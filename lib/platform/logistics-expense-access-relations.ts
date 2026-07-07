@@ -7,6 +7,7 @@ export function includeLogisticsExpenseRelations() {
       include: {
         submittedBy: true,
         reviewedBy: true,
+        voidedBy: true,
         createdBy: true,
         updatedBy: true,
       },
@@ -41,6 +42,7 @@ export function includeLogisticsExpenseListRelations() {
       include: {
         submittedBy: true,
         reviewedBy: true,
+        voidedBy: true,
         createdBy: true,
         updatedBy: true,
       },

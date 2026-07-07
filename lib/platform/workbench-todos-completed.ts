@@ -174,6 +174,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
     batches.push(prisma.logisticsBill.findMany({
       where: {
         deletedAt: null,
+        status: { not: "voided" },
         AND: [
           accessWhere,
           {
@@ -211,6 +212,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
     batches.push(prisma.logisticsBill.findMany({
       where: {
         deletedAt: null,
+        status: { not: "voided" },
         AND: [
           logisticsBillAccessWhere(actor),
           { auditStatus: "审核通过" },

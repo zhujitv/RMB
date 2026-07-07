@@ -45,6 +45,7 @@ export function LogisticsFeesModule({
     cancelConfirmation,
     confirmConfirmation,
     updateConfirmationInput,
+    updateConfirmationSecondaryInput,
   } = useConfirmationDialog();
   const {
     statementMonth,
@@ -67,6 +68,8 @@ export function LogisticsFeesModule({
     setStatus,
     costType,
     setCostType,
+    billStatus,
+    setBillStatus,
     expandedId,
     setExpandedId,
     loading,
@@ -116,6 +119,7 @@ export function LogisticsFeesModule({
     rejectExpense,
     resendInvoiceNotice,
     markExpenseBillPaid,
+    voidExpenseBill,
   } = useLogisticsFeesBillActions({
     rows,
     setRows,
@@ -128,6 +132,7 @@ export function LogisticsFeesModule({
     submittedKeyword,
     status,
     costType,
+    billStatus,
     statementMonth,
     loadExpenses,
     loadStatement,
@@ -149,6 +154,7 @@ export function LogisticsFeesModule({
       keyword={keyword}
       status={status}
       costType={costType}
+      billStatus={billStatus}
       expandedId={expandedId}
       loading={loading}
       error={error}
@@ -178,14 +184,14 @@ export function LogisticsFeesModule({
       }}
       onRefresh={() => {
         setNotice("");
-        void loadExpenses(page);
+        void loadExpenses(page, submittedKeyword, status, costType, billStatus);
       }}
       onCancelCreate={() => setCreateOpen(false)}
       onCreateSaved={(message) => {
         setCreateOpen(false);
         setExpandedId("");
         setNotice(message || "物流费用已保存");
-        void loadExpenses(1, submittedKeyword, status, costType);
+        void loadExpenses(1, submittedKeyword, status, costType, billStatus);
         void loadStatement(statementMonth);
         void onRefreshTodos?.();
       }}
@@ -197,12 +203,17 @@ export function LogisticsFeesModule({
       onStatusChange={(nextStatus) => {
         setStatus(nextStatus);
         setNotice("");
-        void loadExpenses(1, submittedKeyword, nextStatus, costType);
+        void loadExpenses(1, submittedKeyword, nextStatus, costType, billStatus);
       }}
       onCostTypeChange={(nextCostType) => {
         setCostType(nextCostType);
         setNotice("");
-        void loadExpenses(1, submittedKeyword, status, nextCostType);
+        void loadExpenses(1, submittedKeyword, status, nextCostType, billStatus);
+      }}
+      onBillStatusChange={(nextBillStatus) => {
+        setBillStatus(nextBillStatus);
+        setNotice("");
+        void loadExpenses(1, submittedKeyword, status, costType, nextBillStatus);
       }}
       onResetSearch={resetSearch}
       onReviewSelectedBills={() => void reviewSelectedBills()}
@@ -212,7 +223,7 @@ export function LogisticsFeesModule({
       onPage={(nextPage) => {
         setExpandedId("");
         setNotice("");
-        void loadExpenses(nextPage, submittedKeyword, status, costType);
+        void loadExpenses(nextPage, submittedKeyword, status, costType, billStatus);
       }}
       onCloseExpense={() => setExpandedId("")}
       onApprove={(item) => void reviewExpenseBills(logisticsExpenseShipmentBillIds(item), item)}
@@ -221,6 +232,7 @@ export function LogisticsFeesModule({
       onResendInvoiceNotice={(item) => void resendInvoiceNotice(item)}
       onMarkPaid={(item) => void markExpenseBillPaid(item)}
       onSubmitDraft={(item) => void submitDraftExpenseBill(item)}
+      onVoidBill={(item) => void voidExpenseBill(item)}
       onSaveDetails={(payload) => saveBillDetails(activeExpense!, payload)}
       onValidationError={(message) => {
         setError(message);
@@ -235,6 +247,7 @@ export function LogisticsFeesModule({
       onCancelConfirmation={cancelConfirmation}
       onConfirmConfirmation={confirmConfirmation}
       onUpdateConfirmationInput={updateConfirmationInput}
+      onUpdateConfirmationSecondaryInput={updateConfirmationSecondaryInput}
     />
   );
 }

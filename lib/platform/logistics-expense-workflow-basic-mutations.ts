@@ -1,8 +1,11 @@
 import { prisma } from "../prisma";
 import {
   codedError,
+  LOGISTICS_BILL_STATUS_VOIDED,
+  ORDER_COST_STATUS_VOID,
   permissionError,
   runNonCriticalTask,
+  scheduleTaxRefundCompletenessRefresh,
   writeAudit,
 } from "./shared";
 import {
@@ -18,7 +21,7 @@ import {
   serializeLogisticsExpense,
   serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
-import { canSubmitLogisticsBill, canWithdrawLogisticsBill } from "./logistics-bill-state-machine";
+import { canSubmitLogisticsBill, canWithdrawLogisticsBill, isVoidedLogisticsBill } from "./logistics-bill-state-machine";
 import {
   actorId,
   asRecord,
@@ -28,6 +31,7 @@ import {
   logisticsExpenseUpdateBlockReason,
   rowAuditStatus,
   rowBillId,
+  rowBillStatus,
   rowBillSubmittedAt,
   type ActorContext,
   type AuditRequestLike,
@@ -89,8 +93,9 @@ export async function withdrawLogisticsExpenseBill(request: AuditRequestLike, ac
   if (!rows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
   const billAuditStatus = aggregateLogisticsExpenseStatus(rows, "auditStatus");
   const billInvoiceStatus = aggregateLogisticsExpenseStatus(rows, "invoiceStatus");
+  const billStatus = rowBillStatus(rows[0]);
   const billId = rowBillId(rows[0]);
-  const canWithdraw = canWithdrawLogisticsBill({ auditStatus: billAuditStatus });
+  const canWithdraw = canWithdrawLogisticsBill({ auditStatus: billAuditStatus, status: billStatus });
   console.info("[logistics-expense.withdraw]", {
     billId,
     identifier,
@@ -139,7 +144,7 @@ export async function submitLogisticsExpenseBill(request: AuditRequestLike, acto
     if (!rows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
     billId = rowBillId(rows[0]);
     rowCount = rows.length;
-    const blocked = rows.find((row) => !canSubmitLogisticsBill({ auditStatus: rowAuditStatus(row) }));
+    const blocked = rows.find((row) => !canSubmitLogisticsBill({ auditStatus: rowAuditStatus(row), status: rowBillStatus(row) }));
     if (blocked) throw codedError("只有草稿或已驳回费用可以提交审核。", 400, "LOGISTICS_EXPENSE_SUBMIT_NOT_ALLOWED");
     const submittedAt = new Date();
     const ids = rows.map((row) => row.id).filter(Boolean);
@@ -185,4 +190,83 @@ export async function submitLogisticsExpenseBill(request: AuditRequestLike, acto
     if (durationMs > 1000) console.warn("submit-audit-slow-log", payload);
     else console.info("[logistics-expense.submit-audit]", payload);
   }
+}
+
+export async function voidLogisticsExpenseBill(request: AuditRequestLike, actor: ActorContext, identifier: unknown, input: UnknownRecord = {}) {
+  if (actor?.role !== "管理员") throw permissionError("只有管理员可以作废物流费用账单。", 403);
+  const reason = String(input.reason || input.voidReason || "").trim();
+  if (!reason) throw codedError("作废原因不能为空。", 400, "LOGISTICS_BILL_VOID_REASON_REQUIRED");
+  const remark = String(input.remark || input.voidRemark || "").trim();
+  const rows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
+  if (!rows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
+  const billId = rowBillId(rows[0]);
+  if (isVoidedLogisticsBill({ status: rowBillStatus(rows[0]) })) {
+    throw codedError("该物流费用账单已作废，不能重复作废。", 400, "LOGISTICS_BILL_ALREADY_VOIDED");
+  }
+  const billPaymentStatus = aggregateLogisticsExpenseStatus(rows, "paymentStatus");
+  if (String(billPaymentStatus || "").includes("已付款")) {
+    throw codedError("已付款账单不能直接作废，请先取消付款或走红冲流程。", 400, "LOGISTICS_BILL_VOID_PAID_BLOCKED");
+  }
+  const linkedCosts = rows.map((row) => row.cost).filter(Boolean);
+  const paidCost = linkedCosts.find((cost) =>
+    ["已支付", "部分支付"].includes(String(cost?.paymentStatus || "")) ||
+    Boolean(cost?.paid || cost?.paidAt || cost?.paymentDate),
+  );
+  if (paidCost) {
+    throw codedError("已同步成本存在付款记录，不能直接作废，请先取消付款或走红冲流程。", 400, "LOGISTICS_BILL_VOID_COST_PAID_BLOCKED");
+  }
+  const now = new Date();
+  const costIds = [...new Set(rows.map((row) => row.costId || row.cost?.id || "").filter(Boolean))];
+  await prisma.$transaction(async (tx) => {
+    await tx.logisticsBill.update({
+      where: { id: billId },
+      data: {
+        status: LOGISTICS_BILL_STATUS_VOIDED,
+        voidedAt: now,
+        voidedById: actor.id || null,
+        voidReason: reason,
+        voidRemark: remark || null,
+        updatedById: actor.id || null,
+      },
+    });
+    if (costIds.length) {
+      await tx.orderCost.updateMany({
+        where: {
+          id: { in: costIds },
+          deletedAt: null,
+          status: { not: ORDER_COST_STATUS_VOID },
+        },
+        data: {
+          status: ORDER_COST_STATUS_VOID,
+          voidedAt: now,
+          voidedById: actor.id || null,
+          voidReason: `物流费用账单作废：${reason}`,
+          updatedById: actor.id || null,
+        },
+      });
+    }
+  });
+  const savedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
+  for (const orderId of [...new Set(rows.map((row) => row.orderId).filter(Boolean))]) {
+    scheduleTaxRefundCompletenessRefresh(orderId);
+  }
+  invalidateWorkbenchTodosCache();
+  await runNonCriticalTask("物流费用账单作废日志写入", () => writeAudit(request, actor, "作废物流费用账单", "logistics_bills", billId, {
+    bill: serializeLogisticsExpenseBill(rows),
+    expenses: rows.map(serializeLogisticsExpense),
+  }, {
+    bill: serializeLogisticsExpenseBill(savedRows),
+    voidReason: reason,
+    voidRemark: remark,
+    originalOrderNo: rows[0]?.order?.orderNo || rows[0]?.orderId || "",
+    originalAmountCny: rows.reduce((sum, row) => sum + Number(row.amountCny || 0), 0),
+    voidedCostIds: costIds,
+    voidedAt: now.toISOString(),
+  }));
+  return {
+    bill: serializeLogisticsExpenseBill(savedRows),
+    expenses: savedRows.map(serializeLogisticsExpense),
+    voidedBillId: billId,
+    voidedCostIds: costIds,
+  };
 }

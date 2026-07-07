@@ -2,6 +2,7 @@ export {
   saveLogisticsExpenses,
   submitLogisticsExpenseBill,
   updateLogisticsExpense,
+  voidLogisticsExpenseBill,
   withdrawLogisticsExpenseBill,
 } from "./logistics-expense-workflow-basic-mutations";
 

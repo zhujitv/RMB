@@ -91,6 +91,10 @@ export const logisticsBillSupplierKeyMigration = readFileSync(
   "prisma/migrations/20260705143000_logistics_bill_supplier_key/migration.sql",
   "utf8",
 );
+export const logisticsBillVoidMigration = readFileSync(
+  "prisma/migrations/20260707160000_logistics_bill_void_status/migration.sql",
+  "utf8",
+);
 export const logisticsBillStateMachine = readFileSync(
   "lib/platform/logistics-bill-state-machine.ts",
   "utf8",
@@ -149,6 +153,10 @@ export const logisticsFeesMonthlySummary = readFileSync(
   "utf8",
 );
 export const logisticsModule = readLogisticsFeesModuleSource();
+export const domesticLogisticsApiSource = readFileSync(
+  "lib/platform/domestic-logistics-api.ts",
+  "utf8",
+);
 export const deleteExpenseSource =
   logisticsFeesDeleteAction.match(
     /async function deleteExpense[\s\S]*?\n\n  return deleteExpense/,

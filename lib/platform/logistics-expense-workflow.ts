@@ -11,6 +11,7 @@ export {
   saveLogisticsExpenses,
   submitLogisticsExpenseBill,
   updateLogisticsExpense,
+  voidLogisticsExpenseBill,
   withdrawLogisticsExpenseBill,
 } from "./logistics-expense-workflow-mutations";
 export {

@@ -13,6 +13,7 @@ import {
   submitLogisticsExpenseBill,
   updateLogisticsExpense,
   updateLogisticsExpensePaymentStatus,
+  voidLogisticsExpenseBill,
   withdrawLogisticsExpenseBill,
 } from "../../../../lib/platform-db";
 
@@ -52,6 +53,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if ((body.action || "") === "withdraw") {
       const result = await withdrawLogisticsExpenseBill(request, actor, id);
       return ok({ success: true, ...result, message: "物流费用账单已撤回为草稿" });
+    }
+    if ((body.action || "") === "voidBill") {
+      const result = await voidLogisticsExpenseBill(request, actor, id, body);
+      return ok({ success: true, ...result, message: "物流费用账单已作废" });
     }
     if ((body.action || "") === "resendInvoiceNotice") {
       const result = await resendLogisticsExpenseInvoiceNotice(request, actor, id);

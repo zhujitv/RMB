@@ -214,6 +214,7 @@ async function findDomesticLogisticsPageOrderIds(
         FROM logistics_bills lb
         WHERE lb.order_id = ro.id
           AND lb.deleted_at IS NULL
+          AND COALESCE(lb.status, 'normal') <> 'voided'
           ${billSupplierSql}
       ) ranked_bill
       ORDER BY ranked_bill.status_rank ASC, ranked_bill.status_updated_at DESC
@@ -246,6 +247,12 @@ async function findDomesticLogisticsPageOrderIds(
         FROM logistics_expenses le
         WHERE le.order_id = ro.id
           AND le.deleted_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM logistics_bills lb
+            WHERE lb.id = le.bill_id
+              AND COALESCE(lb.status, 'normal') = 'voided'
+          )
           ${expenseSupplierSql}
       ) ranked_expense
       ORDER BY ranked_expense.status_rank ASC, ranked_expense.status_updated_at DESC

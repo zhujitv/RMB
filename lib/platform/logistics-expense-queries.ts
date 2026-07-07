@@ -2,6 +2,8 @@ import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
 import {
   LOGISTICS_COST_TYPES,
+  LOGISTICS_BILL_STATUS_NORMAL,
+  LOGISTICS_BILL_STATUS_VOIDED,
   nonEmpty,
   pageParams,
   pageResult,
@@ -66,6 +68,7 @@ type LogisticsExpenseListFilters = {
   supplierId: string;
   costType: string;
   status: string;
+  billStatus: string;
 };
 type LogisticsQueryActor = {
   id?: string | null;
@@ -92,6 +95,7 @@ function logisticsExpenseListFiltersFromQuery(query: QueryLike): LogisticsExpens
     supplierId: nonEmpty(query.get("supplierId")),
     costType: String(query.get("costType") || "").trim(),
     status: String(query.get("status") || ""),
+    billStatus: nonEmpty(query.get("billStatus") || query.get("voidStatus") || "normal"),
   };
 }
 
@@ -182,6 +186,7 @@ function logisticsExpenseBillListWhere(filters: LogisticsExpenseListFilters, act
   };
   const conditions: Prisma.LogisticsBillWhereInput[] = [
     { deletedAt: null },
+    logisticsExpenseBillVoidStatusWhere(filters.billStatus),
     logisticsExpenseBillAccessWhere(actor),
     { expenses: { some: expenseWhere } },
     logisticsExpenseBillStatusWhere(filters.status),
@@ -220,6 +225,13 @@ function logisticsExpenseBillAccessWhere(actor: LogisticsQueryActor): Prisma.Log
       : { id: "__no_supplier_bound__" };
   }
   return { id: "__no_logistics_bill_access__" };
+}
+
+function logisticsExpenseBillVoidStatusWhere(billStatus = "normal"): Prisma.LogisticsBillWhereInput {
+  const text = nonEmpty(billStatus || "normal");
+  if (text === "all") return {};
+  if (text === "voided") return { status: LOGISTICS_BILL_STATUS_VOIDED };
+  return { status: { in: [LOGISTICS_BILL_STATUS_NORMAL, ""] } };
 }
 
 function logisticsExpenseBillStatusWhere(status = ""): Prisma.LogisticsBillWhereInput {
@@ -307,6 +319,7 @@ export async function logisticsSupplierStatement(query: QueryLike, actor: Logist
     deletedAt: null,
     AND: [
       { bill: { is: { auditStatus: "审核通过" } } },
+      { bill: { is: logisticsExpenseBillVoidStatusWhere("normal") } },
       reviewedMonthWhere,
     ],
     ...logisticsExpenseAccessWhere(actor),

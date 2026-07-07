@@ -38,6 +38,7 @@ import {
   resolveLogisticsExpenseBatchExchange,
   rowAuditStatus,
   rowBillId,
+  rowBillStatus,
   rowBillSubmittedAt,
   type ActorContext,
   type AuditRequestLike,
@@ -117,6 +118,9 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
   const billRows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
   if (!billRows.length) throw codedError("未找到当前物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
   const billId = rowBillId(billRows[0]);
+  if (billRows.some((row) => rowBillStatus(row) === "voided")) {
+    throw codedError("该物流费用账单已作废，不能保存明细。", 400, "LOGISTICS_BILL_VOIDED_SAVE_BLOCKED");
+  }
   const billStatus = aggregateLogisticsExpenseStatus(billRows, "auditStatus");
   if (!["草稿", "已驳回"].includes(billStatus || "草稿")) {
     throw codedError(`账单${billStatus || "当前状态"}，不能保存明细，请先撤回为草稿。`, 400, "LOGISTICS_EXPENSE_BILL_STATUS_BLOCKED");

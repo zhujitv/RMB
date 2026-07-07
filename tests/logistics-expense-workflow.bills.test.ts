@@ -14,6 +14,7 @@ import {
   logisticsBillMigration,
   logisticsInvoiceUsdGroupingMigration,
   logisticsBillConvergenceMigration,
+  logisticsBillVoidMigration,
   logisticsBillStateMachine,
   logisticsFeesMain,
   logisticsFeesModel,
@@ -24,6 +25,7 @@ import {
   logisticsFeesBillTable,
   logisticsFeesMonthlySummary,
   logisticsModule,
+  domesticLogisticsApiSource,
   deleteExpenseSource,
   withdrawExpenseSource,
   saveBillDetailsSource,
@@ -69,6 +71,43 @@ test("logistics expense list reads avoid transactions for count and pagination",
   assert.match(listLogisticsExpensesSource, /take: Math\.max\(total, pageSize\)/);
   assert.doesNotMatch(listLogisticsExpensesSource, /LOGISTICS_EXPENSE_BILL_SORT_SCAN_LIMIT/);
   assert.doesNotMatch(listLogisticsExpensesSource, /prisma\.\$transaction/);
+});
+
+test("logistics fee bills support audited voiding without affecting active statistics", () => {
+  assert.match(schema, /model LogisticsBill[\s\S]*status\s+String\s+@default\("normal"\)/);
+  assert.match(schema, /model LogisticsBill[\s\S]*voidedById\s+String\?\s+@map\("voided_by"\)/);
+  assert.match(schema, /model LogisticsBill[\s\S]*voidReason\s+String\?\s+@map\("void_reason"\) @db\.Text/);
+  assert.match(schema, /voidedLogisticsBills\s+LogisticsBill\[\]\s+@relation\("LogisticsBillVoidedBy"\)/);
+  assert.match(logisticsBillVoidMigration, /ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'normal'/);
+  assert.match(logisticsBillVoidMigration, /ADD COLUMN IF NOT EXISTS "void_reason" TEXT/);
+  assert.match(logisticsBillVoidMigration, /logistics_bills_void_status_idx/);
+  assert.match(logisticsBillStateMachine, /isVoidedLogisticsBill/);
+  assert.match(logisticsBillStateMachine, /if \(isVoidedLogisticsBill\(input\)\) return false/);
+  assert.match(backend, /export async function voidLogisticsExpenseBill/);
+  assert.match(backend, /只有管理员可以作废物流费用账单/);
+  assert.match(backend, /作废原因不能为空/);
+  assert.match(backend, /已付款账单不能直接作废，请先取消付款或走红冲流程/);
+  assert.match(backend, /ORDER_COST_STATUS_VOID/);
+  assert.match(backend, /writeAudit\(request, actor, "作废物流费用账单"/);
+  assert.match(logisticsCostRoute, /action \|\| ""\) === "voidBill"/);
+  assert.match(logisticsCostRoute, /voidLogisticsExpenseBill\(request, actor, id, body\)/);
+  assert.match(logisticsExpenseQueries, /billStatus: nonEmpty\(query\.get\("billStatus"\) \|\| query\.get\("voidStatus"\) \|\| "normal"\)/);
+  assert.match(logisticsExpenseQueries, /if \(text === "voided"\) return \{ status: LOGISTICS_BILL_STATUS_VOIDED \}/);
+  assert.match(logisticsExpenseQueries, /bill: \{ is: logisticsExpenseBillVoidStatusWhere\("normal"\) \}/);
+  assert.match(backend, /status: \{ not: "voided" \}/);
+  assert.match(domesticLogisticsApiSource, /COALESCE\(lb\.status, 'normal'\) <> 'voided'/);
+  assert.match(domesticLogisticsApiSource, /COALESCE\(lb\.status, 'normal'\) = 'voided'/);
+  assert.match(logisticsFeesModel, /BILL_STATUS_FILTERS/);
+  assert.match(logisticsModule, /billStatus=\{billStatus\}/);
+  assert.match(logisticsModule, /onBillStatusChange/);
+  assert.match(logisticsModule, /作废物流费用账单/);
+  assert.match(logisticsModule, /secondaryInputLabel: "备注"/);
+  assert.match(logisticsFeesBillTable, /已作废/);
+  assert.match(logisticsFeesBillTable, /onVoidBill\(expense\)/);
+  assert.match(logisticsFeesShared, /isVoidedLogisticsExpenseBill/);
+  assert.match(logisticsFeesShared, /logisticsExpenseBillCanVoid/);
+  assert.match(logisticsFeesDetails, /该物流费用账单已作废，仅保留原始金额、附件、发票和操作日志。/);
+  assert.match(logisticsFeesDetails, /作废原因/);
 });
 
 test("logistics expense approval works at bill level and pushes uploaded invoices to costs", () => {

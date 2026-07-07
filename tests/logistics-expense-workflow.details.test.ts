@@ -263,7 +263,7 @@ test("logistics paid button is locked by bill state machine", () => {
   assert.match(logisticsModule, /status\.includes\("部分"\)[\s\S]*return "未上传发票"[\s\S]*status\.includes\("已上传发票"\)/);
   assert.match(
     logisticsModule,
-    /logisticsBillPayState\(\{ auditStatus, invoiceStatus, paymentStatus \}\)/,
+    /logisticsBillPayState\(\{[\s\S]*auditStatus,[\s\S]*invoiceStatus,[\s\S]*paymentStatus,[\s\S]*status: isVoidedLogisticsExpenseBill\(expense\) \? "voided" : expense\.status,[\s\S]*\}\)/,
   );
   assert.match(backend, /LOGISTICS_PAYMENT_NOT_READY_INVOICE_STATUSES/);
   assert.match(backend, /payment === "待付款"[\s\S]*LOGISTICS_PAYMENT_NOT_READY_INVOICE_STATUSES\.has\(invoice\)[\s\S]*return "待开票"/);

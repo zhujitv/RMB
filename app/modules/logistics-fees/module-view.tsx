@@ -10,6 +10,7 @@ import { LogisticsFeesModuleHeader } from "./module-header";
 import { LogisticsFeesStatementPanel } from "./statement-panel";
 import {
   AUDIT_FILTERS,
+  BILL_STATUS_FILTERS,
   COST_TYPE_OPTIONS,
   type LogisticsExpense,
   type LogisticsExpenseBatchSavePayload,
@@ -30,6 +31,7 @@ type LogisticsFeesModuleViewProps = {
   keyword: string;
   status: string;
   costType: string;
+  billStatus: string;
   expandedId: string;
   loading: boolean;
   error: string;
@@ -64,6 +66,7 @@ type LogisticsFeesModuleViewProps = {
   onSubmitSearch: () => void;
   onStatusChange: (value: string) => void;
   onCostTypeChange: (value: string) => void;
+  onBillStatusChange: (value: string) => void;
   onResetSearch: () => void;
   onReviewSelectedBills: () => void;
   onToggleAllReviewableBills: (checked: boolean) => void;
@@ -77,12 +80,14 @@ type LogisticsFeesModuleViewProps = {
   onResendInvoiceNotice: (item: LogisticsExpense) => void;
   onMarkPaid: (item: LogisticsExpense) => void;
   onSubmitDraft: (item: LogisticsExpense) => void;
+  onVoidBill: (item: LogisticsExpense) => void;
   onSaveDetails: (payload: LogisticsExpenseBatchSavePayload) => Promise<LogisticsExpenseBatchSaveResult | null>;
   onValidationError: (message: string) => void;
   onInvoiceUploaded: (result: LogisticsExpenseMutationResult) => void;
   onCancelConfirmation: () => void;
   onConfirmConfirmation: () => void;
   onUpdateConfirmationInput: (value: string) => void;
+  onUpdateConfirmationSecondaryInput: (value: string) => void;
 };
 
 export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
@@ -97,6 +102,7 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
     keyword,
     status,
     costType,
+    billStatus,
     expandedId,
     loading,
     error,
@@ -173,6 +179,11 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
+        <select value={billStatus} onChange={(event) => props.onBillStatusChange(event.target.value)}>
+          {BILL_STATUS_FILTERS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
         <button className={styles.primaryButtonCompact} type="button" onClick={props.onSubmitSearch} disabled={loading}>
           查询
         </button>
@@ -207,6 +218,7 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
         onToggleAllReviewableBills={props.onToggleAllReviewableBills}
         onOpen={props.onOpenExpense}
         onSelectBill={props.onSelectBill}
+        onVoidBill={canReviewExpense ? props.onVoidBill : undefined}
       />
 
       <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={props.onPage} />
@@ -244,6 +256,7 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
           onCancel={props.onCancelConfirmation}
           onConfirm={props.onConfirmConfirmation}
           onInputChange={props.onUpdateConfirmationInput}
+          onSecondaryInputChange={props.onUpdateConfirmationSecondaryInput}
         />
       ) : null}
     </section>

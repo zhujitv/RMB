@@ -273,8 +273,9 @@ test("logistics expense bills use compact table and drawer instead of nested tab
   assert.match(logisticsModule, /setActiveTab\(defaultTab\)/);
   assert.match(
     logisticsModule,
-    /logisticsBillDefaultTab\(\{ auditStatus, invoiceStatus, paymentStatus \}\)/,
+    /defaultLogisticsExpenseDetailTab\(\{[\s\S]*auditStatus,[\s\S]*invoiceStatus,[\s\S]*paymentStatus,[\s\S]*status: isVoided \? "voided" : expense\.status,[\s\S]*\}\)/,
   );
+  assert.match(logisticsModule, /return logisticsBillDefaultTab\(\{ auditStatus, invoiceStatus, paymentStatus, status \}\)/);
   assert.match(
     logisticsBillStateMachine,
     /if \(auditStatus === "审核通过"\) return "invoice"/,

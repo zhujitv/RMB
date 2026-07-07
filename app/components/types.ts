@@ -12,11 +12,17 @@ export type ConfirmationDialogState = {
   inputRequiredMessage?: string;
   inputValue?: string;
   inputError?: string;
+  secondaryInputLabel?: string;
+  secondaryInputPlaceholder?: string;
+  secondaryInputType?: "textarea" | "text" | "date";
+  secondaryInputValue?: string;
+  secondaryInputError?: string;
 };
 
 export type ConfirmationResult = {
   confirmed: boolean;
   inputValue?: string;
+  secondaryInputValue?: string;
 };
 
 export type ExportInvoiceRemarkContainer = {

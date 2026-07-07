@@ -44,6 +44,7 @@ export function useLogisticsFeesListController({
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [status, setStatus] = useState(initialStatus);
   const [costType, setCostType] = useState("");
+  const [billStatus, setBillStatus] = useState("normal");
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -55,6 +56,7 @@ export function useLogisticsFeesListController({
     nextKeyword = submittedKeyword,
     nextStatus = status,
     nextCostType = costType,
+    nextBillStatus = billStatus,
     options: { silent?: boolean } = {},
   ) {
     const requestId = ++listRequestRef.current;
@@ -70,6 +72,7 @@ export function useLogisticsFeesListController({
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       if (nextStatus) params.set("status", nextStatus);
       if (nextCostType) params.set("costType", nextCostType);
+      if (nextBillStatus) params.set("billStatus", nextBillStatus);
 
       const result = await apiJson<LogisticsExpensesResponse>(
         `/api/logistics-costs?${params}`,
@@ -102,13 +105,13 @@ export function useLogisticsFeesListController({
   }
 
   useEffect(() => {
-    void loadExpenses(1, "", initialStatus, "");
+    void loadExpenses(1, "", initialStatus, "", billStatus);
     void loadStatement(statementMonth);
   }, []);
 
   useEffect(() => {
     if (!refreshToken) return;
-    void loadExpenses(1, submittedKeyword, status, costType);
+    void loadExpenses(1, submittedKeyword, status, costType, billStatus);
     void loadStatement(statementMonth);
   }, [refreshToken]);
 
@@ -121,10 +124,10 @@ export function useLogisticsFeesListController({
     );
     if (!hasProcessingInvoice) return;
     const timer = window.setInterval(() => {
-      void loadExpenses(page, submittedKeyword, status, costType, { silent: true });
+      void loadExpenses(page, submittedKeyword, status, costType, billStatus, { silent: true });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [rows, page, submittedKeyword, status, costType, loading]);
+  }, [rows, page, submittedKeyword, status, costType, billStatus, loading]);
 
   useEffect(() => {
     if (!focusToken) return;
@@ -133,9 +136,10 @@ export function useLogisticsFeesListController({
     setSubmittedKeyword(nextKeyword);
     setStatus("");
     setCostType("");
+    setBillStatus("normal");
     setCreateOpen(false);
     setNotice("");
-    void loadExpenses(1, nextKeyword, "", "").then((nextRows) => {
+    void loadExpenses(1, nextKeyword, "", "", "normal").then((nextRows) => {
       const matched =
         nextRows.find((row) => row.id === focusBillId) ||
         nextRows.find(
@@ -163,10 +167,10 @@ export function useLogisticsFeesListController({
       setSubmittedKeyword(value);
       setExpandedId("");
       setNotice("");
-      void loadExpenses(1, value, status, costType);
+      void loadExpenses(1, value, status, costType, billStatus);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [keyword, submittedKeyword, status, costType]);
+  }, [keyword, submittedKeyword, status, costType, billStatus]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const activeExpense = expandedId
@@ -190,7 +194,7 @@ export function useLogisticsFeesListController({
     setExpandedId("");
     setSelectedBillIds([]);
     setNotice("");
-    void loadExpenses(1, value, status, costType);
+    void loadExpenses(1, value, status, costType, billStatus);
   }
 
   function resetSearch() {
@@ -198,10 +202,11 @@ export function useLogisticsFeesListController({
     setSubmittedKeyword("");
     setStatus(initialStatus);
     setCostType("");
+    setBillStatus("normal");
     setExpandedId("");
     setSelectedBillIds([]);
     setNotice("");
-    void loadExpenses(1, "", initialStatus, "");
+    void loadExpenses(1, "", initialStatus, "", "normal");
   }
 
   function toggleBillSelection(expense: LogisticsExpense, checked: boolean) {
@@ -237,6 +242,8 @@ export function useLogisticsFeesListController({
     setStatus,
     costType,
     setCostType,
+    billStatus,
+    setBillStatus,
     expandedId,
     setExpandedId,
     loading,

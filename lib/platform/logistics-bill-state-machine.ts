@@ -14,6 +14,7 @@ export type LogisticsBillStateInput = {
   auditStatus?: string | null;
   invoiceStatus?: string | null;
   paymentStatus?: string | null;
+  status?: string | null;
   costSynced?: boolean | null;
   hasInvoiceDocument?: boolean | null;
 };
@@ -30,7 +31,12 @@ export type LogisticsBillState = {
   canDeleteDetails: boolean;
   canUploadInvoice: boolean;
   canMarkPaid: boolean;
+  isVoided: boolean;
 };
+
+export function isVoidedLogisticsBill(input: LogisticsBillStateInput = {}) {
+  return String(input.status || "").trim() === "voided";
+}
 
 export function normalizeLogisticsBillAuditStatus(value: unknown): LogisticsBillAuditStatus {
   const text = String(value || "").trim();
@@ -62,6 +68,7 @@ export function logisticsBillState(input: LogisticsBillStateInput = {}): Logisti
   const paymentStatus = normalizeLogisticsBillPaymentStatus(input.paymentStatus);
   const alreadyPaid = paymentStatus === "已付款";
   const costSynced = Boolean(input.costSynced);
+  const isVoided = isVoidedLogisticsBill(input);
   return {
     auditStatus,
     invoiceStatus,
@@ -74,18 +81,22 @@ export function logisticsBillState(input: LogisticsBillStateInput = {}): Logisti
     canDeleteDetails: !logisticsBillDeleteBlockReason({ ...input, costSynced }),
     canUploadInvoice: canUploadLogisticsBillInvoice(input),
     canMarkPaid: canMarkLogisticsBillPaid(input),
+    isVoided,
   };
 }
 
 export function canSubmitLogisticsBill(input: LogisticsBillStateInput = {}) {
+  if (isVoidedLogisticsBill(input)) return false;
   return ["草稿", "已驳回"].includes(normalizeLogisticsBillAuditStatus(input.auditStatus));
 }
 
 export function canWithdrawLogisticsBill(input: LogisticsBillStateInput = {}) {
+  if (isVoidedLogisticsBill(input)) return false;
   return normalizeLogisticsBillAuditStatus(input.auditStatus) === "待审核";
 }
 
 export function canReviewLogisticsBill(input: LogisticsBillStateInput = {}) {
+  if (isVoidedLogisticsBill(input)) return false;
   return normalizeLogisticsBillAuditStatus(input.auditStatus) === "待审核";
 }
 
@@ -98,16 +109,19 @@ export function canRejectLogisticsBill(input: LogisticsBillStateInput = {}) {
 }
 
 export function canUploadLogisticsBillInvoice(input: LogisticsBillStateInput = {}) {
+  if (isVoidedLogisticsBill(input)) return false;
   return ["待审核", "审核通过"].includes(normalizeLogisticsBillAuditStatus(input.auditStatus));
 }
 
 export function canMarkLogisticsBillPaid(input: LogisticsBillStateInput = {}) {
+  if (isVoidedLogisticsBill(input)) return false;
   return normalizeLogisticsBillAuditStatus(input.auditStatus) === "审核通过"
     && normalizeLogisticsBillInvoiceStatus(input.invoiceStatus) === "已上传发票"
     && normalizeLogisticsBillPaymentStatus(input.paymentStatus) !== "已付款";
 }
 
 export function logisticsBillDefaultTab(input: LogisticsBillStateInput = {}): LogisticsBillDefaultTab {
+  if (isVoidedLogisticsBill(input)) return "history";
   const auditStatus = normalizeLogisticsBillAuditStatus(input.auditStatus);
   const invoiceStatus = normalizeLogisticsBillInvoiceStatus(input.invoiceStatus);
   const paymentStatus = normalizeLogisticsBillPaymentStatus(input.paymentStatus);
@@ -120,6 +134,7 @@ export function logisticsBillDefaultTab(input: LogisticsBillStateInput = {}): Lo
 }
 
 export function logisticsBillEditBlockReason(input: LogisticsBillStateInput = {}) {
+  if (isVoidedLogisticsBill(input)) return "该物流费用账单已作废，不能修改。";
   const auditStatus = normalizeLogisticsBillAuditStatus(input.auditStatus);
   const invoiceText = String(input.invoiceStatus || "").trim();
   const paymentText = String(input.paymentStatus || "").trim();
@@ -133,6 +148,9 @@ export function logisticsBillEditBlockReason(input: LogisticsBillStateInput = {}
 }
 
 export function logisticsBillDeleteBlock(input: LogisticsBillStateInput = {}) {
+  if (isVoidedLogisticsBill(input)) {
+    return { message: "该物流费用账单已作废，仅允许查看详情和操作日志。", code: "LOGISTICS_BILL_VOIDED_DELETE_BLOCKED" };
+  }
   const auditStatus = normalizeLogisticsBillAuditStatus(input.auditStatus);
   const invoiceStatus = normalizeLogisticsBillInvoiceStatus(input.invoiceStatus);
   const invoiceText = String(input.invoiceStatus || "").trim();

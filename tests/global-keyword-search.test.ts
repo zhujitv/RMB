@@ -90,7 +90,7 @@ test("keyword search covers the required business fields", () => {
 
   assert.match(services.taxRefund, /customsDeclarationNo: \{ contains: keyword/);
   assert.match(services.taxRefund, /blNo: \{ contains: keyword/);
-  assert.match(services.taxRefund, /logisticsBills: \{ some: \{ deletedAt: null, billOfLadingNo: \{ contains: keyword/);
+  assert.match(services.taxRefund, /logisticsBills: \{ some: \{ deletedAt: null, status: \{ not: "voided" \}, billOfLadingNo: \{ contains: keyword/);
 
   assert.match(services.profit, /salesperson: \{ is: \{ name: \{ contains: keyword/);
 });

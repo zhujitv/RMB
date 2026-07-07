@@ -105,6 +105,10 @@ export function rowBillReviewedAt(row: UnknownRecord = {}) {
   return rowBillRecord(row).reviewedAt || row.reviewedAt || null;
 }
 
+export function rowBillStatus(row: UnknownRecord = {}) {
+  return nonEmpty(rowBillRecord(row).status || "normal");
+}
+
 export function rowBillId(row: UnknownRecord = {}) {
   return nonEmpty(row.billId || rowBillRecord(row).id || logisticsExpenseBillId(row));
 }

@@ -91,11 +91,11 @@ export function LogisticsExpenseRows({
           billAuditStatus={drawer.auditStatus}
           billSaved={drawer.billSaved}
           canEditBillDetails={drawer.canEditBillDetails}
-          canMarkPaid={canMarkPaid}
+          canMarkPaid={canMarkPaid && !drawer.isVoided}
           canReview={canReview}
           canReviewBill={drawer.canReviewBill}
           canSubmitThisBill={drawer.canSubmitThisBill}
-          canWithdraw={canWithdraw}
+          canWithdraw={canWithdraw && !drawer.isVoided}
           hasInvoiceNoticeFailure={drawer.hasInvoiceNoticeFailure}
           hasPendingChanges={drawer.hasPendingChanges}
           shouldShowSubmitBill={drawer.shouldShowSubmitBill}
@@ -112,6 +112,7 @@ export function LogisticsExpenseRows({
     >
       <LogisticsExpenseDrawerNotices
         auditStatus={drawer.auditStatus}
+        isVoided={drawer.isVoided}
         invoiceGroups={drawer.invoiceGroups}
         rejectReasons={drawer.rejectReasons}
         hasInvoiceNoticeFailure={drawer.hasInvoiceNoticeFailure}
@@ -163,8 +164,8 @@ export function LogisticsExpenseRows({
             expense={expense}
             items={drawer.editingExpenseRows}
             groups={drawer.invoiceGroups}
-            canUploadInvoice={canUploadInvoice}
-            canManageInvoiceRecognition={canManageInvoiceRecognition}
+            canUploadInvoice={canUploadInvoice && !drawer.isVoided}
+            canManageInvoiceRecognition={canManageInvoiceRecognition && !drawer.isVoided}
             onUploaded={onInvoiceUploaded}
           />
         </div>
@@ -178,17 +179,24 @@ export function LogisticsExpenseRows({
 
 function LogisticsExpenseDrawerNotices({
   auditStatus,
+  isVoided,
   invoiceGroups,
   rejectReasons,
   hasInvoiceNoticeFailure,
 }: {
   auditStatus: string;
+  isVoided: boolean;
   invoiceGroups: LogisticsExpense["invoiceGroups"];
   rejectReasons: string[];
   hasInvoiceNoticeFailure: boolean;
 }) {
   return (
     <>
+      {isVoided ? (
+        <div className={styles.infoStrip}>
+          该物流费用账单已作废，仅保留原始金额、附件、发票和操作日志。
+        </div>
+      ) : null}
       {hasInvoiceNoticeFailure ? (
         <div className={styles.logisticsBillInvoiceNoticeError}>
           <strong>开票通知发送失败</strong>
@@ -226,6 +234,15 @@ function LogisticsExpenseBasicTab({
         <DetailField label="提单号" value={expense.blNo || expense.billOfLadingNo || "-"} />
         <DetailField label="船名航次" value={expense.order?.vesselVoyage || expense.vesselVoyage || "-"} />
         <DetailField label="费用明细" value={`${editingCount} 项`} />
+        {expense.status === "voided" ? (
+          <>
+            <DetailField label="账单状态" value="已作废" />
+            <DetailField label="作废人" value={expense.voidedBy?.name || "-"} />
+            <DetailField label="作废时间" value={formatDateTime(expense.voidedAt)} />
+            <DetailField label="作废原因" value={expense.voidReason || "-"} wide />
+            <DetailField label="备注" value={expense.voidRemark || "-"} wide hidden={!expense.voidRemark} />
+          </>
+        ) : null}
         <DetailField label="供应商" value={supplierNames.join(" / ") || "-"} hidden={!canShowSupplier || !supplierNames.length} wide />
         <div className={`${styles.detailField} ${styles.detailFieldWide}`}>
           <span>账单合计</span>

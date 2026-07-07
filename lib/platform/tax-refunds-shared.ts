@@ -206,7 +206,7 @@ export function warnIfArchivedLogisticsHasNoTransportItems(order: TaxRefundOrder
 
 export async function hydrateTaxRefundOrderLogisticsInfo(order: TaxRefundOrderWithRelations): Promise<TaxRefundOrderWithRelations> {
   const orderBills = await guardedPrismaFindMany<Array<{ billOfLadingNo: string | null }>>(prisma.logisticsBill, "logisticsBill", "lib/platform/tax-refunds.ts:hydrateTaxRefundOrderLogisticsInfo.orderBills", {
-    where: { orderId: order.id, deletedAt: null, NOT: { billOfLadingNo: "" } },
+    where: { orderId: order.id, deletedAt: null, status: { not: "voided" }, NOT: { billOfLadingNo: "" } },
     select: { billOfLadingNo: true },
     orderBy: [{ createdAt: "asc" }],
     take: 50,
@@ -219,7 +219,7 @@ export async function hydrateTaxRefundOrderLogisticsInfo(order: TaxRefundOrderWi
         OR: [
           { id: order.id },
           { blNo: { in: billOfLadingNumbers } },
-          { logisticsBills: { some: { deletedAt: null, billOfLadingNo: { in: billOfLadingNumbers } } } },
+          { logisticsBills: { some: { deletedAt: null, status: { not: "voided" }, billOfLadingNo: { in: billOfLadingNumbers } } } },
         ],
       },
       select: {

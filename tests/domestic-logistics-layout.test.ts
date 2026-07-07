@@ -148,7 +148,7 @@ test("tax refund detail hydrates archived logistics transport items by bill of l
   assert.match(taxRefundService, /taxRefundDetailBillOfLadingNumbers/);
   assert.match(taxRefundService, /guardedPrismaFindMany<[\s\S]*prisma\.logisticsBill,\s*"logisticsBill"[\s\S]*where: \{ orderId: order\.id, deletedAt: null/);
   assert.match(taxRefundService, /\{ blNo: \{ in: billOfLadingNumbers \} \}/);
-  assert.match(taxRefundService, /logisticsBills: \{ some: \{ deletedAt: null, billOfLadingNo: \{ in: billOfLadingNumbers \} \} \}/);
+  assert.match(taxRefundService, /logisticsBills: \{ some: \{ deletedAt: null, status: \{ not: "voided" \}, billOfLadingNo: \{ in: billOfLadingNumbers \} \} \}/);
   assert.match(taxRefundService, /select: domesticLogisticsInfoSafeSelect\(\)/);
   assert.match(taxRefundService, /combineTaxRefundDomesticLogisticsInfos/);
   assert.match(taxRefundService, /transportItems = infos\.flatMap/);

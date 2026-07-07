@@ -117,7 +117,7 @@ export async function listDomesticLogisticsTodos(context: WorkbenchTodoContext) 
         orderBy: [{ assignedAt: "desc" }],
       },
       logisticsBills: {
-        where: { deletedAt: null },
+        where: { deletedAt: null, status: { not: "voided" } },
         select: { id: true, billOfLadingNo: true },
       },
       domesticLogisticsInfos: {
@@ -159,7 +159,7 @@ export async function listDomesticLogisticsTodos(context: WorkbenchTodoContext) 
         take: 120,
       },
       logisticsExpenses: {
-        where: { deletedAt: null },
+        where: { deletedAt: null, bill: { is: { status: { not: "voided" } } } },
         select: { id: true },
         take: 1,
       },
@@ -255,6 +255,7 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
       ? prisma.logisticsBill.findMany({
           where: {
             deletedAt: null,
+            status: { not: "voided" },
             AND: [
               { auditStatus: "待审核" },
               { paymentStatus: { notIn: LOGISTICS_PAYMENT_DONE_STATUSES } },
@@ -272,6 +273,7 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
     prisma.logisticsBill.findMany({
       where: {
         deletedAt: null,
+        status: { not: "voided" },
         AND: [
           { auditStatus: "审核通过" },
           { invoiceStatus: { in: LOGISTICS_INVOICE_TO_UPLOAD_STATUSES } },
@@ -290,6 +292,7 @@ export async function listLogisticsFeeTodos(context: WorkbenchTodoContext) {
       ? prisma.logisticsBill.findMany({
           where: {
             deletedAt: null,
+            status: { not: "voided" },
             AND: [
               { auditStatus: "审核通过" },
               { invoiceStatus: { in: LOGISTICS_PAYMENT_READY_INVOICE_STATUSES } },

@@ -1,5 +1,11 @@
 import { Prisma } from "../generated/prisma/client.js";
-import { LEGACY_LOGISTICS_OPERATOR_ROLE, LOGISTICS_OPERATOR_ROLE, nonEmpty } from "./shared";
+import {
+  LEGACY_LOGISTICS_OPERATOR_ROLE,
+  LOGISTICS_BILL_STATUS_NORMAL,
+  LOGISTICS_BILL_STATUS_VOIDED,
+  LOGISTICS_OPERATOR_ROLE,
+  nonEmpty,
+} from "./shared";
 
 export const LOGISTICS_EXPENSE_BILLING_METHODS = ["按柜", "按票", "按次", "按重量", "按金额比例", "手工输入"];
 export const DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD = "按柜";
@@ -111,6 +117,12 @@ export type LogisticsExpenseLike = {
   detailInvoiceStatus?: string | null;
   paymentStatus?: string | null;
   detailPaymentStatus?: string | null;
+  status?: string | null;
+  voidedAt?: unknown;
+  voidedBy?: unknown;
+  voidedById?: string | null;
+  voidReason?: string | null;
+  voidRemark?: string | null;
   submittedAt?: unknown;
   reviewedBy?: unknown;
   reviewedAt?: unknown;
@@ -153,6 +165,12 @@ export type LogisticsBillLike = {
   auditStatus?: string | null;
   invoiceStatus?: string | null;
   paymentStatus?: string | null;
+  status?: string | null;
+  voidedAt?: unknown;
+  voidedBy?: unknown;
+  voidedById?: string | null;
+  voidReason?: string | null;
+  voidRemark?: string | null;
   paymentDate?: unknown;
   submittedBy?: unknown;
   submittedAt?: unknown;
@@ -225,6 +243,8 @@ export function normalizeBillingMethodValue(value: unknown): string {
 }
 
 export {
+  LOGISTICS_BILL_STATUS_NORMAL,
+  LOGISTICS_BILL_STATUS_VOIDED,
   LOGISTICS_OPERATOR_ROLE,
   LEGACY_LOGISTICS_OPERATOR_ROLE,
 };

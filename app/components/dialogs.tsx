@@ -16,7 +16,13 @@ export function useConfirmationDialog() {
       resolverRef.current({ confirmed: false });
       resolverRef.current = null;
     }
-    setConfirmation({ ...options, inputValue: options.inputValue || "", inputError: "" });
+    setConfirmation({
+      ...options,
+      inputValue: options.inputValue || "",
+      inputError: "",
+      secondaryInputValue: options.secondaryInputValue || "",
+      secondaryInputError: "",
+    });
     return new Promise<ConfirmationResult>((resolve) => {
       resolverRef.current = resolve;
     });
@@ -31,11 +37,23 @@ export function useConfirmationDialog() {
     const resolver = resolverRef.current;
     resolverRef.current = null;
     setConfirmation(null);
-    resolver?.({ confirmed, inputValue: String(confirmation.inputValue || "").trim() });
+    resolver?.({
+      confirmed,
+      inputValue: String(confirmation.inputValue || "").trim(),
+      secondaryInputValue: String(confirmation.secondaryInputValue || "").trim(),
+    });
   }
 
   function updateConfirmationInput(value: string) {
     setConfirmation((current) => current ? { ...current, inputValue: value, inputError: "" } : current);
+  }
+
+  function updateConfirmationSecondaryInput(value: string) {
+    setConfirmation((current) =>
+      current
+        ? { ...current, secondaryInputValue: value, secondaryInputError: "" }
+        : current,
+    );
   }
 
   return {
@@ -44,6 +62,7 @@ export function useConfirmationDialog() {
     cancelConfirmation: () => resolveConfirmation(false),
     confirmConfirmation: () => resolveConfirmation(true),
     updateConfirmationInput,
+    updateConfirmationSecondaryInput,
   };
 }
 
@@ -52,11 +71,13 @@ export function ConfirmationDialog({
   onCancel,
   onConfirm,
   onInputChange,
+  onSecondaryInputChange,
 }: {
   state: ConfirmationDialogState;
   onCancel: () => void;
   onConfirm: () => void;
   onInputChange?: (value: string) => void;
+  onSecondaryInputChange?: (value: string) => void;
 }) {
   const variantClass = state.variant === "danger"
     ? styles.confirmDialogDanger
@@ -108,6 +129,28 @@ export function ConfirmationDialog({
                 />
               )}
               {state.inputError ? <small>{state.inputError}</small> : null}
+            </label>
+          ) : null}
+
+          {state.secondaryInputLabel ? (
+            <label className={styles.confirmDialogInput}>
+              {state.secondaryInputLabel}
+              {state.secondaryInputType === "date" || state.secondaryInputType === "text" ? (
+                <input
+                  type={state.secondaryInputType}
+                  value={state.secondaryInputValue || ""}
+                  onChange={(event) => onSecondaryInputChange?.(event.target.value)}
+                  placeholder={state.secondaryInputPlaceholder}
+                />
+              ) : (
+                <textarea
+                  value={state.secondaryInputValue || ""}
+                  onChange={(event) => onSecondaryInputChange?.(event.target.value)}
+                  placeholder={state.secondaryInputPlaceholder}
+                  rows={2}
+                />
+              )}
+              {state.secondaryInputError ? <small>{state.secondaryInputError}</small> : null}
             </label>
           ) : null}
 

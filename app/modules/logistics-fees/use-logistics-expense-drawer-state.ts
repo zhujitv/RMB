@@ -10,6 +10,7 @@ import {
   createTemporaryLogisticsExpenseRow,
   defaultLogisticsExpenseDetailTab,
   logisticsCurrencySummaryPlainText,
+  isVoidedLogisticsExpenseBill,
   logisticsExpenseBillAuditStatus,
   logisticsExpenseBillCanApprove,
   logisticsExpenseBillCanSubmit,
@@ -54,10 +55,16 @@ export function useLogisticsExpenseDrawerState({
   const auditStatus = logisticsExpenseBillAuditStatus(items);
   const invoiceStatus = logisticsExpenseBillInvoiceStatusFromRow(expense);
   const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
-  const canEditBillDetails = canEditAmount && logisticsExpenseBillIsEditable(auditStatus);
+  const isVoided = isVoidedLogisticsExpenseBill(expense);
+  const canEditBillDetails = !isVoided && canEditAmount && logisticsExpenseBillIsEditable(auditStatus);
   const containerSummary = logisticsExpenseContainerSummary(expense, items);
   const itemsSignature = items.map(logisticsExpenseDraftSignature).join("|");
-  const defaultTab = defaultLogisticsExpenseDetailTab({ auditStatus, invoiceStatus, paymentStatus });
+  const defaultTab = defaultLogisticsExpenseDetailTab({
+    auditStatus,
+    invoiceStatus,
+    paymentStatus,
+    status: isVoided ? "voided" : expense.status,
+  });
   const [drafts, setDrafts] = useState<Record<string, LogisticsExpenseDraft>>(() => logisticsExpenseDraftsFromItems(items));
   const [newExpenseRows, setNewExpenseRows] = useState<LogisticsExpense[]>([]);
   const [deletedExpenseIds, setDeletedExpenseIds] = useState<string[]>([]);
@@ -84,9 +91,9 @@ export function useLogisticsExpenseDrawerState({
   const billCurrencySummary = hasPendingChanges
     ? logisticsExpenseCurrencySummaryFromDrafts(editingExpenseRows, drafts)
     : logisticsExpenseCurrencySummaryFromItems(items);
-  const canSubmitThisBill = canSubmitDraft && logisticsExpenseBillCanSubmit(expense);
-  const shouldShowSubmitBill = canSubmitDraft && logisticsExpenseBillIsEditable(auditStatus);
-  const canReviewBill = canReview && logisticsExpenseBillCanApprove(expense);
+  const canSubmitThisBill = !isVoided && canSubmitDraft && logisticsExpenseBillCanSubmit(expense);
+  const shouldShowSubmitBill = !isVoided && canSubmitDraft && logisticsExpenseBillIsEditable(auditStatus);
+  const canReviewBill = !isVoided && canReview && logisticsExpenseBillCanApprove(expense);
   const invoiceGroups = expense.invoiceGroups?.length ? expense.invoiceGroups : logisticsInvoiceGroupsForBill(editingExpenseRows);
   const rejectReasons = [...new Set(items.map((item) => item.rejectReason || "").filter(Boolean))];
   const hasInvoiceNoticeFailure =
@@ -179,6 +186,7 @@ export function useLogisticsExpenseDrawerState({
     auditStatus,
     invoiceStatus,
     paymentStatus,
+    isVoided,
     canEditBillDetails,
     canReviewBill,
     canSubmitThisBill,

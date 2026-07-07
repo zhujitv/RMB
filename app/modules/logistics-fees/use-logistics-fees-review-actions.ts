@@ -17,7 +17,13 @@ type ReviewActionsParams = {
   status: string;
   costType: string;
   statementMonth: string;
-  loadExpenses: (nextPage?: number, nextKeyword?: string, nextStatus?: string, nextCostType?: string) => Promise<LogisticsExpense[]>;
+  loadExpenses: (
+    nextPage?: number,
+    nextKeyword?: string,
+    nextStatus?: string,
+    nextCostType?: string,
+    nextBillStatus?: string,
+  ) => Promise<LogisticsExpense[]>;
   loadStatement: (month?: string) => Promise<void>;
   requestConfirmation: (options: ConfirmationDialogState) => Promise<ConfirmationResult>;
   setBusyId: Dispatch<SetStateAction<string>>;

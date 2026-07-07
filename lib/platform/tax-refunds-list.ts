@@ -139,7 +139,7 @@ function taxRefundKeywordWhere(keyword: string): Prisma.ReceivableOrderWhereInpu
     OR: [
       { orderNo: { contains: keyword, mode: "insensitive" } },
       { blNo: { contains: keyword, mode: "insensitive" } },
-      { logisticsBills: { some: { deletedAt: null, billOfLadingNo: { contains: keyword, mode: "insensitive" } } } },
+      { logisticsBills: { some: { deletedAt: null, status: { not: "voided" }, billOfLadingNo: { contains: keyword, mode: "insensitive" } } } },
       { customsDeclarationNo: { contains: keyword, mode: "insensitive" } },
       { customerNameSnapshot: { contains: keyword, mode: "insensitive" } },
       { taxRefundStatus: { contains: keyword, mode: "insensitive" } },

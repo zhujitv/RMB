@@ -24,6 +24,7 @@ import {
   refreshLogisticsBillWorkflowStatus,
   reloadLogisticsExpenseRowsForBillIds,
   rowBillId,
+  rowBillStatus,
   type ActorContext,
   type AuditRequestLike,
   type CostLink,
@@ -32,6 +33,7 @@ import {
   type ReviewBill,
   type ReviewResult,
 } from "./logistics-expense-workflow-core";
+import { isVoidedLogisticsBill } from "./logistics-bill-state-machine";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
 export async function loadLogisticsExpenseReviewBills(identifiers: string[] = [], actor: ActorContext) {
@@ -66,6 +68,14 @@ export function collectLogisticsExpenseReviewBill(rows: LogisticsExpenseRow[] = 
   const billId = rowBillId(rows[0]);
   if (seenBillIds.has(billId)) return;
   seenBillIds.add(billId);
+  if (rows.some((row) => isVoidedLogisticsBill({ status: rowBillStatus(row) }))) {
+    results.push(logisticsExpenseReviewResultFromRows(rows, {
+      auditStatus: "已作废",
+      notificationStatus: "not_sent",
+      errorMessage: "物流费用账单已作废，不能审核。",
+    }));
+    return;
+  }
   const billAuditStatus = aggregateLogisticsExpenseStatus(rows, "auditStatus");
   if (billAuditStatus !== "待审核") {
     results.push(logisticsExpenseReviewResultFromRows(rows, {
@@ -96,6 +106,7 @@ export async function approveLogisticsExpenseBillsInTransaction(billIds: string[
       where: {
         id: { in: ids },
         deletedAt: null,
+        status: { not: "voided" },
         auditStatus: "待审核",
       },
       data: {
@@ -169,6 +180,7 @@ export async function approveLogisticsExpenseBillRowsInTransaction(rows: Logisti
         where: {
           id: billId,
           deletedAt: null,
+          status: { not: "voided" },
           auditStatus: "待审核",
         },
         data: {

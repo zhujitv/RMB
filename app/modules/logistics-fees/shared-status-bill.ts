@@ -59,6 +59,13 @@ export function logisticsExpenseBillPaymentStatusFromRow(expense: LogisticsExpen
   return paymentStatus;
 }
 
+export function isVoidedLogisticsExpenseBill(expense: LogisticsExpense) {
+  if (String(expense.status || "").trim() === "voided") return true;
+  return logisticsExpenseBillItems(expense).some(
+    (item) => String(item.status || "").trim() === "voided",
+  );
+}
+
 export function logisticsExpenseDetailInvoiceStatus(expense: LogisticsExpense) {
   return String(expense.detailInvoiceStatus || "未通知").trim() || "未通知";
 }
@@ -99,8 +106,9 @@ export function defaultLogisticsExpenseDetailTab({
   auditStatus?: string;
   invoiceStatus?: string;
   paymentStatus?: string;
+  status?: string;
 }) {
-  return logisticsBillDefaultTab({ auditStatus, invoiceStatus, paymentStatus });
+  return logisticsBillDefaultTab({ auditStatus, invoiceStatus, paymentStatus, status });
 }
 
 export function logisticsExpenseBillAuditStatus(items: LogisticsExpense[]) {
@@ -122,6 +130,7 @@ export function logisticsExpenseBillIsEditable(status: string) {
 }
 
 export function logisticsExpenseBillCanApprove(expense: LogisticsExpense) {
+  if (isVoidedLogisticsExpenseBill(expense)) return false;
   const items = logisticsExpenseBillItems(expense);
   return (
     canReviewLogisticsBill({
@@ -140,6 +149,7 @@ export function logisticsExpenseBillCanApprove(expense: LogisticsExpense) {
 }
 
 export function logisticsExpenseBillCanSubmit(expense: LogisticsExpense) {
+  if (isVoidedLogisticsExpenseBill(expense)) return false;
   const items = logisticsExpenseBillItems(expense);
   return (
     items.length > 0 &&
@@ -164,6 +174,7 @@ export function sortLogisticsExpenseBillsForDisplay(rows: LogisticsExpense[]) {
 }
 
 export function logisticsExpenseBillSortRank(expense: LogisticsExpense) {
+  if (isVoidedLogisticsExpenseBill(expense)) return 1000;
   const auditStatus = normalizeLogisticsExpenseSortStatus(
     logisticsExpenseBillAuditStatusFromRow(expense),
   );
@@ -211,6 +222,7 @@ export function expenseCostSyncText(expense: LogisticsExpense) {
 }
 
 export function logisticsExpenseEditBlockReason(expense: LogisticsExpense) {
+  if (isVoidedLogisticsExpenseBill(expense)) return "该物流费用账单已作废，不能修改";
   const auditStatus = logisticsExpenseBillAuditStatusFromRow(expense);
   const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
   const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
@@ -223,6 +235,7 @@ export function logisticsExpenseEditBlockReason(expense: LogisticsExpense) {
 }
 
 export function logisticsExpenseDeleteBlockReason(expense: LogisticsExpense) {
+  if (isVoidedLogisticsExpenseBill(expense)) return "该物流费用账单已作废，不能删除明细";
   const auditStatus = logisticsExpenseBillAuditStatusFromRow(expense);
   const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
   const paymentStatus = logisticsExpenseDetailPaymentStatus(expense);
@@ -234,4 +247,11 @@ export function logisticsExpenseDeleteBlockReason(expense: LogisticsExpense) {
     costSynced: Boolean(expense.costId) || costSyncStatus === "已同步",
     hasInvoiceDocument: Boolean(expense.invoiceDocumentId),
   });
+}
+
+export function logisticsExpenseBillCanVoid(expense: LogisticsExpense) {
+  if (isVoidedLogisticsExpenseBill(expense)) return false;
+  const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
+  if (paymentStatus.includes("已付款")) return false;
+  return true;
 }

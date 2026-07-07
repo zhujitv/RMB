@@ -8,12 +8,14 @@ import {
   formatOriginalCurrencyValue,
   logisticsCurrencyAmountByCode,
   logisticsExpenseBillAuditStatusFromRow,
+  logisticsExpenseBillCanVoid,
   logisticsExpenseBillCanApprove,
   logisticsExpenseBillInvoiceStatusFromRow,
   logisticsExpenseBillItems,
   logisticsExpenseBillPaymentStatusFromRow,
   logisticsExpenseCurrencySummaryFromItems,
   logisticsExpenseSelectionSelected,
+  isVoidedLogisticsExpenseBill,
   StatusPill,
 } from "./shared";
 
@@ -28,6 +30,7 @@ export function LogisticsExpenseBillTable({
   onToggleAllReviewableBills,
   onOpen,
   onSelectBill,
+  onVoidBill,
 }: {
   rows: LogisticsExpense[];
   loading: boolean;
@@ -39,6 +42,7 @@ export function LogisticsExpenseBillTable({
   onToggleAllReviewableBills: (checked: boolean) => void;
   onOpen: (expense: LogisticsExpense) => void;
   onSelectBill: (expense: LogisticsExpense, checked: boolean) => void;
+  onVoidBill?: (expense: LogisticsExpense) => void;
 }) {
   const colSpan = canReviewExpense ? 10 : 9;
   return (
@@ -90,6 +94,7 @@ export function LogisticsExpenseBillTable({
                 )}
                 onOpen={() => onOpen(expense)}
                 onSelect={(checked) => onSelectBill(expense, checked)}
+                onVoidBill={onVoidBill}
               />
             ))
           ) : (
@@ -112,6 +117,7 @@ function LogisticsExpenseCompactRow({
   selected,
   onOpen,
   onSelect,
+  onVoidBill,
 }: {
   expense: LogisticsExpense;
   active: boolean;
@@ -119,7 +125,9 @@ function LogisticsExpenseCompactRow({
   selected: boolean;
   onOpen: () => void;
   onSelect: (checked: boolean) => void;
+  onVoidBill?: (expense: LogisticsExpense) => void;
 }) {
+  const voided = isVoidedLogisticsExpenseBill(expense);
   const auditStatus = compactStatusLabel(
     logisticsExpenseBillAuditStatusFromRow(expense),
     "audit",
@@ -161,6 +169,7 @@ function LogisticsExpenseCompactRow({
       ) : null}
       <td className={styles.orderNoColumn}>
         <strong>{expense.shipmentNo || expense.orderNo || "-"}</strong>
+        {voided ? <StatusPill value="已作废" /> : null}
       </td>
       <td className={styles.blNoColumn}>
         {expense.blNo || expense.billOfLadingNo || "-"}
@@ -200,6 +209,18 @@ function LogisticsExpenseCompactRow({
         >
           详情
         </button>
+        {!voided && onVoidBill && logisticsExpenseBillCanVoid(expense) ? (
+          <button
+            className={styles.fileDangerButton}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onVoidBill(expense);
+            }}
+          >
+            作废
+          </button>
+        ) : null}
       </td>
     </tr>
   );

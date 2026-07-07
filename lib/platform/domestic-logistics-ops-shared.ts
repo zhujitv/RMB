@@ -181,7 +181,7 @@ export function domesticLogisticsOrderInclude(options: { shipsgoTrackings?: bool
       orderBy: [{ assignedAt: "desc" }],
     },
     logisticsBills: {
-      where: { deletedAt: null },
+      where: { deletedAt: null, status: { not: "voided" } },
       select: {
         id: true,
         orderId: true,
@@ -194,7 +194,7 @@ export function domesticLogisticsOrderInclude(options: { shipsgoTrackings?: bool
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     },
     logisticsExpenses: {
-      where: { deletedAt: null },
+      where: { deletedAt: null, bill: { is: { status: { not: "voided" } } } },
       select: {
         id: true,
         billId: true,

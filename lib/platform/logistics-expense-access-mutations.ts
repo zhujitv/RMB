@@ -206,6 +206,9 @@ export async function ensureLogisticsExpenseBill(
   const auditStatus = LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "草稿";
   const now = new Date();
   const existing = await prisma.logisticsBill.findUnique({ where: { billKey } });
+  if (existing?.status === "voided") {
+    throw codedError("该订单/供应商对应物流费用账单已作废，不能继续追加费用，请重新核对订单后创建新账单。", 400, "LOGISTICS_BILL_VOIDED_CREATE_BLOCKED");
+  }
   if (!existing) {
     const legacyBill = legacyBillKey
       ? await prisma.logisticsBill.findFirst({

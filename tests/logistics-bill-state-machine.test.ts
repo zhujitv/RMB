@@ -110,5 +110,16 @@ test("logistics bill state exposes normalized booleans for UI and API guards", (
     canDeleteDetails: false,
     canUploadInvoice: true,
     canMarkPaid: true,
+    isVoided: false,
   });
+  const voided = logisticsBillState({
+    auditStatus: "审核通过",
+    invoiceStatus: "已上传",
+    paymentStatus: "待付款",
+    status: "voided",
+  });
+  assert.equal(voided.isVoided, true);
+  assert.equal(voided.canUploadInvoice, false);
+  assert.equal(voided.canMarkPaid, false);
+  assert.equal(voided.canEditDetails, false);
 });

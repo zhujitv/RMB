@@ -72,6 +72,7 @@ export async function listWorkbenchTodoDiagnostics(actor: ActorLike, orderNos: s
   const bills = await prisma.logisticsBill.findMany({
     where: {
       deletedAt: null,
+      status: { not: "voided" },
       AND: [
         accessWhere,
         ...(normalizedOrderNos.length ? [{ order: { is: { orderNo: { in: normalizedOrderNos } } } }] : []),

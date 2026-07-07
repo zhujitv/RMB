@@ -9,6 +9,7 @@ import {
   logisticsExpenseBillInvoiceStatusFromRow,
   logisticsExpenseBillItems,
   logisticsExpenseBillPaymentStatusFromRow,
+  isVoidedLogisticsExpenseBill,
 } from "./shared-status-bill";
 
 export function logisticsExpensePayButtonState(expense: LogisticsExpense) {
@@ -35,7 +36,12 @@ export function logisticsExpensePayButtonState(expense: LogisticsExpense) {
     !["校验通过", "人工确认通过"].includes(String(item.invoiceValidationStatus || "未上传")),
   );
   const state = {
-    ...logisticsBillPayState({ auditStatus, invoiceStatus, paymentStatus }),
+    ...logisticsBillPayState({
+      auditStatus,
+      invoiceStatus,
+      paymentStatus,
+      status: isVoidedLogisticsExpenseBill(expense) ? "voided" : expense.status,
+    }),
     rule: PAY_BUTTON_RULE,
   };
   return {

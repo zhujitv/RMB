@@ -23,8 +23,15 @@ type UseLogisticsFeesBillActionsParams = {
   submittedKeyword: string;
   status: string;
   costType: string;
+  billStatus: string;
   statementMonth: string;
-  loadExpenses: (nextPage?: number, nextKeyword?: string, nextStatus?: string, nextCostType?: string) => Promise<LogisticsExpense[]>;
+  loadExpenses: (
+    nextPage?: number,
+    nextKeyword?: string,
+    nextStatus?: string,
+    nextCostType?: string,
+    nextBillStatus?: string,
+  ) => Promise<LogisticsExpense[]>;
   loadStatement: (month?: string) => Promise<void>;
   setError: Dispatch<SetStateAction<string>>;
   setNotice: Dispatch<SetStateAction<string>>;
@@ -44,6 +51,7 @@ export function useLogisticsFeesBillActions({
   submittedKeyword,
   status,
   costType,
+  billStatus,
   statementMonth,
   loadExpenses,
   loadStatement,
@@ -97,13 +105,16 @@ export function useLogisticsFeesBillActions({
     rejectExpense,
     resendInvoiceNotice,
     markExpenseBillPaid,
+    voidExpenseBill,
   } = createLogisticsFeesWorkflowActions({
     busyId,
     statementMonth,
+    billStatus,
     loadStatement,
     requestConfirmation,
     setBusyId,
     setRows,
+    setTotal,
     setSelectedBillIds,
     setError,
     setNotice,
@@ -136,5 +147,6 @@ export function useLogisticsFeesBillActions({
     rejectExpense,
     resendInvoiceNotice,
     markExpenseBillPaid,
+    voidExpenseBill,
   };
 }

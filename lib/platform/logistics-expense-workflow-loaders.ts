@@ -15,6 +15,7 @@ import {
   asRecord,
   rowAuditStatus,
   rowBillId,
+  rowBillStatus,
   type ActorContext,
   type LogisticsExpenseRow,
   type LogisticsExpenseStateSnapshot,
@@ -225,6 +226,8 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
 export async function logisticsExpenseBillEditBlockReason(expense: LogisticsExpenseStateSnapshot & UnknownRecord, actor: ActorContext) {
   const rows = await loadLogisticsExpenseBillRowsForAction(rowBillId(expense), actor);
   const billStatus = aggregateLogisticsExpenseStatus(rows, "auditStatus");
-  if (!logisticsBillStateEditBlockReason({ auditStatus: billStatus })) return "";
-  return `账单${billStatus || "当前状态"}，不能修改明细，请先撤回为草稿。`;
+  const voidStatus = rows.map(rowBillStatus).find((status) => status === "voided") || "normal";
+  const reason = logisticsBillStateEditBlockReason({ auditStatus: billStatus, status: voidStatus });
+  if (!reason) return "";
+  return voidStatus === "voided" ? reason : `账单${billStatus || "当前状态"}，不能修改明细，请先撤回为草稿。`;
 }

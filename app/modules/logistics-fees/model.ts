@@ -61,6 +61,11 @@ export const AUDIT_FILTERS = [
   { label: "已上传发票", value: "uploaded" },
   { label: "已确认发票", value: "confirmedInvoice" },
 ];
+export const BILL_STATUS_FILTERS = [
+  { label: "正常账单", value: "normal" },
+  { label: "已作废账单", value: "voided" },
+  { label: "全部账单", value: "all" },
+];
 export const PAYMENT_STATUSES = ["待开票", "已开票", "待付款", "已付款"];
 export const PAY_BUTTON_RULE = LOGISTICS_BILL_PAY_BUTTON_RULE;
 export const PAY_BUTTON_DISABLED_TOOLTIP = LOGISTICS_BILL_PAY_DISABLED_TOOLTIP;
@@ -85,6 +90,12 @@ export type LogisticsExpense = {
   isBill?: boolean;
   isShipment?: boolean;
   isTemporary?: boolean;
+  status?: string;
+  voidedAt?: string | null;
+  voidedBy?: UserLite | null;
+  voidedById?: string;
+  voidReason?: string;
+  voidRemark?: string;
   itemCount?: number;
   billCount?: number;
   items?: LogisticsExpense[];
@@ -343,6 +354,8 @@ export type LogisticsExpenseMutationResult = {
   successCount?: number;
   failedCount?: number;
   results?: LogisticsExpenseReviewResult[];
+  voidedBillId?: string;
+  voidedCostIds?: string[];
 };
 
 export type LogisticsExpenseReviewResult = {

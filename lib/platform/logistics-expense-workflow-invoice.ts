@@ -40,7 +40,7 @@ import {
   runLogisticsInvoiceOcrTaskWithTimeout,
   summarizeInvoiceValidationBlockReason,
 } from "./logistics-invoice-validation";
-import { canMarkLogisticsBillPaid, canUploadLogisticsBillInvoice } from "./logistics-bill-state-machine";
+import { canMarkLogisticsBillPaid, canUploadLogisticsBillInvoice, isVoidedLogisticsBill } from "./logistics-bill-state-machine";
 import { assertCanDeleteLogisticsInvoiceFile } from "./file-delete-policy";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 import {
@@ -49,12 +49,19 @@ import {
   refreshLogisticsBillWorkflowStatus,
   rowAuditStatus,
   rowBillId,
+  rowBillStatus,
   type ActorContext,
   type AuditRequestLike,
   type FormDataLike,
   type LogisticsExpenseRow,
   type UnknownRecord,
 } from "./logistics-expense-workflow-core";
+
+function assertLogisticsBillNotVoided(rows: LogisticsExpenseRow[] = [], message = "该物流费用账单已作废，仅允许查看详情和操作日志。") {
+  if (rows.some((row) => isVoidedLogisticsBill({ status: rowBillStatus(row) }))) {
+    throw codedError(message, 400, "LOGISTICS_BILL_VOIDED_ACTION_BLOCKED");
+  }
+}
 
 function paymentStatusUpdateAfterInvoiceProgress(billRows: LogisticsExpenseRow[]) {
 	const billAuditStatus = aggregateLogisticsExpenseStatus(billRows, "auditStatus");
@@ -69,11 +76,12 @@ function paymentStatusUpdateAfterInvoiceProgress(billRows: LogisticsExpenseRow[]
 
 export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, actor: ActorContext, id: string, formData: FormDataLike) {
   const before = await loadLogisticsExpenseForAction(id, actor);
-  if (!canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(before) })) {
+  if (!canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(before), status: rowBillStatus(before) })) {
     throw codedError("只有已提交待审核或审核通过的物流费用账单可以上传发票。", 400, "LOGISTICS_EXPENSE_NOT_READY_FOR_INVOICE");
   }
   if (!canUploadLogisticsExpenseInvoice(actor, before)) throw permissionError("无权限上传该物流费用发票", 403);
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  assertLogisticsBillNotVoided(rows);
   const requestedGroup = logisticsInvoiceGroupForKey(formData.get("invoiceGroup") || formData.get("invoiceGroupKey"));
   const fallbackGroup = logisticsInvoiceGroupForExpense(before);
   const invoiceGroup = requestedGroup || fallbackGroup;
@@ -84,7 +92,7 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
   if (!targetRows.length) throw codedError(`当前账单没有${invoiceGroup.label}对应费用，不能上传该分组发票。`, 400, "LOGISTICS_INVOICE_GROUP_EMPTY");
   const mixedCurrencyViolation = logisticsInvoiceGroupMixedCurrencyViolation(targetRows, invoiceGroup);
   if (mixedCurrencyViolation) throw codedError(mixedCurrencyViolation, 400, "LOGISTICS_INVOICE_GROUP_MIXED_CURRENCY");
-  const blocked = targetRows.find((row) => !canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(row) }));
+  const blocked = targetRows.find((row) => !canUploadLogisticsBillInvoice({ auditStatus: rowAuditStatus(row), status: rowBillStatus(row) }));
   if (blocked) throw codedError("该发票分组包含尚未提交审核的费用，不能上传发票。", 400, "LOGISTICS_EXPENSE_INVOICE_UPLOAD_STATUS_BLOCKED");
   const file = formData.get("file");
   if (!file || typeof file !== "object" || typeof (file as { arrayBuffer?: unknown }).arrayBuffer !== "function") {
@@ -175,6 +183,7 @@ export async function rerunLogisticsExpenseInvoiceRecognition(request: AuditRequ
   assertCanConfirmLogisticsInvoice(actor);
   const before = await loadLogisticsExpenseForAction(id, actor);
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  assertLogisticsBillNotVoided(rows);
   const requestedGroup = logisticsInvoiceGroupForKey(input.invoiceGroup || input.invoiceGroupKey);
   const fallbackGroup = logisticsInvoiceGroupForExpense(before);
   const invoiceGroup = requestedGroup || fallbackGroup;
@@ -223,6 +232,7 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
   const canManageInvoice = canUploadLogisticsExpenseInvoice(actor, before);
   assertCanDeleteLogisticsInvoiceFile({ canManageInvoice, invoiceConfirmed: false });
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  assertLogisticsBillNotVoided(rows);
   const currentPaymentStatus = aggregateLogisticsExpenseStatus(rows, "paymentStatus");
   if (currentPaymentStatus.includes("已付款")) {
     throw codedError("已付款账单不能删除发票。", 400, "LOGISTICS_INVOICE_PAID_DELETE_BLOCKED");
@@ -300,6 +310,7 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
 export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
   assertCanConfirmLogisticsInvoice(actor);
   const before = await loadLogisticsExpenseForAction(id, actor);
+  assertLogisticsBillNotVoided([before]);
   if (before.invoiceStatus !== "已上传") throw codedError("只有已上传发票的物流费用可以确认。", 400, "LOGISTICS_INVOICE_NOT_UPLOADED");
   if (!before.invoiceDocumentId) throw codedError("发票文件不能为空。", 400, "LOGISTICS_INVOICE_FILE_REQUIRED");
   if (!invoiceValidationStatusCanContinue(before.invoiceValidationStatus)) {
@@ -335,6 +346,7 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
   assertCanConfirmLogisticsInvoice(actor);
   const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   if (!billRows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
+  assertLogisticsBillNotVoided(billRows);
   const before = billRows[0];
   const paymentStatus = nonEmpty(input.paymentStatus || input.status || "已付款");
   if (!LOGISTICS_EXPENSE_PAYMENT_STATUSES.includes(paymentStatus)) {
@@ -350,6 +362,7 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
     auditStatus: billAuditStatus,
     invoiceStatus: billInvoiceStatus,
     paymentStatus: billPaymentStatus,
+    status: rowBillStatus(before),
   })) {
     throw codedError("需审核通过且已上传发票后才可标记付款。", 400, "LOGISTICS_PAYMENT_STATE_INVALID");
   }
