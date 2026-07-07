@@ -23,6 +23,7 @@ export const backend = [
   readFileSync("lib/platform/logistics-expense-shared.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access-model.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-cost-payment.ts", "utf8"),
   readLogisticsExpenseAccessSource(),
   readFileSync("lib/platform/logistics-expense-access-permissions.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access-mutations.ts", "utf8"),

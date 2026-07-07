@@ -303,6 +303,15 @@ test("logistics paid button is locked by bill state machine", () => {
     updateLogisticsExpensePaymentStatusSource,
     /orderCost\.updateMany/,
   );
+  assert.match(backend, /export function logisticsCostPaymentDataForStatus/);
+  assert.match(backend, /export function logisticsCostPaymentDataFromExpense/);
+  assert.match(backend, /const paymentData = logisticsCostPaymentDataFromExpense\(expense\)/);
+  assert.match(
+    updateLogisticsExpensePaymentStatusSource,
+    /const costPaymentData = logisticsCostPaymentDataForStatus\(paymentStatus, paymentDate\)/,
+  );
+  assert.match(updateLogisticsExpensePaymentStatusSource, /paid: costPaymentData\.paid/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /paidAt: costPaymentData\.paidAt/);
 });
 
 test("sales commission base uses actual received payments minus logistics costs", () => {

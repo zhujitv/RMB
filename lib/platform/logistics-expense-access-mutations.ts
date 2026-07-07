@@ -32,6 +32,7 @@ import {
   logisticsExpenseBillOfLadingNo,
   logisticsExpenseOrderSummary,
 } from "./logistics-expense-access-serialization";
+import { logisticsCostPaymentDataFromExpense } from "./logistics-expense-cost-payment";
 import { logisticsExpenseAccessWhere } from "./logistics-expense-access-permissions";
 import {
   DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD,
@@ -364,6 +365,7 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
 	const currentActorId = logisticsExpenseActorId(actor);
 	const invoiceUploaded = Boolean(expense.invoiceDocumentId)
 		|| ["已上传", "已确认", "已上传发票", "已确认发票"].includes(nonEmpty(expense.invoiceStatus || expense.detailInvoiceStatus));
+	const paymentData = logisticsCostPaymentDataFromExpense(expense);
 	const costData = {
     orderId: expense.orderId,
     supplierId: expense.supplierId,
@@ -377,10 +379,12 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
     exchangeRateType: expense.exchangeRateType,
     amount: expense.amount ?? 0,
     amountCny: expense.amountCny ?? 0,
-    paymentStatus: "待支付",
+    paymentStatus: paymentData.paymentStatus,
+    paid: paymentData.paid,
+    paidAt: paymentData.paidAt,
     costConfirmed: true,
     costConfirmedAt: new Date(),
-    paymentDate: null,
+    paymentDate: paymentData.paymentDate,
 		invoiceStatus: invoiceUploaded ? "已收到" : "未收到",
 		sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE,
 		sourceId: expense.id,

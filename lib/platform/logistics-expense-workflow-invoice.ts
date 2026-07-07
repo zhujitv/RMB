@@ -24,6 +24,7 @@ import {
   serializeLogisticsExpense,
   serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
+import { logisticsCostPaymentDataForStatus } from "./logistics-expense-cost-payment";
 import {
   logisticsInvoiceExpenseMatchesGroup,
   logisticsInvoiceGroupCurrencyViolation,
@@ -384,11 +385,14 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
   const savedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
   const costIds = [...new Set(savedRows.map((row) => nonEmpty(row.costId)).filter(Boolean))];
   if (costIds.length) {
+    const costPaymentData = logisticsCostPaymentDataForStatus(paymentStatus, paymentDate);
     await prisma.orderCost.updateMany({
       where: { id: { in: costIds } },
       data: {
-        paymentStatus: paymentStatus === "已付款" ? "已支付" : "待支付",
-        paymentDate,
+        paymentStatus: costPaymentData.paymentStatus,
+        paid: costPaymentData.paid,
+        paidAt: costPaymentData.paidAt,
+        paymentDate: costPaymentData.paymentDate,
       },
     }).catch(() => null);
   }

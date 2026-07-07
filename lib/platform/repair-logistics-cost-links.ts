@@ -8,6 +8,7 @@ import {
   normalizedCostType,
 } from "./shared";
 import { createOrUpdateCostFromLogisticsExpense } from "./logistics-expense-access-mutations";
+import { logisticsCostPaymentDataFromExpense } from "./logistics-expense-cost-payment";
 import { linkLogisticsExpenseInvoiceDocumentsToCosts } from "./logistics-expense-workflow-review-helpers";
 
 type RepairInput = {
@@ -98,6 +99,8 @@ const repairExpenseSelect = Prisma.validator<Prisma.LogisticsExpenseSelect>()({
       billOfLadingNo: true,
       auditStatus: true,
       invoiceStatus: true,
+      paymentStatus: true,
+      paymentDate: true,
       reviewedAt: true,
     },
   },
@@ -185,6 +188,7 @@ export async function repairLogisticsCostLinks(input: RepairInput = {}) {
   const issues: RepairIssue[] = [];
   const repaired: Array<{ logisticsFeeId: string; costId: string }> = [];
   const createdMissing: Array<{ logisticsFeeId: string; costId: string }> = [];
+  const syncedPayment: Array<{ logisticsFeeId: string; costId: string; paymentStatus: string }> = [];
   const skipped: Array<{ logisticsFeeId: string; costId: string; reason: string }> = [];
   const usedCostIds = new Set<string>();
 
@@ -192,6 +196,20 @@ export async function repairLogisticsCostLinks(input: RepairInput = {}) {
     const linkedCost = expense.costId ? costs.find((cost) => cost.id === expense.costId) : null;
     if (linkedCost && linkedCost.sourceType === LOGISTICS_FEE_COST_SOURCE_TYPE && linkedCost.sourceId === expense.id) {
       skipped.push({ logisticsFeeId: expense.id, costId: linkedCost.id, reason: "already-linked" });
+      if (!dryRun) {
+        const paymentData = logisticsCostPaymentDataFromExpense(expense);
+        await prisma.orderCost.update({
+          where: { id: linkedCost.id },
+          data: {
+            invoiceStatus: logisticsInvoiceStatusForCost(expense),
+            paymentStatus: paymentData.paymentStatus,
+            paid: paymentData.paid,
+            paidAt: paymentData.paidAt,
+            paymentDate: paymentData.paymentDate,
+          },
+        });
+        syncedPayment.push({ logisticsFeeId: expense.id, costId: linkedCost.id, paymentStatus: paymentData.paymentStatus });
+      }
       continue;
     }
 
@@ -231,6 +249,7 @@ export async function repairLogisticsCostLinks(input: RepairInput = {}) {
         sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE,
         sourceId: expense.id,
         invoiceStatus: logisticsInvoiceStatusForCost(expense),
+        ...logisticsCostPaymentDataFromExpense(expense),
       },
     });
     await prisma.logisticsExpense.update({
@@ -251,10 +270,12 @@ export async function repairLogisticsCostLinks(input: RepairInput = {}) {
     scanned: expenses.length,
     repaired: repaired.length,
     createdMissing: createdMissing.length,
+    syncedPayment: syncedPayment.length,
     skipped: skipped.length,
     issues,
     repairedLinks: repaired,
     createdMissingLinks: createdMissing,
+    syncedPaymentLinks: syncedPayment,
     skippedLinks: skipped,
   };
 }

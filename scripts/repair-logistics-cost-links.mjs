@@ -39,13 +39,17 @@ try {
     scanned: stats.scanned,
     repaired: stats.repaired,
     createdMissing: stats.createdMissing,
+    syncedPayment: stats.syncedPayment,
     skipped: stats.skipped,
     dryRun: stats.dryRun,
     createMissing: stats.createMissing,
     issues: stats.issues,
     repairedLinks: stats.repairedLinks,
     createdMissingLinks: stats.createdMissingLinks,
+    syncedPaymentLinks: stats.syncedPaymentLinks,
   }, null, 2));
 } finally {
   await prisma.$disconnect();
 }
+
+process.exit(0);
