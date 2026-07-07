@@ -109,7 +109,8 @@ test("tax refund logistics completeness reports required invoice gaps with exact
   assert.match(completeness, /includedFeeTypes: uniqueNormalizedCostTypes\(groupCosts\.length \? groupCosts : \[primaryCost\]\)/);
   assert.match(completeness, /function logisticsRequirementMatchesCoverage/);
   assert.match(completeness, /coverage\.includedFeeTypes\.some\(\(costType\) => requiredTypes\.has\(costType\)\)/);
-  assert.match(completeness, /const completed = directCompleted \|\| matchedCoverages\.length > 0/);
+  assert.match(completeness, /const matchedUploadedCoverages = matchedCoverages\.filter\(\(coverage\) => coverage\.uploadedFileUrl\)/);
+  assert.match(completeness, /const completed = directCompleted \|\| matchedUploadedCoverages\.length > 0/);
   assert.match(completeness, /invoiceGroupId: coverage\.invoiceGroupId/);
   assert.match(completeness, /includedFeeTypes/);
   assert.match(completeness, /tax-refund-logistics-invoice-decision/);
@@ -125,7 +126,11 @@ test("tax refund detail displays grouped logistics invoices by included fee type
   assert.match(completeness, /logisticsExpenseInvoiceCostLike/);
   assert.match(completeness, /includedFeeTypes: uniqueNormalizedCostTypes\(groupCosts\.length \? groupCosts : \[primaryCost\]\)/);
   assert.match(completeness, /uploadedFileUrl: documentUploadedFileExists\(document\)/);
+  assert.match(completeness, /return Boolean\(document\.fileUrl \|\| document\.storageKey\)/);
   assert.match(completeness, /taxRefundDocumentTypeMatched: completed/);
+  assert.match(taxRefundService, /relatedModule: "SUPPLIER"[\s\S]*documentType: "SUPPLIER_INVOICE"[\s\S]*uploadStatus: "SUCCESS"/);
+  assert.match(taxRefundService, /groupedInvoiceDocuments/);
+  assert.match(taxRefundService, /uniqueTaxRefundDocuments\(\[[\s\S]*costs\.flatMap\(\(cost\) => cost\.documents \|\| \[\]\),[\s\S]*groupedInvoiceDocuments/);
   assert.match(taxRefundModule, /function logisticsInvoiceDocumentsForCost/);
   assert.match(taxRefundModule, /completeness\.logistics\?\.requirements/);
   assert.match(taxRefundDetailComponents, /function LogisticsInvoiceRequirementStatus/);

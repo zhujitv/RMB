@@ -52,7 +52,7 @@ export function logisticsExpenseInvoiceCostLike(expense: LogisticsExpenseInvoice
 }
 
 export function documentUploadedFileExists(document: OrderDocumentLike = {}) {
-  return Boolean(document.fileUrl || document.storageKey || document.id);
+  return Boolean(document.fileUrl || document.storageKey);
 }
 
 export function logisticsInvoiceGroupCoverages(documents: OrderDocumentLike[] = [], logisticsInvoiceCosts: CostLike[] = []) {

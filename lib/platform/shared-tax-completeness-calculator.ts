@@ -26,6 +26,7 @@ import {
 } from "./shared-tax-completeness-types";
 import { serializeDomesticLogisticsInfo } from "./shared-serialization";
 import {
+  documentUploadedFileExists,
   logisticsInvoiceGroupCoverages,
   logisticsRequirementMatchesCoverage,
   logisticsRequirementMissingLabel,
@@ -157,15 +158,17 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
       doc.documentType === "SUPPLIER_INVOICE"
       && doc.relatedModule === "SUPPLIER"
       && doc.costId === cost.id
+      && documentUploadedFileExists(doc)
     )));
     const matchedCoverages = logisticsInvoiceCoverages.filter((coverage) => logisticsRequirementMatchesCoverage(requirement, coverage));
-    const completed = directCompleted || matchedCoverages.length > 0;
+    const matchedUploadedCoverages = matchedCoverages.filter((coverage) => coverage.uploadedFileUrl);
+    const completed = directCompleted || matchedUploadedCoverages.length > 0;
     logTaxRefundLogisticsInvoiceDecision({
       order,
       requirement,
       costs,
       directCompleted,
-      matchedCoverages,
+      matchedCoverages: matchedUploadedCoverages,
       completed,
     });
     if (!costs.length) {
@@ -218,7 +221,7 @@ export function taxDocumentCompleteness(order: TaxOrderLike = {}) {
         currency: cost.currency || "CNY",
         invoiceLabel: requirement.label,
       })),
-      invoiceGroups: matchedCoverages.map((coverage) => ({
+      invoiceGroups: matchedUploadedCoverages.map((coverage) => ({
         documentId: coverage.documentId,
         logisticsExpenseId: coverage.logisticsExpenseId,
         invoiceGroupId: coverage.invoiceGroupId,

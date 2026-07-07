@@ -214,11 +214,26 @@ async function getTaxRefundLogisticsDocumentsSection(orderId: string, actor: Act
         orderBy: [{ createdAt: "desc" }],
         take: 80,
       },
+      documents: {
+        where: {
+          deletedAt: null,
+          relatedModule: "SUPPLIER",
+          documentType: "SUPPLIER_INVOICE",
+          uploadStatus: "SUCCESS",
+        },
+        select: taxRefundDocumentLightSelect,
+        orderBy: [{ createdAt: "desc" }],
+        take: 120,
+      },
     },
   });
   if (!order) throw permissionError("应收订单不存在或无权查看", 404);
   const costs = (order.costs || []).map((cost) => serializeTaxRefundLightCost(cost, order as Record<string, unknown>));
-  const documents = costs.flatMap((cost) => cost.documents || []);
+  const groupedInvoiceDocuments = (order.documents || []).map((document) => serializeTaxRefundLightDocument(document, order as Record<string, unknown>));
+  const documents = uniqueTaxRefundDocuments([
+    ...costs.flatMap((cost) => cost.documents || []),
+    ...groupedInvoiceDocuments,
+  ]);
   const domesticLogisticsInfo = combineTaxRefundDomesticLogisticsInfos(order.domesticLogisticsInfos || [])[0] || null;
   return {
     id: order.id,
