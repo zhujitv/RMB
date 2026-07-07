@@ -114,8 +114,6 @@ export function useLogisticsFeesBillActions({
     rows,
     setRows,
     setTotal,
-    statementMonth,
-    loadStatement,
     setBusyId,
     setDeletingId,
     setError,

@@ -63,6 +63,15 @@ export function logisticsExpenseDetailInvoiceStatus(expense: LogisticsExpense) {
   return String(expense.detailInvoiceStatus || "未通知").trim() || "未通知";
 }
 
+export function logisticsExpenseDetailPaymentStatus(expense: LogisticsExpense) {
+  const detailPaymentStatus = String(expense.detailPaymentStatus || "").trim();
+  if (detailPaymentStatus) return detailPaymentStatus;
+  const billPaymentStatus = String(expense.billPaymentStatus || "").trim();
+  const paymentStatus = String(expense.paymentStatus || "").trim();
+  if (billPaymentStatus && paymentStatus === billPaymentStatus) return "待开票";
+  return paymentStatus || "待开票";
+}
+
 export function logisticsExpenseBillItems(expense: LogisticsExpense) {
   return expense.items?.length ? expense.items : [expense];
 }
@@ -216,7 +225,7 @@ export function logisticsExpenseEditBlockReason(expense: LogisticsExpense) {
 export function logisticsExpenseDeleteBlockReason(expense: LogisticsExpense) {
   const auditStatus = logisticsExpenseBillAuditStatusFromRow(expense);
   const invoiceStatus = logisticsExpenseDetailInvoiceStatus(expense);
-  const paymentStatus = logisticsExpenseBillPaymentStatusFromRow(expense);
+  const paymentStatus = logisticsExpenseDetailPaymentStatus(expense);
   const costSyncStatus = expenseCostSyncText(expense);
   return logisticsBillDeleteBlockReason({
     auditStatus,

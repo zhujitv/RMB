@@ -14,8 +14,6 @@ type DeleteLogisticsExpenseParams = {
   rows: LogisticsExpense[];
   setRows: Dispatch<SetStateAction<LogisticsExpense[]>>;
   setTotal: Dispatch<SetStateAction<number>>;
-  statementMonth: string;
-  loadStatement: (month?: string) => Promise<void>;
   setBusyId: Dispatch<SetStateAction<string>>;
   setDeletingId: Dispatch<SetStateAction<string>>;
   setError: Dispatch<SetStateAction<string>>;
@@ -28,8 +26,6 @@ export function createDeleteLogisticsExpenseAction({
   rows,
   setRows,
   setTotal,
-  statementMonth,
-  loadStatement,
   setBusyId,
   setDeletingId,
   setError,
@@ -73,7 +69,6 @@ export function createDeleteLogisticsExpenseAction({
       const removal = removeLogisticsExpenseFromRows(rows, expense.id);
       setRows(result.bill ? replaceLogisticsExpenseBillsInRows(removal.rows, [result.bill]) : removal.rows);
       if (removal.removedBill) setTotal((current) => Math.max(0, current - 1));
-      await loadStatement(statementMonth);
       void onRefreshTodos?.();
       setNotice("已删除");
     } catch (deleteError) {

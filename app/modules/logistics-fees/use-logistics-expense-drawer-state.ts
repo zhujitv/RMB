@@ -132,13 +132,13 @@ export function useLogisticsExpenseDrawerState({
       setBillSaved(false);
       return;
     }
-    if (!canEditBillDetails) {
-      onValidationError(`账单${auditStatus}，不能删除费用明细`);
-      return;
-    }
     const blockReason = logisticsExpenseDeleteBlockReason(row);
     if (blockReason) {
       onValidationError(blockReason);
+      return;
+    }
+    if (!canEditBillDetails) {
+      onValidationError(`账单${auditStatus}，不能删除费用明细`);
       return;
     }
     setDeletedExpenseIds((current) => current.includes(row.id) ? current : [...current, row.id]);

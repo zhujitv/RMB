@@ -130,6 +130,31 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.match(backend, /LOGISTICS_EXPENSE_CONFIRMED_INVOICE_DELETE_BLOCKED/);
   assert.match(backend, /LOGISTICS_EXPENSE_INVOICED_DELETE_BLOCKED/);
   assert.match(backend, /LOGISTICS_EXPENSE_PAID_DELETE_BLOCKED/);
+  assert.match(logisticsFeesShared, /export function logisticsExpenseDetailPaymentStatus/);
+  assert.match(
+    logisticsFeesShared,
+    /if \(billPaymentStatus && paymentStatus === billPaymentStatus\) return "待开票"/,
+  );
+  assert.match(
+    logisticsFeesShared,
+    /export function logisticsExpenseDeleteBlockReason[\s\S]*paymentStatus = logisticsExpenseDetailPaymentStatus\(expense\)/,
+  );
+  assert.doesNotMatch(
+    logisticsFeesShared.match(/export function logisticsExpenseDeleteBlockReason[\s\S]*?\n}\n/)?.[0] || "",
+    /logisticsExpenseBillPaymentStatusFromRow/,
+  );
+  assert.match(
+    logisticsExpenseDetailLineSource,
+    /const deleteBlockReason = logisticsExpenseDeleteBlockReason\(expense\)/,
+  );
+  assert.doesNotMatch(
+    logisticsExpenseDetailLineSource,
+    /const deleteBlockReason = billEditable/,
+  );
+  assert.match(
+    logisticsFeesDetails,
+    /const blockReason = logisticsExpenseDeleteBlockReason\(row\);[\s\S]*if \(blockReason\)[\s\S]*if \(!canEditBillDetails\)/,
+  );
   assert.match(backend, /deletedAt: new Date\(\)/);
   assert.match(backend, /deletedItems: preparedDeletes\.map/);
   assert.match(logisticsExpenseDeleteRoute, /\.\.\.result/);
@@ -146,7 +171,7 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
   assert.match(deleteExpenseSource, /setRows/);
   assert.match(logisticsModule, /removeLogisticsExpenseFromRows/);
   assert.match(logisticsModule, /replaceLogisticsExpenseBillsInRows/);
-  assert.match(deleteExpenseSource, /loadStatement\(statementMonth\)/);
+  assert.doesNotMatch(deleteExpenseSource, /loadStatement\(statementMonth\)/);
   assert.match(deleteExpenseSource, /setNotice\("已删除"\)/);
   assert.doesNotMatch(deleteExpenseSource, /loadExpenses\(/);
   assert.doesNotMatch(deleteExpenseSource, /setExpandedId\(""\)/);

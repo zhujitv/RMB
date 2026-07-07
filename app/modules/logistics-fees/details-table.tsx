@@ -122,9 +122,7 @@ function LogisticsExpenseDetailLine({
   const recommendedCurrency = logisticsCostTypeDefaultCurrency(draft.costType);
   const shouldShowCurrencySuggestion =
     Boolean(draft.currencyTouched) && originalCurrency !== recommendedCurrency;
-  const deleteBlockReason = billEditable
-    ? logisticsExpenseDeleteBlockReason(expense)
-    : `账单${billAuditStatus}，不能删除明细`;
+  const deleteBlockReason = logisticsExpenseDeleteBlockReason(expense);
   return (
     <tr>
       <td>
