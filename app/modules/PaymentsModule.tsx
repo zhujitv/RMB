@@ -232,6 +232,7 @@ export function PaymentsModule({
             setCreateOpen(false);
             setEditPayment(null);
             setNotice(editPayment ? "收款已更新" : "收款已保存");
+            void loadPayments(page, submittedFilters);
           }}
         />
       ) : null}

@@ -55,6 +55,8 @@ type PaymentListFilters = {
   month: string;
 };
 
+const FOREIGN_PAYMENT_CURRENCIES = new Set(["USD", "EUR", "GBP", "HKD"]);
+
 function actorId(actor: ActorLike) {
   return requireText(actor?.id, "当前用户");
 }
@@ -230,11 +232,33 @@ function paymentListWhere(filters: PaymentListFilters, accessWhere: Prisma.Recei
   return { AND: clauses };
 }
 
+function assertPaymentInputRequiredFields(input: PaymentInput) {
+  if (!nonEmpty(input.orderId)) throw codedError("请选择关联订单", 400, "PAYMENT_ORDER_REQUIRED");
+  if (!nonEmpty(input.paymentDate)) throw codedError("请选择收款日期", 400, "PAYMENT_DATE_REQUIRED");
+  if (!dateFromInput(input.paymentDate)) throw codedError("请选择收款日期", 400, "PAYMENT_DATE_REQUIRED");
+  if (!nonEmpty(input.paymentType)) throw codedError("请选择收款类型", 400, "PAYMENT_TYPE_REQUIRED");
+  if (!nonEmpty(input.amount)) throw codedError("请输入收款金额", 400, "PAYMENT_AMOUNT_REQUIRED");
+  if (!(Number(input.amount) > 0)) throw codedError("收款金额必须大于 0", 400, "PAYMENT_AMOUNT_POSITIVE_REQUIRED");
+  if (!nonEmpty(input.currency)) throw codedError("请选择币种", 400, "PAYMENT_CURRENCY_REQUIRED");
+}
+
+function assertPaymentExchangeInput(input: PaymentInput, currency: string) {
+  if (currency === "CNY") return;
+  if (FOREIGN_PAYMENT_CURRENCIES.has(currency) && !nonEmpty(input.exchangeRate)) {
+    throw codedError("汇率不能为空", 400, "PAYMENT_EXCHANGE_RATE_REQUIRED");
+  }
+  if (FOREIGN_PAYMENT_CURRENCIES.has(currency) && !(Number(input.exchangeRate) > 0)) {
+    throw codedError("汇率必须大于 0", 400, "PAYMENT_EXCHANGE_RATE_POSITIVE_REQUIRED");
+  }
+}
+
 export async function savePayment(request: AuditRequestLike, actor: ActorLike, input: unknown, id: string | null = null) {
   assertWrite(actor, "payments");
   const currentActorId = actorId(actor);
   const currentActor = { ...(actor || {}), id: currentActorId, role: actorRole(actor) };
-  const inputData = assertInputSchema(assertJsonObject(input), PAYMENT_INPUT_SCHEMA) as PaymentInput;
+  const jsonInput = assertJsonObject(input);
+  assertPaymentInputRequiredFields(jsonInput);
+  const inputData = assertInputSchema(jsonInput, PAYMENT_INPUT_SCHEMA) as PaymentInput;
   const before = id ? await prisma.payment.findFirst({
     where: { id, deletedAt: null },
     include: {
@@ -256,13 +280,24 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
     await assertOrderCanReceivePayment(order);
   }
   const amount = requirePositive(inputData.amount, "收款金额");
-  const paymentDate = dateFromInput(inputData.paymentDate) || dateFromInput(todayInputInChina()) || new Date();
+  const paymentDate = dateFromInput(inputData.paymentDate);
+  if (!paymentDate) throw codedError("请选择收款日期", 400, "PAYMENT_DATE_REQUIRED");
   const orderCurrency = requireText(order.currency, "订单币种").toUpperCase();
-  const requestedCurrency = requireText(inputData.currency || orderCurrency, "币种").toUpperCase();
+  const requestedCurrency = requireText(inputData.currency, "币种").toUpperCase();
   if (requestedCurrency !== orderCurrency) {
     throw codedError("收款币种必须与订单币种一致。", 400, "PAYMENT_CURRENCY_MISMATCH");
   }
-  const exchangeInput: PaymentInput = { ...inputData, currency: orderCurrency };
+  assertPaymentExchangeInput(inputData, orderCurrency);
+  const exchangeInput: PaymentInput = orderCurrency === "CNY"
+    ? {
+      ...inputData,
+      currency: orderCurrency,
+      exchangeRate: 1,
+      exchangeRateDate: dateToInput(paymentDate),
+      exchangeRateSource: "系统",
+      exchangeRateType: "人民币",
+    }
+    : { ...inputData, currency: orderCurrency };
   if (before) {
     if (!inputHasOwn(exchangeInput, "exchangeRateDate") && !inputHasOwn(exchangeInput, "rateDate") && before.exchangeRateDate) {
       exchangeInput.exchangeRateDate = dateToInput(before.exchangeRateDate);
@@ -281,6 +316,7 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
   });
   const exchangeRate = exchange.exchangeRate;
   const requestedStatus = PAYMENT_STATUSES.includes(String(inputData.status || "")) ? String(inputData.status) : "待确认";
+  const paymentType = requireText(inputData.paymentType, "收款类型");
   const data: Prisma.PaymentUncheckedCreateInput = {
     orderId: order.id,
     paymentDate,
@@ -291,7 +327,7 @@ export async function savePayment(request: AuditRequestLike, actor: ActorLike, i
     exchangeRateType: exchange.exchangeRateType,
     amount,
     amountCny: amountCny(amount, exchangeRate),
-    paymentType: PAYMENT_TYPES.includes(String(inputData.paymentType || "")) ? String(inputData.paymentType) : "",
+    paymentType: PAYMENT_TYPES.includes(paymentType) ? paymentType : "",
     status: requestedStatus,
     bankReference: optional(inputData.bankReference),
     remark: optional(inputData.remark),

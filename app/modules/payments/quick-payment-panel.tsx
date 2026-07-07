@@ -10,6 +10,8 @@ import styles from "../../WorkspaceShell.module.css";
 import { CURRENCIES, PAYMENT_TYPES, type ExchangeRateResponse, type OrdersResponse, type PaymentOrderOption, type PaymentRow, type QuickPaymentForm } from "./types";
 import { orderLabel, paymentFormFromRow, paymentStatusOptions } from "./helpers";
 
+type PaymentFieldErrors = Partial<Record<keyof QuickPaymentForm, string>>;
+
 export function QuickCreatePaymentPanel({
   initialPayment,
   canConfirmArrived,
@@ -26,6 +28,7 @@ export function QuickCreatePaymentPanel({
   const [exchangeMeta, setExchangeMeta] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<PaymentFieldErrors>({});
 
   async function searchOrders(keyword: string) {
     try {
@@ -43,6 +46,12 @@ export function QuickCreatePaymentPanel({
 
   function setFormValue<K extends keyof QuickPaymentForm>(key: K, value: QuickPaymentForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
   }
 
   function setExchangeSnapshot({
@@ -75,7 +84,7 @@ export function QuickCreatePaymentPanel({
     if (normalized === "CNY") {
       setExchangeMeta("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
       setExchangeSnapshot({
-        exchangeRate: "1",
+        exchangeRate: "1.0000",
         exchangeRateDate: paymentDate || new Date().toISOString().slice(0, 10),
         exchangeRateSource: "系统",
         exchangeRateType: "人民币",
@@ -117,17 +126,25 @@ export function QuickCreatePaymentPanel({
   }
 
   async function handleOrderSelect(order: PaymentOrderOption) {
+    const currency = (order?.currency || "").toUpperCase();
     setOrders((current) => current.some((item) => item.id === order.id) ? current : [order, ...current]);
     setForm((current) => ({
       ...current,
       orderId: order.id,
-      currency: order?.currency || "",
+      currency,
       exchangeRate: "",
       exchangeRateDate: "",
       exchangeRateSource: "",
       exchangeRateType: "",
     }));
-    await resolveExchangeRate(order?.currency || "");
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next.orderId;
+      delete next.currency;
+      delete next.exchangeRate;
+      return next;
+    });
+    await resolveExchangeRate(currency);
   }
 
   async function handleCurrencyChange(currency: string) {
@@ -151,32 +168,64 @@ export function QuickCreatePaymentPanel({
   async function handlePaymentDateChange(paymentDate: string) {
     setFormValue("paymentDate", paymentDate);
     if (form.currency && form.currency !== "CNY") await resolveExchangeRate(form.currency, paymentDate);
+    if (form.currency === "CNY") {
+      setExchangeSnapshot({
+        exchangeRate: "1.0000",
+        exchangeRateDate: paymentDate,
+        exchangeRateSource: "系统",
+        exchangeRateType: "人民币",
+      });
+    }
+  }
+
+  function validateQuickPaymentForm(nextForm: QuickPaymentForm) {
+    const errors: PaymentFieldErrors = {};
+    const currency = nextForm.currency.trim().toUpperCase();
+    const amountText = nextForm.amount.trim();
+    const amount = Number(amountText);
+    const exchangeRateText = nextForm.exchangeRate.trim();
+    const exchangeRate = Number(exchangeRateText);
+
+    if (!nextForm.orderId.trim()) errors.orderId = "请选择关联订单";
+    if (!nextForm.paymentDate.trim()) errors.paymentDate = "请选择收款日期";
+    if (!nextForm.paymentType.trim()) errors.paymentType = "请选择收款类型";
+    if (!amountText) errors.amount = "请输入收款金额";
+    else if (!Number.isFinite(amount) || amount <= 0) errors.amount = "收款金额必须大于 0";
+    if (!currency) errors.currency = "请选择币种";
+    if (currency && currency !== "CNY") {
+      if (!exchangeRateText) errors.exchangeRate = "汇率不能为空";
+      else if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) errors.exchangeRate = "汇率必须大于 0";
+    }
+    return errors;
   }
 
   async function submitQuickPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!form.orderId) {
-      setMessage("请选择关联订单");
-      return;
-    }
-    if (!form.amount || Number(form.amount) <= 0) {
-      setMessage("请填写收款金额");
-      return;
-    }
-    if (!form.currency) {
-      setMessage("请选择币种");
+    const normalizedCurrency = form.currency.trim().toUpperCase();
+    const normalizedForm: QuickPaymentForm = normalizedCurrency === "CNY"
+      ? {
+        ...form,
+        currency: normalizedCurrency,
+        exchangeRate: "1.0000",
+        exchangeRateDate: form.exchangeRateDate || form.paymentDate,
+        exchangeRateSource: form.exchangeRateSource || "系统",
+        exchangeRateType: form.exchangeRateType || "人民币",
+      }
+      : { ...form, currency: normalizedCurrency };
+    const errors = validateQuickPaymentForm(normalizedForm);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      setMessage("请完善收款信息");
+      setForm(normalizedForm);
       return;
     }
     const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
     const orderCurrency = selectedOrder?.currency?.toUpperCase();
-    if (orderCurrency && form.currency.toUpperCase() !== orderCurrency) {
+    if (orderCurrency && normalizedForm.currency !== orderCurrency) {
       setMessage("收款币种必须与订单币种一致。");
       return;
     }
-    if (!Number(form.exchangeRate)) {
-      setMessage("请填写汇率；CNY 收款汇率应自动为 1");
-      return;
-    }
+    setForm(normalizedForm);
     setSaving(true);
     setMessage("");
     try {
@@ -186,22 +235,23 @@ export function QuickCreatePaymentPanel({
         {
           method: isEdit ? "PATCH" : "POST",
           body: JSON.stringify({
-            orderId: form.orderId,
-            paymentDate: form.paymentDate,
-            paymentType: form.paymentType,
-            amount: Number(form.amount),
-            currency: form.currency,
-            exchangeRate: Number(form.exchangeRate),
-            exchangeRateDate: form.exchangeRateDate || undefined,
-            exchangeRateSource: form.exchangeRateSource || undefined,
-            exchangeRateType: form.exchangeRateType || undefined,
+            orderId: normalizedForm.orderId,
+            paymentDate: normalizedForm.paymentDate,
+            paymentType: normalizedForm.paymentType,
+            amount: Number(normalizedForm.amount),
+            currency: normalizedForm.currency,
+            exchangeRate: Number(normalizedForm.exchangeRate),
+            exchangeRateDate: normalizedForm.exchangeRateDate || undefined,
+            exchangeRateSource: normalizedForm.exchangeRateSource || undefined,
+            exchangeRateType: normalizedForm.exchangeRateType || undefined,
             status: form.status,
-            bankReference: form.bankReference.trim(),
-            remark: form.remark.trim(),
+            bankReference: normalizedForm.bankReference.trim(),
+            remark: normalizedForm.remark.trim(),
           }),
         },
       );
       if (result.success !== true) throw new Error(result.message || "收款保存失败");
+      setFieldErrors({});
       setForm(paymentFormFromRow(null));
       setExchangeMeta("");
       onSaved(result.payment || result.data?.payment || null);
@@ -256,7 +306,7 @@ export function QuickCreatePaymentPanel({
   const currencyLocked = Boolean(selectedOrder?.currency);
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={submitQuickPayment}>
+    <form className={styles.quickCreatePanel} onSubmit={submitQuickPayment} noValidate>
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{initialPayment?.id ? "编辑收款" : "快速登记收款"}</strong>
@@ -278,10 +328,12 @@ export function QuickCreatePaymentPanel({
             search={searchOrders}
             onSelect={(order) => void handleOrderSelect(order)}
           />
+          {fieldErrors.orderId ? <small className={styles.inlineError}>{fieldErrors.orderId}</small> : null}
         </label>
         <label>
           收款日期
-          <input type="date" value={form.paymentDate} onChange={(event) => void handlePaymentDateChange(event.target.value)} required />
+          <input type="date" value={form.paymentDate} onChange={(event) => void handlePaymentDateChange(event.target.value)} aria-invalid={Boolean(fieldErrors.paymentDate)} />
+          {fieldErrors.paymentDate ? <small className={styles.inlineError}>{fieldErrors.paymentDate}</small> : null}
         </label>
         <label>
           收款类型
@@ -289,10 +341,12 @@ export function QuickCreatePaymentPanel({
             <option value="">请选择收款类型</option>
             {PAYMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
           </select>
+          {fieldErrors.paymentType ? <small className={styles.inlineError}>{fieldErrors.paymentType}</small> : null}
         </label>
         <label>
           收款金额
-          <input value={form.amount} onChange={(event) => setFormValue("amount", event.target.value)} inputMode="decimal" required />
+          <input value={form.amount} onChange={(event) => setFormValue("amount", event.target.value)} inputMode="decimal" aria-invalid={Boolean(fieldErrors.amount)} />
+          {fieldErrors.amount ? <small className={styles.inlineError}>{fieldErrors.amount}</small> : null}
         </label>
         <label>
           币种
@@ -300,6 +354,7 @@ export function QuickCreatePaymentPanel({
             <option value="">请选择币种</option>
             {CURRENCIES.filter(Boolean).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
           </select>
+          {fieldErrors.currency ? <small className={styles.inlineError}>{fieldErrors.currency}</small> : null}
         </label>
         <label>
           汇率
@@ -317,8 +372,9 @@ export function QuickCreatePaymentPanel({
             }}
             readOnly={form.currency === "CNY"}
             inputMode="decimal"
-            required
+            aria-invalid={Boolean(fieldErrors.exchangeRate)}
           />
+          {fieldErrors.exchangeRate ? <small className={styles.inlineError}>{fieldErrors.exchangeRate}</small> : null}
         </label>
         <label>
           收款状态

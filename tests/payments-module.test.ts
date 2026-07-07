@@ -45,6 +45,49 @@ test("payment registration keeps receipt currency aligned with the receivable or
   assert.match(paymentsService, /requestedCurrency !== orderCurrency/);
 });
 
+test("quick payment registration validates required fields before submit", () => {
+  assert.match(paymentsModule, /type PaymentFieldErrors = Partial<Record<keyof QuickPaymentForm, string>>/);
+  assert.match(paymentsModule, /function validateQuickPaymentForm/);
+  assert.match(paymentsModule, /errors\.orderId = "请选择关联订单"/);
+  assert.match(paymentsModule, /errors\.paymentDate = "请选择收款日期"/);
+  assert.match(paymentsModule, /errors\.paymentType = "请选择收款类型"/);
+  assert.match(paymentsModule, /errors\.amount = "请输入收款金额"/);
+  assert.match(paymentsModule, /errors\.amount = "收款金额必须大于 0"/);
+  assert.match(paymentsModule, /errors\.exchangeRate = "汇率不能为空"/);
+  assert.match(paymentsModule, /errors\.exchangeRate = "汇率必须大于 0"/);
+  assert.match(paymentsModule, /<form className=\{styles\.quickCreatePanel\} onSubmit=\{submitQuickPayment\} noValidate>/);
+  assert.match(paymentsModule, /\{fieldErrors\.paymentDate \? <small className=\{styles\.inlineError\}>\{fieldErrors\.paymentDate\}<\/small> : null\}/);
+  assert.match(paymentsModule, /\{fieldErrors\.amount \? <small className=\{styles\.inlineError\}>\{fieldErrors\.amount\}<\/small> : null\}/);
+  assert.match(paymentsModule, /setMessage\("请完善收款信息"\)/);
+});
+
+test("CNY payment saves with automatic exchange rate while foreign currency requires a positive rate", () => {
+  assert.match(paymentsModule, /normalizedCurrency === "CNY"[\s\S]*exchangeRate: "1\.0000"/);
+  assert.match(paymentsModule, /exchangeRateDate: form\.exchangeRateDate \|\| form\.paymentDate/);
+  assert.match(paymentsService, /function assertPaymentExchangeInput/);
+  assert.match(paymentsService, /if \(currency === "CNY"\) return/);
+  assert.match(paymentsService, /throw codedError\("汇率不能为空", 400, "PAYMENT_EXCHANGE_RATE_REQUIRED"\)/);
+  assert.match(paymentsService, /throw codedError\("汇率必须大于 0", 400, "PAYMENT_EXCHANGE_RATE_POSITIVE_REQUIRED"\)/);
+  assert.match(paymentsService, /orderCurrency === "CNY"[\s\S]*exchangeRate: 1[\s\S]*exchangeRateSource: "系统"[\s\S]*exchangeRateType: "人民币"/);
+  assert.match(paymentsService, /amountCny\(amount, exchangeRate\)/);
+});
+
+test("payment save refreshes only the payments list and summary after success", () => {
+  assert.match(paymentsModule, /onSaved=\{\(payment\) => \{[\s\S]*void loadPayments\(page, submittedFilters\);[\s\S]*\}\}/);
+  assert.doesNotMatch(paymentsModule, /window\.location|location\.href|router\.refresh|reload\(/);
+});
+
+test("payments backend rejects missing required save fields with explicit messages", () => {
+  assert.match(paymentsService, /function assertPaymentInputRequiredFields/);
+  assert.match(paymentsService, /throw codedError\("请选择关联订单", 400, "PAYMENT_ORDER_REQUIRED"\)/);
+  assert.match(paymentsService, /throw codedError\("请选择收款日期", 400, "PAYMENT_DATE_REQUIRED"\)/);
+  assert.match(paymentsService, /throw codedError\("请选择收款类型", 400, "PAYMENT_TYPE_REQUIRED"\)/);
+  assert.match(paymentsService, /throw codedError\("请输入收款金额", 400, "PAYMENT_AMOUNT_REQUIRED"\)/);
+  assert.match(paymentsService, /throw codedError\("收款金额必须大于 0", 400, "PAYMENT_AMOUNT_POSITIVE_REQUIRED"\)/);
+  assert.match(paymentsService, /throw codedError\("请选择币种", 400, "PAYMENT_CURRENCY_REQUIRED"\)/);
+  assert.doesNotMatch(paymentsService, /dateFromInput\(inputData\.paymentDate\) \|\| dateFromInput\(todayInputInChina\(\)\)/);
+});
+
 test("payment updates verify access to the original payment order before mutation", () => {
   assert.match(paymentsService, /const before = id \? await prisma\.payment\.findFirst\(\{\s*where: \{ id, deletedAt: null \},\s*include: \{\s*order: \{/);
   assert.match(paymentsService, /if \(before && !canAccessOrder\(actor, before\.order\)\) \{\s*throw permissionError\("无权限更新该收款记录"\)/);
@@ -90,7 +133,7 @@ test("payment types support phased receipts without defaulting to final payment"
   assert.match(paymentsModule, /const PAYMENT_TYPES = \["预付款", "中期款", "分批款", "尾款", "补差款", "退款", "其他"\]/);
   assert.match(paymentsModule, /paymentType: ""/);
   assert.match(paymentsModule, /<option value="">请选择收款类型<\/option>/);
-  assert.match(paymentsService, /paymentType: PAYMENT_TYPES\.includes\(String\(inputData\.paymentType \|\| ""\)\) \? String\(inputData\.paymentType\) : ""/);
+  assert.match(paymentsService, /paymentType: PAYMENT_TYPES\.includes\(paymentType\) \? paymentType : ""/);
   assert.match(sharedSerialization, /paymentType: payment\.paymentType \|\| ""/);
   assert.match(schema, /paymentType\s+String\s+@default\(""\)\s+@map\("payment_type"\)/);
   assert.doesNotMatch(paymentsModule, /paymentType: "尾款"/);
