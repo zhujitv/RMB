@@ -1,10 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { logServerError } from "./shared-base-utils";
-import {
-  OCR_STATUS_PASSED,
-  VALIDATION_CONFIRMED,
-} from "./supplier-document-ocr-shared";
 const SUPPLIER_DOCUMENT_TYPES = ["SUPPLIER_PURCHASE_CONTRACT", "SUPPLIER_INVOICE"];
 
 type RequestCompletionClient = Pick<Prisma.TransactionClient, "supplierDocumentRequest">;
@@ -36,10 +32,6 @@ function requiredSupplierDocumentTypes(value: unknown) {
     .filter((item, index, arr) => arr.indexOf(item) === index);
 }
 
-function isOcrQualified(task: { status?: string | null; validationStatus?: string | null } | null | undefined) {
-  return task?.status === OCR_STATUS_PASSED || task?.validationStatus === VALIDATION_CONFIRMED;
-}
-
 function hasStartedUpload(document: { uploadStatus?: unknown; uploadProgress?: unknown }) {
   const uploadStatus = String(document.uploadStatus || "PENDING");
   const uploadProgress = Number(document.uploadProgress || 0);
@@ -56,20 +48,12 @@ export async function refreshSupplierDocumentRequestCompletion(
     include: {
       documents: {
         where: { deletedAt: null },
-        include: {
-          ocrTasks: {
-            orderBy: [{ createdAt: "desc" }],
-            take: 1,
-            select: {
-              id: true,
-              status: true,
-              validationStatus: true,
-              confirmedById: true,
-              confirmedAt: true,
-              updatedAt: true,
-              createdAt: true,
-            },
-          },
+        select: {
+          id: true,
+          documentType: true,
+          uploadStatus: true,
+          uploadProgress: true,
+          uploadedById: true,
         },
         orderBy: [{ createdAt: "desc" }],
       },
@@ -87,15 +71,12 @@ export async function refreshSupplierDocumentRequestCompletion(
 
   const items = requiredTypes.map((type) => {
     const document = latestByType.get(type);
-    const task = document?.ocrTasks?.[0];
     const uploaded = document?.uploadStatus === "SUCCESS";
-    const qualified = uploaded && isOcrQualified(task);
     return {
       type,
       document,
-      task,
       started: Boolean(document && hasStartedUpload(document)),
-      qualified,
+      qualified: uploaded,
     };
   });
 
@@ -104,7 +85,6 @@ export async function refreshSupplierDocumentRequestCompletion(
   const nextStatus = allQualified ? "已完成" : anyStarted ? "部分上传" : "待上传";
   const completedById = allQualified
     ? options.completedById
-      || items.find((item) => item.task?.confirmedById)?.task?.confirmedById
       || items.find((item) => item.document?.uploadedById)?.document?.uploadedById
       || null
     : null;

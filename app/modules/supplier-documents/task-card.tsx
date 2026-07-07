@@ -4,7 +4,7 @@ import { PdfPreviewButton, fileDownloadUrl } from "../../components";
 import { formatDate, formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { PDF_UPLOAD_ACCEPT, PDF_UPLOAD_MAX_SIZE_LABEL } from "../../utils";
-import type { SupplierDocument, SupplierDocumentTask, SupplierFactoryCostSlot } from "./types";
+import type { SupplierDocumentTask, SupplierFactoryCostSlot } from "./types";
 import {
   DOCUMENT_LABELS,
   factoryCostSlotSummary,
@@ -13,8 +13,6 @@ import {
   supplierDocumentFileWarning,
   supplierDocumentSendStatusLabel,
   supplierDocumentStatusClass,
-  supplierOcrActionKey,
-  supplierOcrRequiresManualReview,
   supplierUploadKey,
   uniqueRequiredDocumentTypes,
 } from "./helpers";
@@ -24,10 +22,8 @@ export function SupplierDocumentTaskCard({
   task,
   uploadingKey,
   progressByKey,
-  ocrBusyKey,
   isExpanded,
   isAdmin,
-  canManageOcr,
   deleting,
   resending,
   onToggle,
@@ -35,17 +31,12 @@ export function SupplierDocumentTaskCard({
   onUpload,
   onDelete,
   onResendNotice,
-  onRerunOcr,
-  onConfirmOcr,
-  onRejectOcr,
 }: {
   task: SupplierDocumentTask;
   uploadingKey: string;
   progressByKey: Record<string, number>;
-  ocrBusyKey: string;
   isExpanded: boolean;
   isAdmin: boolean;
-  canManageOcr: boolean;
   deleting: boolean;
   resending: boolean;
   onToggle: () => void;
@@ -53,9 +44,6 @@ export function SupplierDocumentTaskCard({
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null, costId?: string) => void;
   onDelete: (task: SupplierDocumentTask) => void;
   onResendNotice: (task: SupplierDocumentTask) => void;
-  onRerunOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
-  onConfirmOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
-  onRejectOcr: (task: SupplierDocumentTask, document: SupplierDocument) => void;
 }) {
   const requiredTypes = task.requiredDocumentTypes || [];
   const factoryCostSlots = task.factoryCostSlots || [];
@@ -158,7 +146,6 @@ export function SupplierDocumentTaskCard({
                     const uploadCostId = document?.costId || defaultUploadCostId;
                     const key = supplierUploadKey(task.id, documentType, uploadCostId);
                     const uploading = uploadingKey === key;
-                    const documentOcrBusy = document ? ocrBusyKey.startsWith(`${task.id}:${document.id}:`) : false;
                     const uploadStatus = uploading ? "上传中" : document ? "已上传" : "未上传";
                     const fileName = document ? supplierDocumentFileName(document) : "";
                     const fileWarning = document ? supplierDocumentFileWarning(document) : "";
@@ -185,25 +172,16 @@ export function SupplierDocumentTaskCard({
                                 <PdfPreviewButton documentId={document.id} fileName={document.fileName || ""} />
                                 <a className={styles.fileActionButton} href={fileDownloadUrl("order-document", document.id)}>下载</a>
                               </div>
-                              <SupplierDocumentOcrPanel
-                                task={task}
-                                document={document}
-                                canManageOcr={canManageOcr}
-                                busyKey={ocrBusyKey}
-                                onRerun={onRerunOcr}
-                                onConfirm={onConfirmOcr}
-                                onReject={onRejectOcr}
-                              />
                             </div>
                           ) : null}
                         </div>
                         <div className={styles.supplierDocumentUploadControls}>
                           <label className={styles.supplierDocumentUploadButton}>
-                            {uploading ? "上传中..." : documentOcrBusy ? "正在识别..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
+                            {uploading ? "上传中..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
                             <input
                               type="file"
                               accept={PDF_UPLOAD_ACCEPT}
-                              disabled={uploading || documentOcrBusy}
+                              disabled={uploading}
                               hidden
                               onChange={(event) => {
                                 onUpload(task, documentType, event.target.files?.[0] || null, uploadCostId);
@@ -223,158 +201,6 @@ export function SupplierDocumentTaskCard({
         </div>
       ) : null}
     </article>
-  );
-}
-
-function SupplierDocumentOcrPanel({
-  task,
-  document,
-  canManageOcr,
-  busyKey,
-  onRerun,
-  onConfirm,
-  onReject,
-}: {
-  task: SupplierDocumentTask;
-  document: SupplierDocument;
-  canManageOcr: boolean;
-  busyKey: string;
-  onRerun: (task: SupplierDocumentTask, document: SupplierDocument) => void;
-  onConfirm: (task: SupplierDocumentTask, document: SupplierDocument) => void;
-  onReject: (task: SupplierDocumentTask, document: SupplierDocument) => void;
-}) {
-  const ocrTask = document.ocrTask;
-  const documentBusy = busyKey.startsWith(`${task.id}:${document.id}:`);
-  const rerunBusy = busyKey === supplierOcrActionKey(task.id, document.id, "rerun");
-  const confirmBusy = busyKey === supplierOcrActionKey(task.id, document.id, "confirm");
-  const rejectBusy = busyKey === supplierOcrActionKey(task.id, document.id, "reject");
-  if (!ocrTask) {
-    return (
-      <div className={styles.supplierDocumentOcrPanel}>
-        <div className={styles.supplierDocumentOcrHeader}>
-          <strong>OCR 校验结果</strong>
-          <span className={`${styles.statusPill} ${documentBusy ? styles.statusWarning : styles.statusMuted}`}>
-            {documentBusy ? "OCR识别中" : "未识别"}
-          </span>
-        </div>
-        {documentBusy ? (
-          <OcrWaitingInline />
-        ) : (
-          <p className={styles.supplierDocumentUploadHint}>该文件暂未生成 OCR 校验结果。</p>
-        )}
-        {canManageOcr ? (
-          <div className={styles.supplierDocumentOcrActions}>
-            <button
-              className={styles.secondaryButton}
-              type="button"
-              onClick={() => onRerun(task, document)}
-              disabled={documentBusy}
-            >
-              {rerunBusy ? <ButtonSpinnerText text="识别中..." /> : "重新识别"}
-            </button>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-  const fields = ocrTask.fields || [];
-  const issues = ocrTask.issues || [];
-  const status = ocrTask.status || "待人工确认";
-  const requiresManualReview = supplierOcrRequiresManualReview(ocrTask);
-  return (
-    <div className={styles.supplierDocumentOcrPanel}>
-      <div className={styles.supplierDocumentOcrHeader}>
-        <strong>OCR 校验结果</strong>
-        <span className={`${styles.statusPill} ${supplierDocumentStatusClass(documentBusy ? "OCR识别中" : status)}`}>
-          {documentBusy ? "OCR识别中" : status}
-        </span>
-      </div>
-      {documentBusy ? <OcrWaitingInline /> : null}
-      <div className={styles.supplierDocumentOcrMeta}>
-        <span>文件类型：{DOCUMENT_LABELS[document.documentType || ""] || document.documentType || "-"}</span>
-        <span>更新时间：{formatDateTime(ocrTask.updatedAt)}</span>
-      </div>
-      {ocrTask.errorMessage ? <div className={styles.inlineError}>{ocrTask.errorMessage}</div> : null}
-      {ocrTask.rejectReason ? <div className={styles.inlineError}>驳回原因：{ocrTask.rejectReason}</div> : null}
-      {fields.length ? (
-        <div className={styles.supplierDocumentOcrFields}>
-          {fields.map((field) => (
-            <span key={`${ocrTask.id}-${field.key}`}>
-              <small>{field.label || field.key}</small>
-              <b>{field.value || "-"}</b>
-            </span>
-          ))}
-        </div>
-      ) : null}
-      <div className={styles.supplierDocumentOcrIssues}>
-        <strong>校验结果</strong>
-        {issues.length ? (
-          issues.map((issue, index) => (
-            <span key={`${issue.message}-${index}`} data-level={issue.level || "manual"}>
-              {issue.message}
-            </span>
-          ))
-        ) : (
-          <span data-level="success">未发现异常</span>
-        )}
-      </div>
-      {canManageOcr && ocrTask.rawText ? (
-        <details className={styles.supplierDocumentOcrRawText}>
-          <summary>查看 OCR 原始文本</summary>
-          <pre>{ocrTask.rawText}</pre>
-        </details>
-      ) : null}
-      {canManageOcr ? (
-        <div className={styles.supplierDocumentOcrActions}>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => onRerun(task, document)}
-            disabled={documentBusy}
-          >
-            {rerunBusy ? <ButtonSpinnerText text="识别中..." /> : "重新识别"}
-          </button>
-          {requiresManualReview ? (
-            <>
-              <button
-                className={styles.primaryButtonCompact}
-                type="button"
-                onClick={() => onConfirm(task, document)}
-                disabled={documentBusy}
-              >
-                {confirmBusy ? "确认中..." : "人工确认通过"}
-              </button>
-              <button
-                className={styles.dangerButton}
-                type="button"
-                onClick={() => onReject(task, document)}
-                disabled={documentBusy}
-              >
-                {rejectBusy ? "驳回中..." : "驳回重传"}
-              </button>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function OcrWaitingInline() {
-  return (
-    <div className={styles.supplierDocumentOcrWaiting}>
-      <span className={styles.supplierDocumentOcrSpinner} aria-hidden="true" />
-      <span>正在识别，请勿关闭页面</span>
-    </div>
-  );
-}
-
-function ButtonSpinnerText({ text }: { text: string }) {
-  return (
-    <span className={styles.supplierDocumentOcrButtonLoading}>
-      <span className={styles.supplierDocumentOcrSpinner} aria-hidden="true" />
-      <span>{text}</span>
-    </span>
   );
 }
 

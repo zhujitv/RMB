@@ -26,15 +26,14 @@ test("OCR integration settings are modular and stored in system settings", () =>
   assert.match(constants, /OCR_INTEGRATION_SETTING_KEY = "ocr_integration"/);
   assert.match(constants, /DEFAULT_OCR_INTEGRATION_SETTINGS/);
   assert.match(constants, /customsDeclarationMode: "AUTO"/);
-  assert.match(constants, /supplierDocumentReturnEnabled: false/);
+  assert.doesNotMatch(constants, /supplierDocumentReturnEnabled/);
   assert.match(service, /export type CustomsDeclarationRecognitionMode = "AUTO" \| "STRICT" \| "MANUAL"/);
   assert.match(service, /function cleanCustomsDeclarationMode/);
   assert.match(service, /prisma\.systemSetting\.findUnique\(\{ where: \{ key: OCR_INTEGRATION_SETTING_KEY \} \}\)/);
   assert.match(service, /prisma\.systemSetting\.upsert/);
   assert.match(service, /assertRead\(actor, "settings"\)/);
   assert.match(service, /assertWrite\(actor, "settings"\)/);
-  assert.match(service, /supplierDocumentReturnEnabled/);
-  assert.match(service, /supplierDocumentReturn/);
+  assert.doesNotMatch(service, /supplierDocumentReturnEnabled|supplierDocumentReturn/);
   assert.match(service, /accessKeyIdConfigured: Boolean\(normalized\.accessKeyId\)/);
   assert.match(service, /accessKeySecretConfigured: Boolean\(normalized\.accessKeySecret\)/);
   assert.match(service, /appCodeConfigured: Boolean\(normalized\.appCode\)/);
@@ -76,7 +75,7 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.match(settingsModule, /SecretField/);
   assert.match(settingsModule, /OCR_FEATURE_OPTIONS/);
   assert.match(settingsModule, /发票结构化识别/);
-  assert.match(settingsModule, /产品供应商资料回传 OCR/);
+  assert.doesNotMatch(settingsModule, /产品供应商资料回传 OCR/);
   assert.match(settingsModule, /物流费用发票 OCR/);
   assert.match(settingsModule, /title="启用范围"/);
   assert.doesNotMatch(settingsModule, /CUSTOMS_DECLARATION_MODE_OPTIONS/);
@@ -87,22 +86,23 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.doesNotMatch(settingsModule, /PDF 文本兜底/);
   assert.doesNotMatch(settingsModule, /自动模式下仅可用于基础字段兜底/);
   assert.match(settingsModule, /可选：旧版 AppCode/);
-  assert.match(settingsModule, /增值税发票、资料回传和物流费用发票识别需要 AccessKey ID \/ AccessKey Secret。报关单 OCR 已停用，不再提供相关配置。/);
+  assert.match(settingsModule, /增值税发票和物流费用发票识别需要 AccessKey ID \/ AccessKey Secret。报关单 OCR 已停用，不再提供相关配置。/);
   assert.match(settingsModule, /setOcrIntegrationSettings/);
   assert.match(settingsModule, /setOcrIntegrationForm\(ocrIntegrationFormFromSettings\(ocrSettings\)\)/);
   assert.match(settingsModule, /markLoaded\("ocrIntegration"\)/);
 });
 
-test("OCR integration keeps invoice, supplier return, and logistics OCR", () => {
+test("OCR integration keeps invoice and logistics OCR without supplier return OCR", () => {
   assert.match(service, /@alicloud\/ocr-api20210707/);
   assert.match(service, /RecognizeInvoiceRequest/);
   assert.match(service, /recognizeInvoice\(new RecognizeInvoiceRequest/);
   assert.match(service, /ALIYUN_RECOGNIZE_INVOICE/);
   assert.match(service, /recognizeLogisticsInvoiceWithOcr/);
   assert.match(service, /return recognizeAliyunVatInvoice\(fileBuffer, settings\)/);
-  assert.match(service, /recognizeSupplierDocumentWithOcr/);
-  assert.match(service, /recognizeAliyunSupplierContract/);
-  assert.match(service, /ALIYUN_RECOGNIZE_GENERAL_STRUCTURE/);
+  assert.doesNotMatch(service, /recognizeSupplierDocumentWithOcr/);
+  assert.doesNotMatch(service, /recognizeAliyunSupplierContract/);
+  assert.doesNotMatch(service, /const source = options\.url \? \{ url: options\.url \} : \{ body: Readable\.from\(buffer\) \}/);
+  assert.doesNotMatch(service, /withAliyunOcrRetry\("ALIYUN_RECOGNIZE_INVOICE"/);
   assert.doesNotMatch(service, /supplierDocumentOcrInput/);
   assert.doesNotMatch(service, /rasterizeFirstPdfPageForSupplierOcr\(buffer\)/);
   assert.doesNotMatch(service, /signedObjectReadUrl\(tempKey, 600\)/);
@@ -110,7 +110,7 @@ test("OCR integration keeps invoice, supplier return, and logistics OCR", () => 
   assert.doesNotMatch(service, /recognizeAliyunSupplierInvoiceWithGeneralStructure/);
   assert.match(service, /OCR_ACCESS_KEY_REQUIRED/);
   assert.doesNotMatch(service, /ALIYUN_INVOICE_FALLBACK_PDF_TEXT/);
-  assert.match(service, /ALIYUN_CONTRACT_FALLBACK_PDF_TEXT/);
+  assert.doesNotMatch(service, /ALIYUN_CONTRACT_FALLBACK_PDF_TEXT/);
 });
 
 test("Aliyun OCR requests retry and log provider diagnostics before surfacing failure", () => {
