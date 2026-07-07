@@ -81,6 +81,8 @@ export function shippingNotificationStatus(row: ShippingNotificationRowLike | nu
   if (!row) return "WAITING_DOCUMENTS";
   const sendStatus = String(row.sendStatus || "");
   const sendMode = String(row.sendMode || "");
+  if (sendStatus === "CANCELLED") return "CANCELLED";
+  if (["sent", "SUCCESS"].includes(sendStatus) && (sendMode === "manual_mark" || row.isSystemSent === false)) return "MANUAL_SENT";
   if (["sent", "SUCCESS"].includes(sendStatus) && sendMode === "manual") return "MANUAL_SENT";
   if (["sent", "SUCCESS"].includes(sendStatus)) return "AUTO_SENT";
   if (["failed", "FAILED"].includes(sendStatus)) return "FAILED";
@@ -110,6 +112,9 @@ export function serializeShippingDocumentNotification(row: ShippingNotificationR
     sendStatusLabel: SHIPPING_NOTIFICATION_STATUS_LABELS[status] || status,
     status,
     sendMode: row?.sendMode || "",
+    deliveryMethod: row?.deliveryMethod || "",
+    manualRemark: row?.manualRemark || "",
+    isSystemSent: row?.isSystemSent !== false,
     emailLanguage,
     emailLanguageLabel: (SHIPPING_EMAIL_LANGUAGE_LABELS as Record<string, string>)[emailLanguage] || emailLanguage || "",
     emailSubject: row?.emailSubject || "",

@@ -28,6 +28,9 @@ export type ShippingNotificationRowLike = {
   attachmentFileIds?: unknown;
   sendStatus?: string | null;
   sendMode?: string | null;
+  deliveryMethod?: string | null;
+  manualRemark?: string | null;
+  isSystemSent?: boolean | null;
   emailLanguage?: string | null;
   emailSubject?: string | null;
   emailBody?: string | null;

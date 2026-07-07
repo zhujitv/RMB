@@ -140,6 +140,7 @@ export const SHIPPING_NOTIFICATION_STATUS_LABELS = {
   AUTO_SENT: "已自动发送",
   FAILED: "发送失败",
   MANUAL_SENT: "已手动发送",
+  CANCELLED: "已取消",
 };
 export const SHIPPING_EMAIL_LANGUAGE_LABELS = {
   EN: "English",

@@ -158,8 +158,11 @@ export function CustomerCommunicationDrawer({
                           <th>抄送</th>
                           <th>邮件类型</th>
                           <th>附件清单</th>
+                          <th>发送方式</th>
+                          <th>系统发送</th>
                           <th>发送状态</th>
                           <th>失败原因</th>
+                          <th>备注</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -171,11 +174,14 @@ export function CustomerCommunicationDrawer({
                             <td>{(record.ccEmails || []).join(", ") || "-"}</td>
                             <td>{record.emailTypeLabel || "-"}</td>
                             <td>{attachmentText(record)}</td>
+                            <td>{record.deliveryMethod || sendModeText(record.sendMode) || "-"}</td>
+                            <td>{record.isSystemSent === false ? "否" : "是"}</td>
                             <td>{record.sendStatusLabel || record.sendStatus || "-"}</td>
                             <td>{record.errorMessage || "-"}</td>
+                            <td>{record.manualRemark || "-"}</td>
                           </tr>
                         )) : (
-                          <tr><td colSpan={8}><div className={styles.emptyState}>暂无发送记录</div></td></tr>
+                          <tr><td colSpan={11}><div className={styles.emptyState}>暂无发送记录</div></td></tr>
                         )}
                       </tbody>
                     </table>
@@ -194,6 +200,13 @@ function languageLabel(value = "") {
   if (value === "ZH") return "中文";
   if (value === "RU") return "俄文";
   return "英文";
+}
+
+function sendModeText(value = "") {
+  if (value === "manual_mark") return "手动标记";
+  if (value === "manual") return "系统手动发送";
+  if (value === "auto") return "系统自动发送";
+  return value;
 }
 
 function attachmentText(record: CommunicationRecord) {

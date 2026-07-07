@@ -10,6 +10,8 @@ export type CommunicationRow = {
   clearanceStatus?: string;
   clearanceStatusLabel?: string;
   latestSentAt?: string | null;
+  manualMarked?: boolean;
+  latestManualMarkId?: string;
 };
 
 export type AvailableFile = {
@@ -60,6 +62,10 @@ export type CommunicationRecord = {
   sendStatus?: string;
   sendStatusLabel?: string;
   errorMessage?: string;
+  sendMode?: string;
+  deliveryMethod?: string;
+  manualRemark?: string;
+  isSystemSent?: boolean;
 };
 
 export type CommunicationDetail = {

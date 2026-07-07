@@ -37,7 +37,7 @@ test("supplier return OCR stores tasks and fields in independent OCR tables", ()
   assert.match(schema, /request\s+SupplierDocumentRequest\?/);
 });
 
-test("supplier document upload triggers foreground OCR after the file is saved", () => {
+test("supplier document upload starts asynchronous OCR after the file is saved", () => {
   assert.match(supplierUploadActions, /setNotice\(data\.message \|\| "上传成功"\)/);
   assert.match(supplierUploadActions, /async function recognizeUploadedDocument/);
   assert.match(supplierUploadActions, /setOcrBusyKey/);
@@ -52,7 +52,7 @@ test("supplier document upload triggers foreground OCR after the file is saved",
   assert.match(supplierRequests, /已跳过OCR附加信息/);
   assert.doesNotMatch(supplierRequestList, /documents:\s*\{[\s\S]*include:\s*\{[\s\S]*ocrTasks:\s*\{/);
   assert.match(supplierRequests, /serializeSupplierDocumentOcrTask/);
-  assert.doesNotMatch(supplierRequests, /产品供应商回传资料OCR后台识别/);
+  assert.doesNotMatch(supplierUploadActions, /runSupplierDocumentOcrTaskWithTimeout/);
 });
 
 test("supplier document page silently polls only while OCR is processing", () => {
@@ -63,7 +63,7 @@ test("supplier document page silently polls only while OCR is processing", () =>
   assert.match(supplierModule, /window\.clearInterval/);
 });
 
-test("supplier document foreground OCR disables repeated actions while waiting", () => {
+test("supplier document asynchronous OCR disables repeated actions while waiting", () => {
   assert.match(supplierModule, /const documentOcrBusy = document \? ocrBusyKey\.startsWith/);
   assert.match(supplierModule, /disabled=\{uploading \|\| documentOcrBusy\}/);
   assert.match(supplierModule, /const documentBusy = busyKey\.startsWith/);
@@ -393,12 +393,13 @@ test("supplier OCR rerun loads supplier return document and exposes actionable f
   assert.match(service, /SUPPLIER_DOCUMENT_UPLOAD_INCOMPLETE/);
   assert.match(service, /createSupplierDocumentOcrTask\(document\)/);
   assert.match(service, /cancelProcessingSupplierDocumentOcrTasks\(documentId, requestId\)/);
+  assert.match(service, /void runNonCriticalTask\("资料回传OCR重新识别后台执行"/);
   assert.match(service, /const result = await runSupplierDocumentOcrTaskWithTimeout\(task\.id\)/);
-  assert.match(service, /return serializeSupplierDocumentOcrTask\(result\)/);
+  assert.match(service, /return serializeSupplierDocumentOcrTask\(task\)/);
+  assert.match(service, /status: "PROCESSING"/);
+  assert.match(service, /OCR已开始识别，完成后将自动更新。/);
   assert.match(service, /status: "TIMEOUT"/);
   assert.match(service, /OCR识别超时，请重新识别或人工确认。/);
-  assert.doesNotMatch(service, /void runNonCriticalTask\("资料回传OCR重新识别后台执行"/);
-  assert.doesNotMatch(ocrRoute, /已开始重新识别，OCR识别中/);
   assert.match(service, /normalizeSupplierReturnDocumentType/);
   assert.match(service, /VAT_INVOICE/);
   assert.match(supplierModule, /apiErrorMessage\(ocrError, "重新识别失败"\)/);

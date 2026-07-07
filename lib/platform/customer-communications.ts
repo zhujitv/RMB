@@ -4,8 +4,9 @@ import {
   DEFAULT_SHIPPING_DOCUMENT_TYPES,
   SHIPPING_DOCUMENT_TYPE_CONFIG,
   assertRead,
+  assertWrite,
   canRead,
-  canWrite,
+  codedError,
   customerFullName,
   customerShortName,
   dateToInput,
@@ -16,7 +17,9 @@ import {
   pageResult,
   parseEmailList,
   permissionError,
+  runNonCriticalTask,
   serializeShippingDocumentNotification,
+  writeAudit,
 } from "./shared";
 import { orderAccessWhere } from "./order-access";
 import {
@@ -34,6 +37,7 @@ type ActorLike = {
 
 type QueryLike = URLSearchParams;
 type AuditRequestLike = Parameters<typeof sendManualShippingDocumentsNotification>[0];
+type ManualMarkInput = Record<string, unknown>;
 
 const CUSTOMER_COMMUNICATION_ENABLED_WHERE: Prisma.ReceivableOrderWhereInput = {
   customer: {
@@ -53,6 +57,9 @@ const CUSTOMER_EMAIL_TYPES = {
   PAYMENT_REMINDER: "PAYMENT_REMINDER",
   AFTER_SALES: "AFTER_SALES",
 } as const;
+
+const MANUAL_SEND_METHODS = new Set(["系统邮件", "手动邮件", "微信", "QQ", "WhatsApp", "客户平台", "其它"]);
+const ACTIVE_SENT_STATUSES = new Set(["sent", "SUCCESS"]);
 
 const COMMUNICATION_FILE_TYPES = [
   { key: "commercialInvoice", label: "Commercial Invoice", documentType: "COMMERCIAL_INVOICE", requiredForClearance: true },
@@ -183,19 +190,30 @@ function clearanceMissingLabels(order: CommunicationOrder) {
 }
 
 function latestNotification(order: CommunicationOrder) {
-  return (order.shippingDocumentNotifications || [])[0] || null;
+  return (order.shippingDocumentNotifications || []).find((row) => row.sendStatus !== "CANCELLED") || null;
 }
 
 function latestSentNotification(order: CommunicationOrder) {
   return (order.shippingDocumentNotifications || []).find((row) => (
-    ["sent", "SUCCESS"].includes(String(row.sendStatus || "")) && row.sentAt
+    ACTIVE_SENT_STATUSES.has(String(row.sendStatus || "")) && row.sentAt
+  )) || null;
+}
+
+function latestManualMarkNotification(order: CommunicationOrder) {
+  return (order.shippingDocumentNotifications || []).find((row) => (
+    ACTIVE_SENT_STATUSES.has(String(row.sendStatus || ""))
+    && row.sentAt
+    && (row.sendMode === "manual_mark" || row.isSystemSent === false)
   )) || null;
 }
 
 function clearanceStatus(order: CommunicationOrder) {
   const latest = latestNotification(order);
   const status = String(latest?.sendStatus || "");
-  if (["sent", "SUCCESS"].includes(status)) return { value: "SENT", label: "已发送" };
+  if (ACTIVE_SENT_STATUSES.has(status) && (latest?.sendMode === "manual_mark" || latest?.isSystemSent === false)) {
+    return { value: "MANUAL_SENT", label: "手动已发送" };
+  }
+  if (ACTIVE_SENT_STATUSES.has(status)) return { value: "SENT", label: "已发送" };
   if (["failed", "FAILED"].includes(status)) return { value: "FAILED", label: "发送失败" };
   const missing = clearanceMissingLabels(order);
   if (missing.length) return { value: "MISSING", label: "附件缺失" };
@@ -243,6 +261,7 @@ function serializeAvailableFile(order: CommunicationOrder, item: (typeof COMMUNI
 function serializeCommunicationRow(order: CommunicationOrder) {
   const latest = latestNotification(order);
   const latestSent = latestSentNotification(order);
+  const latestManualMark = latestManualMarkNotification(order);
   const status = clearanceStatus(order);
   return {
     id: order.id,
@@ -256,6 +275,8 @@ function serializeCommunicationRow(order: CommunicationOrder) {
     clearanceStatus: status.value,
     clearanceStatusLabel: status.label,
     latestSentAt: latestSent?.sentAt || latest?.sentAt || null,
+    manualMarked: Boolean(latestManualMark),
+    latestManualMarkId: latestManualMark?.id || "",
   };
 }
 
@@ -330,5 +351,143 @@ export async function sendCustomerCommunicationClearanceDocuments(
     ...input,
     emailType: CUSTOMER_EMAIL_TYPES.CUSTOMS_CLEARANCE_DOCS,
   });
+  return getCustomerCommunicationDetail(orderId, actor);
+}
+
+function assertManualMarkPermission(actor: ActorLike) {
+  assertWrite(actor, "customerCommunication");
+  const role = String(actor?.role || "");
+  if (!["管理员", "业务员"].includes(role)) {
+    throw permissionError("当前账号无权手动标记客户沟通发送状态", 403);
+  }
+  const actorId = nonEmpty(actor?.id);
+  if (!actorId) throw permissionError("请先登录", 401);
+  return actorId;
+}
+
+function manualSendMethod(input: ManualMarkInput) {
+  const method = nonEmpty(input.deliveryMethod || input.sendMethod || input.method) || "手动邮件";
+  if (!MANUAL_SEND_METHODS.has(method)) {
+    throw codedError("请选择有效的发送方式。", 400, "CUSTOMER_COMMUNICATION_SEND_METHOD_INVALID");
+  }
+  return method;
+}
+
+function manualSentAt(input: ManualMarkInput) {
+  const sentAtText = nonEmpty(input.sentAt);
+  const sentAt = sentAtText ? new Date(sentAtText) : new Date();
+  if (!sentAt || Number.isNaN(sentAt.getTime())) {
+    throw codedError("请选择有效的发送时间。", 400, "CUSTOMER_COMMUNICATION_SENT_AT_INVALID");
+  }
+  return sentAt;
+}
+
+function manualRemark(input: ManualMarkInput) {
+  return nonEmpty(input.remark || input.manualRemark)?.slice(0, 500) || null;
+}
+
+function manualMarkAttachmentIds(order: CommunicationOrder) {
+  const requiredDocumentTypes = new Set(Object.values(SHIPPING_DOCUMENT_TYPE_CONFIG).map((item) => item.documentType));
+  return (order.documents || [])
+    .filter((document) => requiredDocumentTypes.has(document.documentType || ""))
+    .filter((document) => document.uploadStatus === "SUCCESS" && !document.deletedAt)
+    .flatMap((document) => document.id ? [document.id] : []);
+}
+
+async function loadCustomerCommunicationOrder(orderId: string, actor: ActorLike) {
+  const order = await prisma.receivableOrder.findFirst({
+    where: { id: orderId, ...customerCommunicationWhere(actor) },
+    select: orderSelect,
+  });
+  if (!order) throw permissionError("订单不存在或无权查看客户沟通资料", 404);
+  if (!order.customerId || !order.customer) throw codedError("订单未关联客户，不能标记清关资料发送状态。", 400, "CUSTOMER_REQUIRED");
+  return order;
+}
+
+export async function markCustomerCommunicationSent(
+  request: AuditRequestLike,
+  actor: ActorLike,
+  orderId: string,
+  input: ManualMarkInput = {},
+) {
+  const actorId = assertManualMarkPermission(actor);
+  const order = await loadCustomerCommunicationOrder(orderId, actor);
+  const method = manualSendMethod(input);
+  const sentAt = manualSentAt(input);
+  const remark = manualRemark(input);
+  const customer = order.customer || null;
+  const record = await prisma.shippingDocumentNotification.create({
+    data: {
+      orderId: order.id,
+      customerId: order.customerId || "",
+      invoiceId: null,
+      sentById: actorId,
+      recipientEmails: shippingRecipientEmails(customer),
+      ccEmails: parseEmailList(customer?.shippingDocsCcEmails || []),
+      documentTypes: DEFAULT_SHIPPING_DOCUMENT_TYPES,
+      attachmentFileIds: manualMarkAttachmentIds(order),
+      sendStatus: "SUCCESS",
+      sendMode: "manual_mark",
+      deliveryMethod: method,
+      manualRemark: remark,
+      isSystemSent: false,
+      emailSubject: "手动标记清关资料已发送",
+      emailBody: remark || null,
+      errorMessage: null,
+      sentAt,
+    },
+    include: { sentBy: true },
+  });
+  await runNonCriticalTask("客户沟通手动标记已发送日志写入", () => writeAudit(
+    request,
+    actor,
+    "手动标记清关资料已发送",
+    "shipping_document_notifications",
+    record.id,
+    null,
+    {
+      orderNo: order.orderNo,
+      deliveryMethod: method,
+      sentAt,
+      remark,
+      isSystemSent: false,
+    },
+  ));
+  return getCustomerCommunicationDetail(orderId, actor);
+}
+
+export async function unmarkCustomerCommunicationSent(
+  request: AuditRequestLike,
+  actor: ActorLike,
+  orderId: string,
+) {
+  assertManualMarkPermission(actor);
+  const order = await loadCustomerCommunicationOrder(orderId, actor);
+  const latestManual = latestManualMarkNotification(order);
+  if (!latestManual?.id) {
+    throw codedError("当前订单没有可取消的手动发送标记。", 400, "CUSTOMER_COMMUNICATION_MANUAL_MARK_NOT_FOUND");
+  }
+  const updated = await prisma.shippingDocumentNotification.update({
+    where: { id: latestManual.id },
+    data: {
+      sendStatus: "CANCELLED",
+      errorMessage: "手动发送标记已取消",
+    },
+    include: { sentBy: true },
+  });
+  await runNonCriticalTask("客户沟通取消手动标记日志写入", () => writeAudit(
+    request,
+    actor,
+    "取消手动标记清关资料已发送",
+    "shipping_document_notifications",
+    updated.id,
+    latestManual,
+    {
+      orderNo: order.orderNo,
+      deliveryMethod: latestManual.deliveryMethod || "",
+      sentAt: latestManual.sentAt,
+      remark: latestManual.manualRemark || "",
+    },
+  ));
   return getCustomerCommunicationDetail(orderId, actor);
 }

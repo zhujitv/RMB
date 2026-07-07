@@ -42,9 +42,20 @@ export async function rerunSupplierDocumentOcr(request: AuditRequestLike, actor:
     await cancelProcessingSupplierDocumentOcrTasks(documentId, requestId);
     const task = await createSupplierDocumentOcrTask(document);
     if (!task) throw codedError("产品供应商资料回传 OCR 未启用，请到系统设置开启。", 403, "OCR_FEATURE_DISABLED");
-    const result = await runSupplierDocumentOcrTaskWithTimeout(task.id);
-    await runNonCriticalTask("资料回传OCR重新识别日志写入", () => writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result));
-    return serializeSupplierDocumentOcrTask(result);
+    void runNonCriticalTask("资料回传OCR重新识别后台执行", async () => {
+      const result = await runSupplierDocumentOcrTaskWithTimeout(task.id);
+      await writeAudit(request, actor, "重新识别供应商回传资料", "ocr_tasks", task.id, before, result);
+      return result;
+    }, {
+      context: {
+        documentId,
+        requestId,
+        taskId: task.id,
+        documentType: document.documentType,
+      },
+      slowMs: 3000,
+    });
+    return serializeSupplierDocumentOcrTask(task);
   } catch (error: unknown) {
     throwIfSupplierOcrTableMissing(error);
     throw error;
@@ -198,6 +209,13 @@ export function supplierDocumentOcrApiResult(ocrTask: ReturnType<typeof serializ
   const statusText = String(ocrTask?.status || "");
   const issues = Array.isArray(ocrTask?.issues) ? ocrTask.issues : [];
   const errorMessage = String(ocrTask?.errorMessage || issues[0]?.message || "");
+  if (statusText === OCR_STATUS_PROCESSING || validationStatus === "PROCESSING") {
+    return {
+      status: "PROCESSING",
+      message: "OCR已开始识别，完成后将自动更新。",
+      result: ocrTask,
+    };
+  }
   const timeout = /超时|TIMEOUT/i.test([errorMessage, ...issues.map((issue) => issue.message || "")].join(" "));
   if (timeout) {
     return {

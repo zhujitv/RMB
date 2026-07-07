@@ -18,6 +18,15 @@ const LANGUAGE_OPTIONS = [
   { value: "RU", label: "俄文" },
 ];
 
+const MANUAL_SEND_METHOD_OPTIONS = ["系统邮件", "手动邮件", "微信", "QQ", "WhatsApp", "客户平台", "其它"];
+
+type ManualMarkDialogState = {
+  row: CommunicationRow;
+  deliveryMethod: string;
+  sentAt: string;
+  remark: string;
+};
+
 export function CustomerCommunicationModule({
   currentUser,
   permissions,
@@ -45,9 +54,13 @@ export function CustomerCommunicationModule({
   const [detailError, setDetailError] = useState("");
   const [mailForm, setMailForm] = useState<MailForm | null>(null);
   const [sending, setSending] = useState(false);
+  const [manualMarkDialog, setManualMarkDialog] = useState<ManualMarkDialogState | null>(null);
+  const [manualMarkBusyId, setManualMarkBusyId] = useState("");
+  const [manualMarkError, setManualMarkError] = useState("");
   const listRequestRef = useRef(0);
 
   const canSendByPermission = canWritePermission(currentUser, permissions, "customerCommunication", ["管理员", "业务员"]);
+  const canManualMark = canSendByPermission && ["管理员", "业务员"].includes(currentUser.role);
   const activeMissingLabels = detail?.missingLabels || detail?.draft?.missingLabels || [];
   const canSend = Boolean(detail?.canSend && canSendByPermission && !activeMissingLabels.length);
 
@@ -164,6 +177,75 @@ export function CustomerCommunicationModule({
     }
   }
 
+  function updateRowFromDetail(nextDetail: CommunicationDetail) {
+    if (!nextDetail.order?.id) return;
+    setRows((current) => current.map((row) => (row.id === nextDetail.order.id ? { ...row, ...nextDetail.order } : row)));
+    if (detailOrderId === nextDetail.order.id) {
+      setDetail(nextDetail);
+      setMailForm(formFromDraft(nextDetail.draft || null));
+    }
+  }
+
+  function openManualMarkDialog(row: CommunicationRow) {
+    setManualMarkError("");
+    setManualMarkDialog({
+      row,
+      deliveryMethod: "手动邮件",
+      sentAt: currentDateTimeLocalValue(),
+      remark: "",
+    });
+  }
+
+  async function submitManualMark(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!manualMarkDialog) return;
+    const row = manualMarkDialog.row;
+    setManualMarkBusyId(row.id);
+    setManualMarkError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; detail?: CommunicationDetail }>(
+        `/api/customer-communications/${encodeURIComponent(row.id)}/mark-sent`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            deliveryMethod: manualMarkDialog.deliveryMethod,
+            sentAt: manualMarkDialog.sentAt,
+            remark: manualMarkDialog.remark,
+          }),
+        },
+      );
+      if (result.success !== true || !result.detail) throw new Error(result.message || "手动标记已发送失败");
+      updateRowFromDetail(result.detail);
+      setManualMarkDialog(null);
+      setNotice(result.message || "已手动标记为已发送。");
+    } catch (markError) {
+      setManualMarkError(markError instanceof Error ? markError.message : "手动标记已发送失败");
+    } finally {
+      setManualMarkBusyId("");
+    }
+  }
+
+  async function unmarkManualSent(row: CommunicationRow) {
+    if (!window.confirm(`确认取消订单 ${row.orderNo || "-"} 的手动已发送标记？`)) return;
+    setManualMarkBusyId(row.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string; detail?: CommunicationDetail }>(
+        `/api/customer-communications/${encodeURIComponent(row.id)}/unmark-sent`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      if (result.success !== true || !result.detail) throw new Error(result.message || "取消手动发送标记失败");
+      updateRowFromDetail(result.detail);
+      setNotice(result.message || "已取消手动发送标记。");
+    } catch (unmarkError) {
+      setError(unmarkError instanceof Error ? unmarkError.message : "取消手动发送标记失败");
+    } finally {
+      setManualMarkBusyId("");
+    }
+  }
+
   return (
     <section className={`${styles.moduleCard} ${styles.logisticsTypographyScope}`}>
       <div className={styles.moduleHeader}>
@@ -222,7 +304,27 @@ export function CustomerCommunicationModule({
                 <td>{row.logisticsStatus || "-"}</td>
                 <td><StatusBadge row={row} /></td>
                 <td>{formatDateTime(row.latestSentAt)}</td>
-                <td><button className={styles.secondaryButton} type="button" onClick={() => void openDetail(row.id)}>详情</button></td>
+                <td>
+                  <div className={styles.inlineActionGroup}>
+                    <button className={styles.secondaryButton} type="button" onClick={() => void openDetail(row.id)}>详情</button>
+                    {canManualMark ? (
+                      <button
+                        className={styles.secondaryButton}
+                        type="button"
+                        disabled={manualMarkBusyId === row.id}
+                        onClick={() => {
+                          if (row.manualMarked) {
+                            void unmarkManualSent(row);
+                          } else {
+                            openManualMarkDialog(row);
+                          }
+                        }}
+                      >
+                        {manualMarkBusyId === row.id ? "处理中..." : manualMarkButtonLabel(row)}
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
               </tr>
             )) : (
               <tr><td colSpan={9}><div className={styles.emptyState}>未找到需要发送清关资料的订单</div></td></tr>
@@ -248,15 +350,78 @@ export function CustomerCommunicationModule({
           onLanguageChange={updateLanguage}
         />
       ) : null}
+
+      {manualMarkDialog ? (
+        <div className={styles.modalOverlay} role="presentation">
+          <form className={styles.modalCard} onSubmit={submitManualMark}>
+            <div className={styles.modalHeader}>
+              <div>
+                <strong>手动标记已发送</strong>
+                <small>{manualMarkDialog.row.orderNo || "-"} · {manualMarkDialog.row.customerShortName || "-"}</small>
+              </div>
+              <button className={styles.ghostButton} type="button" disabled={Boolean(manualMarkBusyId)} onClick={() => setManualMarkDialog(null)}>关闭</button>
+            </div>
+            {manualMarkError ? <div className={styles.inlineError}>{manualMarkError}</div> : null}
+            <div className={styles.shippingDocsFormGrid}>
+              <label>
+                发送方式
+                <select
+                  value={manualMarkDialog.deliveryMethod}
+                  onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, deliveryMethod: event.target.value })}
+                  required
+                >
+                  {MANUAL_SEND_METHOD_OPTIONS.map((method) => <option key={method} value={method}>{method}</option>)}
+                </select>
+              </label>
+              <label>
+                发送时间
+                <input
+                  type="datetime-local"
+                  value={manualMarkDialog.sentAt}
+                  onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, sentAt: event.target.value })}
+                  required
+                />
+              </label>
+              <label className={styles.shippingDocsWideField}>
+                备注
+                <textarea
+                  value={manualMarkDialog.remark}
+                  onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, remark: event.target.value })}
+                  rows={4}
+                  placeholder="可填写微信、QQ、客户平台记录编号或人工邮件说明"
+                />
+              </label>
+            </div>
+            <div className={styles.modalFooter}>
+              <button className={styles.secondaryButton} type="button" disabled={Boolean(manualMarkBusyId)} onClick={() => setManualMarkDialog(null)}>取消</button>
+              <button className={styles.primaryButtonCompact} type="submit" disabled={Boolean(manualMarkBusyId)}>
+                {manualMarkBusyId ? "提交中..." : "确认标记"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </section>
   );
 }
 
 function StatusBadge({ row }: { row: CommunicationRow }) {
   const danger = ["FAILED", "MISSING"].includes(String(row.clearanceStatus || ""));
-  const success = row.clearanceStatus === "SENT";
+  const success = ["SENT", "MANUAL_SENT"].includes(String(row.clearanceStatus || ""));
   const className = `${styles.statusBadge} ${success ? styles.statusBadgeSuccess : danger ? styles.statusBadgeDanger : ""}`;
   return <span className={className}>{row.clearanceStatusLabel || "-"}</span>;
+}
+
+function manualMarkButtonLabel(row: CommunicationRow) {
+  if (row.manualMarked || row.clearanceStatus === "MANUAL_SENT") return "取消标记";
+  if (row.clearanceStatus === "SENT") return "重新标记";
+  return "标记已发送";
+}
+
+function currentDateTimeLocalValue() {
+  const now = new Date();
+  const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
 }
 
 function formFromDraft(draft: CommunicationDraft | null): MailForm | null {
