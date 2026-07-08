@@ -76,8 +76,13 @@ function controlTowerTimelineEvents(row: ShipsgoTrackingRow) {
   return Array.isArray(row.timeline) ? row.timeline : [];
 }
 
+function trackingProviderLabel(row: ShipsgoTrackingRow) {
+  return String(row.provider || "").toUpperCase() === "FREIGHTOWER" ? "飞驼可视" : "大掌柜";
+}
+
 export function ControlTowerTimeline({ row }: { row: ShipsgoControlTowerRow }) {
   const events = controlTowerTimelineEvents(row);
+  const providerLabel = trackingProviderLabel(row);
   return (
     <div className={styles.shipsgoTimelinePanel}>
       <strong>运输节点时间轴</strong>
@@ -89,7 +94,7 @@ export function ControlTowerTimeline({ row }: { row: ShipsgoControlTowerRow }) {
               <div className={styles.shipsgoTimelineContent}>
                 <div className={styles.shipsgoTimelineHeader}>
                   <strong>{event.time ? formatDateTime(event.time) : "时间未返回"}</strong>
-                  <span>数据来源：{event.source || "大掌櫃"}</span>
+	                  <span>数据来源：{event.source || providerLabel}</span>
                 </div>
                 <span>地点：{formatShipsgoPortForLocale(event.location, "", "zh-CN") || shipsgoValue(event.location)}</span>
                 <span>状态：{formatShipsgoStatusForLocale(event.description, "zh-CN") || shipsgoValue(event.description)}</span>
@@ -99,7 +104,7 @@ export function ControlTowerTimeline({ row }: { row: ShipsgoControlTowerRow }) {
           ))}
         </div>
       ) : (
-        <div className={styles.shipsgoTimelineState}>大掌櫃暂未返回运输节点。</div>
+	        <div className={styles.shipsgoTimelineState}>{providerLabel}暂未返回运输节点。</div>
       )}
     </div>
   );
@@ -115,7 +120,7 @@ export function ControlTowerTooltip({ row }: { row: ShipsgoControlTowerRow }) {
       <span>船公司：{shipsgoCarrierText(row)}</span>
       <span>船名航次：{shipsgoVesselVoyage(row)}</span>
       <span>当前状态：{controlTowerStatusText(row)}</span>
-      <span>当前节点：{row.latestNodeDescription || "大掌櫃暂未返回运输节点"}</span>
+	      <span>当前节点：{row.latestNodeDescription || `${trackingProviderLabel(row)}暂未返回运输节点`}</span>
       <span>节点时间：{row.latestNodeTime ? formatDateTime(row.latestNodeTime) : "未返回"}</span>
       <span>起运港：{shipsgoPortText(row.originPortName || row.originName, row.originPortCode)}</span>
       <span>目的港：{shipsgoPortText(row.destinationPortName || row.destinationName, row.destinationPortCode)}</span>

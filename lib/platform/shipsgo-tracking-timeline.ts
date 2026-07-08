@@ -41,6 +41,8 @@ function shipsgoEventLocation(event: unknown) {
     "portName",
     "port_name",
     "port",
+    "eventPlace",
+    "portPlace",
     "facility",
     "terminal",
     "place",
@@ -53,6 +55,8 @@ function shipsgoEventLocation(event: unknown) {
 function shipsgoEventDescription(event: unknown) {
   return textByKeys(event, [
     "description",
+    "descriptionCn",
+    "descriptionEn",
     "statusDescription",
     "status_description",
     "eventDescription",
@@ -100,11 +104,16 @@ export function extractShipsgoTimeline(payload: unknown) {
     "tracking_events",
     "milestones",
     "movements",
+    "places",
   ]);
   const containers = arrayAt(shipment, "containers").concat(arrayByKeys(shipment, ["containerList", "container_list"]));
   for (const container of containers) {
     const movements = arrayAt(container, "movements");
     if (movements.length) eventArrays.push(movements);
+    const status = arrayAt(container, "status");
+    if (status.length) eventArrays.push(status);
+    const warnings = arrayAt(container, "warnings");
+    if (warnings.length) eventArrays.push(warnings);
   }
   const seen = new Set<string>();
   return eventArrays

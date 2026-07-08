@@ -35,6 +35,7 @@ export type ShipsgoQueryLike = {
 } | null | undefined;
 
 export const SHIPSGO_PROVIDER = "SHIPSGO";
+export const FREIGHTOWER_PROVIDER = "FREIGHTOWER";
 export const OCEAN_MODE = "OCEAN";
 const CONTAINER_PATTERN = /^[A-Z]{4}[0-9]{7}$/;
 const CARRIER_PATTERN = /^(SG_)?[A-Z0-9]{4}$/;
@@ -110,8 +111,23 @@ function shipsgoApiBaseUrl(settings: ShipsgoSettings) {
 
 export function assertShipsgoOceanEnabled(settings: ShipsgoSettings) {
   if (!settings.enabled) throw codedError("大掌櫃集成未启用。", 400, "SHIPSGO_DISABLED");
+  if (!settings.shipsgoEnabled) throw codedError("ShipsGo 接口未启用。", 400, "SHIPSGO_PROVIDER_DISABLED");
   if (!settings.apiKey) throw codedError("大掌櫃 API Key 未配置。", 400, "SHIPSGO_API_KEY_REQUIRED");
   if (!settings.oceanTrackingEnabled) throw codedError("大掌櫃海运跟踪功能未启用。", 400, "SHIPSGO_OCEAN_DISABLED");
+}
+
+export function assertActiveOceanTrackingEnabled(settings: ShipsgoSettings) {
+  if (!settings.enabled) throw codedError("物流跟踪接口未启用。", 400, "TRACKING_INTEGRATION_DISABLED");
+  if (!settings.oceanTrackingEnabled) throw codedError("海运跟踪功能未启用。", 400, "OCEAN_TRACKING_DISABLED");
+  if (settings.activeProvider === FREIGHTOWER_PROVIDER) {
+    if (!settings.freightowerEnabled) throw codedError("飞驼可视接口未启用。", 400, "FREIGHTOWER_PROVIDER_DISABLED");
+    if (!settings.freightowerClientId || !settings.freightowerSecret) {
+      throw codedError("飞驼可视 Client ID 或 Secret 未配置。", 400, "FREIGHTOWER_CREDENTIAL_REQUIRED");
+    }
+    return FREIGHTOWER_PROVIDER;
+  }
+  assertShipsgoOceanEnabled(settings);
+  return SHIPSGO_PROVIDER;
 }
 
 export async function shipsgoApiRequest<T>(

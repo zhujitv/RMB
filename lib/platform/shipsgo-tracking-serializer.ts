@@ -42,14 +42,18 @@ export function serializeShipsgoTracking(row: {
   const rawSource = row.rawResponse ?? row.rawPayload ?? null;
   const rawShipment = rawSource ? extractShipmentPayload(rawSource) : {};
   const rawFallback = Object.keys(rawShipment).length ? mapShipsgoShipmentPayload(rawShipment) : null;
-  const timeline = rawSource ? extractShipsgoTimeline(rawSource) : [];
+  const providerLabel = row.provider === "FREIGHTOWER" ? "飞驼可视" : "大掌櫃";
+  const timeline = rawSource ? extractShipsgoTimeline(rawSource).map((event) => ({
+    ...event,
+    source: event.source === "大掌櫃" ? providerLabel : event.source,
+  })) : [];
   const fallbackTimeline = !timeline.length && row.lastEvent ? [{
     time: dateTimeText(row.lastEventAt),
     location: row.originName || row.destinationName || "",
     description: row.lastEvent,
     vesselName: row.vesselName || "",
     voyage: row.voyage || "",
-    source: "大掌櫃",
+    source: providerLabel,
   }] : [];
   const containerNumbers = uniqueStrings([
     row.containerNumber || "",

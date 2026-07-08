@@ -20,6 +20,7 @@ type ShipsgoTimelineEvent = {
 
 type ShipsgoTracking = {
   id: string;
+  provider?: string;
   shipsgoShipmentId?: string;
   masterBlNo?: string;
   bookingNumber?: string;
@@ -62,8 +63,12 @@ function clean(value: unknown) {
   return String(value || "").trim();
 }
 
-function fallback(value: unknown, emptyText = "大掌櫃未返回") {
+function fallback(value: unknown, emptyText = "接口未返回") {
   return clean(value) || emptyText;
+}
+
+function providerLabel(tracking?: Pick<ShipsgoTracking, "provider"> | null) {
+  return clean(tracking?.provider).toUpperCase() === "FREIGHTOWER" ? "飞驼可视" : "大掌柜";
 }
 
 function formatDateTime(value: unknown) {
@@ -86,7 +91,7 @@ function shipsgoCarrierText(tracking: ShipsgoTracking) {
 }
 
 function shipsgoPortText(name: unknown, code: unknown) {
-  return formatShipsgoPortForLocale(name, code, "zh-CN") || "大掌櫃未返回";
+  return formatShipsgoPortForLocale(name, code, "zh-CN") || "接口未返回";
 }
 
 function shipsgoStatusText(tracking: ShipsgoTracking) {
@@ -139,7 +144,7 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
       })
       .catch((loadError) => {
         if (!active) return;
-        console.error("大掌櫃运输地图数据加载失败", loadError);
+	        console.error("运输地图数据加载失败", loadError);
         setError("当前运输跟踪数据加载失败，请重新同步后再试。");
       })
       .finally(() => {
@@ -150,20 +155,20 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
     };
   }, [trackingId]);
 
-  useEffect(() => {
-    if (!tracking) {
-      document.title = "大掌櫃运输地图";
-      return;
-    }
-    const masterBlNo = clean(tracking.masterBlNo || tracking.bookingNumber);
-    document.title = masterBlNo ? `${masterBlNo} - 大掌櫃运输地图` : "大掌櫃运输地图";
-  }, [tracking]);
+	  useEffect(() => {
+	    if (!tracking) {
+	      document.title = "运输地图";
+	      return;
+	    }
+	    const masterBlNo = clean(tracking.masterBlNo || tracking.bookingNumber);
+	    document.title = masterBlNo ? `${masterBlNo} - ${providerLabel(tracking)}运输地图` : `${providerLabel(tracking)}运输地图`;
+	  }, [tracking]);
 
   if (!trackingId) {
     return (
       <main className={styles.page}>
         <section className={styles.emptyPanel}>
-          <span>大掌櫃运输地图</span>
+	          <span>运输地图</span>
           <h1>请选择一条运输跟踪记录</h1>
           {billOfLading ? <p>当前 URL 仅包含提单号 {billOfLading}，请从物流信息或运输监控中点击对应记录的「查看地图」。</p> : null}
         </section>
@@ -175,9 +180,9 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
     return (
       <main className={styles.page}>
         <section className={styles.emptyPanel}>
-          <span>大掌櫃运输地图</span>
+	          <span>运输地图</span>
           <h1>正在读取运输跟踪数据...</h1>
-          <p>系统正在根据 trackingId 自动加载当前订单的大掌柜跟踪记录。</p>
+	          <p>系统正在根据 trackingId 自动加载当前订单的运输跟踪记录。</p>
         </section>
       </main>
     );
@@ -195,7 +200,8 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
     );
   }
 
-  const masterBlNo = tracking.masterBlNo || tracking.bookingNumber || "大掌櫃未返回";
+	  const providerName = providerLabel(tracking);
+	  const masterBlNo = tracking.masterBlNo || tracking.bookingNumber || "接口未返回";
   const containerNumbers = containers(tracking);
   const originPort = shipsgoPortText(tracking.originPortName || tracking.originName, tracking.originPortCode);
   const destinationPort = shipsgoPortText(tracking.destinationPortName || tracking.destinationName, tracking.destinationPortCode);
@@ -205,7 +211,7 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
     <main className={styles.page}>
       <header className={styles.header}>
         <div>
-          <span>大掌櫃运输地图</span>
+	          <span>{providerName}运输地图</span>
           <h1>{masterBlNo}</h1>
         </div>
         <a className={styles.backLink} href="/?view=domesticLogistics" target="_self">返回物流信息</a>
@@ -242,7 +248,7 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
             <div className={styles.containerTags}>
               {containerNumbers.length ? containerNumbers.map((containerNo) => (
                 <span key={containerNo}>{containerNo}</span>
-              )) : <span>大掌櫃未返回</span>}
+	              )) : <span>接口未返回</span>}
             </div>
           </div>
         </div>
@@ -255,15 +261,15 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
                 <div className={styles.timelineItem} key={`${event.time || index}-${event.description || index}`}>
                   <span className={styles.timelineDot} />
                   <div>
-                    <strong>{event.description || "大掌櫃节点"}</strong>
+	                  <strong>{event.description || `${providerName}节点`}</strong>
                     <span>{formatDateTime(event.time) || "时间未返回"} ｜ {shipsgoPortText(event.location, "")}</span>
-                    <span>{event.vesselName || event.voyage ? `${event.vesselName || ""}${event.voyage ? ` / ${event.voyage}` : ""}` : "船名航次未返回"} ｜ 数据来源：{event.source || "大掌櫃"}</span>
+	                    <span>{event.vesselName || event.voyage ? `${event.vesselName || ""}${event.voyage ? ` / ${event.voyage}` : ""}` : "船名航次未返回"} ｜ 数据来源：{event.source || providerName}</span>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className={styles.mutedText}>大掌櫃暂未返回运输节点。</p>
+	            <p className={styles.mutedText}>{providerName}暂未返回运输节点。</p>
           )}
         </div>
       </section>
@@ -271,21 +277,21 @@ export default function TrackingMapClient({ initialTrackingId, initialBillOfLadi
       <section className={styles.mapPanel}>
         <div className={styles.mapHeader}>
           <div>
-            <span>大掌柜原始地图</span>
+	            <span>{providerName}原始地图</span>
             <h2>船舶位置与航线轨迹</h2>
           </div>
         </div>
         {tracking.mapUrl ? (
           <div className={styles.mapLinkPanel}>
             <strong>{masterBlNo}</strong>
-            <span>系统已读取当前跟踪记录。点击下方按钮将按大掌柜返回的原始地图链接打开，不再使用 iframe 嵌入。</span>
-            <a className={styles.primaryMapLink} href={tracking.mapUrl} target="_blank" rel="noreferrer">
-              打开大掌柜原始地图
-            </a>
+	            <span>系统已读取当前跟踪记录。点击下方按钮将按{providerName}返回的原始地图链接打开。</span>
+	            <a className={styles.primaryMapLink} href={tracking.mapUrl} target="_blank" rel="noreferrer">
+	              打开{providerName}原始地图
+	            </a>
           </div>
         ) : (
           <div className={styles.mapFallback}>
-            大掌柜暂未返回原始地图链接，请先同步最新状态后再试。
+	            {providerName}暂未返回原始地图链接，请先同步最新状态后再试。
           </div>
         )}
       </section>

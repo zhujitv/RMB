@@ -253,11 +253,11 @@ export function useDomesticLogisticsActions({
           carrierScac: payload.carrierScac || "",
         }),
       });
-      if (result.success !== true || !result.tracking) throw new Error(result.message || "创建大掌櫃跟踪失败");
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "创建海运跟踪失败");
       updateRowShipsgoTracking(row.id, result.tracking);
-      setNotice(result.message || "大掌櫃跟踪已创建");
+      setNotice(result.message || "海运跟踪已创建");
     } catch (createError) {
-      throw createError instanceof Error ? createError : new Error("创建大掌櫃跟踪失败");
+      throw createError instanceof Error ? createError : new Error("创建海运跟踪失败");
     } finally {
       setShipsgoBusyKey("");
     }
@@ -272,12 +272,12 @@ export function useDomesticLogisticsActions({
       const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(trackingId)}/sync`, {
         method: "POST",
       });
-      if (result.success !== true || !result.tracking) throw new Error(result.message || "同步大掌櫃跟踪失败");
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "同步海运跟踪失败");
       updateRowShipsgoTracking(row.id, result.tracking);
-      setNotice(result.message || "大掌櫃状态已同步");
+      setNotice(result.message || "海运状态已同步");
       return result.tracking;
     } catch (syncError) {
-      const message = syncError instanceof Error ? syncError.message : "同步大掌櫃跟踪失败";
+      const message = syncError instanceof Error ? syncError.message : "同步海运跟踪失败";
       setError(message);
       throw new Error(message);
     } finally {
@@ -298,11 +298,11 @@ export function useDomesticLogisticsActions({
           masterBlNo: row.blNo || row.billOfLadingNo || "",
         }),
       });
-      if (result.success !== true || !result.tracking) throw new Error(result.message || "从大掌櫃同步已有跟踪失败");
+      if (result.success !== true || !result.tracking) throw new Error(result.message || "同步已有海运跟踪失败");
       updateRowShipsgoTracking(row.id, result.tracking);
-      setNotice(result.message || "已从大掌櫃同步已有跟踪");
+      setNotice(result.message || "已同步已有海运跟踪");
     } catch (recoverError) {
-      setError(recoverError instanceof Error ? recoverError.message : "从大掌櫃同步已有跟踪失败");
+      setError(recoverError instanceof Error ? recoverError.message : "同步已有海运跟踪失败");
     } finally {
       setShipsgoBusyKey("");
     }
@@ -310,8 +310,8 @@ export function useDomesticLogisticsActions({
 
   async function deleteShipsgoTracking(row: DomesticLogisticsRow, tracking: ShipsgoTrackingRow) {
     const confirmationResult = await requestConfirmation({
-      title: "删除大掌櫃跟踪？",
-      message: "删除后该订单将不再显示这条运输跟踪记录。本操作不会调用大掌櫃创建或同步接口。",
+      title: "删除海运跟踪？",
+      message: "删除后该订单将不再显示这条运输跟踪记录。本操作不会调用第三方创建或同步接口。",
       details: [
         `订单：${row.orderNo || "-"}`,
         `Master B/L：${tracking.masterBlNo || tracking.bookingNumber || "-"}`,
@@ -329,11 +329,11 @@ export function useDomesticLogisticsActions({
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(tracking.id)}`, {
         method: "DELETE",
       });
-      if (result.success !== true) throw new Error(result.message || "删除大掌櫃跟踪失败");
+      if (result.success !== true) throw new Error(result.message || "删除海运跟踪失败");
       removeRowShipsgoTracking(row.id, tracking.id);
-      setNotice(result.message || "大掌櫃跟踪已删除");
+      setNotice(result.message || "海运跟踪已删除");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "删除大掌櫃跟踪失败");
+      setError(deleteError instanceof Error ? deleteError.message : "删除海运跟踪失败");
     } finally {
       setShipsgoBusyKey("");
     }

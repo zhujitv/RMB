@@ -9,7 +9,7 @@ import {
 } from "./masters-access";
 import { orderSalespersonOwnershipWhere } from "./order-access";
 import { serializeShipsgoTracking, type ShipsgoTrackingDto } from "./shipsgo-tracking-mapping";
-import { cleanInputText, OCEAN_MODE, SHIPSGO_PROVIDER, type ShipsgoActor, type ShipsgoQueryLike } from "./shipsgo-tracking-utils";
+import { cleanInputText, FREIGHTOWER_PROVIDER, OCEAN_MODE, SHIPSGO_PROVIDER, type ShipsgoActor, type ShipsgoQueryLike } from "./shipsgo-tracking-utils";
 
 function controlTowerQueryValue(query: ShipsgoQueryLike, key: string, limit = 128) {
   return cleanInputText(query?.get(key), limit);
@@ -206,7 +206,7 @@ export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, 
   const orderAccessWhere = controlTowerOrderAccessWhere(actor);
   const rows = await prisma.shipsgoTracking.findMany({
     where: {
-      provider: SHIPSGO_PROVIDER,
+      provider: { in: [SHIPSGO_PROVIDER, FREIGHTOWER_PROVIDER] },
       mode: OCEAN_MODE,
       deletedAt: null,
       shipsgoShipmentId: { not: null },

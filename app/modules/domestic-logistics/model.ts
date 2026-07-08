@@ -151,6 +151,8 @@ export type DomesticLogisticsRow = {
 
 export type ShipsgoFeatureFlags = {
   enabled?: boolean;
+  activeProvider?: string;
+  providerLabel?: string;
   oceanTrackingEnabled?: boolean;
   airTrackingEnabled?: boolean;
   manualSyncEnabled?: boolean;

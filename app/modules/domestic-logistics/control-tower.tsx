@@ -148,12 +148,12 @@ export function ShipsgoControlTowerView({
       const result = await apiJson<{ success?: boolean; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(row.id)}/sync`, {
         method: "POST",
       });
-      if (result.success === false) throw new Error(result.message || "同步大掌櫃跟踪失败");
+      if (result.success === false) throw new Error(result.message || "同步海运跟踪失败");
       await loadControlTower(submittedFilters, true);
-      setNotice(result.message || "大掌櫃状态已同步");
+      setNotice(result.message || "海运状态已同步");
     } catch (syncError) {
-      const message = syncError instanceof Error ? syncError.message : "同步大掌櫃跟踪失败";
-      console.error("同步大掌櫃跟踪失败", syncError);
+      const message = syncError instanceof Error ? syncError.message : "同步海运跟踪失败";
+      console.error("同步海运跟踪失败", syncError);
       setError(message);
     } finally {
       setSyncingId("");
@@ -315,7 +315,7 @@ export function ShipsgoControlTowerView({
                       {(row.alertLabels || []).map((label) => <span className={controlTowerAlertClass(label)} key={label}>{label}</span>)}
                     </div>
                   </td>
-                  <td title={row.latestNodeDescription || ""}>{row.latestNodeDescription || "大掌櫃暂未返回运输节点"}</td>
+	                  <td title={row.latestNodeDescription || ""}>{row.latestNodeDescription || "接口暂未返回运输节点"}</td>
                   <td>{row.lastSyncTime || row.lastSyncedAt ? formatDateTime(row.lastSyncTime || row.lastSyncedAt) : "暂无同步记录"}</td>
                   <td>{row.containerCount || row.containerNumbers?.length || 0}</td>
                   <td>

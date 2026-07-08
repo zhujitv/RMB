@@ -13,8 +13,21 @@ type AuditRequestLike = Parameters<typeof writeAudit>[0];
 
 type ShipsgoIntegrationInput = {
   enabled?: unknown;
+  activeProvider?: unknown;
   apiBaseUrl?: unknown;
   apiKey?: unknown;
+  shipsgoEnabled?: unknown;
+  freightowerEnabled?: unknown;
+  freightowerApiBaseUrl?: unknown;
+  freightowerClientId?: unknown;
+  freightowerSecret?: unknown;
+  freightowerMapKey?: unknown;
+  freightowerWebhookSecret?: unknown;
+  freightowerDefaultCarrierCode?: unknown;
+  freightowerDefaultPortCode?: unknown;
+  freightowerDefaultIsExport?: unknown;
+  freightowerDefaultLang?: unknown;
+  freightowerHiddenReference?: unknown;
   oceanTrackingEnabled?: unknown;
   airTrackingEnabled?: unknown;
   manualSyncEnabled?: unknown;
@@ -36,6 +49,11 @@ function cleanSecret(value: unknown, limit = 500) {
     .trim();
 }
 
+function normalizeTrackingProvider(value: unknown) {
+  const provider = nonEmpty(value).toUpperCase();
+  return provider === "FREIGHTOWER" ? "FREIGHTOWER" : "SHIPSGO";
+}
+
 function cleanOptionalUrl(value: unknown, fallback: string) {
   const text = nonEmpty(value || fallback);
   try {
@@ -48,6 +66,20 @@ function cleanOptionalUrl(value: unknown, fallback: string) {
     if ((error as { status?: number } | null)?.status) throw error;
     throw codedError("大掌櫃 API 地址格式错误", 400, "VALIDATION_INVALID_URL");
   }
+}
+
+function cleanProviderCode(value: unknown, fallback = "", limit = 32) {
+  return cleanSecret(value || fallback, limit).toUpperCase();
+}
+
+function cleanFreightowerLang(value: unknown) {
+  const lang = nonEmpty(value || DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerDefaultLang).toLowerCase();
+  return ["zh", "en", "jp"].includes(lang) ? lang : "zh";
+}
+
+function cleanFreightowerIsExport(value: unknown) {
+  const flag = nonEmpty(value).toUpperCase();
+  return flag === "E" || flag === "I" ? flag : "";
 }
 
 function cleanDailySyncTime(value: unknown) {
@@ -67,8 +99,21 @@ export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
   const input: ShipsgoIntegrationInput = isPlainRecord(value) ? value : {};
   return {
     enabled: input.enabled === true,
+    activeProvider: normalizeTrackingProvider(input.activeProvider),
     apiBaseUrl: cleanOptionalUrl(input.apiBaseUrl, DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.apiBaseUrl),
     apiKey: cleanSecret(input.apiKey),
+    shipsgoEnabled: input.shipsgoEnabled !== false,
+    freightowerEnabled: input.freightowerEnabled === true,
+    freightowerApiBaseUrl: cleanOptionalUrl(input.freightowerApiBaseUrl, DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerApiBaseUrl),
+    freightowerClientId: cleanSecret(input.freightowerClientId, 128),
+    freightowerSecret: cleanSecret(input.freightowerSecret, 500),
+    freightowerMapKey: cleanSecret(input.freightowerMapKey, 500),
+    freightowerWebhookSecret: cleanSecret(input.freightowerWebhookSecret, 500),
+    freightowerDefaultCarrierCode: cleanProviderCode(input.freightowerDefaultCarrierCode, DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerDefaultCarrierCode),
+    freightowerDefaultPortCode: cleanProviderCode(input.freightowerDefaultPortCode, "", 16),
+    freightowerDefaultIsExport: cleanFreightowerIsExport(input.freightowerDefaultIsExport),
+    freightowerDefaultLang: cleanFreightowerLang(input.freightowerDefaultLang),
+    freightowerHiddenReference: input.freightowerHiddenReference === true,
     oceanTrackingEnabled: input.oceanTrackingEnabled !== false,
     airTrackingEnabled: input.airTrackingEnabled === true,
     manualSyncEnabled: input.manualSyncEnabled !== false,
@@ -91,17 +136,30 @@ export function serializeShipsgoIntegrationSetting(setting: unknown) {
   return {
     ...normalized,
     apiKey: "",
+    freightowerSecret: "",
+    freightowerMapKey: "",
+    freightowerWebhookSecret: "",
     webhookSecret: "",
     apiKeyConfigured: Boolean(normalized.apiKey),
+    freightowerClientIdConfigured: Boolean(normalized.freightowerClientId),
+    freightowerSecretConfigured: Boolean(normalized.freightowerSecret),
+    freightowerMapKeyConfigured: Boolean(normalized.freightowerMapKey),
+    freightowerWebhookSecretConfigured: Boolean(normalized.freightowerWebhookSecret),
     webhookSecretConfigured: Boolean(normalized.webhookSecret),
   };
 }
 
 export function serializeShipsgoFeatureFlags(setting: unknown) {
   const normalized = normalizeShipsgoIntegrationSettings(settingValue(setting) || {});
-  const enabled = normalized.enabled && Boolean(normalized.apiKey);
+  const shipsgoReady = normalized.shipsgoEnabled && Boolean(normalized.apiKey);
+  const freightowerReady = normalized.freightowerEnabled && Boolean(normalized.freightowerClientId && normalized.freightowerSecret);
+  const activeProvider = normalized.activeProvider;
+  const activeProviderReady = activeProvider === "FREIGHTOWER" ? freightowerReady : shipsgoReady;
+  const enabled = normalized.enabled && activeProviderReady;
   return {
     enabled,
+    activeProvider,
+    providerLabel: activeProvider === "FREIGHTOWER" ? "飞驼可视" : "ShipsGo",
     oceanTrackingEnabled: enabled && normalized.oceanTrackingEnabled,
     airTrackingEnabled: enabled && normalized.airTrackingEnabled,
     manualSyncEnabled: enabled && normalized.manualSyncEnabled,
@@ -139,12 +197,19 @@ export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, 
     ...current,
     ...data,
     apiKey: cleanSecret(data.apiKey) || current.apiKey,
+    freightowerClientId: cleanSecret(data.freightowerClientId, 128) || current.freightowerClientId,
+    freightowerSecret: cleanSecret(data.freightowerSecret) || current.freightowerSecret,
+    freightowerMapKey: cleanSecret(data.freightowerMapKey) || current.freightowerMapKey,
+    freightowerWebhookSecret: cleanSecret(data.freightowerWebhookSecret) || current.freightowerWebhookSecret,
     webhookSecret: cleanSecret(data.webhookSecret) || current.webhookSecret,
   });
-  if (value.enabled && !value.apiKey) {
+  if (value.enabled && value.activeProvider === "SHIPSGO" && (!value.shipsgoEnabled || !value.apiKey)) {
     throw codedError("启用大掌櫃前请先填写 API Key", 400, "SHIPSGO_API_KEY_REQUIRED");
   }
-  if (value.webhookEnabled && !value.webhookSecret) {
+  if (value.enabled && value.activeProvider === "FREIGHTOWER" && (!value.freightowerEnabled || !value.freightowerClientId || !value.freightowerSecret)) {
+    throw codedError("启用飞驼可视前请先填写 Client ID 和 Secret", 400, "FREIGHTOWER_CREDENTIAL_REQUIRED");
+  }
+  if (value.webhookEnabled && value.activeProvider === "SHIPSGO" && !value.webhookSecret) {
     throw codedError("启用 Webhook 前请先填写 Webhook Secret", 400, "SHIPSGO_WEBHOOK_SECRET_REQUIRED");
   }
   const setting = await prisma.systemSetting.upsert({

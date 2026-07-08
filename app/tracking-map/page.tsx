@@ -3,7 +3,7 @@ import TrackingMapClient from "./tracking-map-client";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "大掌櫃运输地图",
+  title: "运输地图",
 };
 
 type TrackingMapPageProps = {

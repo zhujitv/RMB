@@ -201,14 +201,14 @@ function selectNotificationTemplate(type: string) {
           }),
         },
       );
-      if (result.success !== true) throw new Error(result.message || "大掌櫃设置保存失败");
+      if (result.success !== true) throw new Error(result.message || "物流接口设置保存失败");
       const nextSettings = result.settings || shipsgoIntegrationForm;
       setShipsgoIntegrationSettings(nextSettings);
       setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(nextSettings));
       markLoaded("shipsgoIntegration");
-      setShipsgoIntegrationMessage(result.message || "大掌櫃设置已保存");
+      setShipsgoIntegrationMessage(result.message || "物流接口设置已保存");
     } catch (saveError) {
-      setShipsgoIntegrationMessage(saveError instanceof Error ? saveError.message : "大掌櫃设置保存失败");
+      setShipsgoIntegrationMessage(saveError instanceof Error ? saveError.message : "物流接口设置保存失败");
     } finally {
       setShipsgoIntegrationSaving(false);
     }

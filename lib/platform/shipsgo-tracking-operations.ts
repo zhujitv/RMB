@@ -5,8 +5,17 @@ import { writeAudit } from "./shared-audit";
 import { assertJsonObject, codedError } from "./shared-base-utils";
 import { canAccessDomesticLogisticsOrder } from "./masters-access";
 import { getShipsgoIntegrationSettings } from "./shipsgo-integration";
+import {
+  assertFreightowerOceanEnabled,
+  createFreightowerPayloadFromInput,
+  createFreightowerPayloadFromTracking,
+  freightowerApiRequest,
+  mapFreightowerShipmentPayload,
+  trackingDataFromFreightowerMappedShipment,
+} from "./freightower-tracking";
 import { extractShipmentPayload, mapShipsgoShipmentPayload, serializeShipsgoTracking, trackingDataFromMappedShipment } from "./shipsgo-tracking-mapping";
 import {
+  FREIGHTOWER_PROVIDER,
   OCEAN_MODE,
   SHIPSGO_PROVIDER,
   actorId,
@@ -68,9 +77,45 @@ export async function syncShipsgoOceanTracking(request: AuditRequestLike, actor:
   const id = cleanInputText(trackingId, 80);
   if (!id) throw codedError("请选择需要同步的大掌櫃跟踪记录。", 400, "SHIPSGO_TRACKING_REQUIRED");
   const settings = await getShipsgoIntegrationSettings();
-  assertShipsgoOceanEnabled(settings);
   const before = await getTrackingForActor(id, actor);
   assertShipsgoTrackingWriteAccess(actor, before.order);
+  if (before.provider === FREIGHTOWER_PROVIDER) {
+    assertFreightowerOceanEnabled(settings);
+    const payload = createFreightowerPayloadFromTracking(before, settings);
+    const response = await freightowerApiRequest<unknown>(settings, "/application/v1/query", payload);
+    const mapped = mapFreightowerShipmentPayload(response, settings);
+    const trackingData = trackingDataFromFreightowerMappedShipment(mapped);
+    const now = new Date();
+    const savedBase = await prisma.shipsgoTracking.update({
+      where: { id: before.id },
+      data: {
+        ...trackingData,
+        masterBlNo: mapped.masterBlNo || before.masterBlNo || before.bookingNumber,
+        containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || before.containerNumber,
+        eta: mapped.eta,
+        currentStatus: mapped.currentStatus,
+        lastCheckedAt: now,
+        lastSyncedAt: now,
+        lastSyncTime: now,
+        updatedById: actorId(actor) || null,
+      },
+    });
+    await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
+    const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
+    if (!saved) throw codedError("飞驼可视跟踪本地同步保存失败。", 500, "FREIGHTOWER_TRACKING_SAVE_FAILED");
+    await runNonCriticalTask("飞驼可视跟踪同步日志写入", () => writeAudit(
+      request,
+      actor,
+      "同步飞驼可视海运跟踪",
+      "shipsgo_trackings",
+      saved.id,
+      { status: before.status, syncStatus: before.syncStatus },
+      { status: saved.status, syncStatus: saved.syncStatus, lastSyncedAt: saved.lastSyncedAt },
+    ));
+    return { tracking: serializeShipsgoTracking(saved), message: "飞驼可视状态已同步。" };
+  }
+
+  assertShipsgoOceanEnabled(settings);
   if (!before.shipsgoShipmentId) {
     return recoverShipsgoOceanTracking(request, actor, {
       orderId: before.orderId,
@@ -150,9 +195,74 @@ export async function recoverShipsgoOceanTracking(request: AuditRequestLike, act
   const orderId = cleanInputText(body.orderId, 80);
   if (!orderId) throw codedError("请选择需要补同步大掌櫃跟踪的订单。", 400, "ORDER_REQUIRED");
   const settings = await getShipsgoIntegrationSettings();
-  assertShipsgoOceanEnabled(settings);
   const order = await getShipsgoTrackingOrder(orderId, actor);
   assertShipsgoTrackingWriteAccess(actor, order);
+  if (settings.activeProvider === FREIGHTOWER_PROVIDER) {
+    assertFreightowerOceanEnabled(settings);
+    const existing = await prisma.shipsgoTracking.findFirst({
+      where: {
+        orderId,
+        provider: FREIGHTOWER_PROVIDER,
+        mode: OCEAN_MODE,
+        deletedAt: null,
+      },
+      include: {
+        containers: {
+          select: { containerNo: true },
+          orderBy: [{ containerNo: "asc" }],
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }],
+    });
+    if (existing) return syncShipsgoOceanTracking(request, actor, existing.id);
+    const payload = createFreightowerPayloadFromInput(body, order, settings);
+    const response = await freightowerApiRequest<unknown>(settings, "/application/v1/query", payload);
+    const mapped = mapFreightowerShipmentPayload(response, settings);
+    const trackingData = trackingDataFromFreightowerMappedShipment(mapped);
+    const now = new Date();
+    const currentActorId = actorId(actor);
+    const savedBase = await prisma.shipsgoTracking.create({
+      data: {
+        orderId,
+        provider: FREIGHTOWER_PROVIDER,
+        mode: OCEAN_MODE,
+        ...trackingData,
+        masterBlNo: mapped.masterBlNo || payload.billNo,
+        reference: mapped.reference || payload.businessNo,
+        carrierScac: mapped.carrierScac || payload.carrierCode,
+        bookingNumber: mapped.bookingNumber || payload.billNo,
+        containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || payload.containerNo || null,
+        eta: mapped.eta,
+        currentStatus: mapped.currentStatus,
+        syncStatus: "RECOVERED",
+        syncMessage: "已从飞驼可视同步已有跟踪。",
+        lastCheckedAt: now,
+        lastSyncedAt: now,
+        lastSyncTime: now,
+        createdById: currentActorId || null,
+        updatedById: currentActorId || null,
+      },
+    });
+    await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
+    const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
+    if (!saved) throw codedError("飞驼可视已有跟踪补同步保存失败。", 500, "FREIGHTOWER_TRACKING_SAVE_FAILED");
+    await runNonCriticalTask("飞驼可视已有跟踪补同步日志写入", () => writeAudit(
+      request,
+      actor,
+      "补同步飞驼可视已有跟踪",
+      "shipsgo_trackings",
+      saved.id,
+      null,
+      {
+        orderId,
+        masterBlNo: saved.masterBlNo || saved.bookingNumber,
+        containerNumbers: (saved.containers || []).map((container) => container.containerNo),
+      },
+    ));
+    return { tracking: serializeShipsgoTracking(saved), recovered: true, message: "已从飞驼可视同步已有跟踪。" };
+  }
+
+  assertShipsgoOceanEnabled(settings);
   const masterBlNo = cleanBookingNumber(body.masterBlNo) || cleanBookingNumber(body.bookingNumber) || cleanBookingNumber(order.blNo);
   const carrierScac = cleanCarrierScac(body.carrierScac);
   const existing = await prisma.shipsgoTracking.findFirst({
@@ -258,7 +368,7 @@ export async function findShipsgoOceanTrackingByContainerNo(actor: ShipsgoActor,
     where: {
       containerNo,
       tracking: {
-        provider: SHIPSGO_PROVIDER,
+        provider: { in: [SHIPSGO_PROVIDER, FREIGHTOWER_PROVIDER] },
         mode: OCEAN_MODE,
         deletedAt: null,
       },

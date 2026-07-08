@@ -148,9 +148,26 @@ export const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
 };
 export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   enabled: false,
+  activeProvider: "SHIPSGO",
   apiBaseUrl: "https://api.shipsgo.com",
   apiKey: "",
   apiKeyConfigured: false,
+  shipsgoEnabled: true,
+  freightowerEnabled: false,
+  freightowerApiBaseUrl: "http://openapi.freightower.com",
+  freightowerClientId: "",
+  freightowerClientIdConfigured: false,
+  freightowerSecret: "",
+  freightowerSecretConfigured: false,
+  freightowerMapKey: "",
+  freightowerMapKeyConfigured: false,
+  freightowerWebhookSecret: "",
+  freightowerWebhookSecretConfigured: false,
+  freightowerDefaultCarrierCode: "AUTO",
+  freightowerDefaultPortCode: "",
+  freightowerDefaultIsExport: "",
+  freightowerDefaultLang: "zh",
+  freightowerHiddenReference: false,
   oceanTrackingEnabled: true,
   airTrackingEnabled: false,
   manualSyncEnabled: true,
@@ -200,7 +217,7 @@ export const SHIPSGO_FEATURE_OPTIONS = [
   {
     key: "oceanTrackingEnabled",
     label: "海运集装箱跟踪",
-    description: "按提单号、柜号创建大掌櫃海运跟踪任务。",
+    description: "按提单号、柜号创建第三方海运跟踪任务。",
   },
   {
     key: "airTrackingEnabled",
@@ -210,7 +227,7 @@ export const SHIPSGO_FEATURE_OPTIONS = [
   {
     key: "manualSyncEnabled",
     label: "手动同步",
-    description: "允许在物流页面手动刷新大掌櫃跟踪状态。",
+    description: "允许在物流页面手动刷新海运跟踪状态。",
   },
   {
     key: "autoSyncEnabled",
@@ -220,12 +237,12 @@ export const SHIPSGO_FEATURE_OPTIONS = [
   {
     key: "webhookEnabled",
     label: "Webhook 推送",
-    description: "允许接收大掌櫃状态变更推送。",
+    description: "允许接收第三方状态变更推送。",
   },
   {
     key: "liveMapEnabled",
     label: "地图入口",
-    description: "开启后前台显示大掌柜返回的原始地图链接。",
+    description: "开启后前台显示当前接口返回的原始地图链接。",
   },
   {
     key: "customerPushEnabled",
@@ -240,6 +257,20 @@ export const SHIPSGO_FEATURE_OPTIONS = [
   label: string;
   description: string;
 }>;
+export const TRACKING_PROVIDER_OPTIONS = [
+  { value: "SHIPSGO", label: "ShipsGo", description: "保留现有大掌柜 / ShipsGo 海运跟踪接口。" },
+  { value: "FREIGHTOWER", label: "飞驼可视", description: "使用飞驼可视集装箱综合跟踪、预警推送和可视化地图。" },
+];
+export const FREIGHTOWER_LANG_OPTIONS = [
+  { value: "zh", label: "中文" },
+  { value: "en", label: "英文" },
+  { value: "jp", label: "日文" },
+];
+export const FREIGHTOWER_EXPORT_OPTIONS = [
+  { value: "", label: "不指定" },
+  { value: "E", label: "出口 E" },
+  { value: "I", label: "进口 I" },
+];
 export const USER_ROLES = ["管理员", "业务员", "财务", "物流供应商", FACTORY_SUPPLIER_ACCOUNT_ROLE, "物流资料录入员"];
 export const USER_APPROVAL_STATUS_OPTIONS = [
   { label: "待审核", value: "PENDING" },

@@ -30,7 +30,7 @@ export function shipsgoCarrierText(tracking: ShipsgoTrackingRow) {
 }
 
 export function shipsgoPortText(name: unknown, code: unknown = "") {
-  return formatShipsgoPortForLocale(name, code, "zh-CN") || "大掌櫃未返回";
+  return formatShipsgoPortForLocale(name, code, "zh-CN") || "接口未返回";
 }
 
 export function shipsgoTrackingMethodText(method = "Master B/L") {

@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const actor = await requireApiActor(request);
     return ok({ settings: await readShipsgoIntegrationSettings(actor) });
   } catch (error: unknown) {
-    return apiError(error, "读取大掌櫃设置失败");
+    return apiError(error, "读取物流接口设置失败");
   }
 }
 
@@ -19,8 +19,8 @@ export async function PATCH(request: NextRequest) {
     const actor = await requireApiActor(request);
     const body = await parseJsonBody(request);
     const settings = await saveShipsgoIntegrationSettings(request, actor, body);
-    return ok({ success: true, settings, message: "大掌櫃设置已保存" });
+    return ok({ success: true, settings, message: "物流接口设置已保存" });
   } catch (error: unknown) {
-    return apiError(error, "保存大掌櫃设置失败");
+    return apiError(error, "保存物流接口设置失败");
   }
 }

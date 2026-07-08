@@ -64,7 +64,7 @@ test("ShipsGo settings API supports authenticated read and admin write", () => {
   assert.match(settingsRoute, /readShipsgoIntegrationSettings\(actor\)/);
   assert.match(settingsRoute, /export async function PATCH/);
   assert.match(settingsRoute, /saveShipsgoIntegrationSettings\(request, actor, body\)/);
-  assert.match(settingsRoute, /大掌櫃设置已保存/);
+  assert.match(settingsRoute, /物流接口设置已保存/);
 });
 
 test("settings module exposes third-party API configuration without leaking secrets", () => {
@@ -136,7 +136,7 @@ test("ShipsGo routes expose create, sync and webhook endpoints", () => {
   assert.match(oceanTrackingControlTowerRoute, /listShipsgoControlTowerTrackings\(new URL\(request\.url\)\.searchParams, actor\)/);
   assert.match(webhookRoute, /request\.text\(\)/);
   assert.match(webhookRoute, /X-Shipsgo-Webhook-Signature/);
-  assert.match(webhookRoute, /handleShipsgoWebhook\(rawBody, signature\)/);
+  assert.match(webhookRoute, /handleShipsgoWebhook\(rawBody, signature, request\.headers\)/);
   assert.match(shipsgoCronRoute, /syncDueShipsgoOceanTrackings\(request, actor\)/);
   assert.match(vercelConfig, /"path": "\/api\/cron\/shipsgo-sync"/);
   assert.match(vercelConfig, /"schedule": "0 \*\/6 \* \* \*"/);
@@ -153,7 +153,7 @@ test("ShipsGo map opens as a dedicated page and loads by trackingId", () => {
   assert.match(trackingMapClient, /起运港/);
   assert.match(trackingMapClient, /目的港/);
   assert.match(trackingMapClient, /关联柜号/);
-  assert.match(trackingMapClient, /打开大掌柜原始地图/);
+  assert.match(trackingMapClient, /打开\{providerName\}原始地图/);
   assert.match(trackingMapClient, /href=\{tracking\.mapUrl\}/);
   assert.doesNotMatch(trackingMapClient, /trackingMapUrl|appendIfAbsent|<iframe/);
   assert.match(logisticsModule, /target="_blank"/);
@@ -188,11 +188,11 @@ test("domestic logistics rows include safe ShipsGo tracking summaries", () => {
 
 test("ShipsGo create errors are shown inside the create panel", () => {
   const createFunction = logisticsModule.match(/async function createShipsgoTracking[\s\S]*?async function syncShipsgoTracking/)?.[0] || "";
-  assert.match(createFunction, /throw createError instanceof Error \? createError : new Error\("创建大掌櫃跟踪失败"\)/);
+  assert.match(createFunction, /throw createError instanceof Error \? createError : new Error\("创建海运跟踪失败"\)/);
   assert.doesNotMatch(createFunction, /setError\(createError/);
   assert.match(logisticsModule, /const \[createError, setCreateError\] = useState\(""\)/);
   assert.match(logisticsModule, /styles\.shipsgoCreateError/);
-  assert.match(logisticsModule, /const message = error instanceof Error \? error\.message : "创建大掌櫃跟踪失败"/);
+  assert.match(logisticsModule, /const message = error instanceof Error \? error\.message : `创建\$\{activeProviderLabel\}跟踪失败`/);
   assert.match(logisticsModule, /setCreateError\(message\)/);
   assert.match(logisticsModule, /setShowCarrierInput\(true\)/);
 });
@@ -206,7 +206,10 @@ test("ShipsGo creation consumes one tracking per master bill only", () => {
   assert.doesNotMatch(payloadFunction, /input\.bookingNumber/);
   assert.match(payloadFunction, /booking_number: masterBlNo/);
   assert.doesNotMatch(payloadFunction, /container_number:/);
-  assert.match(createService, /findFirst\(\{\s*where: \{\s*orderId,\s*provider: SHIPSGO_PROVIDER,\s*mode: OCEAN_MODE,\s*deletedAt: null,/);
+  assert.match(createService, /const provider = assertActiveOceanTrackingEnabled\(settings\)/);
+  assert.match(createService, /provider,\s*mode: OCEAN_MODE,\s*deletedAt: null,/);
+  assert.match(createService, /provider: SHIPSGO_PROVIDER/);
+  assert.match(createService, /provider: FREIGHTOWER_PROVIDER/);
   assert.match(createService, /if \(existing\) \{/);
   assert.match(createService, /alreadyExists: true/);
   assert.match(createService, /replaceShipsgoTrackingContainers\(savedBase\.id, mapped\.containerNumbers\)/);
@@ -219,7 +222,7 @@ test("ShipsGo creation consumes one tracking per master bill only", () => {
   assert.doesNotMatch(logisticsModule, /柜号 Container No\./);
   assert.match(logisticsModule, /开始追踪/);
   assert.match(logisticsModule, /查看运输状态/);
-  assert.match(logisticsModule, /从大掌櫃同步已有跟踪/);
+  assert.match(logisticsModule, /从\$\{activeProviderLabel\}同步已有跟踪/);
 });
 
 test("ShipsGo raw response port mapping reads nested loading and discharge locations", () => {

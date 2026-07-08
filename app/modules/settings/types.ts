@@ -262,9 +262,26 @@ export type NotificationTemplateForm = {
 
 export type ShipsgoIntegrationForm = {
   enabled: boolean;
+  activeProvider: string;
   apiBaseUrl: string;
   apiKey: string;
   apiKeyConfigured: boolean;
+  shipsgoEnabled: boolean;
+  freightowerEnabled: boolean;
+  freightowerApiBaseUrl: string;
+  freightowerClientId: string;
+  freightowerClientIdConfigured: boolean;
+  freightowerSecret: string;
+  freightowerSecretConfigured: boolean;
+  freightowerMapKey: string;
+  freightowerMapKeyConfigured: boolean;
+  freightowerWebhookSecret: string;
+  freightowerWebhookSecretConfigured: boolean;
+  freightowerDefaultCarrierCode: string;
+  freightowerDefaultPortCode: string;
+  freightowerDefaultIsExport: string;
+  freightowerDefaultLang: string;
+  freightowerHiddenReference: boolean;
   oceanTrackingEnabled: boolean;
   airTrackingEnabled: boolean;
   manualSyncEnabled: boolean;
