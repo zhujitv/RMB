@@ -36,7 +36,7 @@ import {
 } from "./shared";
 import { assertCustomerScope, resolveSalespersonUserId } from "./shared-admin";
 import { canAccessOrder, validateDuplicateOrder } from "./order-access";
-import { defaultOrderLogisticsSupplier, syncOrderLogisticsSuppliers } from "./masters-access";
+import { syncOrderLogisticsSuppliers } from "./masters-access";
 import {
   MAX_BL_NO_LENGTH,
   MAX_ORDER_NO_LENGTH,
@@ -227,10 +227,13 @@ async function maybeSyncOrderLogisticsSuppliers(order: any, inputData: OrderInpu
   const hasInput = inputHasOwn(inputData, "logisticsSupplierIds") || inputHasOwn(inputData, "logisticsSuppliers");
   const logisticsSupplierIds = normalizeOrderLogisticsSupplierIds(inputData);
   const logisticsSettings = await getExchangeRateSettings();
-  if (!logisticsSettings.allowMultipleOrderLogisticsSuppliers && !(await defaultOrderLogisticsSupplier())) {
-    throw codedError("请先在供应商资料中设置默认物流供应商。", 400, "DEFAULT_LOGISTICS_SUPPLIER_REQUIRED");
-  }
   if (!hasInput && logisticsSettings.allowMultipleOrderLogisticsSuppliers) return order;
+  if (!hasInput && !logisticsSettings.allowMultipleOrderLogisticsSuppliers) {
+    const existingCount = Array.isArray(order.logisticsSuppliers)
+      ? order.logisticsSuppliers.length
+      : await prisma.orderLogisticsSupplier.count({ where: { orderId: order.id } });
+    if (existingCount > 0) return order;
+  }
   await syncOrderLogisticsSuppliers(order.id, logisticsSupplierIds, actor);
   return await prisma.receivableOrder.findUnique({ where: { id: order.id }, include: includeOrderRelations() }) || order;
 }

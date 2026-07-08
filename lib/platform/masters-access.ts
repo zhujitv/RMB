@@ -76,10 +76,10 @@ export async function syncOrderLogisticsSuppliers(orderId: string, supplierIds: 
   let ids = normalizedStringArray(supplierIds).filter((item, index, arr) => item && arr.indexOf(item) === index);
   if (!settings.allowMultipleOrderLogisticsSuppliers) {
     const defaultSupplier = await defaultOrderLogisticsSupplier();
-    if (!defaultSupplier) {
+    ids = ids.length ? [ids[0]] : (defaultSupplier ? [defaultSupplier.id] : []);
+    if (!ids.length) {
       throw codedError("请先在供应商资料中设置默认物流供应商。", 400, "DEFAULT_LOGISTICS_SUPPLIER_REQUIRED");
     }
-    ids = [defaultSupplier.id];
   }
   if (ids.length) {
     const suppliers = await prisma.supplier.findMany({

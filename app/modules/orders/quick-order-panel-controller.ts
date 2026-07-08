@@ -82,7 +82,9 @@ export function useQuickOrderPanelController({
   useEffect(() => {
     if (allowMultipleLogisticsSuppliers) return;
     if (!defaultLogisticsSupplier) return;
-    setForm((current) => ({ ...current, logisticsSupplierIds: [defaultLogisticsSupplier.id] }));
+    setForm((current) => (
+      current.logisticsSupplierIds.length ? current : { ...current, logisticsSupplierIds: [defaultLogisticsSupplier.id] }
+    ));
   }, [allowMultipleLogisticsSuppliers, defaultLogisticsSupplier?.id]);
 
   useEffect(() => {
@@ -244,8 +246,9 @@ export function useQuickOrderPanelController({
   }
 
   function selectedLogisticsSupplierIds() {
-    if (!allowMultipleLogisticsSuppliers) return defaultLogisticsSupplier ? [defaultLogisticsSupplier.id] : [];
-    return form.logisticsSupplierIds;
+    const selectedIds = form.logisticsSupplierIds.filter(Boolean);
+    if (allowMultipleLogisticsSuppliers) return selectedIds;
+    return selectedIds[0] ? [selectedIds[0]] : (defaultLogisticsSupplier ? [defaultLogisticsSupplier.id] : []);
   }
 
   async function submitQuickOrder() {
@@ -266,7 +269,8 @@ export function useQuickOrderPanelController({
     if (normalizedForm.paymentTermType === "AFTER_ARRIVAL" && !normalizedForm.expectedArrivalDate) return setMessage("到港后付款请填写预计到港日期");
     if (["OA", "AFTER_ARRIVAL"].includes(normalizedForm.paymentTermType) && Number(normalizedForm.creditDays) < 0) return setMessage("请填写有效账期天数");
     if (normalizedForm.paymentTermType === "INSTALLMENT" && installmentTotal(normalizedForm.paymentInstallments) !== 100) return setMessage("分批付款比例合计必须等于 100%");
-    if (!allowMultipleLogisticsSuppliers && !defaultLogisticsSupplier) return setMessage("请先在供应商资料中设置默认物流供应商");
+    const logisticsSupplierIds = selectedLogisticsSupplierIds();
+    if (!logisticsSupplierIds.length) return setMessage("请选择物流供应商");
 
     setSaving(true);
     setMessage("");
@@ -298,7 +302,7 @@ export function useQuickOrderPanelController({
         status: normalizedForm.status,
         businessEntityId: normalizedForm.businessEntityId || undefined,
         ...(canManageOrderAssignments ? { salespersonUserId: normalizedForm.salespersonUserId } : {}),
-        logisticsSupplierIds: selectedLogisticsSupplierIds(),
+        logisticsSupplierIds,
         remark: normalizedForm.remark.trim(),
       };
       const isEdit = Boolean(initialOrder?.id);

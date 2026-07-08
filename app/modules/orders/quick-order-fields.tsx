@@ -56,9 +56,10 @@ export function LogisticsSupplierField({
         multiple={allowMultipleLogisticsSuppliers}
         size={allowMultipleLogisticsSuppliers ? 4 : 1}
         value={allowMultipleLogisticsSuppliers ? form.logisticsSupplierIds : (selectedIds[0] || "")}
-        disabled={!allowMultipleLogisticsSuppliers}
+        disabled={!logisticsSuppliers.length}
         onChange={(event) => setFormValue("logisticsSupplierIds", Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
       >
+        {!allowMultipleLogisticsSuppliers ? <option value="">请选择物流供应商</option> : null}
         {logisticsSuppliers.length ? logisticsSuppliers.map((supplier) => (
           <option key={supplier.id} value={supplier.id}>
             {supplierName(supplier)} · {supplier.supplierType || "-"}{supplier.isDefaultLogisticsSupplier ? " · 默认" : ""}
@@ -66,7 +67,11 @@ export function LogisticsSupplierField({
         )) : <option value="">请先设置默认物流供应商</option>}
       </select>
       <small className={styles.mutedText}>
-        {allowMultipleLogisticsSuppliers ? "可多选物流、报关、海运或港杂费用供应商。" : defaultLogisticsSupplier ? "当前使用默认物流供应商，暂不允许手动切换。" : "请先在系统设置中设置默认物流供应商。"}
+        {allowMultipleLogisticsSuppliers
+          ? "可多选物流、报关、海运或港杂费用供应商。"
+          : defaultLogisticsSupplier
+            ? "默认供应商会自动带出，也可以为本订单单独切换；不会修改系统默认供应商。"
+            : "请选择本订单物流供应商。"}
       </small>
     </label>
   );

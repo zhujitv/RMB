@@ -15,6 +15,7 @@ const ordersPaymentsService = readFileSync("lib/platform/orders-payments.ts", "u
 const orderSerialization = readSharedOrderSerializationSource();
 const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
 const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
+const mastersAccess = readFileSync("lib/platform/masters-access.ts", "utf8");
 const quickOrderFields = readFileSync("app/modules/orders/quick-order-fields.tsx", "utf8");
 const quickOrderController = readFileSync("app/modules/orders/quick-order-panel-controller.ts", "utf8");
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
@@ -148,6 +149,21 @@ test("orders create form submits system exchange rate metadata", () => {
   assert.match(ordersService, /!EXCHANGE_RATE_SOURCES\.includes\(exchange\.exchangeRateSource\)/);
   assert.match(ordersService, /当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。/);
   assert.doesNotMatch(ordersModule, /exchangeRateSource: "手动"/);
+});
+
+test("order logistics supplier default is only a per-order fallback", () => {
+  assert.match(quickOrderController, /current\.logisticsSupplierIds\.length \? current : \{ \.\.\.current, logisticsSupplierIds: \[defaultLogisticsSupplier\.id\] \}/);
+  assert.match(quickOrderController, /const selectedIds = form\.logisticsSupplierIds\.filter\(Boolean\)/);
+  assert.match(quickOrderController, /return selectedIds\[0\] \? \[selectedIds\[0\]\] : \(defaultLogisticsSupplier \? \[defaultLogisticsSupplier\.id\] : \[\]\)/);
+  assert.match(quickOrderController, /const logisticsSupplierIds = selectedLogisticsSupplierIds\(\)/);
+  assert.match(quickOrderController, /logisticsSupplierIds,/);
+  assert.match(quickOrderFields, /disabled=\{!logisticsSuppliers\.length\}/);
+  assert.doesNotMatch(quickOrderFields, /disabled=\{!allowMultipleLogisticsSuppliers\}/);
+  assert.match(quickOrderFields, /本订单单独切换；不会修改系统默认供应商/);
+  assert.match(mastersAccess, /ids = ids\.length \? \[ids\[0\]\] : \(defaultSupplier \? \[defaultSupplier\.id\] : \[\]\)/);
+  assert.doesNotMatch(mastersAccess, /ids = \[defaultSupplier\.id\];/);
+  assert.match(ordersService, /if \(!hasInput && !logisticsSettings\.allowMultipleOrderLogisticsSuppliers\)/);
+  assert.match(ordersService, /if \(existingCount > 0\) return order/);
 });
 
 test("order detail edit switches from drawer to edit form without silent failure", () => {
