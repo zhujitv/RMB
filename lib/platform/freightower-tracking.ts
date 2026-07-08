@@ -56,7 +56,7 @@ function responseMessage(data: unknown) {
 function freightowerApiErrorMessage(path: string, responseStatus: number, data: unknown) {
   const statusCode = responseStatusCode(data);
   if (statusCode === "40300" || responseStatus === 403) {
-    return `飞驼可视接口无权限：账号未开通或未授权 ${path}（statusCode ${statusCode || responseStatus}）。请联系飞驼确认集装箱综合跟踪查询接口权限。`;
+    return `飞驼可视接口拒绝当前请求：${path} 返回 ${statusCode || responseStatus}。请联系飞驼确认该 Client ID 的应用接口授权、服务器出口 IP 白名单和集装箱综合跟踪查询接口权限。`;
   }
   if (statusCode === "40100" || responseStatus === 401) {
     return "飞驼可视登录状态已失效，请重新获取 Token 后再试。";
@@ -68,6 +68,10 @@ function freightowerApiErrorMessage(path: string, responseStatus: number, data: 
 
 function isTokenExpiredResponse(data: unknown) {
   return responseStatusCode(data) === "40100";
+}
+
+function isFreightowerSuccessStatus(statusCode: string) {
+  return !statusCode || statusCode === "20000" || statusCode === "20001";
 }
 
 async function getFreightowerToken(settings: ShipsgoSettings, forceRefresh = false) {
@@ -123,7 +127,7 @@ export async function freightowerApiRequest<T>(
     return freightowerApiRequest<T>(settings, path, body, true);
   }
   const statusCode = responseStatusCode(data);
-  if (!response.ok || (statusCode && statusCode !== "20000")) {
+  if (!response.ok || !isFreightowerSuccessStatus(statusCode)) {
     throw codedError(freightowerApiErrorMessage(path, response.status, data), response.status >= 500 ? 502 : 400, "FREIGHTOWER_API_ERROR");
   }
   return data as T;

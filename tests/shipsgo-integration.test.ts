@@ -70,8 +70,12 @@ test("ShipsGo settings API supports authenticated read and admin write", () => {
 
 test("Freightower API errors explain account authorization failures", () => {
   assert.match(freightowerService, /function freightowerApiErrorMessage/);
+  assert.match(freightowerService, /function isFreightowerSuccessStatus/);
+  assert.match(freightowerService, /statusCode === "20000" \|\| statusCode === "20001"/);
   assert.match(freightowerService, /statusCode === "40300"/);
-  assert.match(freightowerService, /账号未开通或未授权/);
+  assert.match(freightowerService, /接口拒绝当前请求/);
+  assert.match(freightowerService, /服务器出口 IP 白名单/);
+  assert.match(freightowerService, /Client ID 的应用接口授权/);
   assert.match(freightowerService, /集装箱综合跟踪查询接口权限/);
   assert.match(freightowerService, /FREIGHTOWER_API_ERROR/);
 });
