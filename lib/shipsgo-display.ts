@@ -110,6 +110,7 @@ const STATUS_DISPLAY_ENTRIES: StatusDisplayEntry[] = [
   { aliases: ["SAILING", "ONBOARD", "ON BOARD", "DEPARTED"], labels: { "zh-CN": "航行中", en: "Sailing", ru: "В рейсе", de: "Auf See", fr: "En mer", es: "Navegando" } },
   { aliases: ["ARRIVED", "DISCHARGED", "POD"], labels: { "zh-CN": "已到港", en: "Arrived", ru: "Прибыло в порт", de: "Angekommen", fr: "Arrivé", es: "Llegado" } },
   { aliases: ["DELIVERED", "COMPLETE", "COMPLETED", "CLOSED", "FINISHED"], labels: { "zh-CN": "已完成", en: "Delivered", ru: "Доставлено", de: "Abgeschlossen", fr: "Livré", es: "Entregado" } },
+  { aliases: ["SUBSCRIBED", "START", "SHIPMENT LOADING"], labels: { "zh-CN": "已订阅，等待节点", en: "Subscribed", ru: "Подписано", de: "Abonniert", fr: "Abonné", es: "Suscrito" } },
   { aliases: ["PENDING", "NEW", "LOCAL_PENDING", "NOT_SYNCED"], labels: { "zh-CN": "待更新", en: "Pending", ru: "Ожидает обновления", de: "Ausstehend", fr: "En attente", es: "Pendiente" } },
   { aliases: ["IN TRANSIT", "INTRANSIT", "TRANSIT", "INPROGRESS", "IN_PROGRESS", "LOADED"], labels: { "zh-CN": "运输途中", en: "In Transit", ru: "В пути", de: "Unterwegs", fr: "En transit", es: "En tránsito" } },
   { aliases: ["FAIL", "FAILED", "ERROR", "SYNC_FAILED"], labels: { "zh-CN": "同步失败", en: "Sync Failed", ru: "Ошибка синхронизации", de: "Synchronisierung fehlgeschlagen", fr: "Échec de synchronisation", es: "Error de sincronización" } },
@@ -212,4 +213,3 @@ export function formatShipsgoTrackingMethodForLocale(value: unknown, locale: unk
   const normalizedKey = key.includes("HOUSE") ? "HOUSEBL" : key.includes("CONTAINER") ? "CONTAINER" : "MASTERBL";
   return labelFor(TRACKING_METHOD_LABELS[normalizedKey], locale, raw);
 }
-

@@ -71,7 +71,10 @@ test("ShipsGo settings API supports authenticated read and admin write", () => {
 test("Freightower API errors explain account authorization failures", () => {
   assert.match(freightowerService, /function freightowerApiErrorMessage/);
   assert.match(freightowerService, /function isFreightowerSuccessStatus/);
+  assert.match(freightowerService, /function freightowerSubscribedMessage/);
   assert.match(freightowerService, /statusCode === "20000" \|\| statusCode === "20001"/);
+  assert.match(freightowerService, /syncStatus: isSubscribedOnly \? "SUBSCRIBED" : "SYNCED"/);
+  assert.match(freightowerService, /等待飞驼推送或船司返回运输节点/);
   assert.match(freightowerService, /statusCode === "40300"/);
   assert.match(freightowerService, /接口拒绝当前请求/);
   assert.match(freightowerService, /服务器出口 IP 白名单/);
@@ -257,6 +260,8 @@ test("ShipsGo ERP display localizes carrier ports status and tracking method in 
   assert.equal(formatShipsgoPortForLocale("AARHUS", "DKAAR", "zh-CN"), "奥胡斯（DKAAR）");
   assert.equal(formatShipsgoStatusForLocale("Sailing", "zh-CN"), "航行中");
   assert.equal(formatShipsgoStatusForLocale("In Transit", "zh-CN"), "运输途中");
+  assert.equal(formatShipsgoStatusForLocale("Shipment loading", "zh-CN"), "已订阅，等待节点");
+  assert.equal(formatShipsgoStatusForLocale("SUBSCRIBED", "zh-CN"), "已订阅，等待节点");
   assert.equal(formatShipsgoTrackingMethodForLocale("Master B/L", "zh-CN"), "主提单跟踪");
   assert.match(logisticsModule, /formatShipsgoCarrierForLocale/);
   assert.match(logisticsModule, /formatShipsgoPortForLocale/);

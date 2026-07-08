@@ -74,6 +74,13 @@ function isFreightowerSuccessStatus(statusCode: string) {
   return !statusCode || statusCode === "20000" || statusCode === "20001";
 }
 
+function freightowerSubscribedMessage(payload: unknown) {
+  const message = responseMessage(payload);
+  return /订阅成功|subscription/i.test(message)
+    ? "已订阅，等待飞驼推送或船司返回运输节点。"
+    : message;
+}
+
 async function getFreightowerToken(settings: ShipsgoSettings, forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && tokenCache?.token && tokenCache.expiresAt > now + 60_000) return tokenCache;
@@ -262,6 +269,10 @@ export function mapFreightowerShipmentPayload(payload: unknown, settings?: Ships
   const destinationPlace = placeByTypes(places, [4, 5]) || places[places.length - 1] || {};
   const container = firstContainer(result);
   const containerStatuses = arrayAt(container, "status");
+  const hasTrackingEvents = places.length > 0
+    || arrayAt(result, "containers").some((item) => arrayAt(item, "status").length > 0)
+    || Object.keys(current).length > 0;
+  const isSubscribedOnly = responseStatusCode(payload) === "20001" && !hasTrackingEvents;
   const latestContainerStatus = newestStatus(containerStatuses);
   const statusDescription = textAt(current, "descriptionCn")
     || textAt(latestContainerStatus, "descriptionCn")
@@ -284,8 +295,8 @@ export function mapFreightowerShipmentPayload(payload: unknown, settings?: Ships
     containerNumber: containerNumbers[0] || "",
     status: textAt(result, "statusCategory") || "UNKNOWN",
     currentStatus: statusDescription,
-    syncStatus: "SYNCED",
-    syncMessage: responseMessage(payload),
+    syncStatus: isSubscribedOnly ? "SUBSCRIBED" : "SYNCED",
+    syncMessage: isSubscribedOnly ? freightowerSubscribedMessage(payload) : responseMessage(payload),
     originName: freightowerPlaceLabel(originPlace),
     destinationName: freightowerPlaceLabel(destinationPlace),
     originPortCode: textAt(originPlace, "code"),
