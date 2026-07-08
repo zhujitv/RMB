@@ -22,6 +22,7 @@ const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
 const trackingService = readShipsgoTrackingSource();
 const shipsgoControlTowerService = readFileSync("lib/platform/shipsgo-control-tower.ts", "utf8");
 const freightowerService = readFileSync("lib/platform/freightower-tracking.ts", "utf8");
+const notificationDefinitions = readFileSync("lib/platform/notification-definitions.ts", "utf8");
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260628100000_shipsgo_trackings/migration.sql", "utf8");
@@ -81,6 +82,23 @@ test("Freightower API errors explain account authorization failures", () => {
   assert.match(freightowerService, /Client ID 的应用接口授权/);
   assert.match(freightowerService, /集装箱综合跟踪查询接口权限/);
   assert.match(freightowerService, /FREIGHTOWER_API_ERROR/);
+});
+
+test("Freightower webhook can notify operators by email", () => {
+  assert.match(notificationDefinitions, /FREIGHTOWER_TRACKING_UPDATE: "FREIGHTOWER_TRACKING_UPDATE"/);
+  assert.match(notificationDefinitions, /name: "飞驼可视运输节点通知"/);
+  assert.match(notificationDefinitions, /subjectTemplate: "【NEXTWOOD ERP】飞驼可视跟踪更新：\{orderNo\} \/ \{blNo\}"/);
+  assert.match(notificationDefinitions, /trackingUrl/);
+  assert.match(trackingService, /function activeApprovedEmails/);
+  assert.match(trackingService, /async function notifyFreightowerTrackingUpdate/);
+  assert.match(trackingService, /sendNotificationEmail/);
+  assert.match(trackingService, /NOTIFICATION_TYPES\.FREIGHTOWER_TRACKING_UPDATE/);
+  assert.match(trackingService, /tracking\.order\.salesperson/);
+  assert.match(trackingService, /tracking\.order\.createdBy/);
+  assert.match(trackingService, /tracking\.order\.updatedBy/);
+  assert.match(trackingService, /enabledAdminEmails/);
+  assert.match(trackingService, /\/tracking-map\?trackingId=\$\{encodeURIComponent\(tracking\.id\)\}/);
+  assert.match(trackingService, /runNonCriticalTask\(\s*"飞驼可视跟踪推送邮件通知"/);
 });
 
 test("settings module exposes third-party API configuration without leaking secrets", () => {
