@@ -21,6 +21,7 @@ const constants = readSharedConstantsSource();
 const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
 const trackingService = readShipsgoTrackingSource();
 const shipsgoControlTowerService = readFileSync("lib/platform/shipsgo-control-tower.ts", "utf8");
+const freightowerService = readFileSync("lib/platform/freightower-tracking.ts", "utf8");
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20260628100000_shipsgo_trackings/migration.sql", "utf8");
@@ -65,6 +66,14 @@ test("ShipsGo settings API supports authenticated read and admin write", () => {
   assert.match(settingsRoute, /export async function PATCH/);
   assert.match(settingsRoute, /saveShipsgoIntegrationSettings\(request, actor, body\)/);
   assert.match(settingsRoute, /物流接口设置已保存/);
+});
+
+test("Freightower API errors explain account authorization failures", () => {
+  assert.match(freightowerService, /function freightowerApiErrorMessage/);
+  assert.match(freightowerService, /statusCode === "40300"/);
+  assert.match(freightowerService, /账号未开通或未授权/);
+  assert.match(freightowerService, /集装箱综合跟踪查询接口权限/);
+  assert.match(freightowerService, /FREIGHTOWER_API_ERROR/);
 });
 
 test("settings module exposes third-party API configuration without leaking secrets", () => {

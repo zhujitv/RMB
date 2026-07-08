@@ -53,6 +53,19 @@ function responseMessage(data: unknown) {
   return nonEmpty(data.message || data.alertMessage || recordAt(data, "data").message);
 }
 
+function freightowerApiErrorMessage(path: string, responseStatus: number, data: unknown) {
+  const statusCode = responseStatusCode(data);
+  if (statusCode === "40300" || responseStatus === 403) {
+    return `飞驼可视接口无权限：账号未开通或未授权 ${path}（statusCode ${statusCode || responseStatus}）。请联系飞驼确认集装箱综合跟踪查询接口权限。`;
+  }
+  if (statusCode === "40100" || responseStatus === 401) {
+    return "飞驼可视登录状态已失效，请重新获取 Token 后再试。";
+  }
+  const message = responseMessage(data);
+  const codeSuffix = statusCode ? `（statusCode ${statusCode}）` : "";
+  return message ? `${message}${codeSuffix}` : `飞驼可视请求失败${codeSuffix}。`;
+}
+
 function isTokenExpiredResponse(data: unknown) {
   return responseStatusCode(data) === "40100";
 }
@@ -111,7 +124,7 @@ export async function freightowerApiRequest<T>(
   }
   const statusCode = responseStatusCode(data);
   if (!response.ok || (statusCode && statusCode !== "20000")) {
-    throw codedError(responseMessage(data) || "飞驼可视请求失败。", response.status >= 500 ? 502 : 400, "FREIGHTOWER_API_ERROR");
+    throw codedError(freightowerApiErrorMessage(path, response.status, data), response.status >= 500 ? 502 : 400, "FREIGHTOWER_API_ERROR");
   }
   return data as T;
 }
