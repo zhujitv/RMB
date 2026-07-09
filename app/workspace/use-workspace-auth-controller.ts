@@ -22,6 +22,7 @@ export function useWorkspaceAuthController({
   const [loginBusy, setLoginBusy] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerBusy, setRegisterBusy] = useState(false);
+  const [registerMessage, setRegisterMessage] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [publicCompanyProfile, setPublicCompanyProfile] = useState<CompanyProfileSettings | null>(null);
   const [workbenchTodos, setWorkbenchTodos] = useState<WorkbenchTodosState>(EMPTY_WORKBENCH_TODOS);
@@ -151,24 +152,42 @@ export function useWorkspaceAuthController({
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") || "").trim();
+    const email = normalizeEmail(String(form.get("email") || ""));
     const password = String(form.get("password") || "");
     const confirmPassword = String(form.get("confirmPassword") || "");
+    setRegisterMessage("");
+    if (!name) {
+      setRegisterMessage("请填写姓名。");
+      return;
+    }
+    if (!email) {
+      setRegisterMessage("请填写邮箱。");
+      return;
+    }
     if (password !== confirmPassword || !passwordMeetsPolicy(password)) {
-      setAuth({ status: "guest", message: password !== confirmPassword ? "两次输入的密码不一致。" : PASSWORD_POLICY_MESSAGE });
+      setRegisterMessage(password !== confirmPassword ? "两次输入的密码不一致。" : PASSWORD_POLICY_MESSAGE);
       return;
     }
     setRegisterBusy(true);
     try {
       const result = await apiJson<{ message?: string }>("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify({ email: normalizeEmail(String(form.get("email") || "")), password, confirmPassword }),
+        body: JSON.stringify({ name, email, password, confirmPassword }),
       });
+      setRegisterMessage("");
+      setRegisterOpen(false);
       setAuth({ status: "guest", message: result.message || "注册申请已提交，请先查收邮件完成邮箱验证。验证完成后，管理员审核通过方可登录。" });
     } catch (error) {
-      setAuth({ status: "guest", message: error instanceof Error ? error.message : "提交注册申请失败" });
+      setRegisterMessage(error instanceof Error ? error.message : "提交注册申请失败");
     } finally {
       setRegisterBusy(false);
     }
+  }
+
+  function toggleRegisterOpen(open: boolean) {
+    setRegisterOpen(open);
+    setRegisterMessage("");
   }
 
   async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
@@ -224,11 +243,12 @@ export function useWorkspaceAuthController({
     loginBusy,
     registerBusy,
     registerOpen,
+    registerMessage,
     passwordBusy,
     publicCompanyProfile,
     workbenchTodos,
     setAuth,
-    setRegisterOpen,
+    setRegisterOpen: toggleRegisterOpen,
     handleLogin,
     handleRegister,
     handleChangePassword,

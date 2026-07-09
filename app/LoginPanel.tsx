@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
 import styles from "./WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "./types";
@@ -12,6 +12,7 @@ type LoginPanelProps = {
   loginBusy: boolean;
   registerBusy: boolean;
   registerOpen: boolean;
+  registerMessage?: string;
   onRegisterToggle: (open: boolean) => void;
   onLogin: (event: FormEvent<HTMLFormElement>) => void;
   onRegister: (event: FormEvent<HTMLFormElement>) => void;
@@ -23,6 +24,7 @@ export function LoginPanel({
   loginBusy,
   registerBusy,
   registerOpen,
+  registerMessage,
   onRegisterToggle,
   onLogin,
   onRegister,
@@ -41,6 +43,13 @@ export function LoginPanel({
     registerConfirmPassword && registerPassword !== registerConfirmPassword ? "两次输入的密码不一致。" : ""
   ), [registerConfirmPassword, registerPassword]);
   const registerSubmitDisabled = registerBusy || Boolean(registerPasswordError || registerConfirmError);
+
+  useEffect(() => {
+    if (!registerOpen) {
+      setRegisterPassword("");
+      setRegisterConfirmPassword("");
+    }
+  }, [registerOpen]);
 
   return (
     <main className={styles.loginScreen}>
@@ -123,8 +132,8 @@ export function LoginPanel({
                   required
                 />
               </label>
-              {registerPasswordError || registerConfirmError ? (
-                <p className={styles.formMessage}>{registerPasswordError || registerConfirmError}</p>
+              {registerPasswordError || registerConfirmError || registerMessage ? (
+                <p className={styles.formMessage}>{registerPasswordError || registerConfirmError || registerMessage}</p>
               ) : null}
               <button className={styles.loginSubmitButton} type="submit" disabled={registerSubmitDisabled}>
                 {registerBusy ? "提交中..." : "提交申请"}

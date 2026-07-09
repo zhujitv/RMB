@@ -35,6 +35,7 @@ export function WorkspaceShell() {
     loginBusy,
     registerBusy,
     registerOpen,
+    registerMessage,
     passwordBusy,
     publicCompanyProfile,
     workbenchTodos,
@@ -153,6 +154,7 @@ export function WorkspaceShell() {
         loginBusy={loginBusy}
         registerBusy={registerBusy}
         registerOpen={registerOpen}
+        registerMessage={registerMessage}
         onRegisterToggle={setRegisterOpen}
         onLogin={handleLogin}
         onRegister={handleRegister}
