@@ -223,9 +223,18 @@ function buildReceivableOrderData(params: Record<string, any>): Prisma.Receivabl
   };
 }
 
+function normalizedOrderTradeTerm(value: unknown) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function isExwOrderInput(inputData: OrderInput, order: { tradeTerm?: string | null } = {}) {
+  return normalizedOrderTradeTerm(inputData.tradeTerm ?? order.tradeTerm).includes("EXW");
+}
+
 async function maybeSyncOrderLogisticsSuppliers(order: any, inputData: OrderInput, actor: ActorLike) {
   const hasInput = inputHasOwn(inputData, "logisticsSupplierIds") || inputHasOwn(inputData, "logisticsSuppliers");
   const logisticsSupplierIds = normalizeOrderLogisticsSupplierIds(inputData);
+  const allowEmpty = isExwOrderInput(inputData, order);
   const logisticsSettings = await getExchangeRateSettings();
   if (!hasInput && logisticsSettings.allowMultipleOrderLogisticsSuppliers) return order;
   if (!hasInput && !logisticsSettings.allowMultipleOrderLogisticsSuppliers) {
@@ -234,7 +243,7 @@ async function maybeSyncOrderLogisticsSuppliers(order: any, inputData: OrderInpu
       : await prisma.orderLogisticsSupplier.count({ where: { orderId: order.id } });
     if (existingCount > 0) return order;
   }
-  await syncOrderLogisticsSuppliers(order.id, logisticsSupplierIds, actor);
+  await syncOrderLogisticsSuppliers(order.id, logisticsSupplierIds, actor, { allowEmpty });
   return await prisma.receivableOrder.findUnique({ where: { id: order.id }, include: includeOrderRelations() }) || order;
 }
 

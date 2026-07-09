@@ -19,6 +19,7 @@ import {
   displayDocumentLabel,
   hasDisabledTaxRefundCompletenessMarker,
   isActualApprovedLogisticsCost,
+  isExwTaxRefundOrder,
   isNonFullContainerTaxRefundOrder,
   isSeaFreightRequiredByTradeTerm,
   isTaxRefundFactoryCost,
@@ -45,6 +46,7 @@ import { taxDocumentCompleteness } from "./shared-tax-completeness-calculator";
 export {
   displayDocumentLabel,
   hasDisabledTaxRefundCompletenessMarker,
+  isExwTaxRefundOrder,
   isNonFullContainerTaxRefundOrder,
   isSeaFreightRequirement,
   isSeaFreightRequiredByTradeTerm,
@@ -179,6 +181,8 @@ export function needsTaxRefundCompletenessRefresh(order: TaxOrderLike = {}) {
   const cachedLogisticsRequirements = Array.isArray(logistics.requirements) ? logistics.requirements as Array<Record<string, unknown>> : [];
   const hasCachedSeaRequirement = cachedLogisticsRequirements.some((item) => item?.key === SEA_FREIGHT_REQUIREMENT_KEY);
   const hasCachedPortRequirement = cachedLogisticsRequirements.some((item) => item?.key === "PORT");
+  if (isExwTaxRefundOrder(order) && cachedLogisticsRequirements.length) return true;
+  if (isExwTaxRefundOrder(order) && Array.isArray(logistics.missing) && logistics.missing.length) return true;
   if (!isSeaFreightRequiredByTradeTerm(order) && hasCachedSeaRequirement) return true;
   if (isSeaFreightRequiredByTradeTerm(order) && !hasCachedSeaRequirement) return true;
   if (isNonFullContainerTaxRefundOrder(order) && hasCachedPortRequirement) return true;

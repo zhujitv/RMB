@@ -38,6 +38,7 @@ export function LogisticsSupplierField({
   allowMultipleLogisticsSuppliers,
   defaultLogisticsSupplier,
   form,
+  isExwOrder = false,
   logisticsSuppliers,
   selectedIds,
   setFormValue,
@@ -45,29 +46,32 @@ export function LogisticsSupplierField({
   allowMultipleLogisticsSuppliers: boolean;
   defaultLogisticsSupplier: SupplierOption | null;
   form: QuickOrderForm;
+  isExwOrder?: boolean;
   logisticsSuppliers: SupplierOption[];
   selectedIds: string[];
   setFormValue: QuickOrderValueSetter;
 }) {
   return (
     <label className={styles.autocompleteField}>
-      物流供应商
+      {isExwOrder ? "物流供应商（选填）" : "物流供应商"}
       <select
         multiple={allowMultipleLogisticsSuppliers}
         size={allowMultipleLogisticsSuppliers ? 4 : 1}
         value={allowMultipleLogisticsSuppliers ? form.logisticsSupplierIds : (selectedIds[0] || "")}
-        disabled={!logisticsSuppliers.length}
+        disabled={!logisticsSuppliers.length && !isExwOrder}
         onChange={(event) => setFormValue("logisticsSupplierIds", Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
       >
-        {!allowMultipleLogisticsSuppliers ? <option value="">请选择物流供应商</option> : null}
+        {!allowMultipleLogisticsSuppliers ? <option value="">{isExwOrder ? "未指定" : "请选择物流供应商"}</option> : null}
         {logisticsSuppliers.length ? logisticsSuppliers.map((supplier) => (
           <option key={supplier.id} value={supplier.id}>
             {supplierName(supplier)} · {supplier.supplierType || "-"}{supplier.isDefaultLogisticsSupplier ? " · 默认" : ""}
           </option>
-        )) : <option value="">请先设置默认物流供应商</option>}
+        )) : <option value="">{isExwOrder ? "暂无可选物流供应商，可不指定" : "请先设置默认物流供应商"}</option>}
       </select>
       <small className={styles.mutedText}>
-        {allowMultipleLogisticsSuppliers
+        {isExwOrder
+          ? "EXW 条款下可不指定物流供应商"
+          : allowMultipleLogisticsSuppliers
           ? "可多选物流、报关、海运或港杂费用供应商。"
           : defaultLogisticsSupplier
             ? "默认供应商会自动带出，也可以为本订单单独切换；不会修改系统默认供应商。"

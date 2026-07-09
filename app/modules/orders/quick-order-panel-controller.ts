@@ -24,6 +24,14 @@ type SalespeopleResponse = {
   salespeople?: SalespersonOption[];
 };
 
+function normalizedOrderTradeTerm(value: string) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function isExwTradeTerm(value: string) {
+  return normalizedOrderTradeTerm(value).includes("EXW");
+}
+
 export type UseQuickOrderPanelControllerParams = {
   initialOrder?: OrderRow | null;
   canManageOrderAssignments?: boolean;
@@ -83,9 +91,10 @@ export function useQuickOrderPanelController({
     if (allowMultipleLogisticsSuppliers) return;
     if (!defaultLogisticsSupplier) return;
     setForm((current) => (
+      isExwTradeTerm(current.tradeTerm) ? current :
       current.logisticsSupplierIds.length ? current : { ...current, logisticsSupplierIds: [defaultLogisticsSupplier.id] }
     ));
-  }, [allowMultipleLogisticsSuppliers, defaultLogisticsSupplier?.id]);
+  }, [allowMultipleLogisticsSuppliers, defaultLogisticsSupplier?.id, form.tradeTerm]);
 
   useEffect(() => {
     if (initialOrder?.id) return;
@@ -245,10 +254,12 @@ export function useQuickOrderPanelController({
     );
   }
 
-  function selectedLogisticsSupplierIds() {
-    const selectedIds = form.logisticsSupplierIds.filter(Boolean);
+  function selectedLogisticsSupplierIds(current = form) {
+    const selectedIds = current.logisticsSupplierIds.filter(Boolean);
     if (allowMultipleLogisticsSuppliers) return selectedIds;
-    return selectedIds[0] ? [selectedIds[0]] : (defaultLogisticsSupplier ? [defaultLogisticsSupplier.id] : []);
+    if (selectedIds[0]) return [selectedIds[0]];
+    if (isExwTradeTerm(current.tradeTerm)) return [];
+    return defaultLogisticsSupplier ? [defaultLogisticsSupplier.id] : [];
   }
 
   async function submitQuickOrder() {
@@ -269,8 +280,8 @@ export function useQuickOrderPanelController({
     if (normalizedForm.paymentTermType === "AFTER_ARRIVAL" && !normalizedForm.expectedArrivalDate) return setMessage("到港后付款请填写预计到港日期");
     if (["OA", "AFTER_ARRIVAL"].includes(normalizedForm.paymentTermType) && Number(normalizedForm.creditDays) < 0) return setMessage("请填写有效账期天数");
     if (normalizedForm.paymentTermType === "INSTALLMENT" && installmentTotal(normalizedForm.paymentInstallments) !== 100) return setMessage("分批付款比例合计必须等于 100%");
-    const logisticsSupplierIds = selectedLogisticsSupplierIds();
-    if (!logisticsSupplierIds.length) return setMessage("请选择物流供应商");
+    const logisticsSupplierIds = selectedLogisticsSupplierIds(normalizedForm);
+    if (!isExwTradeTerm(normalizedForm.tradeTerm) && !logisticsSupplierIds.length) return setMessage("请选择物流供应商");
 
     setSaving(true);
     setMessage("");
@@ -328,6 +339,7 @@ export function useQuickOrderPanelController({
     allowMultipleLogisticsSuppliers,
     logisticsSuppliers,
     defaultLogisticsSupplier,
+    isExwOrder: isExwTradeTerm(form.tradeTerm),
     exchangeMeta,
     exchangeCacheMissing,
     refreshingExchangeRate,

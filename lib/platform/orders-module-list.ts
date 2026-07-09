@@ -16,7 +16,6 @@ import {
   type SerializedOrderListRowDto,
 } from "./shared";
 import { orderAccessWhere, scopeOrderForActor } from "./order-access";
-import { sortReceivableRowsByShipmentDate } from "./order-receivable-sort";
 import { summarizeCurrencyTotals } from "./currency-totals";
 import {
   ORDER_UNPAGINATED_SCAN_LIMIT,
@@ -54,13 +53,13 @@ export async function listOrders(query: QueryLike, actor: ActorLike, options: { 
   const orders = await prisma.receivableOrder.findMany({
     where,
     include: includeOrderRelations(),
-    orderBy: [{ createdAt: "desc" }],
+    orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
     take: ORDER_UNPAGINATED_SCAN_LIMIT,
   });
-  return sortReceivableRowsByShipmentDate(applyCommonFilters(
+  return applyCommonFilters(
     orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))),
     query,
-  ));
+  );
 }
 
 async function listPaginatedOrders(query: QueryLike, actor: ActorLike, where: Prisma.ReceivableOrderWhereInput) {
@@ -70,7 +69,7 @@ async function listPaginatedOrders(query: QueryLike, actor: ActorLike, where: Pr
     prisma.receivableOrder.findMany({
       where,
       include: includeOrderListRelations(),
-      orderBy: [{ actualShipmentDate: "desc" }, { blDate: "desc" }, { createdAt: "desc" }, { updatedAt: "desc" }],
+      orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -83,9 +82,7 @@ async function listPaginatedOrders(query: QueryLike, actor: ActorLike, where: Pr
       },
     }),
   ]);
-  const rows = sortReceivableRowsByShipmentDate(
-    orders.map((order) => serializeOrderListRow(scopeOrderForActor(order, actor))),
-  );
+  const rows = orders.map((order) => serializeOrderListRow(scopeOrderForActor(order, actor)));
   return {
     ...pageResult(rows, total, page, pageSize),
     summary: summarizeCurrencyTotals(summaryGroups.map((group) => ({

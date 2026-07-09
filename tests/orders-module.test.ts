@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { sortReceivableRowsByShipmentDate } from "../lib/platform/order-receivable-sort.ts";
 import {
   readOrdersModuleSource,
   readOrdersServiceSource,
@@ -10,6 +9,7 @@ import {
 
 const ordersModule = readOrdersModuleSource();
 const ordersService = readOrdersServiceSource();
+const ordersListService = readFileSync("lib/platform/orders-module-list.ts", "utf8");
 const orderSearchService = readFileSync("lib/platform/order-receivable-search.ts", "utf8");
 const ordersPaymentsService = readFileSync("lib/platform/orders-payments.ts", "utf8");
 const orderSerialization = readSharedOrderSerializationSource();
@@ -45,23 +45,17 @@ test("orders page renders only the table list and not duplicate order cards", ()
   assert.match(ordersModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} onPage=\{(?:gotoPage|actions\.onPage)\} \/>/);
 });
 
-test("orders api sorts receivable orders by shipment date", () => {
-  const sorted = sortReceivableRowsByShipmentDate([
-    { orderNo: "PV260", actualShipmentDate: "2026-06-03", createdAt: "2026-06-20T00:00:00.000Z" },
-    { orderNo: "MG40", blDate: "2026-06-12", createdAt: "2026-06-19T00:00:00.000Z" },
-    { orderNo: "PV263", actualShipmentDate: "2026-06-18", createdAt: "2026-06-18T00:00:00.000Z" },
-    { orderNo: "PV252", blDate: "2026-06-08", createdAt: "2026-06-17T00:00:00.000Z" },
-    { orderNo: "DM22 23", createdAt: "2026-06-16T00:00:00.000Z" },
-  ]);
-
-  assert.deepEqual(sorted.map((row) => row.orderNo), ["PV263", "MG40", "PV252", "PV260", "DM22 23"]);
-  assert.match(ordersService, /sortReceivableRowsByShipmentDate/);
-  assert.match(ordersService, /pageParams\(query, 20, 20\)/);
-  assert.match(ordersService, /include: includeOrderListRelations\(\)/);
-  assert.match(ordersService, /serializeOrderListRow\(scopeOrderForActor\(order, actor\)\)/);
-  assert.match(ordersService, /skip: \(page - 1\) \* pageSize/);
-  assert.match(ordersService, /take: pageSize/);
-  assert.doesNotMatch(ordersService, /sortedRows\.slice\(start, start \+ pageSize\)/);
+test("orders api sorts receivable orders by created time", () => {
+  assert.match(ordersListService, /orderBy: \[\{ createdAt: "desc" \}, \{ updatedAt: "desc" \}\]/);
+  assert.match(ordersListService, /pageParams\(query, 20, 20\)/);
+  assert.match(ordersListService, /include: includeOrderListRelations\(\)/);
+  assert.match(ordersListService, /serializeOrderListRow\(scopeOrderForActor\(order, actor\)\)/);
+  assert.match(ordersListService, /skip: \(page - 1\) \* pageSize/);
+  assert.match(ordersListService, /take: pageSize/);
+  assert.doesNotMatch(ordersListService, /actualShipmentDate: "desc"/);
+  assert.doesNotMatch(ordersListService, /blDate: "desc"/);
+  assert.doesNotMatch(ordersListService, /sortReceivableRowsByShipmentDate/);
+  assert.doesNotMatch(ordersListService, /sortedRows\.slice\(start, start \+ pageSize\)/);
 });
 
 test("paginated orders use a DTO that does not expose unloaded detail relations", () => {
@@ -152,16 +146,24 @@ test("orders create form submits system exchange rate metadata", () => {
 });
 
 test("order logistics supplier default is only a per-order fallback", () => {
-  assert.match(quickOrderController, /current\.logisticsSupplierIds\.length \? current : \{ \.\.\.current, logisticsSupplierIds: \[defaultLogisticsSupplier\.id\] \}/);
-  assert.match(quickOrderController, /const selectedIds = form\.logisticsSupplierIds\.filter\(Boolean\)/);
-  assert.match(quickOrderController, /return selectedIds\[0\] \? \[selectedIds\[0\]\] : \(defaultLogisticsSupplier \? \[defaultLogisticsSupplier\.id\] : \[\]\)/);
-  assert.match(quickOrderController, /const logisticsSupplierIds = selectedLogisticsSupplierIds\(\)/);
+  assert.match(quickOrderController, /function isExwTradeTerm/);
+  assert.match(quickOrderController, /isExwTradeTerm\(current\.tradeTerm\) \? current :/);
+  assert.match(quickOrderController, /const selectedIds = current\.logisticsSupplierIds\.filter\(Boolean\)/);
+  assert.match(quickOrderController, /if \(isExwTradeTerm\(current\.tradeTerm\)\) return \[\]/);
+  assert.match(quickOrderController, /return defaultLogisticsSupplier \? \[defaultLogisticsSupplier\.id\] : \[\]/);
+  assert.match(quickOrderController, /const logisticsSupplierIds = selectedLogisticsSupplierIds\(normalizedForm\)/);
+  assert.match(quickOrderController, /if \(!isExwTradeTerm\(normalizedForm\.tradeTerm\) && !logisticsSupplierIds\.length\) return setMessage\("请选择物流供应商"\)/);
   assert.match(quickOrderController, /logisticsSupplierIds,/);
-  assert.match(quickOrderFields, /disabled=\{!logisticsSuppliers\.length\}/);
+  assert.match(quickOrderFields, /disabled=\{!logisticsSuppliers\.length && !isExwOrder\}/);
   assert.doesNotMatch(quickOrderFields, /disabled=\{!allowMultipleLogisticsSuppliers\}/);
+  assert.match(quickOrderFields, /物流供应商（选填）/);
+  assert.match(quickOrderFields, /EXW 条款下可不指定物流供应商/);
   assert.match(quickOrderFields, /本订单单独切换；不会修改系统默认供应商/);
-  assert.match(mastersAccess, /ids = ids\.length \? \[ids\[0\]\] : \(defaultSupplier \? \[defaultSupplier\.id\] : \[\]\)/);
+  assert.match(mastersAccess, /options: \{ allowEmpty\?: boolean \} = \{\}/);
+  assert.match(mastersAccess, /else if \(!options\.allowEmpty\)/);
   assert.doesNotMatch(mastersAccess, /ids = \[defaultSupplier\.id\];/);
+  assert.match(ordersService, /function isExwOrderInput/);
+  assert.match(ordersService, /syncOrderLogisticsSuppliers\(order\.id, logisticsSupplierIds, actor, \{ allowEmpty \}\)/);
   assert.match(ordersService, /if \(!hasInput && !logisticsSettings\.allowMultipleOrderLogisticsSuppliers\)/);
   assert.match(ordersService, /if \(existingCount > 0\) return order/);
 });

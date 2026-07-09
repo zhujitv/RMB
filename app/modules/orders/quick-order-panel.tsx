@@ -190,6 +190,7 @@ export function QuickCreateOrderPanel({
           allowMultipleLogisticsSuppliers={controller.allowMultipleLogisticsSuppliers}
           defaultLogisticsSupplier={controller.defaultLogisticsSupplier}
           form={controller.form}
+          isExwOrder={controller.isExwOrder}
           logisticsSuppliers={controller.logisticsSuppliers}
           selectedIds={controller.selectedLogisticsSupplierIds()}
           setFormValue={controller.setFormValue}

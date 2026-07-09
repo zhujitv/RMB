@@ -69,16 +69,25 @@ export async function defaultOrderLogisticsSupplier() {
   });
 }
 
-export async function syncOrderLogisticsSuppliers(orderId: string, supplierIds: unknown[] = [], actor: ActorLike = null) {
+export async function syncOrderLogisticsSuppliers(
+  orderId: string,
+  supplierIds: unknown[] = [],
+  actor: ActorLike = null,
+  options: { allowEmpty?: boolean } = {},
+) {
   const { getExchangeRateSettings } = await import("./shared-exchange");
   const { normalizedStringArray } = await import("./shared-serialization");
   const settings = await getExchangeRateSettings();
   let ids = normalizedStringArray(supplierIds).filter((item, index, arr) => item && arr.indexOf(item) === index);
   if (!settings.allowMultipleOrderLogisticsSuppliers) {
-    const defaultSupplier = await defaultOrderLogisticsSupplier();
-    ids = ids.length ? [ids[0]] : (defaultSupplier ? [defaultSupplier.id] : []);
-    if (!ids.length) {
-      throw codedError("请先在供应商资料中设置默认物流供应商。", 400, "DEFAULT_LOGISTICS_SUPPLIER_REQUIRED");
+    if (ids.length) {
+      ids = [ids[0]];
+    } else if (!options.allowEmpty) {
+      const defaultSupplier = await defaultOrderLogisticsSupplier();
+      ids = defaultSupplier ? [defaultSupplier.id] : [];
+      if (!ids.length) {
+        throw codedError("请先在供应商资料中设置默认物流供应商。", 400, "DEFAULT_LOGISTICS_SUPPLIER_REQUIRED");
+      }
     }
   }
   if (ids.length) {

@@ -33,7 +33,7 @@ const logisticsExpenseMutations = readLogisticsExpenseWorkflowSource();
 const taxRefundModule = readTaxRefundModuleSource();
 
 test("tax refund completeness uses trade term logistics invoice requirements", () => {
-  assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "TRADE_TERM_LOGISTICS_INVOICES_20260704_LCL_PORT_NOT_APPLICABLE"/);
+  assert.match(constants, /TAX_REFUND_LOGISTICS_RULE_VERSION = "TRADE_TERM_LOGISTICS_INVOICES_20260709_EXW_NOT_APPLICABLE"/);
   assert.match(constants, /TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS = \["CUSTOMS", "TRUCKING", "PORT"\]/);
   assert.match(constants, /label: "拖车费发票"[\s\S]*"国内物流费"[\s\S]*"进港费"[\s\S]*"其他物流费用"/);
   assert.match(constants, /label: "港杂费发票"[\s\S]*missingCostLabel: "缺少港杂费发票"/);
@@ -45,12 +45,14 @@ test("tax refund completeness uses trade term logistics invoice requirements", (
   assert.match(completeness, /text\.includes\("非整柜"\)/);
   assert.match(completeness, /\["FCL", "FULL_CONTAINER"[\s\S]*"TRUCK"[\s\S]*"MULTIMODAL"[\s\S]*"整柜"/);
   assert.match(completeness, /function normalizedTaxRefundTradeTerm/);
+  assert.match(completeness, /text\.includes\("EXW"\)/);
   assert.match(completeness, /orderRecord\.declarationType/);
   assert.match(completeness, /orderRecord\.customsDeclarationType/);
   assert.match(completeness, /orderRecord\.tradeMode/);
   assert.match(completeness, /orderRecord\.modeOfTrade/);
   assert.match(completeness, /export function isNonFullContainerTaxRefundOrder/);
   assert.match(completeness, /orderTransportMode\(order\) === "LCL"/);
+  assert.match(completeness, /value === "FOB" \|\| value === "CIF" \|\| value === "CFR" \|\| value === "EXW"/);
   assert.match(completeness, /\["FOB", "CIF", "CFR"\]\.includes\(tradeTerm\)/);
   assert.match(completeness, /TAX_REFUND_BASE_LOGISTICS_REQUIREMENT_KEYS\.forEach\(\(key\) => tradeTermRequiredKeys\.add\(key\)\)/);
   assert.match(completeness, /tradeTermRequiredKeys\.delete\("PORT"\)/);
@@ -60,6 +62,15 @@ test("tax refund completeness uses trade term logistics invoice requirements", (
   assert.match(completeness, /!\s*isPortChargesRequirement\(requirement\)/);
   assert.doesNotMatch(completeness, /hasSeaFreightCost/);
   assert.doesNotMatch(completeness, /nonFullContainer && \["CUSTOMS", "TRUCKING"\]\.includes/);
+});
+
+test("EXW tax refund completeness does not require logistics invoices", () => {
+  assert.match(completeness, /export function isExwTaxRefundOrder/);
+  assert.match(completeness, /normalizedTaxRefundTradeTerm\(order\) === "EXW"/);
+  assert.match(completeness, /if \(isExwTaxRefundOrder\(order\)\) return \[\]/);
+  assert.match(completeness, /key: "LOGISTICS_INVOICE"[\s\S]*label: "物流费用发票"[\s\S]*EXW 条款下不强制要求物流费用发票/);
+  assert.match(completeness, /if \(isExwTaxRefundOrder\(order\) && cachedLogisticsRequirements\.length\) return true/);
+  assert.match(completeness, /if \(isExwTaxRefundOrder\(order\) && Array\.isArray\(logistics\.missing\) && logistics\.missing\.length\) return true/);
 });
 
 test("tax refund completeness does not require port charges for LCL bulk or loose cargo", () => {
@@ -74,6 +85,7 @@ test("tax refund completeness does not require port charges for LCL bulk or loos
   assert.match(completeness, /if \(nonFullContainer\) \{[\s\S]*tradeTermRequiredKeys\.delete\("PORT"\);[\s\S]*actualRequirementKeys\.delete\("PORT"\);[\s\S]*\}/);
   assert.match(completeness, /\(!nonFullContainer \|\| !isPortChargesRequirement\(requirement\)\)/);
   assert.match(completeness, /function notApplicableLogisticsRequirementsForOrder/);
+  assert.match(completeness, /if \(isExwTaxRefundOrder\(order\)\) \{/);
   assert.match(completeness, /if \(!isNonFullContainerTaxRefundOrder\(order\)\) return \[\]/);
   assert.match(completeness, /key: "PORT"[\s\S]*label: "港杂费"[\s\S]*拼箱散货\/非整柜出口不强制要求港杂费/);
   assert.match(completeness, /notApplicableRequirements: notApplicableLogisticsRequirements/);

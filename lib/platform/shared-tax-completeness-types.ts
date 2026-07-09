@@ -235,6 +235,7 @@ export function normalizedTradeTerm(value = "") {
   if (text.includes("CIF")) return "CIF";
   if (text.includes("CFR")) return "CFR";
   if (text.includes("FOB")) return "FOB";
+  if (text.includes("EXW")) return "EXW";
   return text;
 }
 
@@ -250,8 +251,12 @@ export function normalizedTaxRefundTradeTerm(order: TaxOrderLike = {}) {
     orderRecord.customsTradeMode,
   ];
   return candidates.map((value) => normalizedTradeTerm(String(value || ""))).find((value) => (
-    value === "FOB" || value === "CIF" || value === "CFR"
+    value === "FOB" || value === "CIF" || value === "CFR" || value === "EXW"
   )) || normalizedTradeTerm(order.tradeTerm || "");
+}
+
+export function isExwTaxRefundOrder(order: TaxOrderLike = {}) {
+  return normalizedTaxRefundTradeTerm(order) === "EXW";
 }
 
 export function isSeaFreightRequirement(requirement: { key?: string } = {}) {
@@ -322,6 +327,7 @@ export function isPortChargesRequirement(requirement: { key?: string } = {}) {
 }
 
 export function taxRefundLogisticsInvoiceRequirementsForOrder(order: TaxOrderLike = {}, logisticsInvoiceCosts: CostLike[] = []) {
+  if (isExwTaxRefundOrder(order)) return [];
   const actualRequirementKeys = new Set(logisticsInvoiceCosts.flatMap((cost) => {
     const requirement = logisticsInvoiceRequirementForCost(cost);
     return requirement?.key ? [requirement.key] : [];
@@ -349,6 +355,13 @@ export function taxRefundLogisticsInvoiceRequirementsForOrder(order: TaxOrderLik
 }
 
 export function notApplicableLogisticsRequirementsForOrder(order: TaxOrderLike = {}) {
+  if (isExwTaxRefundOrder(order)) {
+    return [{
+      key: "LOGISTICS_INVOICE",
+      label: "物流费用发票",
+      reason: "EXW 条款下不强制要求物流费用发票",
+    }];
+  }
   if (!isNonFullContainerTaxRefundOrder(order)) return [];
   return [{
     key: "PORT",
