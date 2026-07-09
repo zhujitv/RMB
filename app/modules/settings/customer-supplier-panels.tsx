@@ -210,6 +210,7 @@ export function SupplierEditPanel({
   readOnly,
   saving,
   message,
+  modal = false,
   onChange,
   onSubmit,
   onEdit,
@@ -221,6 +222,7 @@ export function SupplierEditPanel({
   readOnly: boolean;
   saving: boolean;
   message: string;
+  modal?: boolean;
   onChange: (form: SupplierForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onEdit: () => void;
@@ -246,22 +248,32 @@ export function SupplierEditPanel({
   const factoryDocumentCapable = PRODUCT_SUPPLIER_TYPES.includes(form.supplierType);
   const isCreate = !form.id;
   const controlsDisabled = readOnly || saving;
+  const formClassName = modal
+    ? styles.supplierSettingsModalForm
+    : `${styles.quickCreatePanel} ${styles.userEditPanel}`;
+  const bodyClassName = modal ? styles.supplierSettingsModalBody : undefined;
+  const actionsClassName = modal ? styles.supplierSettingsModalFooter : styles.detailActions;
+  const fieldGridClassName = modal ? styles.supplierSettingsModalFieldGrid : styles.reportFilterGrid;
+  const costGridClassName = modal ? styles.supplierSettingsModalCostGrid : styles.supplierLogisticsCostGrid;
 
   return (
-    <form className={`${styles.quickCreatePanel} ${styles.userEditPanel}`} onSubmit={(event) => {
+    <form className={formClassName} onSubmit={(event) => {
       if (readOnly) {
         event.preventDefault();
         return;
       }
       onSubmit(event);
     }}>
-      <section className={styles.userEditTitle}>
-        <div>
-          <strong>{isCreate ? "新建供应商资料" : readOnly ? "供应商资料" : "编辑供应商资料"}</strong>
-        </div>
-      </section>
+      {!modal ? (
+        <section className={styles.userEditTitle}>
+          <div>
+            <strong>{isCreate ? "新建供应商资料" : readOnly ? "供应商资料" : "编辑供应商资料"}</strong>
+          </div>
+        </section>
+      ) : null}
 
-      {message ? <div className={styles.inlineError}>{message}</div> : null}
+      <div className={bodyClassName}>
+        {message ? <div className={styles.inlineError}>{message}</div> : null}
 
       <section className={styles.userEditSection}>
         <div className={styles.userEditSectionHeader}>
@@ -269,7 +281,7 @@ export function SupplierEditPanel({
             <strong>基础信息</strong>
           </div>
         </div>
-        <div className={styles.reportFilterGrid}>
+        <div className={fieldGridClassName}>
         <label>
           供应商名称
           <input value={form.supplierName} onChange={(event) => setField("supplierName", event.target.value)} required disabled={controlsDisabled} />
@@ -342,7 +354,7 @@ export function SupplierEditPanel({
               <strong>产品供应商权限</strong>
             </div>
           </div>
-          <div className={styles.reportFilterGrid}>
+          <div className={fieldGridClassName}>
             <BooleanSelect
               label="允许供应商资料回传"
               value={form.allowFactoryDocumentUpload}
@@ -360,7 +372,7 @@ export function SupplierEditPanel({
               <strong>物流供应商权限</strong>
             </div>
           </div>
-          <div className={styles.reportFilterGrid}>
+          <div className={fieldGridClassName}>
             <BooleanSelect
               label="允许录入物流信息"
               value={form.allowDomesticLogisticsEntry}
@@ -388,7 +400,7 @@ export function SupplierEditPanel({
           </div>
           <div className={styles.documentGroupCard}>
             <strong>允许录入的物流费用类型</strong>
-            <div className={styles.supplierLogisticsCostGrid}>
+            <div className={costGridClassName}>
               {LOGISTICS_COST_TYPE_OPTIONS.map(({ value: costType, label }) => {
                 const meta = SUPPLIER_LOGISTICS_COST_TYPE_UI_META[costType];
                 return (
@@ -406,8 +418,9 @@ export function SupplierEditPanel({
           </div>
         </section>
       ) : null}
+      </div>
 
-      <div className={styles.detailActions}>
+      <div className={actionsClassName}>
         {readOnly ? (
           <>
             <button className={styles.primaryButtonCompact} type="button" onClick={onEdit} disabled={saving}>编辑供应商</button>
@@ -416,6 +429,16 @@ export function SupplierEditPanel({
           </>
         ) : (
           <>
+            {modal && form.id ? (
+              <button
+                className={`${styles.dangerButton} ${styles.supplierSettingsDeleteButton}`}
+                type="button"
+                onClick={onDelete}
+                disabled={saving}
+              >
+                删除供应商
+              </button>
+            ) : null}
             <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存供应商"}</button>
             <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
           </>

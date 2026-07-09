@@ -113,7 +113,8 @@ test("supplier logistics cost types use card multi-select options", () => {
   for (const label of ["拖车费", "报关费", "港杂费", "海运费", "保险费", "ENS", "打单费", "查验费", "超重费", "提箱费", "进港费", "其他本地费用", "其他国际费用", "其他物流费用"]) {
     assert.match(settingsModule, new RegExp(label));
   }
-  assert.match(supplierCostSnippet, /styles\.supplierLogisticsCostGrid/);
+  assert.match(supplierCostSnippet, /costGridClassName/);
+  assert.match(supplierPanelSnippet, /const costGridClassName = modal \? styles\.supplierSettingsModalCostGrid : styles\.supplierLogisticsCostGrid/);
   assert.match(supplierCostSnippet, /LOGISTICS_COST_TYPE_OPTIONS\.map/);
   assert.match(supplierCostSnippet, /<PermissionSelectItem/);
   assert.match(supplierCostSnippet, /description=\{meta\?\.description/);
@@ -245,7 +246,7 @@ test("user list detail action opens the inline user editor directly", () => {
   assert.match(saveUserSnippet, /await loadTab\("users", activePagination\.page \|\| 1, filters\.users\)/);
 });
 
-test("supplier action opens unified supplier edit panel with editable supplier name", () => {
+test("supplier action opens supplier edit modal with editable supplier name", () => {
   const settingsTableIndex = settingsModule.indexOf("function SettingsTable(");
   const settingsTableSnippet = settingsModule.slice(settingsTableIndex, settingsTableIndex + 3600);
   const settingsTableRenderIndex = settingsModuleMain.indexOf("<SettingsTable");
@@ -265,18 +266,28 @@ test("supplier action opens unified supplier edit panel with editable supplier n
   assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" && tab !== "suppliers" \? \(/);
   assert.match(settingsRowsSnippet, /onViewDetail\(\)/);
   assert.match(settingsRowsSnippet, /\{tab === "users" \|\| tab === "suppliers" \? "编辑" : "详情"\}/);
-  assert.match(supplierPanelRenderSnippet, /readOnly=\{Boolean\(supplierForm\.id\) && supplierPanelMode === "view"\}/);
-  assert.match(supplierPanelRenderSnippet, /onEdit=\{\(\) => setSupplierPanelMode\("edit"\)\}/);
-  assert.match(supplierPanelRenderSnippet, /onClose=\{closeSupplierPanel\}/);
-  assert.match(supplierPanelRenderSnippet, /onCancel=\{cancelSupplierEdit\}/);
+  assert.match(supplierPanelRenderSnippet, /<DismissibleLayer/);
+  assert.match(supplierPanelRenderSnippet, /ariaLabel=\{supplierModalTitle\}/);
+  assert.match(supplierPanelRenderSnippet, /surfaceClassName=\{styles\.supplierSettingsModalCard\}/);
+  assert.match(supplierPanelRenderSnippet, /dismissConfirmMessage=\{supplierFormDirty \? "表单已有修改，确认放弃修改吗？" : ""\}/);
+  assert.match(supplierPanelRenderSnippet, /readOnly=\{false\}/);
+  assert.match(supplierPanelRenderSnippet, /\smodal\s/);
+  assert.match(supplierPanelRenderSnippet, /onCancel=\{requestClose\}/);
+  assert.doesNotMatch(supplierPanelRenderSnippet, /readOnly=\{Boolean\(supplierForm\.id\) && supplierPanelMode === "view"\}/);
+  assert.doesNotMatch(supplierPanelRenderSnippet, /onCancel=\{cancelSupplierEdit\}/);
   assert.match(supplierPanelSnippet, /readOnly \? "供应商资料" : "编辑供应商资料"/);
   assert.match(supplierPanelSnippet, /<input value=\{form\.supplierName\} onChange=\{\(event\) => setField\("supplierName", event\.target\.value\)\} required disabled=\{controlsDisabled\} \/>/);
   assert.match(supplierPanelSnippet, /disabled=\{controlsDisabled\}/);
   assert.match(supplierPanelSnippet, /编辑供应商/);
   assert.match(supplierPanelSnippet, /保存供应商/);
+  assert.match(supplierPanelSnippet, /删除供应商/);
   assert.match(saveSupplierSnippet, /setSuppliers\(\(current\) =>/);
+  assert.match(saveSupplierSnippet, /setSupplierForm\(null\)/);
   assert.match(saveSupplierSnippet, /setSupplierPanelMode\("view"\)/);
-  assert.doesNotMatch(saveSupplierSnippet, /await loadTab\("suppliers"/);
+  assert.match(saveSupplierSnippet, /await loadTab\("suppliers", activePagination\.page \|\| 1, filters\.suppliers\)/);
+  assert.match(workspaceStyles, /\.supplierSettingsModalCard \{[\s\S]*width: min\(720px, calc\(100vw - 48px\)\);[\s\S]*max-height: min\(92vh, 960px\);/);
+  assert.match(workspaceStyles, /\.supplierSettingsModalFieldGrid,[\s\S]*\.supplierSettingsModalCostGrid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(workspaceStyles, /@media \(max-width: 760px\) \{[\s\S]*\.supplierSettingsModalFieldGrid,[\s\S]*\.supplierSettingsModalCostGrid \{[\s\S]*grid-template-columns: 1fr;/);
 });
 
 test("native form controls are normalized by the workspace style layer", () => {

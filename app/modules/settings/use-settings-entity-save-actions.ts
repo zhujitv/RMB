@@ -5,7 +5,6 @@ import { FACTORY_SUPPLIER_ACCOUNT_ROLES } from "./constants";
 import {
   businessEntityFormFromRow,
   isSupplierAccountRole,
-  supplierFormFromRow,
   supplierMatchesUserRole,
 } from "./helpers";
 import type { BusinessEntityRow, SupplierRow } from "./types";
@@ -133,10 +132,11 @@ async function saveSupplierForm(event: FormEvent<HTMLFormElement>) {
             ? current.map((supplier) => (supplier.id === savedSupplier.id ? savedSupplier : supplier))
             : [savedSupplier, ...current];
         });
-        setSupplierForm(supplierFormFromRow(savedSupplier));
       }
       setSupplierPanelMode("view");
+      setSupplierForm(null);
       setSupplierMessage(result.message || "供应商已保存");
+      await loadTab("suppliers", activePagination.page || 1, filters.suppliers);
     } catch (saveError) {
       setSupplierMessage(saveError instanceof Error ? saveError.message : "供应商资料保存失败");
     } finally {

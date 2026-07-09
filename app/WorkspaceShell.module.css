@@ -297,3 +297,12 @@
 .settingsSecretField { composes: settingsSecretField from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; composes: settingsSecretField from "./styles/workspace-shell/workspace-settings-center.module.css"; } .settingsSecretActions { composes: settingsSecretActions from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsStatusTag { composes: settingsStatusTag from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
 .settingsStatusSuccess { composes: settingsStatusSuccess from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsStatusWarning { composes: settingsStatusWarning from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsStatusDanger { composes: settingsStatusDanger from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
 .settingsStatusMuted { composes: settingsStatusMuted from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
+.supplierSettingsModalCard { composes: supplierSettingsModalCard from "./styles/workspace-shell/settings-user-drawer.module.css"; }
+.supplierSettingsModalHeader { composes: supplierSettingsModalHeader from "./styles/workspace-shell/settings-user-drawer.module.css"; }
+.supplierSettingsModalClose { composes: supplierSettingsModalClose from "./styles/workspace-shell/settings-user-drawer.module.css"; }
+.supplierSettingsModalForm { composes: supplierSettingsModalForm from "./styles/workspace-shell/settings-user-drawer.module.css"; }
+.supplierSettingsModalBody { composes: supplierSettingsModalBody from "./styles/workspace-shell/settings-user-drawer.module.css"; }
+.supplierSettingsModalFieldGrid { composes: supplierSettingsModalFieldGrid from "./styles/workspace-shell/settings-user-drawer.module.css"; }
+.supplierSettingsModalCostGrid { composes: supplierSettingsModalCostGrid from "./styles/workspace-shell/settings-user-drawer.module.css"; }
+.supplierSettingsModalFooter { composes: supplierSettingsModalFooter from "./styles/workspace-shell/settings-user-drawer.module.css"; }
+.supplierSettingsDeleteButton { composes: supplierSettingsDeleteButton from "./styles/workspace-shell/settings-user-drawer.module.css"; }

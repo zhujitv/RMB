@@ -1,9 +1,9 @@
-import { SideDetailDrawer } from "../../components";
+import { DismissibleLayer, SideDetailDrawer } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
 import { CustomerEditPanel, SupplierEditPanel } from "./customer-supplier-panels";
-import { filtersForTab } from "./helpers";
+import { emptySupplierForm, filtersForTab, supplierFormFromRow } from "./helpers";
 import { SettingsTable } from "./settings-table";
-import type { SupplierRow, UserRow } from "./types";
+import type { SupplierForm, SupplierRow, UserRow } from "./types";
 import { UserEditPanel } from "./user-edit-panel";
 import type { useSettingsController } from "./use-settings-controller";
 
@@ -16,7 +16,6 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
     customerSaving,
     customerMessage,
     supplierForm,
-    supplierPanelMode,
     supplierSaving,
     supplierMessage,
     userForm,
@@ -27,7 +26,6 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
     setCustomerForm,
     setCustomerMessage,
     setSupplierForm,
-    setSupplierPanelMode,
     setSupplierMessage,
     setUserForm,
     setSelectedUserId,
@@ -36,10 +34,15 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
     saveSupplierForm,
     saveUserForm,
     closeSupplierPanel,
-    cancelSupplierEdit,
     deleteRecord,
     userEditPanelRef,
   } = settings;
+  const supplierModalTitle = supplierForm?.id ? "编辑供应商" : "新建供应商";
+  const savedSupplierForm = supplierForm?.id
+    ? settings.suppliers.find((supplier) => supplier.id === supplierForm.id)
+    : null;
+  const supplierFormBaseline = savedSupplierForm ? supplierFormFromRow(savedSupplierForm) : emptySupplierForm();
+  const supplierFormDirty = supplierForm ? !isSameSupplierForm(supplierForm, supplierFormBaseline) : false;
 
   return (
     <>
@@ -70,18 +73,50 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
         </SideDetailDrawer>
       ) : null}
       {supplierForm && activeTab === "suppliers" ? (
-        <SupplierEditPanel
-          form={supplierForm}
-          readOnly={Boolean(supplierForm.id) && supplierPanelMode === "view"}
-          saving={supplierSaving}
-          message={supplierMessage}
-          onChange={setSupplierForm}
-          onSubmit={saveSupplierForm}
-          onEdit={() => setSupplierPanelMode("edit")}
-          onDelete={() => supplierForm.id ? void deleteRecord("supplier", supplierForm.id) : undefined}
+        <DismissibleLayer
+          ariaLabel={supplierModalTitle}
+          overlayClassName={styles.modalOverlay}
+          surfaceClassName={styles.supplierSettingsModalCard}
           onClose={closeSupplierPanel}
-          onCancel={cancelSupplierEdit}
-        />
+          dismissible={!supplierSaving}
+          dismissConfirmMessage={supplierFormDirty ? "表单已有修改，确认放弃修改吗？" : ""}
+        >
+          {({ requestClose }) => (
+            <>
+              <div className={styles.supplierSettingsModalHeader}>
+                <div>
+                  <strong id="supplier-settings-modal-title">{supplierModalTitle}</strong>
+                  <span>供应商资料保存后会同步到系统设置列表。</span>
+                </div>
+                <button
+                  className={styles.supplierSettingsModalClose}
+                  type="button"
+                  onClick={requestClose}
+                  disabled={supplierSaving}
+                  aria-label="关闭供应商弹窗"
+                >
+                  ×
+                </button>
+              </div>
+              <SupplierEditPanel
+                form={supplierForm}
+                readOnly={false}
+                saving={supplierSaving}
+                message={supplierMessage}
+                modal
+                onChange={setSupplierForm}
+                onSubmit={saveSupplierForm}
+                onEdit={() => undefined}
+                onDelete={() => supplierForm.id ? void deleteRecord("supplier", supplierForm.id) : undefined}
+                onClose={requestClose}
+                onCancel={requestClose}
+              />
+            </>
+          )}
+        </DismissibleLayer>
+      ) : null}
+      {activeTab === "suppliers" && !supplierForm && supplierMessage ? (
+        <div className={styles.inlineSuccess}>{supplierMessage}</div>
       ) : null}
       {userForm && activeTab === "users" ? (
         <div ref={userEditPanelRef}>
@@ -103,6 +138,17 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
       ) : null}
     </>
   );
+}
+
+function normalizeSupplierForm(form: SupplierForm) {
+  return {
+    ...form,
+    allowedLogisticsCostTypes: [...form.allowedLogisticsCostTypes].sort(),
+  };
+}
+
+function isSameSupplierForm(left: SupplierForm, right: SupplierForm) {
+  return JSON.stringify(normalizeSupplierForm(left)) === JSON.stringify(normalizeSupplierForm(right));
 }
 
 export function SettingsTableContent({ settings }: { settings: SettingsController }) {
