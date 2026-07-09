@@ -18,6 +18,7 @@ const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
 const mastersAccess = readFileSync("lib/platform/masters-access.ts", "utf8");
 const quickOrderFields = readFileSync("app/modules/orders/quick-order-fields.tsx", "utf8");
 const quickOrderController = readFileSync("app/modules/orders/quick-order-panel-controller.ts", "utf8");
+const quickOrderPanel = readFileSync("app/modules/orders/quick-order-panel.tsx", "utf8");
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
 
 test("orders page renders only the table list and not duplicate order cards", () => {
@@ -200,4 +201,17 @@ test("orders create form supports actual shipment date", () => {
   assert.doesNotMatch(ordersModule, /<DetailField label="预计发货"/);
   assert.doesNotMatch(inputSchemas, /expectedShipmentDate/);
   assert.doesNotMatch(inputSchemas, /预计发货日期/);
+});
+
+test("orders allow historical business dates for backfilled orders", () => {
+  assert.match(quickOrderPanel, /actualShipmentDate[\s\S]*type="date"/);
+  assert.match(quickOrderPanel, /blDate[\s\S]*type="date"/);
+  assert.match(quickOrderPanel, /expectedArrivalDate[\s\S]*type="date"/);
+  assert.match(quickOrderPanel, /expectedPaymentDate[\s\S]*type="date"/);
+  assert.match(quickOrderPanel, /dueDate[\s\S]*type="date"/);
+  assert.doesNotMatch(quickOrderPanel, /\bmin=/);
+  assert.match(quickOrderPanel, /historicalDateNotice/);
+  assert.match(quickOrderController, /当前为历史日期，请确认是否为补录订单。/);
+  assert.doesNotMatch(quickOrderController, /不能早于今天|早于今天|不能创建过去|历史日期.*阻止/);
+  assert.doesNotMatch(ordersService, /DUE_DATE_BEFORE_ORDER_DATE|到期日不能早于订单创建日期|不能早于今天|早于今天|不能创建过去/);
 });

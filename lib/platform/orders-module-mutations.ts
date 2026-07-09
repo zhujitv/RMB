@@ -173,7 +173,6 @@ function resolveOrderPaymentDates(inputData: OrderInput, before: Record<string, 
   const paymentInstallments = paymentTermType === "INSTALLMENT"
     ? normalizeInstallments(inputData.paymentInstallments, finalReceivableAmount, exchangeRate)
     : (!paymentTermType && before ? before.paymentInstallments : null);
-  if (dueDate && createdAt && dueDate < new Date(createdAt.toISOString().slice(0, 10))) throw codedError("到期日不能早于订单创建日期", 400, "DUE_DATE_BEFORE_ORDER_DATE");
   return { paymentTermInfo, paymentTermType, paymentTerm, depositRatio, actualShipmentDate, expectedArrivalDate, expectedShipmentDate, blDate, creditDays, dueDate, expectedPaymentDate, paymentInstallments };
 }
 

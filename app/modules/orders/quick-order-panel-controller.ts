@@ -32,6 +32,17 @@ function isExwTradeTerm(value: string) {
   return normalizedOrderTradeTerm(value).includes("EXW");
 }
 
+function hasHistoricalBusinessDate(form: QuickOrderForm) {
+  const today = new Date().toISOString().slice(0, 10);
+  return [
+    form.actualShipmentDate,
+    form.blDate,
+    form.expectedArrivalDate,
+    form.expectedPaymentDate,
+    form.dueDate,
+  ].some((value) => Boolean(value && value < today));
+}
+
 export type UseQuickOrderPanelControllerParams = {
   initialOrder?: OrderRow | null;
   canManageOrderAssignments?: boolean;
@@ -217,6 +228,9 @@ export function useQuickOrderPanelController({
       : [initialCustomer, ...customers];
   }, [customers, initialCustomer]);
   const customer = customerOptions.find((option) => option.id === form.customerId);
+  const historicalDateNotice = hasHistoricalBusinessDate(form)
+    ? "当前为历史日期，请确认是否为补录订单。"
+    : "";
 
   async function handleCustomerSelect(customerOption: CustomerAutocompleteOption) {
     setCustomers((current) => current.some((item) => item.id === customerOption.id) ? current : [customerOption, ...current]);
@@ -345,6 +359,7 @@ export function useQuickOrderPanelController({
     refreshingExchangeRate,
     saving,
     message,
+    historicalDateNotice,
     customer,
     setMessage,
     setForm,

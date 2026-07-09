@@ -49,6 +49,7 @@ export function QuickCreateOrderPanel({
       </div>
 
       {controller.message ? <div className={styles.inlineError}>{controller.message}</div> : null}
+      {controller.historicalDateNotice ? <div className={styles.infoStrip}>{controller.historicalDateNotice}</div> : null}
 
       <div className={styles.reportFilterGrid}>
         <label className={styles.autocompleteField}>
