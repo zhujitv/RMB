@@ -290,8 +290,10 @@ export function useCostDocumentActions({
       return;
     }
     const key = paymentVoucherUploadKey(cost);
+    const previousVoucherVersion = [cost.paymentVoucherUploadedAt, cost.updatedAt, cost.paymentVoucherFileName, cost.paymentVoucherUrl].filter(Boolean).join(":");
     setVoucherUploadingKey(key);
     setUploadProgressByKey((current) => ({ ...current, [key]: 0 }));
+    setVoucherPreviewCost((current) => current?.id === cost.id ? null : current);
     setDocumentError("");
     try {
       const formData = new FormData();
@@ -301,8 +303,16 @@ export function useCostDocumentActions({
       });
       const nextCost = result.cost || result.data?.cost;
       if (!nextCost) throw new Error(result.message || "付款凭证上传失败");
+      const nextVoucherVersion = [nextCost.paymentVoucherUploadedAt, nextCost.updatedAt, nextCost.paymentVoucherFileName, nextCost.paymentVoucherUrl].filter(Boolean).join(":");
+      if (previousVoucherVersion && nextVoucherVersion && previousVoucherVersion === nextVoucherVersion) {
+        throw new Error("付款凭证替换失败：系统仍关联旧凭证，请重新上传。");
+      }
+      setRows((current) => current.map((item) => item.id === nextCost.id ? { ...item, ...nextCost } : item));
+      setDetailCost((current) => current?.id === nextCost.id ? { ...current, ...nextCost } : current);
+      setDocumentCost((current) => current?.id === nextCost.id ? { ...current, ...nextCost } : current);
+      setCostFormDrawer((current) => current?.cost?.id === nextCost.id ? { ...current, cost: { ...current.cost, ...nextCost } } : current);
       await refreshDocumentCost(nextCost.id);
-      if (costView === "invoiceGroups" || costView === "invoiceExceptions") void loadCosts(page, submittedFilters, archiveScope, costView, { silent: true });
+      void loadCosts(page, submittedFilters, archiveScope, costView, { silent: true });
       setNotice("付款凭证已上传");
     } catch (uploadError) {
       setDocumentError(uploadError instanceof Error ? uploadError.message : "付款凭证上传失败");

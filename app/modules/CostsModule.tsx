@@ -131,11 +131,6 @@ export function CostsModule({
     setCostFormDrawer({ mode: "copy", cost: copiedCost });
   }
 
-  function openPaymentVoucherPreview(cost: CostRow) {
-    if (!hasPaymentVoucher(cost)) return;
-    setVoucherPreviewCost(cost);
-  }
-
   function closeCostFormDrawer() {
     if (returnDetailCost) setDetailCost(returnDetailCost);
     setReturnDetailCost(null);
@@ -212,6 +207,22 @@ export function CostsModule({
     loadCosts,
     requestConfirmation,
   });
+
+  async function openPaymentVoucherPreview(cost: CostRow) {
+    if (!hasPaymentVoucher(cost)) return;
+    setVoucherPreviewCost(cost);
+    try {
+      const freshCost = await fetchCostDetail(cost.id);
+      if (!hasPaymentVoucher(freshCost)) {
+        setVoucherPreviewCost(null);
+        setError("该成本记录当前没有付款凭证。");
+        return;
+      }
+      setVoucherPreviewCost(freshCost);
+    } catch (previewError) {
+      setError(previewError instanceof Error ? previewError.message : "读取最新付款凭证失败");
+    }
+  }
 
   const selectedCosts = rows.filter((cost) => selectedCostIds.includes(cost.id) && canVoidCost(cost));
 

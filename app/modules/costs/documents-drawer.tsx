@@ -316,12 +316,14 @@ export function PaymentVoucherPreviewModal({
   onClose: () => void;
 }) {
   const supplierName = costSupplierName(cost);
+  const cacheKey = cost.paymentVoucherUploadedAt || cost.updatedAt || cost.paymentVoucherFileName || cost.id;
   return (
     <FilePreviewModal
       fileKind="payment-voucher"
       fileId={cost.id}
       title="付款凭证"
       initialFileName={cost.paymentVoucherFileName || "汇款水单"}
+      cacheKey={cacheKey}
       metaItems={[
         { label: "订单号", value: cost.orderNo || "-" },
         { label: "供应商", value: supplierName || "-" },

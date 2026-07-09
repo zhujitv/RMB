@@ -252,11 +252,13 @@
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .costTableWrap .dataTable {
-  width: 100%;
-  max-width: 100%;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
   table-layout: fixed;
 }
 
@@ -268,14 +270,29 @@
   word-break: normal;
 }
 
+.costTableWrap .dataTable th.costSelectColumn,
+.costTableWrap .dataTable td.costSelectColumn {
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+  text-align: center;
+}
+
 .costTableWrap .dataTable th.orderNoColumn,
 .costTableWrap .dataTable td.orderNoColumn {
-  width: 180px;
-  min-width: 180px;
+  width: 170px;
+  min-width: 170px;
 }
 
 .costTableWrap .dataTable th.customerColumn,
 .costTableWrap .dataTable td.customerColumn {
-  width: 120px;
-  min-width: 120px;
+  width: 150px;
+  min-width: 150px;
+}
+
+.costTableWrap .dataTable th.amountColumn,
+.costTableWrap .dataTable td.amountColumn {
+  width: 136px;
+  min-width: 136px;
+  text-align: right;
 }

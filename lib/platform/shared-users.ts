@@ -13,4 +13,4 @@ export { backfillMissingAvatarInitials, ensureDefaultUsers, isInitialAdminPasswo
 export { updateOwnProfile, listOwnLoginRecords } from "./shared-users-profile";
 export { listUsers } from "./shared-users-list";
 export { verifyRegistrationEmail, registerUser } from "./shared-users-registration";
-export { saveUser, updateUserStatus } from "./shared-users-admin";
+export { forceDeleteRejectedUser, saveUser, updateUserStatus } from "./shared-users-admin";

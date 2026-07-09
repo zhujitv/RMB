@@ -62,12 +62,19 @@ export function filePreviewUrl(fileKind: string, fileId: string) {
   return `/api/files/${encodeURIComponent(fileKind)}/${encodeURIComponent(fileId)}/preview`;
 }
 
+function withCacheVersion(url: string, cacheKey?: string) {
+  if (!url || !cacheKey) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}v=${encodeURIComponent(cacheKey)}`;
+}
+
 export function FilePreviewModal({
   fileKind,
   fileId,
   title = "文件预览",
   initialFileName = "",
   metaItems = [],
+  cacheKey = "",
   onClose,
   downloadLabel = "下载文件",
 }: {
@@ -76,6 +83,7 @@ export function FilePreviewModal({
   title?: string;
   initialFileName?: string;
   metaItems?: FilePreviewMetaItem[];
+  cacheKey?: string;
   onClose: () => void;
   downloadLabel?: string;
 }) {
@@ -87,9 +95,10 @@ export function FilePreviewModal({
   const [zoom, setZoom] = useState(100);
   const encodedKind = encodeURIComponent(fileKind);
   const encodedId = encodeURIComponent(fileId);
-  const metadataUrl = `/api/files/${encodedKind}/${encodedId}`;
-  const previewUrl = filePreviewUrl(fileKind, fileId);
-  const downloadUrl = fileDownloadUrl(fileKind, fileId);
+  const cacheVersion = String(cacheKey || "");
+  const metadataUrl = withCacheVersion(`/api/files/${encodedKind}/${encodedId}`, cacheVersion);
+  const previewUrl = withCacheVersion(filePreviewUrl(fileKind, fileId), cacheVersion);
+  const downloadUrl = withCacheVersion(fileDownloadUrl(fileKind, fileId), cacheVersion);
   const previewSource = previewKind === "pdf" ? `${previewUrl}#zoom=${zoom}` : previewUrl;
 
   useEffect(() => {

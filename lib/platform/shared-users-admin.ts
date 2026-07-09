@@ -25,6 +25,15 @@ import {
   serializeUser,
 } from "./shared-users-types";
 
+function rejectedUserDeletedEmail(email: unknown) {
+  const timestamp = new Date().toISOString().replace(/[^0-9]/g, "");
+  return `deleted_${timestamp}_${String(email || "user").trim() || "user"}`;
+}
+
+function isPrismaForeignKeyConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003";
+}
+
 export async function saveUser(request: AuditRequestLike, actor: ActorLike, input: UserInput, id: string | null = null) {
   assertWrite(actor, "users");
   const requestedRole = String(input.role || "");
@@ -146,4 +155,54 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
   if (nextStatus !== "APPROVED") await revokeUserSessions(id);
   runNonCriticalTask("用户状态操作日志写入", () => writeAudit(request, actor, "更新用户状态", "users", id, before, user));
   return serializeUser(user);
+}
+
+export async function forceDeleteRejectedUser(request: AuditRequestLike, actor: ActorLike, id: string) {
+  assertWrite(actor, "users");
+  if (actor?.role !== "管理员") throw codedError("只有管理员可以强制删除拒绝状态用户。", 403, "USER_FORCE_DELETE_ADMIN_ONLY");
+  if (!id) throw codedError("请选择需要删除的用户。", 400, "USER_REQUIRED");
+  if (actor?.id === id) throw codedError("不能删除当前登录管理员账号。", 400, "USER_DELETE_SELF_FORBIDDEN");
+  const before = await prisma.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT });
+  if (!before) throw permissionError("用户不存在", 404);
+  if (before.approvalStatus !== "REJECTED") {
+    throw codedError("仅审核状态为已拒绝的用户允许强制删除。", 400, "USER_FORCE_DELETE_REJECTED_ONLY");
+  }
+  const auditAfter = {
+    id: before.id,
+    email: before.email,
+    name: before.name,
+    role: before.role,
+    approvalStatus: before.approvalStatus,
+    deleteReason: "拒绝状态强制删除",
+  };
+  try {
+    await prisma.user.delete({ where: { id } });
+    runNonCriticalTask("拒绝用户强制删除日志写入", () => writeAudit(request, actor, "强制删除拒绝用户", "users", id, before, auditAfter));
+    return { id, hardDeleted: true };
+  } catch (error: unknown) {
+    if (!isPrismaForeignKeyConstraintError(error)) {
+      logServerError("force delete rejected user failed", error, { userId: id });
+      throw codedError("拒绝用户删除失败，请稍后重试。", 500, "USER_FORCE_DELETE_FAILED");
+    }
+  }
+
+  await prisma.user.update({
+    where: { id },
+    data: {
+      email: rejectedUserDeletedEmail(before.email),
+      name: `已删除用户-${String(before.id || "").slice(-6) || "unknown"}`,
+      supplierId: null,
+      approvalStatus: "DISABLED",
+      isActive: false,
+      deletedAt: new Date(),
+      customPermissions: Prisma.JsonNull,
+    },
+  });
+  await revokeUserSessions(id);
+  runNonCriticalTask("拒绝用户强制删除日志写入", () => writeAudit(request, actor, "强制删除拒绝用户", "users", id, before, {
+    ...auditAfter,
+    softDeleted: true,
+    deleteReason: "拒绝状态强制删除",
+  }));
+  return { id, hardDeleted: false };
 }

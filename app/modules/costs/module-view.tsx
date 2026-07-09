@@ -166,7 +166,7 @@ export function CostsModuleView(props: CostsModuleViewProps) {
         {error ? <div className={styles.inlineError}>{error}</div> : null}
         {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
-        <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols} ${styles.costTableWrap}`}>
+        <div className={`${styles.tableWrap} ${styles.costTableWrap}`}>
           <table className={styles.dataTable}>
             {costView === "orders" ? <CostOrderTableHead /> : costView === "invoiceGroups" || costView === "invoiceExceptions" ? <CostInvoiceGroupTableHead showException={costView === "invoiceExceptions"} /> : (
               <CostDetailTableHead

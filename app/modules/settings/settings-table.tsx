@@ -15,7 +15,9 @@ export function SettingsTable({
   onEditCustomer,
   onEditUser,
   onDeleteCustomer,
-  onDeleteUser,
+  onForceDeleteRejectedUser,
+  forceDeletingRejectedUserId = "",
+  canForceDeleteRejectedUsers = false,
   onPage,
 }: {
   tab: SettingsTabKey;
@@ -29,7 +31,9 @@ export function SettingsTable({
   onEditCustomer: (customer: CustomerRow) => void;
   onEditUser: (user: UserRow) => void;
   onDeleteCustomer: (customer: CustomerRow) => void;
-  onDeleteUser: (user: UserRow) => void;
+  onForceDeleteRejectedUser: (user: UserRow) => void;
+  forceDeletingRejectedUserId?: string;
+  canForceDeleteRejectedUsers?: boolean;
   onPage: (page: number) => void;
 }) {
   const colSpan = columns.length + 1;
@@ -63,6 +67,9 @@ export function SettingsTable({
                 columns={columns}
                 onViewDetail={() => onViewDetail(row)}
                 onEditUser={onEditUser}
+                onForceDeleteRejectedUser={onForceDeleteRejectedUser}
+                forceDeletingRejectedUserId={forceDeletingRejectedUserId}
+                canForceDeleteRejectedUsers={canForceDeleteRejectedUsers}
               />
             )) : (
               <tr>
@@ -97,13 +104,21 @@ export function SettingsRows({
   columns,
   onViewDetail,
   onEditUser,
+  onForceDeleteRejectedUser,
+  forceDeletingRejectedUserId,
+  canForceDeleteRejectedUsers,
 }: {
   tab: SettingsTabKey;
   row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow;
   columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
   onViewDetail: () => void;
   onEditUser: (user: UserRow) => void;
+  onForceDeleteRejectedUser: (user: UserRow) => void;
+  forceDeletingRejectedUserId: string;
+  canForceDeleteRejectedUsers: boolean;
 }) {
+  const rejectedUser = canForceDeleteRejectedUsers && tab === "users" && (row as UserRow).approvalStatus === "REJECTED";
+  const userRow = row as UserRow;
   const handlePrimaryAction = () => {
     if (tab === "users") {
       onEditUser(row as UserRow);
@@ -127,16 +142,31 @@ export function SettingsRows({
           );
         })}
         <td>
-          <button
-            className={styles.rowDetailButton}
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              handlePrimaryAction();
-            }}
-          >
-            {tab === "users" || tab === "suppliers" ? "编辑" : "详情"}
-          </button>
+          <div className={styles.rowActionGroup}>
+            <button
+              className={styles.rowDetailButton}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handlePrimaryAction();
+              }}
+            >
+              {tab === "users" || tab === "suppliers" ? "编辑" : "详情"}
+            </button>
+            {rejectedUser ? (
+              <button
+                className={styles.dangerButton}
+                type="button"
+                disabled={forceDeletingRejectedUserId === userRow.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onForceDeleteRejectedUser(userRow);
+                }}
+              >
+                {forceDeletingRejectedUserId === userRow.id ? "删除中..." : "强制删除"}
+              </button>
+            ) : null}
+          </div>
         </td>
       </tr>
     </>

@@ -96,6 +96,7 @@ export function useSettingsState() {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [userSaving, setUserSaving] = useState(false);
   const [userMessage, setUserMessage] = useState("");
+  const [forceDeletingRejectedUserId, setForceDeletingRejectedUserId] = useState("");
   const [companyProfileSaving, setCompanyProfileSaving] = useState(false);
   const [companyProfileMessage, setCompanyProfileMessage] = useState("");
   const [exchangeSaving, setExchangeSaving] = useState(false);
@@ -207,6 +208,8 @@ export function useSettingsState() {
     setUserSaving,
     userMessage,
     setUserMessage,
+    forceDeletingRejectedUserId,
+    setForceDeletingRejectedUserId,
     companyProfileSaving,
     setCompanyProfileSaving,
     companyProfileMessage,

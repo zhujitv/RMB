@@ -67,6 +67,10 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
   const fileName = paymentVoucherFileName(extension);
   const storageFileName = safeFileName(`payment-voucher-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${fileName.split(".").pop() || extension}`);
   const storageKey = buildCostPaymentVoucherKey({ costId: id, fileName: storageFileName });
+  const previousStorageKey = before.paymentVoucherStorageKey || "";
+  if (previousStorageKey && previousStorageKey === storageKey) {
+    throw codedError("付款凭证替换失败，请重新上传。", 409, "PAYMENT_VOUCHER_REPLACE_UNCHANGED");
+  }
   const storedFile = await uploadManagedFileToStorage({ file: uploadedFile, storageKey, fileName });
   let updated;
   try {
@@ -91,12 +95,16 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
     await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
     throw error;
   }
-  const oldStorageKey = before.paymentVoucherStorageKey || "";
-  if (oldStorageKey && oldStorageKey !== storedFile.storageKey) {
-    await runNonCriticalTask("付款凭证旧文件删除", () => deleteManagedStoredFile(oldStorageKey));
+  if (previousStorageKey && previousStorageKey !== storedFile.storageKey) {
+    await runNonCriticalTask("付款凭证旧文件删除", () => deleteManagedStoredFile(previousStorageKey));
   }
   await runNonCriticalTask("成本付款凭证操作日志写入", () => writeAudit(request, currentActor, "上传产品供应商货款付款凭证", "order_costs", id, before, {
     costId: id,
+    operatorId: currentActor.id,
+    replacedAt: new Date().toISOString(),
+    previousFileId: previousStorageKey,
+    nextFileId: storedFile.storageKey,
+    previousFileName: before.paymentVoucherFileName || "",
     fileName,
     mimeType,
     fileSize,

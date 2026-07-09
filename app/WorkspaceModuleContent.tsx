@@ -199,7 +199,7 @@ export function WorkspaceModuleContent({
       />
     );
   }
-  if (activeMenu === "settings") return <SettingsModule initialTab={settingsFocus.tab} initialTabToken={settingsFocus.token} onCompanyProfileSaved={updateCompanyProfile} />;
+  if (activeMenu === "settings") return <SettingsModule currentUser={payload.user} initialTab={settingsFocus.tab} initialTabToken={settingsFocus.token} onCompanyProfileSaved={updateCompanyProfile} />;
   if (activeMenu === "manual") return <ManualModule />;
   return <StatusPanel title="功能暂不可用" message="该功能入口暂未开放，请从左侧选择可用的业务模块。" actionLabel="返回工作台首页" onAction={() => setActiveMenu("welcome")} />;
 }

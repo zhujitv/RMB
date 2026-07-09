@@ -84,6 +84,7 @@ type SettingsControllerActionsContext = {
   setExchangeRefreshing: Setter<boolean>;
   setExchangeSettings: Setter<ExchangeRateSettings | null>;
   setFilters: Setter<SettingsFilters>;
+  setForceDeletingRejectedUserId: Setter<string>;
   setNotificationTemplateForm: Setter<NotificationTemplateForm | null>;
   setNotificationTemplateMessage: Setter<string>;
   setNotificationTemplateSettings: Setter<NotificationTemplateSettings | null>;
@@ -129,6 +130,7 @@ export function useSettingsControllerActions(context: SettingsControllerActionsC
     setExchangeRefreshing,
     setExchangeSettings,
     setFilters,
+    setForceDeletingRejectedUserId,
     setNotificationTemplateForm,
     setNotificationTemplateMessage,
     setNotificationTemplateSettings,
@@ -231,6 +233,31 @@ async function deleteRecord(kind: "customer" | "supplier" | "user", id: string) 
       }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : `${labels[kind]}操作失败`);
+    }
+  }
+
+async function forceDeleteRejectedUser(user: UserRow) {
+    if (user.approvalStatus !== "REJECTED") {
+      setError("仅审核状态为已拒绝的用户允许强制删除。");
+      return;
+    }
+    if (!window.confirm("确认强制删除该拒绝用户？此操作不可恢复。")) return;
+    setError("");
+    setForceDeletingRejectedUserId(user.id);
+    try {
+      const result = await apiJson<{ success?: boolean; ok?: boolean; message?: string }>(
+        `/api/users/${encodeURIComponent(user.id)}?forceRejected=1`,
+        { method: "DELETE" },
+      );
+      await loadTab(activeTab, activePagination.page || 1, filtersForTab(filters, activeTab));
+      setUserForm(null);
+      setSelectedUserId("");
+      setUserMessage("");
+      setError(result.message || "拒绝用户已删除");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "强制删除拒绝用户失败");
+    } finally {
+      setForceDeletingRejectedUserId("");
     }
   }
 
@@ -338,6 +365,7 @@ function updateFilter(tab: SettingsTabKey, key: string, value: string) {
     refreshCurrent,
     refreshExchangeRatesManually,
     deleteRecord,
+    forceDeleteRejectedUser,
     startCreateCustomer,
     startCreateBusinessEntity,
     startEditBusinessEntity,

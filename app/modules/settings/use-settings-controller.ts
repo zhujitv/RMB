@@ -26,7 +26,7 @@ function isSettingsTabKey(value: unknown): value is SettingsTabKey {
   return typeof value === "string" && SETTINGS_TAB_KEYS.has(value as SettingsTabKey);
 }
 
-export function useSettingsController({ initialTab, initialTabToken = 0, onCompanyProfileSaved }: SettingsModuleProps = {}) {
+export function useSettingsController({ currentUser = null, initialTab, initialTabToken = 0, onCompanyProfileSaved }: SettingsModuleProps = {}) {
   const state = useSettingsState();
 
   const {
@@ -100,6 +100,7 @@ export function useSettingsController({ initialTab, initialTabToken = 0, onCompa
     setExchangeRefreshing: state.setExchangeRefreshing,
     setExchangeSettings: state.setExchangeSettings,
     setFilters: state.setFilters,
+    setForceDeletingRejectedUserId: state.setForceDeletingRejectedUserId,
     setNotificationTemplateForm: state.setNotificationTemplateForm,
     setNotificationTemplateMessage: state.setNotificationTemplateMessage,
     setNotificationTemplateSettings: state.setNotificationTemplateSettings,
@@ -197,6 +198,7 @@ export function useSettingsController({ initialTab, initialTabToken = 0, onCompa
 
   return {
     ...state,
+    canForceDeleteRejectedUsers: currentUser?.role === "管理员",
     ...controllerActions,
     ...saveActions,
   };

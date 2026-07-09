@@ -419,5 +419,6 @@ export type UserForm = {
 export type SettingsModuleProps = {
   initialTab?: SettingsTabKey;
   initialTabToken?: number;
+  currentUser?: { role?: string } | null;
   onCompanyProfileSaved?: (settings: CompanyProfileSettings) => void;
 };

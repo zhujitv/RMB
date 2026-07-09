@@ -235,7 +235,7 @@ export function CostOrderItemsTable({
           <span>{costs.length} 项</span>
         </div>
       </div>
-      <div className={styles.tableWrap}>
+      <div className={`${styles.tableWrap} ${styles.costTableWrap}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>
@@ -399,7 +399,7 @@ export function CostInvoiceGroupItemsTable({
           <span>{costs.length} 项</span>
         </div>
       </div>
-      <div className={styles.tableWrap}>
+      <div className={`${styles.tableWrap} ${styles.costTableWrap}`}>
         <table className={styles.dataTable}>
           <thead>
             <tr>

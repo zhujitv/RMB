@@ -7,6 +7,7 @@ export {
 } from "./shared-audit";
 export {
   listUsers,
+  forceDeleteRejectedUser,
   registerUser,
   saveUser,
   updateUserStatus,

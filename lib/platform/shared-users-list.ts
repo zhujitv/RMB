@@ -39,6 +39,8 @@ export async function listUsers(actor: ActorLike, query: UserListQuery = null, o
     ? (USER_APPROVAL_STATUSES.includes(statusText) ? statusText : (statusMap as Record<string, string>)[statusText.toLowerCase()] || (statusMap as Record<string, string>)[statusText] || "")
     : "";
   const where: Prisma.UserWhereInput = {
+    deletedAt: null,
+    NOT: { email: { startsWith: "deleted_", mode: "insensitive" } },
     ...(keyword ? {
       OR: [
         { name: { contains: keyword, mode: "insensitive" } },

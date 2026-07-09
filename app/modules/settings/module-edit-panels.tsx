@@ -161,12 +161,15 @@ export function SettingsTableContent({ settings }: { settings: SettingsControlle
     activePagination,
     detailRow,
     filters,
+    canForceDeleteRejectedUsers,
     setDetailRow,
     startViewSupplier,
     startEditCustomer,
     startEditUser,
     deleteRecord,
+    forceDeleteRejectedUser,
     loadTab,
+    forceDeletingRejectedUserId,
   } = settings;
 
   return (
@@ -189,7 +192,9 @@ export function SettingsTableContent({ settings }: { settings: SettingsControlle
         onEditCustomer={startEditCustomer}
         onEditUser={startEditUser}
         onDeleteCustomer={(customer) => void deleteRecord("customer", customer.id)}
-        onDeleteUser={(user: UserRow) => void deleteRecord("user", user.id)}
+        onForceDeleteRejectedUser={(user: UserRow) => void forceDeleteRejectedUser(user)}
+        forceDeletingRejectedUserId={forceDeletingRejectedUserId}
+        canForceDeleteRejectedUsers={canForceDeleteRejectedUsers}
         onPage={(nextPage) => loadTab(activeTab, nextPage, filtersForTab(filters, activeTab))}
       />
       <SettingsEntityEditors settings={settings} />

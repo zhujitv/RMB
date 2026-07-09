@@ -44,7 +44,7 @@ export function CostTableRows({
   return (
     <>
       <tr className={getBusinessEntityRowClass(cost, styles, styles.clickableRow)} onClick={onViewDetail}>
-        <td>
+        <td className={styles.costSelectColumn}>
           <input
             type="checkbox"
             checked={selected}
@@ -62,31 +62,33 @@ export function CostTableRows({
         <td className={styles.statusColumn}><span className={`${styles.statusPill} ${voided ? styles.statusMuted : cost.paymentStatus === "已支付" ? styles.statusSuccess : styles.statusWarning}`}>{costStatusLabel(cost)}</span></td>
         <td className={styles.statusColumn}><span className={`${styles.statusPill} ${cost.invoiceStatus === "已收到" ? styles.statusSuccess : styles.statusMuted}`}>{cost.invoiceStatus || "-"}</span></td>
         <td className={styles.costInvoiceActionColumn}>
-          <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} onOpenPaymentVoucher={onOpenPaymentVoucher} />
-          {manualCost ? (
-            <>
-              {voided ? (
-                <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onRestore(); }}>
-                  {deleting ? "处理中..." : "恢复"}
-                </button>
-              ) : (
-                <>
-                  <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>编辑</button>
-                  <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onCopy(); }}>复制</button>
-                  {voidAllowed ? (
-                    <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onVoid(); }}>
-                      {deleting ? "处理中..." : "作废"}
-                    </button>
-                  ) : null}
-                  {deleteAllowed ? (
-                    <button className={styles.fileDangerButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onDelete(); }}>
-                      {deleting ? "处理中..." : "删除"}
-                    </button>
-                  ) : null}
-                </>
-              )}
-            </>
-          ) : null}
+          <div className={styles.costInvoiceActions}>
+            <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} onOpenPaymentVoucher={onOpenPaymentVoucher} />
+            {manualCost ? (
+              <>
+                {voided ? (
+                  <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onRestore(); }}>
+                    {deleting ? "处理中..." : "恢复"}
+                  </button>
+                ) : (
+                  <>
+                    <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>编辑</button>
+                    <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onCopy(); }}>复制</button>
+                    {voidAllowed ? (
+                      <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onVoid(); }}>
+                        {deleting ? "处理中..." : "作废"}
+                      </button>
+                    ) : null}
+                    {deleteAllowed ? (
+                      <button className={styles.fileDangerButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onDelete(); }}>
+                        {deleting ? "处理中..." : "删除"}
+                      </button>
+                    ) : null}
+                  </>
+                )}
+              </>
+            ) : null}
+          </div>
         </td>
       </tr>
     </>
@@ -103,7 +105,7 @@ export function CostDetailTableHead({
   return (
     <thead>
       <tr>
-        <th>
+        <th className={styles.costSelectColumn}>
           <input
             type="checkbox"
             checked={allSelected}

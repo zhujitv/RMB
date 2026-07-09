@@ -192,21 +192,22 @@
 
 .costTableWrap .dataTable th.amountColumn,
 .costTableWrap .dataTable td.amountColumn {
-  width: 120px;
-  min-width: 120px;
+  width: 136px;
+  min-width: 136px;
+  text-align: right;
 }
 
 .costTableWrap .dataTable th.supplierColumn,
 .costTableWrap .dataTable td.supplierColumn {
-  width: 220px;
-  min-width: 220px;
-  max-width: 260px;
+  width: 240px;
+  min-width: 240px;
+  max-width: 280px;
 }
 
 .costTableWrap .dataTable th.statusColumn,
 .costTableWrap .dataTable td.statusColumn {
-  width: 112px;
-  min-width: 112px;
+  width: 126px;
+  min-width: 126px;
 }
 
 .costTableWrap .dataTable th.operationColumn,
@@ -217,8 +218,8 @@
 
 .costTableWrap .dataTable th.costInvoiceActionColumn,
 .costTableWrap .dataTable td.costInvoiceActionColumn {
-  width: 180px;
-  min-width: 180px;
+  width: 390px;
+  min-width: 390px;
 }
 
 .detailField {

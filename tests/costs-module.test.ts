@@ -6,6 +6,13 @@ import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const costsModule = readCostsModuleSource();
 const costsMutation = readCostRecordsMutationsSource();
+const costModuleView = readFileSync("app/modules/costs/module-view.tsx", "utf8");
+const costTable = readFileSync("app/modules/costs/cost-table.tsx", "utf8");
+const costDocumentActions = readFileSync("app/modules/costs/use-cost-document-actions.ts", "utf8");
+const costDocumentsDrawer = readFileSync("app/modules/costs/documents-drawer.tsx", "utf8");
+const filePreviewComponent = readFileSync("app/components/file-preview.tsx", "utf8");
+const costListStyles = readFileSync("app/styles/workspace-shell/list-filter-layout.module.css", "utf8");
+const costActionStyles = readFileSync("app/styles/workspace-shell/autocomplete-controls.module.css", "utf8");
 const costRoute = readFileSync("app/api/costs/[id]/route.ts", "utf8");
 const costTypeRoute = readFileSync("app/api/costs/[id]/cost-type/route.ts", "utf8");
 const costPaymentRoute = readFileSync("app/api/costs/[id]/payment/route.ts", "utf8");
@@ -222,6 +229,43 @@ test("cost management page is centered and constrained to readable table width",
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.amountColumn,[\s\S]*width: 120px;/);
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.statusColumn,[\s\S]*width: 120px;[\s\S]*white-space: nowrap;[\s\S]*word-break: keep-all;[\s\S]*overflow-wrap: normal;/);
   assert.match(workspaceStyles, /\.costTableWrap \.dataTable th\.operationColumn,[\s\S]*width: 80px;/);
+});
+
+test("cost tables use stable widths and horizontal scrolling without pinned-column overlap", () => {
+  assert.match(costModuleView, /className=\{`\$\{styles\.tableWrap\} \$\{styles\.costTableWrap\}`\}/);
+  assert.doesNotMatch(costModuleView, /styles\.tablePinnedTwoCols/);
+  assert.match(costTable, /<td className=\{styles\.costSelectColumn\}>/);
+  assert.match(costTable, /<th className=\{styles\.costSelectColumn\}>/);
+  assert.match(costListStyles, /\.costTableWrap \{[\s\S]*overflow-x: auto;[\s\S]*scrollbar-gutter: stable;/);
+  assert.match(costListStyles, /\.costTableWrap \.dataTable \{[\s\S]*width: max-content;[\s\S]*min-width: 100%;[\s\S]*max-width: none;[\s\S]*table-layout: fixed;/);
+  assert.match(costListStyles, /\.costTableWrap \.dataTable th\.costSelectColumn,[\s\S]*width: 52px;[\s\S]*max-width: 52px;/);
+  assert.match(costListStyles, /\.costTableWrap \.dataTable th\.orderNoColumn,[\s\S]*width: 170px;/);
+  assert.match(costListStyles, /\.costTableWrap \.dataTable th\.customerColumn,[\s\S]*width: 150px;/);
+  assert.match(costActionStyles, /\.costTableWrap \.dataTable th\.supplierColumn,[\s\S]*width: 240px;[\s\S]*max-width: 280px;/);
+  assert.match(costActionStyles, /\.costTableWrap \.dataTable th\.amountColumn,[\s\S]*width: 136px;[\s\S]*text-align: right;/);
+  assert.match(costActionStyles, /\.costTableWrap \.dataTable th\.statusColumn,[\s\S]*width: 126px;/);
+  assert.match(costActionStyles, /\.dataTable th\.costInvoiceActionColumn,[\s\S]*width: 390px;[\s\S]*min-width: 390px;/);
+  assert.match(costActionStyles, /\.costInvoiceActions \{[\s\S]*flex-wrap: nowrap;[\s\S]*white-space: nowrap;/);
+});
+
+test("payment voucher replacement refreshes current cost and bypasses stale preview cache", () => {
+  assert.match(filePreviewComponent, /function withCacheVersion\(url: string, cacheKey\?: string\)/);
+  assert.match(filePreviewComponent, /v=\$\{encodeURIComponent\(cacheKey\)\}/);
+  assert.match(filePreviewComponent, /cacheKey = ""/);
+  assert.match(filePreviewComponent, /withCacheVersion\(filePreviewUrl\(fileKind, fileId\), cacheVersion\)/);
+  assert.match(filePreviewComponent, /withCacheVersion\(fileDownloadUrl\(fileKind, fileId\), cacheVersion\)/);
+  assert.match(costDocumentsDrawer, /const cacheKey = cost\.paymentVoucherUploadedAt \|\| cost\.updatedAt \|\| cost\.paymentVoucherFileName \|\| cost\.id/);
+  assert.match(costDocumentsDrawer, /cacheKey=\{cacheKey\}/);
+  assert.match(costDocumentActions, /setVoucherPreviewCost\(\(current\) => current\?\.id === cost\.id \? null : current\)/);
+  assert.match(costDocumentActions, /previousVoucherVersion/);
+  assert.match(costDocumentActions, /nextVoucherVersion/);
+  assert.match(costDocumentActions, /付款凭证替换失败：系统仍关联旧凭证，请重新上传。/);
+  assert.match(costDocumentActions, /setRows\(\(current\) => current\.map\(\(item\) => item\.id === nextCost\.id \? \{ \.\.\.item, \.\.\.nextCost \} : item\)\)/);
+  assert.match(costDocumentActions, /void loadCosts\(page, submittedFilters, archiveScope, costView, \{ silent: true \}\)/);
+  assert.match(costsMutation, /previousFileId: previousStorageKey/);
+  assert.match(costsMutation, /nextFileId: storedFile\.storageKey/);
+  assert.match(costsMutation, /operatorId: currentActor\.id/);
+  assert.match(costsMutation, /replacedAt: new Date\(\)\.toISOString\(\)/);
 });
 
 test("cost detail tables always keep an invoice operation column", () => {
