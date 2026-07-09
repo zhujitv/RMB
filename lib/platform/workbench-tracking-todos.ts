@@ -89,11 +89,11 @@ export async function listOceanTrackingTodos(context: WorkbenchTodoContext) {
       trackingId: row.id,
       keyword: order.orderNo,
     });
-    if (row.isSoonArriving || row.isEtaOverdue) {
+    if (row.isEtaOverdue) {
       todos.push(todoForOrder({
         id: `eta-arrival-${row.id}`,
         type: "ETA_ARRIVAL_ALERT",
-        title: row.isEtaOverdue ? "ETA 已过期" : "ETA 即将到港",
+        title: "ETA 已过期",
         module: "运输监控",
         order,
         context,

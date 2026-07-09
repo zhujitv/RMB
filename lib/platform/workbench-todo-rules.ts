@@ -231,7 +231,7 @@ export const WORKBENCH_TODO_ACTIVATION_RULES: Record<string, WorkbenchTodoActiva
   ETA_ARRIVAL_ALERT: {
     flowStage: "LOGISTICS_INFO_COMPLETED",
     prerequisiteStage: "LOGISTICS_INFO_COMPLETED",
-    activationCondition: "shipment tracking exists AND ETA is overdue or soon arriving",
+    activationCondition: "shipment tracking exists AND ETA is overdue",
   },
   CONTAINER_TRACKING_EXCEPTION: {
     flowStage: "LOGISTICS_INFO_COMPLETED",

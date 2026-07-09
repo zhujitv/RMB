@@ -172,6 +172,13 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /summary\.commissionCanSettle && taxFinalized/);
   assert.match(workbenchSource, /hasProfitException && summary\.allCostsConfirmed && summary\.logisticsCostConfirmed && taxFinalized/);
   assert.match(workbenchSource, /listShipsgoControlTowerTrackings\(new URLSearchParams\(\), actor\)/);
+  assert.match(workbenchSource, /if \(row\.isEtaOverdue\) \{/);
+  assert.doesNotMatch(workbenchSource, /row\.isSoonArriving \|\| row\.isEtaOverdue/);
+  assert.doesNotMatch(workbenchSource, /ETA 即将到港/);
+  assert.equal(
+    workbenchRules.WORKBENCH_TODO_ACTIVATION_RULES.ETA_ARRIVAL_ALERT.activationCondition,
+    "shipment tracking exists AND ETA is overdue",
+  );
   assert.match(workbenchSource, /summarizeOrder\(order, commissionFormulaSettings\)/);
   assert.match(workbenchSource, /sourceTypes:[\s\S]*"payments"[\s\S]*"factoryPayments"[\s\S]*"profit"[\s\S]*"oceanTracking"/);
 });
