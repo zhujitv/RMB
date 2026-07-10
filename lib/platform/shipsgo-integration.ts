@@ -61,6 +61,7 @@ function cleanProviderApiUrl(
   fallback: string,
   label: string,
   allowedHosts: Set<string>,
+  allowedPaths: Set<string>,
 ) {
   const text = nonEmpty(value || fallback);
   try {
@@ -72,10 +73,15 @@ function cleanProviderApiUrl(
     if (url.username || url.password || url.port || !allowedHosts.has(hostname)) {
       throw codedError(`${label}必须使用官方 API 域名`, 400, "VALIDATION_INVALID_URL");
     }
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    if (!allowedPaths.has(pathname)) {
+      throw codedError(`${label}路径不受支持`, 400, "VALIDATION_INVALID_URL");
+    }
     // Older deployments stored the official Freightower endpoint as HTTP.
     // Normalize that exact legacy host to HTTPS; never preserve arbitrary HTTP URLs.
     url.protocol = "https:";
     url.hostname = hostname;
+    url.pathname = pathname;
     url.search = "";
     url.hash = "";
     return url.toString().replace(/\/+$/, "");
@@ -122,6 +128,7 @@ export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
       DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.apiBaseUrl,
       "ShipsGo API 地址",
       SHIPSGO_API_HOSTS,
+      new Set(["/", "/v2"]),
     ),
     apiKey: cleanSecret(input.apiKey),
     shipsgoEnabled: input.shipsgoEnabled !== false,
@@ -131,6 +138,7 @@ export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
       DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerApiBaseUrl,
       "飞驼可视 API 地址",
       FREIGHTOWER_API_HOSTS,
+      new Set(["/"]),
     ),
     freightowerClientId: cleanSecret(input.freightowerClientId, 128),
     freightowerSecret: cleanSecret(input.freightowerSecret, 500),

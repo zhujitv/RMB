@@ -145,6 +145,7 @@ export async function shipsgoApiRequest<T>(
       ...(options.headers || {}),
     },
     cache: "no-store",
+    redirect: "error",
   });
   const text = await response.text();
   const data = text ? safeJsonParse(text) : {};

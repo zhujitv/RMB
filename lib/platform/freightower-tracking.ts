@@ -92,6 +92,7 @@ async function getFreightowerToken(settings: ShipsgoSettings, forceRefresh = fal
       secret: settings.freightowerSecret,
     }),
     cache: "no-store",
+    redirect: "error",
   });
   const text = await response.text();
   const data = text ? safeJsonParse(text) : {};
@@ -126,6 +127,7 @@ export async function freightowerApiRequest<T>(
     },
     body: JSON.stringify(body),
     cache: "no-store",
+    redirect: "error",
   });
   const text = await response.text();
   const data = text ? safeJsonParse(text) : {};
