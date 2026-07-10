@@ -29,7 +29,7 @@ import {
   type ShipsgoActor,
 } from "./shipsgo-tracking-utils";
 import { loadShipsgoTrackingWithContainers, replaceShipsgoTrackingContainers, type AuditRequestLike } from "./shipsgo-tracking-service-shared";
-import { claimWebhookReplay, releaseWebhookReplayClaim } from "./webhook-replay-guard";
+import { claimWebhookReplay, completeWebhookReplayClaim, releaseWebhookReplayClaim } from "./webhook-replay-guard";
 
 const notificationUserSelect = {
   email: true,
@@ -261,7 +261,10 @@ export async function handleShipsgoWebhook(rawBody: string, signature: unknown, 
       "freightower",
       webhookReplayFingerprint(FREIGHTOWER_PROVIDER, rawBody, signature, headers),
     );
-    if (!replay.claimed) return { success: true, ignored: true, message: "重复推送已忽略。" };
+    if (!replay.claimed) {
+      if (replay.processed) return { success: true, ignored: true, message: "重复推送已忽略。" };
+      throw codedError("相同推送正在处理中，请稍后重试。", 409, "WEBHOOK_DELIVERY_IN_PROGRESS");
+    }
     try {
       const trackingData = trackingDataFromFreightowerMappedShipment(mapped);
       const now = new Date();
@@ -289,6 +292,7 @@ export async function handleShipsgoWebhook(rawBody: string, signature: unknown, 
         () => notifyFreightowerTrackingUpdate(saved.id),
         { context: { provider: FREIGHTOWER_PROVIDER, trackingId: saved.id, orderId: saved.orderId } },
       );
+      await completeWebhookReplayClaim(replay.key, "freightower");
       return { success: true, tracking: serializeShipsgoTracking(saved) };
     } catch (error) {
       await releaseWebhookReplayClaim(replay.key);
@@ -321,7 +325,10 @@ export async function handleShipsgoWebhook(rawBody: string, signature: unknown, 
     "shipsgo",
     webhookReplayFingerprint(SHIPSGO_PROVIDER, rawBody, signature, headers),
   );
-  if (!replay.claimed) return { success: true, ignored: true, message: "重复推送已忽略。" };
+  if (!replay.claimed) {
+    if (replay.processed) return { success: true, ignored: true, message: "重复推送已忽略。" };
+    throw codedError("相同推送正在处理中，请稍后重试。", 409, "WEBHOOK_DELIVERY_IN_PROGRESS");
+  }
   try {
     const mapped = mapShipsgoShipmentPayload(shipmentPayload);
     const trackingData = trackingDataFromMappedShipment(mapped);
@@ -345,6 +352,7 @@ export async function handleShipsgoWebhook(rawBody: string, signature: unknown, 
     await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
     const saved = await loadShipsgoTrackingWithContainers(savedBase.id);
     if (!saved) throw codedError("大掌櫃 Webhook 同步保存失败。", 500, "SHIPSGO_TRACKING_SAVE_FAILED");
+    await completeWebhookReplayClaim(replay.key, "shipsgo");
     return { success: true, tracking: serializeShipsgoTracking(saved) };
   } catch (error) {
     await releaseWebhookReplayClaim(replay.key);
