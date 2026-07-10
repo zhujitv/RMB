@@ -24,6 +24,7 @@ export function CustomerEditPanel({
   salespeople,
   saving,
   message,
+  modal = false,
   onChange,
   onSubmit,
   onCancel,
@@ -32,6 +33,7 @@ export function CustomerEditPanel({
   salespeople: SalespersonOption[];
   saving: boolean;
   message: string;
+  modal?: boolean;
   onChange: (form: CustomerForm) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
@@ -68,17 +70,20 @@ export function CustomerEditPanel({
   }
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={onSubmit}>
-      <div className={styles.quickCreateHeader}>
-        <div>
-          <strong>{form.id ? "编辑客户资料" : "新建客户资料"}</strong>
-          <span>客户名称保存时会统一转为大写；业务列表优先显示客户简称，正式单证继续使用客户全称。</span>
+    <form className={modal ? styles.supplierSettingsModalForm : styles.quickCreatePanel} onSubmit={onSubmit}>
+      <div className={modal ? styles.supplierSettingsModalBody : undefined}>
+      {!modal ? (
+        <div className={styles.quickCreateHeader}>
+          <div>
+            <strong>{form.id ? "编辑客户资料" : "新建客户资料"}</strong>
+            <span>客户名称保存时会统一转为大写；业务列表优先显示客户简称，正式单证继续使用客户全称。</span>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {message ? <div className={styles.inlineError}>{message}</div> : null}
 
-      <div className={styles.reportFilterGrid}>
+      <div className={modal ? styles.supplierSettingsModalFieldGrid : styles.reportFilterGrid}>
         <label>
           客户全称
           <input value={form.name} onChange={(event) => setField("name", event.target.value)} required />
@@ -155,7 +160,7 @@ export function CustomerEditPanel({
           checked={form.enableAutoShippingDocsNotification}
           onChange={(event) => setField("enableAutoShippingDocsNotification", event.currentTarget.checked)}
         />
-        <div className={styles.reportFilterGrid}>
+        <div className={modal ? styles.supplierSettingsModalFieldGrid : styles.reportFilterGrid}>
           <label>
             清关资料接收邮箱
             <textarea
@@ -197,7 +202,8 @@ export function CustomerEditPanel({
         </div>
       </section>
 
-      <div className={styles.detailActions}>
+      </div>
+      <div className={modal ? styles.supplierSettingsModalFooter : styles.detailActions}>
         <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存客户"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>

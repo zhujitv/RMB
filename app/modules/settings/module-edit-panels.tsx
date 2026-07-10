@@ -1,4 +1,4 @@
-import { DismissibleLayer, SideDetailDrawer } from "../../components";
+import { DismissibleLayer } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
 import { CustomerEditPanel, SupplierEditPanel } from "./customer-supplier-panels";
 import { emptySupplierForm, filtersForTab, supplierFormFromRow } from "./helpers";
@@ -47,30 +47,38 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
   return (
     <>
       {customerForm && activeTab === "customers" ? (
-        <SideDetailDrawer
+        <DismissibleLayer
           ariaLabel={customerForm.id ? "编辑客户资料" : "新建客户资料"}
-          kicker="客户资料"
-          title={customerForm.id ? "编辑客户资料" : "新建客户资料"}
-          subtitle="客户资料会通过 Portal 挂载到页面顶层，避免被列表或表格遮挡。"
-          surfaceClassName={styles.settingsCustomerDrawer}
+          overlayClassName={styles.modalOverlay}
+          surfaceClassName={styles.supplierSettingsModalCard}
           onClose={() => {
             setCustomerForm(null);
             setCustomerMessage("");
           }}
+          dismissible={!customerSaving}
         >
-          <CustomerEditPanel
-            form={customerForm}
-            salespeople={settings.salespeople}
-            saving={customerSaving}
-            message={customerMessage}
-            onChange={setCustomerForm}
-            onSubmit={saveCustomerForm}
-            onCancel={() => {
-              setCustomerForm(null);
-              setCustomerMessage("");
-            }}
-          />
-        </SideDetailDrawer>
+          {({ requestClose }) => (
+            <>
+              <div className={styles.supplierSettingsModalHeader}>
+                <div>
+                  <strong>{customerForm.id ? "编辑客户" : "新建客户"}</strong>
+                  <span>客户资料保存后会同步到系统设置列表。</span>
+                </div>
+                <button className={styles.supplierSettingsModalClose} type="button" onClick={requestClose} disabled={customerSaving} aria-label="关闭客户弹窗">×</button>
+              </div>
+              <CustomerEditPanel
+                form={customerForm}
+                salespeople={settings.salespeople}
+                saving={customerSaving}
+                message={customerMessage}
+                modal
+                onChange={setCustomerForm}
+                onSubmit={saveCustomerForm}
+                onCancel={requestClose}
+              />
+            </>
+          )}
+        </DismissibleLayer>
       ) : null}
       {supplierForm && activeTab === "suppliers" ? (
         <DismissibleLayer
