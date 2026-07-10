@@ -81,7 +81,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
   apiKey: "",
   shipsgoEnabled: true,
   freightowerEnabled: false,
-  freightowerApiBaseUrl: "http://openapi.freightower.com",
+  freightowerApiBaseUrl: "https://openapi.freightower.com",
   freightowerClientId: "",
   freightowerSecret: "",
   freightowerMapKey: "",

@@ -62,6 +62,7 @@ async function sendEmailVerification(request: AuditRequestLike, user: { id: stri
   const delivery = await sendNotificationEmail({
     type: NOTIFICATION_TEMPLATE_TYPES.USER_EMAIL_VERIFICATION,
     recipientEmails: [user.email],
+    ignoreTemplateCc: true,
     variables: {
       name: user.name || "您好",
       verifyUrl,

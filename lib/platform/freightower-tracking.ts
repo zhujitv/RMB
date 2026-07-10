@@ -32,7 +32,7 @@ type FreightowerTokenCache = {
 let tokenCache: FreightowerTokenCache | null = null;
 
 function freightowerApiBaseUrl(settings: ShipsgoSettings) {
-  return String(settings.freightowerApiBaseUrl || "http://openapi.freightower.com").replace(/\/+$/, "");
+  return String(settings.freightowerApiBaseUrl || "https://openapi.freightower.com").replace(/\/+$/, "");
 }
 
 function cleanFreightowerCode(value: unknown, limit = 32) {
@@ -328,12 +328,14 @@ export function trackingDataFromFreightowerMappedShipment(mapped: ReturnType<typ
 }
 
 export function verifyFreightowerWebhookSignature(settings: ShipsgoSettings, rawBody: string, headers: Headers) {
-  if (!settings.freightowerWebhookSecret) return true;
+  if (!settings.freightowerWebhookSecret) return false;
   const timestamp = nonEmpty(headers.get("x-ft-timestamp"));
   const nonce = nonEmpty(headers.get("x-ft-nonce"));
   const client = nonEmpty(headers.get("x-ft-client"));
   const signature = nonEmpty(headers.get("x-ft-signature"));
   if (!timestamp || !nonce || !client || !signature) return false;
+  const timestampMs = Number(timestamp) * 1000;
+  if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000) return false;
   const expected = crypto
     .createHmac("sha1", settings.freightowerWebhookSecret)
     .update(`${timestamp}/${nonce}/${client}/${rawBody}`)

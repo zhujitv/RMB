@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
   try {
     const actor = await requireApiActor(request).catch(() => null);
     if (!actor) return ok({ success: true });
+    if (actor.role !== "管理员") return ok({ success: true, recorded: false });
     const body = await parseJsonBody(request, { allowEmpty: true });
     const payload = body && typeof body === "object" ? body as Record<string, unknown> : {};
     recordApiPerformanceLog({

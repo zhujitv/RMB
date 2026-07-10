@@ -125,6 +125,7 @@ export function supplierFormFromRow(supplier: SupplierRow): SupplierForm {
 export function emptyUserForm(): UserForm {
   return {
     id: "",
+    expectedUpdatedAt: "",
     name: "",
     email: "",
     role: "业务员",
@@ -144,6 +145,7 @@ export function userFormFromRow(user: UserRow): UserForm {
   const role = USER_ROLES.includes(user.role || "") ? String(user.role) : "业务员";
   return {
     id: user.id,
+    expectedUpdatedAt: user.updatedAt || "",
     name: user.name || "",
     email: user.email || "",
     role,

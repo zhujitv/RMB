@@ -34,8 +34,36 @@ function isPrismaForeignKeyConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003";
 }
 
+function samePermissionConfig(left: unknown, right: unknown) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+async function assertAnotherActiveAdministrator(userId: string) {
+  const anotherAdministrator = await prisma.user.findFirst({
+    where: {
+      id: { not: userId },
+      role: "管理员",
+      isActive: true,
+      approvalStatus: "APPROVED",
+      deletedAt: null,
+    },
+    select: { id: true },
+  });
+  if (!anotherAdministrator) {
+    throw codedError("必须至少保留一个已启用的管理员账号。", 409, "LAST_ACTIVE_ADMIN_REQUIRED");
+  }
+}
+
 export async function saveUser(request: AuditRequestLike, actor: ActorLike, input: UserInput, id: string | null = null) {
   assertWrite(actor, "users");
+  const expectedUpdatedAtText = id ? nonEmpty(input.expectedUpdatedAt || input.updatedAt) : "";
+  const expectedUpdatedAt = expectedUpdatedAtText ? new Date(expectedUpdatedAtText) : null;
+  if (id && !expectedUpdatedAtText) {
+    throw codedError("用户资料版本缺失，请刷新后重试。", 409, "USER_UPDATE_VERSION_REQUIRED");
+  }
+  if (expectedUpdatedAt && Number.isNaN(expectedUpdatedAt.getTime())) {
+    throw codedError("用户资料版本无效，请刷新后重试。", 400, "USER_UPDATE_VERSION_INVALID");
+  }
   const requestedRole = String(input.role || "");
   const role = isProductSupplierOperatorRole(requestedRole)
     ? PRODUCT_SUPPLIER_OPERATOR_ROLE
@@ -53,6 +81,31 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
     : (id
       ? (before?.approvalStatus || (before?.isActive ? "APPROVED" : "DISABLED"))
       : (input.isActive === false ? "DISABLED" : "APPROVED"));
+  const beforeRole = String(before?.role || "");
+  const beforePermissions = before
+    ? normalizedCustomPermissionInput(before.customPermissions, beforeRole)
+    : null;
+  const roleChanged = Boolean(before && role !== beforeRole);
+  const permissionsChanged = before
+    ? !samePermissionConfig(customPermissions, beforePermissions)
+    : Boolean(customPermissions);
+  const statusChanged = Boolean(before && approvalStatus !== before.approvalStatus);
+  const actorIsAdministrator = actor?.role === "管理员";
+  if (!actorIsAdministrator) {
+    if ((before && (beforeRole !== "业务员" || beforePermissions)) || role !== "业务员" || customPermissions) {
+      throw codedError("非管理员只能维护未配置组合权限的业务员账号。", 403, "PRIVILEGED_USER_CHANGE_FORBIDDEN");
+    }
+    if (roleChanged || permissionsChanged) {
+      throw codedError("只有管理员可以分配用户角色和组合权限。", 403, "USER_PRIVILEGE_CHANGE_FORBIDDEN");
+    }
+  }
+  if (id && actor?.id === id && (roleChanged || permissionsChanged || statusChanged)) {
+    throw codedError("不能修改当前账号自身的角色、权限或启用状态。", 403, "USER_SELF_PRIVILEGE_CHANGE_FORBIDDEN");
+  }
+  if (id && beforeRole === "管理员" && before?.isActive && before.approvalStatus === "APPROVED"
+    && (role !== "管理员" || approvalStatus !== "APPROVED")) {
+    await assertAnotherActiveAdministrator(id);
+  }
   const data: Record<string, unknown> = {
     name,
     email,
@@ -103,13 +156,32 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
     throw codedError("邮箱已存在，不能重复创建", 409, "EMAIL_ALREADY_EXISTS");
   }
   let user;
-  try {
-    user = id
-      ? await prisma.user.update({ where: { id }, data: data as Prisma.UserUncheckedUpdateInput, select: USER_PUBLIC_SELECT })
-      : await prisma.user.create({ data: data as Prisma.UserUncheckedCreateInput, select: USER_PUBLIC_SELECT });
-  } catch (error: unknown) {
-    logServerError("user role or supplier update failed", error, { userId: id, role, supplierId: data.supplierId });
-    throw codedError("用户角色或供应商绑定保存失败。", 500, "ROLE_UPDATE_FAILED");
+  if (id) {
+    try {
+      user = await prisma.$transaction(async (tx) => {
+        const updated = await tx.user.updateMany({
+          where: { id, updatedAt: expectedUpdatedAt as Date },
+          data: data as Prisma.UserUncheckedUpdateManyInput,
+        });
+        if (updated.count !== 1) return null;
+        return tx.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT });
+      });
+    } catch (error: unknown) {
+      logServerError("user role or supplier update failed", error, { userId: id, role, supplierId: data.supplierId });
+      throw codedError("用户角色或供应商绑定保存失败。", 500, "ROLE_UPDATE_FAILED");
+    }
+    if (!user) {
+      const exists = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+      if (!exists) throw permissionError("用户不存在", 404);
+      throw codedError("用户资料已被其他管理员更新，请刷新后重试。", 409, "USER_UPDATE_CONFLICT");
+    }
+  } else {
+    try {
+      user = await prisma.user.create({ data: data as Prisma.UserUncheckedCreateInput, select: USER_PUBLIC_SELECT });
+    } catch (error: unknown) {
+      logServerError("user role or supplier update failed", error, { userId: id, role, supplierId: data.supplierId });
+      throw codedError("用户角色或供应商绑定保存失败。", 500, "ROLE_UPDATE_FAILED");
+    }
   }
   if (id && (data.passwordHash || data.approvalStatus !== "APPROVED")) await revokeUserSessions(id);
   if (id && emailChanged) {
@@ -130,6 +202,18 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
   }
   const before = await prisma.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT });
   if (!before) throw permissionError("用户不存在", 404);
+  if (actor?.role !== "管理员" && (
+    before.role !== "业务员"
+    || normalizedCustomPermissionInput(before.customPermissions, before.role)
+  )) {
+    throw codedError("非管理员只能修改未配置组合权限的业务员账号状态。", 403, "PRIVILEGED_USER_STATUS_CHANGE_FORBIDDEN");
+  }
+  if (actor?.id === id && nextStatus !== before.approvalStatus) {
+    throw codedError("不能修改当前账号自身的启用状态。", 403, "USER_SELF_STATUS_CHANGE_FORBIDDEN");
+  }
+  if (before.role === "管理员" && before.isActive && before.approvalStatus === "APPROVED" && nextStatus !== "APPROVED") {
+    await assertAnotherActiveAdministrator(id);
+  }
   if (nextStatus === "APPROVED" && before.emailVerified === false) {
     throw codedError("邮箱未验证，不能启用账号。", 400, "EMAIL_NOT_VERIFIED");
   }

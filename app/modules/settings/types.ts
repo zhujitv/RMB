@@ -132,6 +132,7 @@ export type UserRow = {
   emailVerifiedAt?: string;
   passwordPolicyPassed?: boolean;
   createdAt?: string;
+  updatedAt?: string;
   permissionMode?: string;
   customPermissions?: UserCustomPermissions | null;
   mustChangePassword?: boolean;
@@ -403,6 +404,7 @@ export type BusinessEntityForm = {
 
 export type UserForm = {
   id: string;
+  expectedUpdatedAt: string;
   name: string;
   email: string;
   role: string;

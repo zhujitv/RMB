@@ -41,6 +41,8 @@ type ShipsgoIntegrationInput = {
 };
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const SHIPSGO_API_HOSTS = new Set(["api.shipsgo.com"]);
+const FREIGHTOWER_API_HOSTS = new Set(["openapi.freightower.com"]);
 
 function cleanSecret(value: unknown, limit = 500) {
   return nonEmpty(value)
@@ -54,17 +56,32 @@ function normalizeTrackingProvider(value: unknown) {
   return provider === "FREIGHTOWER" ? "FREIGHTOWER" : "SHIPSGO";
 }
 
-function cleanOptionalUrl(value: unknown, fallback: string) {
+function cleanProviderApiUrl(
+  value: unknown,
+  fallback: string,
+  label: string,
+  allowedHosts: Set<string>,
+) {
   const text = nonEmpty(value || fallback);
   try {
     const url = new URL(text);
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
     if (!["http:", "https:"].includes(url.protocol)) {
-      throw codedError("大掌櫃 API 地址只支持 http 或 https", 400, "VALIDATION_INVALID_URL");
+      throw codedError(`${label}只支持 HTTPS`, 400, "VALIDATION_INVALID_URL");
     }
+    if (url.username || url.password || url.port || !allowedHosts.has(hostname)) {
+      throw codedError(`${label}必须使用官方 API 域名`, 400, "VALIDATION_INVALID_URL");
+    }
+    // Older deployments stored the official Freightower endpoint as HTTP.
+    // Normalize that exact legacy host to HTTPS; never preserve arbitrary HTTP URLs.
+    url.protocol = "https:";
+    url.hostname = hostname;
+    url.search = "";
+    url.hash = "";
     return url.toString().replace(/\/+$/, "");
   } catch (error) {
     if ((error as { status?: number } | null)?.status) throw error;
-    throw codedError("大掌櫃 API 地址格式错误", 400, "VALIDATION_INVALID_URL");
+    throw codedError(`${label}格式错误`, 400, "VALIDATION_INVALID_URL");
   }
 }
 
@@ -100,11 +117,21 @@ export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
   return {
     enabled: input.enabled === true,
     activeProvider: normalizeTrackingProvider(input.activeProvider),
-    apiBaseUrl: cleanOptionalUrl(input.apiBaseUrl, DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.apiBaseUrl),
+    apiBaseUrl: cleanProviderApiUrl(
+      input.apiBaseUrl,
+      DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.apiBaseUrl,
+      "ShipsGo API 地址",
+      SHIPSGO_API_HOSTS,
+    ),
     apiKey: cleanSecret(input.apiKey),
     shipsgoEnabled: input.shipsgoEnabled !== false,
     freightowerEnabled: input.freightowerEnabled === true,
-    freightowerApiBaseUrl: cleanOptionalUrl(input.freightowerApiBaseUrl, DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerApiBaseUrl),
+    freightowerApiBaseUrl: cleanProviderApiUrl(
+      input.freightowerApiBaseUrl,
+      DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerApiBaseUrl,
+      "飞驼可视 API 地址",
+      FREIGHTOWER_API_HOSTS,
+    ),
     freightowerClientId: cleanSecret(input.freightowerClientId, 128),
     freightowerSecret: cleanSecret(input.freightowerSecret, 500),
     freightowerMapKey: cleanSecret(input.freightowerMapKey, 500),
@@ -211,6 +238,9 @@ export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, 
   }
   if (value.webhookEnabled && value.activeProvider === "SHIPSGO" && !value.webhookSecret) {
     throw codedError("启用 Webhook 前请先填写 Webhook Secret", 400, "SHIPSGO_WEBHOOK_SECRET_REQUIRED");
+  }
+  if (value.webhookEnabled && value.activeProvider === "FREIGHTOWER" && !value.freightowerWebhookSecret) {
+    throw codedError("启用飞驼可视推送前请先填写推送 Access Secret", 400, "FREIGHTOWER_WEBHOOK_SECRET_REQUIRED");
   }
   const setting = await prisma.systemSetting.upsert({
     where: { key: SHIPSGO_INTEGRATION_SETTING_KEY },

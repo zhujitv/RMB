@@ -130,10 +130,14 @@ export async function saveNotificationCenterTemplate(request: AuditRequestLike, 
   const before = await ensureNotificationTemplate(type);
   const current = serializeNotificationTemplate(before);
   const editable = definition.editable && current.editable;
-  const recipientConfig = isPlainRecord(data.recipientConfig)
+  const recipientConfig = definition.securitySensitive
+    ? (definition.recipientConfig || {})
+    : isPlainRecord(data.recipientConfig)
     ? data.recipientConfig
     : current.recipientConfig;
-  const extraConfig = isPlainRecord(data.extraConfig)
+  const extraConfig = definition.securitySensitive
+    ? (definition.extraConfig || {})
+    : isPlainRecord(data.extraConfig)
     ? data.extraConfig
     : current.extraConfig;
   const next = await prisma.notificationTemplate.update({
@@ -146,7 +150,9 @@ export async function saveNotificationCenterTemplate(request: AuditRequestLike, 
       bodyTemplate: editable
         ? cleanTemplateText(data.bodyTemplate, String(current.bodyTemplate || ""), TEXT_LIMITS.body)
         : String(current.bodyTemplate || ""),
-      ccEmails: jsonOrNull(requireValidEmailList(data.ccEmails || [], "通知抄送邮箱")),
+      ccEmails: jsonOrNull(definition.securitySensitive
+        ? []
+        : requireValidEmailList(data.ccEmails || [], "通知抄送邮箱")),
       ccAdminEmails: definition.securitySensitive ? false : data.ccAdminEmails === true,
       recipientConfig: jsonOrNull(recipientConfig),
       extraConfig: jsonOrNull(extraConfig),

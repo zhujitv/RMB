@@ -26,9 +26,13 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
   if (!recipientEmails.length) {
     throw codedError("邮件收件人不能为空或格式错误。", 400, "NOTIFICATION_RECIPIENT_REQUIRED");
   }
-  const templateCc = input.ignoreTemplateCc ? [] : uniqueEmails([template.ccEmails || []]);
-  const directCc = uniqueEmails([input.ccEmails || []]);
-  const adminCc = !input.ignoreTemplateCc && template.ccAdminEmails ? await enabledAdminEmails() : [];
+  const templateCc = input.ignoreTemplateCc || template.securitySensitive
+    ? []
+    : uniqueEmails([template.ccEmails || []]);
+  const directCc = template.securitySensitive ? [] : uniqueEmails([input.ccEmails || []]);
+  const adminCc = !input.ignoreTemplateCc && !template.securitySensitive && template.ccAdminEmails
+    ? await enabledAdminEmails()
+    : [];
   const recipientSet = new Set(recipientEmails);
   const ccEmails = uniqueEmails([...directCc, ...templateCc, ...adminCc])
     .filter((email) => !recipientSet.has(email));

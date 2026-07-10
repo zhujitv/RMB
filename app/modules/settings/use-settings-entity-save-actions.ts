@@ -247,6 +247,7 @@ async function saveUserForm(event: FormEvent<HTMLFormElement>) {
           }
           : { mode: "ROLE" },
       };
+      if (isEdit) payload.expectedUpdatedAt = userForm.expectedUpdatedAt;
       if (userForm.password.trim()) payload.password = userForm.password.trim();
       const result = await apiJson<{ success?: boolean; message?: string }>(
         isEdit ? `/api/users/${encodeURIComponent(userForm.id)}` : "/api/users",
