@@ -9,6 +9,7 @@ import {
   logisticsExpenseAccessWhere,
 } from "./logistics-expense-shared";
 import { logisticsBillEditBlockReason as logisticsBillStateEditBlockReason } from "./logistics-bill-state-machine";
+import { assertBusinessNotArchived } from "./business-archive";
 import {
   LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
   actorId,
@@ -23,6 +24,12 @@ import {
 } from "./logistics-expense-workflow-model";
 
 export type LogisticsExpenseSubmitRow = Prisma.LogisticsExpenseGetPayload<{ select: ReturnType<typeof logisticsExpenseSubmitSelect> }> & UnknownRecord;
+
+function assertRowsAreWritable(rows: Array<{ order?: unknown }> = []) {
+  for (const row of rows) {
+    assertBusinessNotArchived(row.order as Parameters<typeof assertBusinessNotArchived>[0], "该订单已提交退税并归档，物流费用只允许查看和下载。");
+  }
+}
 
 export async function refreshLogisticsBillWorkflowStatus(rows: LogisticsExpenseRow[] = [], actor: ActorContext, overrides: Prisma.LogisticsBillUncheckedUpdateInput = {}) {
   if (!rows.length || !rows[0]?.billId) return;
@@ -41,7 +48,7 @@ export async function reloadLogisticsExpenseRowsForBillIds(billIds: string[] = [
   const uniqueBillIds = [...new Set(billIds.map(nonEmpty).filter(Boolean))];
   const directBillIds = uniqueBillIds.filter((billId) => !billId.startsWith("bill:"));
   if (directBillIds.length) {
-    rows.push(...await prisma.logisticsExpense.findMany({
+    const directRows = await prisma.logisticsExpense.findMany({
       where: {
         billId: { in: directBillIds },
         deletedAt: null,
@@ -50,7 +57,9 @@ export async function reloadLogisticsExpenseRowsForBillIds(billIds: string[] = [
       include: includeLogisticsExpenseRelations(),
       orderBy: [{ billId: "asc" }, { createdAt: "asc" }],
       take: directBillIds.length * LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
-    }));
+    });
+    assertRowsAreWritable(directRows);
+    rows.push(...directRows);
   }
   for (const legacyBillId of uniqueBillIds.filter((billId) => billId.startsWith("bill:"))) {
     rows.push(...await loadLogisticsExpenseBillRowsForAction(legacyBillId, actor));
@@ -120,6 +129,10 @@ export function logisticsExpenseSubmitSelect() {
         id: true,
         orderNo: true,
         blNo: true,
+        taxArchived: true,
+        taxRefundStatus: true,
+        taxRefundArchivedAt: true,
+        taxSubmittedAt: true,
       },
     },
   };
@@ -138,7 +151,10 @@ export async function loadLogisticsExpenseBillRowsForSubmit(identifier: unknown,
       orderBy: [{ createdAt: "asc" }],
       take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
-    if (billRows.length) return billRows;
+    if (billRows.length) {
+      assertRowsAreWritable(billRows);
+      return billRows;
+    }
   }
   if (text.startsWith("bill:")) {
     const parsed = parseLogisticsExpenseGroupKey(text);
@@ -153,7 +169,9 @@ export async function loadLogisticsExpenseBillRowsForSubmit(identifier: unknown,
       orderBy: [{ createdAt: "asc" }],
       take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
-    return rows.filter((row) => rowMatchesLegacyBillKey(row, text));
+    const matchedRows = rows.filter((row) => rowMatchesLegacyBillKey(row, text));
+    assertRowsAreWritable(matchedRows);
+    return matchedRows;
   }
   const before = await prisma.logisticsExpense.findFirst({
     where: {
@@ -175,7 +193,9 @@ export async function loadLogisticsExpenseBillRowsForSubmit(identifier: unknown,
     orderBy: [{ createdAt: "asc" }],
     take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
   });
-  return before.billId ? rows : rows.filter((row) => rowMatchesLegacyBillKey(row, billId));
+  const matchedRows = before.billId ? rows : rows.filter((row) => rowMatchesLegacyBillKey(row, billId));
+  assertRowsAreWritable(matchedRows);
+  return matchedRows;
 }
 
 export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown, actor: ActorContext): Promise<LogisticsExpenseRow[]> {
@@ -191,7 +211,10 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
       orderBy: [{ createdAt: "asc" }],
       take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
-    if (billRows.length) return billRows;
+    if (billRows.length) {
+      assertRowsAreWritable(billRows);
+      return billRows;
+    }
   }
   if (text.startsWith("bill:")) {
     const parsed = parseLogisticsExpenseGroupKey(text);
@@ -206,7 +229,9 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
       orderBy: [{ createdAt: "asc" }],
       take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
-    return rows.filter((row) => rowMatchesLegacyBillKey(row, text));
+    const matchedRows = rows.filter((row) => rowMatchesLegacyBillKey(row, text));
+    assertRowsAreWritable(matchedRows);
+    return matchedRows;
   }
   const before = await loadLogisticsExpenseForAction(text, actor);
   const billId = rowBillId(before);
@@ -220,7 +245,9 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
     orderBy: [{ createdAt: "asc" }],
     take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
   });
-  return before.billId ? rows : rows.filter((row) => rowMatchesLegacyBillKey(row, billId));
+  const matchedRows = before.billId ? rows : rows.filter((row) => rowMatchesLegacyBillKey(row, billId));
+  assertRowsAreWritable(matchedRows);
+  return matchedRows;
 }
 
 export async function logisticsExpenseBillEditBlockReason(expense: LogisticsExpenseStateSnapshot & UnknownRecord, actor: ActorContext) {

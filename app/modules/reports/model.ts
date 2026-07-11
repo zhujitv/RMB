@@ -106,13 +106,13 @@ export const COST_TYPE_LABELS: Record<string, string> = Object.fromEntries([
   ["", "全部"],
   ...LOGISTICS_COST_TYPE_OPTIONS.map((item) => [item.value, item.label]),
 ]);
-export const TAX_REFUND_STATUSES = ["", "NOT_READY", "READY", "PROBLEM", "SUBMITTED", "REFUND_RECEIVED"];
+export const TAX_REFUND_STATUSES = ["", "NOT_READY", "READY", "PROBLEM", "SUBMITTED"];
 export const TAX_REFUND_STATUS_LABELS: Record<string, string> = {
   NOT_READY: "资料不完整",
   READY: "资料完整待提交",
   PROBLEM: "资料异常",
   SUBMITTED: "已提交退税",
-  REFUND_RECEIVED: "已收到退税款",
+  REFUND_RECEIVED: "已提交退税",
 };
 
 export const HIDDEN_DETAIL_KEYS = new Set(["id", "orderId", "customerId", "supplierId", "userId", "paymentId", "costId", "documentId"]);

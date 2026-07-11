@@ -39,6 +39,7 @@ import {
   reviewLogisticsExpenseBillsSource,
   approveLogisticsExpenseBillRowsSource,
   updateLogisticsExpensePaymentStatusSource,
+  reverseLogisticsExpensePaymentSource,
   logisticsCostRoute,
   logisticsInvoiceRoute,
   logisticsReviewRoute,
@@ -312,6 +313,27 @@ test("logistics paid button is locked by bill state machine", () => {
   );
   assert.match(updateLogisticsExpensePaymentStatusSource, /paid: costPaymentData\.paid/);
   assert.match(updateLogisticsExpensePaymentStatusSource, /paidAt: costPaymentData\.paidAt/);
+  assert.match(logisticsModule, /付款更正\/冲销/);
+  assert.match(logisticsModule, /action: "reversePayment"/);
+  assert.match(logisticsCostRoute, /reverseLogisticsExpensePayment/);
+  assert.match(logisticsCostRoute, /body\.action \|\| ""\) === "reversePayment"/);
+  assert.match(reverseLogisticsExpensePaymentSource, /assertCanReverseLogisticsPayment\(actor\)/);
+  assert.match(reverseLogisticsExpensePaymentSource, /LOGISTICS_PAYMENT_REVERSAL_REASON_REQUIRED/);
+  assert.match(reverseLogisticsExpensePaymentSource, /prisma\.\$transaction/);
+  assert.match(reverseLogisticsExpensePaymentSource, /syncApprovedLogisticsExpenseCosts\(tx, currentRows, actor\)/);
+  assert.match(reverseLogisticsExpensePaymentSource, /paymentStatus: "待付款"/);
+  assert.match(reverseLogisticsExpensePaymentSource, /paymentStatus: "待支付"/);
+  assert.match(reverseLogisticsExpensePaymentSource, /costUpdate\.count !== costIds\.length/);
+  assert.match(reverseLogisticsExpensePaymentSource, /"冲销物流费用付款"/);
+  assert.match(reverseLogisticsExpensePaymentSource, /reason,/);
+  assert.match(reverseLogisticsExpensePaymentSource, /tx,/);
+  assert.match(reverseLogisticsExpensePaymentSource, /bill: serializeLogisticsExpenseBill\(savedRows\)/);
+  assert.match(reverseLogisticsExpensePaymentSource, /const serializedExpenses = savedRows\.map\(serializeLogisticsExpense\)/);
+  assert.match(reverseLogisticsExpensePaymentSource, /expenses: serializedExpenses/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /bill: serializeLogisticsExpenseBill\(reloadedRows\)/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /expenses: serializedExpenses/);
+  assert.match(backend, /costConfirmedAt: existing\.costConfirmedAt \|\| confirmedAt/);
+  assert.match(logisticsFeesShared, /text\.includes\("部分"\)[\s\S]*text\.includes\("已付款"\)/);
 });
 
 test("sales commission base uses actual received payments minus logistics costs", () => {

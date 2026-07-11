@@ -31,6 +31,7 @@ export type LogisticsBillState = {
   canDeleteDetails: boolean;
   canUploadInvoice: boolean;
   canMarkPaid: boolean;
+  canReversePayment: boolean;
   isVoided: boolean;
 };
 
@@ -56,8 +57,8 @@ export function normalizeLogisticsBillInvoiceStatus(value: unknown): LogisticsBi
 
 export function normalizeLogisticsBillPaymentStatus(value: unknown): LogisticsBillPaymentStatus {
   const text = String(value || "").trim();
-  if (text.includes("已付款")) return "已付款";
   if (text.includes("部分")) return "部分付款";
+  if (text.includes("已付款")) return "已付款";
   if (text.includes("待付款") || text.includes("已开票")) return "待付款";
   return "待开票";
 }
@@ -81,6 +82,7 @@ export function logisticsBillState(input: LogisticsBillStateInput = {}): Logisti
     canDeleteDetails: !logisticsBillDeleteBlockReason({ ...input, costSynced }),
     canUploadInvoice: canUploadLogisticsBillInvoice(input),
     canMarkPaid: canMarkLogisticsBillPaid(input),
+    canReversePayment: canReverseLogisticsBillPayment(input),
     isVoided,
   };
 }
@@ -118,6 +120,12 @@ export function canMarkLogisticsBillPaid(input: LogisticsBillStateInput = {}) {
   return normalizeLogisticsBillAuditStatus(input.auditStatus) === "审核通过"
     && normalizeLogisticsBillInvoiceStatus(input.invoiceStatus) === "已上传发票"
     && normalizeLogisticsBillPaymentStatus(input.paymentStatus) !== "已付款";
+}
+
+export function canReverseLogisticsBillPayment(input: LogisticsBillStateInput = {}) {
+  if (isVoidedLogisticsBill(input)) return false;
+  return normalizeLogisticsBillAuditStatus(input.auditStatus) === "审核通过"
+    && normalizeLogisticsBillPaymentStatus(input.paymentStatus) === "已付款";
 }
 
 export function logisticsBillDefaultTab(input: LogisticsBillStateInput = {}): LogisticsBillDefaultTab {
@@ -201,6 +209,7 @@ export function logisticsBillPayState(input: LogisticsBillStateInput = {}) {
     paymentStatus: state.paymentStatus,
     alreadyPaid: state.alreadyPaid,
     canMarkPaid: state.canMarkPaid,
+    canReversePayment: state.canReversePayment,
     rule: LOGISTICS_BILL_PAY_BUTTON_RULE,
   };
 }

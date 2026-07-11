@@ -1,6 +1,8 @@
 import { prisma } from "../prisma";
 import {
   FILE_ASSET_SOURCE_TABLES,
+  LOGISTICS_GENERATED_COST_SOURCE_TYPES,
+  ORDER_COST_STATUS_VOID,
   codedError,
   dateFromInput,
   deleteManagedStoredFile,
@@ -17,6 +19,7 @@ import {
   aggregateLogisticsExpenseInvoiceStatus,
   aggregateLogisticsExpenseStatus,
   assertCanConfirmLogisticsInvoice,
+  assertCanReverseLogisticsPayment,
   canUploadLogisticsExpenseInvoice,
   createLogisticsInvoiceDocument,
   includeLogisticsExpenseRelations,
@@ -41,10 +44,11 @@ import {
   runLogisticsInvoiceOcrTaskWithTimeout,
   summarizeInvoiceValidationBlockReason,
 } from "./logistics-invoice-validation";
-import { canMarkLogisticsBillPaid, canUploadLogisticsBillInvoice, isVoidedLogisticsBill } from "./logistics-bill-state-machine";
+import { canMarkLogisticsBillPaid, canReverseLogisticsBillPayment, canUploadLogisticsBillInvoice, isVoidedLogisticsBill } from "./logistics-bill-state-machine";
 import { assertCanDeleteLogisticsInvoiceFile } from "./file-delete-policy";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 import {
+  LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS,
   actorId,
   loadLogisticsExpenseBillRowsForAction,
   refreshLogisticsBillWorkflowStatus,
@@ -57,6 +61,8 @@ import {
   type LogisticsExpenseRow,
   type UnknownRecord,
 } from "./logistics-expense-workflow-core";
+import { syncApprovedLogisticsExpenseCosts } from "./logistics-expense-workflow-review-helpers";
+import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 
 function assertLogisticsBillNotVoided(rows: LogisticsExpenseRow[] = [], message = "该物流费用账单已作废，仅允许查看详情和操作日志。") {
   if (rows.some((row) => isVoidedLogisticsBill({ status: rowBillStatus(row) }))) {
@@ -378,28 +384,209 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
     throw codedError("标记已付款时必须填写付款时间。", 400, "LOGISTICS_PAYMENT_DATE_REQUIRED");
   }
   const billId = rowBillId(before);
-  await prisma.logisticsBill.update({
-    where: { id: billId },
-    data: { paymentStatus, paymentDate, updatedById: actorId(actor) || null },
-  });
-  const savedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
-  const costIds = [...new Set(savedRows.map((row) => nonEmpty(row.costId)).filter(Boolean))];
-  if (costIds.length) {
+  const orderId = nonEmpty(before.orderId);
+  const savedRows = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      orderId,
+      "该订单已提交退税并归档，不能再修改物流费用付款状态。",
+    );
+    const currentRows = await tx.logisticsExpense.findMany({
+      where: { billId, deletedAt: null },
+      include: includeLogisticsExpenseRelations(),
+      orderBy: [{ createdAt: "asc" }],
+    });
+    if (!currentRows.length) {
+      throw codedError("物流费用账单缺少费用明细，不能同步付款。", 409, "LOGISTICS_PAYMENT_ROWS_EMPTY");
+    }
+    assertLogisticsBillNotVoided(currentRows);
+    const currentAuditStatus = aggregateLogisticsExpenseStatus(currentRows, "auditStatus");
+    const currentInvoiceStatus = aggregateLogisticsExpenseInvoiceStatus(currentRows);
+    const currentPaymentStatus = aggregateLogisticsExpenseStatus(currentRows, "paymentStatus");
+    if (paymentStatus === "已付款" && !canMarkLogisticsBillPaid({
+      auditStatus: currentAuditStatus,
+      invoiceStatus: currentInvoiceStatus,
+      paymentStatus: currentPaymentStatus,
+      status: rowBillStatus(currentRows[0]),
+    })) {
+      throw codedError("账单状态已变化，需审核通过且已上传发票后才可标记付款。", 409, "LOGISTICS_PAYMENT_STATE_CHANGED");
+    }
+    if (paymentStatus === "已付款") {
+      const currentBlockReason = summarizeInvoiceValidationBlockReason(currentRows);
+      if (currentBlockReason) {
+        throw codedError(currentBlockReason, 400, "LOGISTICS_INVOICE_VALIDATION_BLOCKED");
+      }
+    }
+    if (currentAuditStatus !== "审核通过") {
+      throw codedError("物流费用尚未审核通过，不能同步成本付款状态。", 400, "LOGISTICS_COST_SYNC_AUDIT_REQUIRED");
+    }
+    const costLinks = await syncApprovedLogisticsExpenseCosts(tx, currentRows, actor);
+    const costIds = [...new Set(costLinks.map((link) => nonEmpty(link.costId)).filter(Boolean))];
+    if (costIds.length !== currentRows.length) {
+      throw codedError("物流费用未完整生成对应成本，付款状态未更新。", 409, "LOGISTICS_COST_SYNC_INCOMPLETE");
+    }
+    const billUpdate = await tx.logisticsBill.updateMany({
+      where: { id: billId, deletedAt: null, status: { not: "voided" } },
+      data: {
+        paymentStatus,
+        paymentDate,
+        invoiceStatus: currentInvoiceStatus,
+        updatedById: actorId(actor) || null,
+      },
+    });
+    if (billUpdate.count !== 1) {
+      throw codedError("物流费用账单状态已变化，付款和成本同步已取消。", 409, "LOGISTICS_PAYMENT_BILL_CHANGED");
+    }
     const costPaymentData = logisticsCostPaymentDataForStatus(paymentStatus, paymentDate);
-    await prisma.orderCost.updateMany({
-      where: { id: { in: costIds } },
+    const costUpdate = await tx.orderCost.updateMany({
+      where: {
+        id: { in: costIds },
+        deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
+        sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
+      },
       data: {
         paymentStatus: costPaymentData.paymentStatus,
         paid: costPaymentData.paid,
         paidAt: costPaymentData.paidAt,
         paymentDate: costPaymentData.paymentDate,
       },
-    }).catch(() => null);
-  }
-  const saved = savedRows.find((row) => row.id === before.id) || savedRows[0] || before;
+    });
+    if (costUpdate.count !== costIds.length) {
+      throw codedError("成本付款状态同步不完整，物流付款已取消，请重试。", 409, "LOGISTICS_COST_PAYMENT_SYNC_INCOMPLETE");
+    }
+    const rows = await tx.logisticsExpense.findMany({
+      where: { billId, deletedAt: null },
+      include: includeLogisticsExpenseRelations(),
+      orderBy: [{ createdAt: "asc" }],
+    });
+    if (rows.length !== currentRows.length) {
+      throw codedError("物流费用明细状态已变化，付款和成本同步已取消。", 409, "LOGISTICS_PAYMENT_ROWS_CHANGED");
+    }
+    return rows;
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
   await runNonCriticalTask("物流付款状态日志写入", () => writeAudit(request, actor, "更新物流费用付款状态", "logistics_bills", billId, billRows.map(serializeLogisticsExpense), savedRows.map(serializeLogisticsExpense)));
-  await refreshLogisticsBillWorkflowStatus(savedRows, actor, { paymentStatus, paymentDate });
   invalidateWorkbenchTodosCache();
   const reloadedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
-  return serializeLogisticsExpense(reloadedRows.find((row) => row.id === saved.id) || reloadedRows[0] || saved);
+  const serializedExpenses = reloadedRows.map(serializeLogisticsExpense);
+  return {
+    bill: serializeLogisticsExpenseBill(reloadedRows),
+    expenses: serializedExpenses,
+    expense: serializedExpenses.find((row) => row.id === before.id) || serializedExpenses[0] || null,
+  };
+}
+
+export async function reverseLogisticsExpensePayment(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
+  assertCanReverseLogisticsPayment(actor);
+  const reason = optional(input.reason || input.correctionReason || input.reversalReason);
+  if (!reason) {
+    throw codedError("付款更正必须填写冲销原因。", 400, "LOGISTICS_PAYMENT_REVERSAL_REASON_REQUIRED");
+  }
+  const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  if (!billRows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
+  assertLogisticsBillNotVoided(billRows);
+  const billId = rowBillId(billRows[0]);
+  const orderId = nonEmpty(billRows[0]?.orderId);
+  const reversedAt = new Date();
+  const savedRows = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      orderId,
+      "该订单已提交退税并归档，不能冲销物流费用付款。",
+    );
+    const currentRows = await tx.logisticsExpense.findMany({
+      where: { billId, deletedAt: null },
+      include: includeLogisticsExpenseRelations(),
+      orderBy: [{ createdAt: "asc" }],
+    });
+    if (!currentRows.length) {
+      throw codedError("物流费用账单缺少费用明细，不能冲销付款。", 409, "LOGISTICS_PAYMENT_REVERSAL_ROWS_EMPTY");
+    }
+    assertLogisticsBillNotVoided(currentRows);
+    const auditStatus = aggregateLogisticsExpenseStatus(currentRows, "auditStatus");
+    const paymentStatus = aggregateLogisticsExpenseStatus(currentRows, "paymentStatus");
+    if (!canReverseLogisticsBillPayment({
+      auditStatus,
+      paymentStatus,
+      status: rowBillStatus(currentRows[0]),
+    })) {
+      throw codedError("只有审核通过且已付款的物流费用账单可以冲销付款。", 409, "LOGISTICS_PAYMENT_REVERSAL_STATE_INVALID");
+    }
+    const costLinks = await syncApprovedLogisticsExpenseCosts(tx, currentRows, actor);
+    const costIds = [...new Set(costLinks.map((link) => nonEmpty(link.costId)).filter(Boolean))];
+    if (costIds.length !== currentRows.length) {
+      throw codedError("物流费用未完整关联成本，付款冲销已取消。", 409, "LOGISTICS_PAYMENT_REVERSAL_COST_LINK_INCOMPLETE");
+    }
+    const billUpdate = await tx.logisticsBill.updateMany({
+      where: {
+        id: billId,
+        deletedAt: null,
+        status: { not: "voided" },
+        paymentStatus: "已付款",
+      },
+      data: {
+        paymentStatus: "待付款",
+        paymentDate: null,
+        updatedById: actorId(actor) || null,
+      },
+    });
+    if (billUpdate.count !== 1) {
+      throw codedError("物流费用付款状态已变化，冲销已取消，请刷新后重试。", 409, "LOGISTICS_PAYMENT_REVERSAL_BILL_CHANGED");
+    }
+    const costUpdate = await tx.orderCost.updateMany({
+      where: {
+        id: { in: costIds },
+        deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
+        sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
+      },
+      data: {
+        paymentStatus: "待支付",
+        paid: false,
+        paidAt: null,
+        paymentDate: null,
+        updatedById: actorId(actor) || null,
+      },
+    });
+    if (costUpdate.count !== costIds.length) {
+      throw codedError("成本付款冲销不完整，物流付款冲销已取消。", 409, "LOGISTICS_PAYMENT_REVERSAL_COST_SYNC_INCOMPLETE");
+    }
+    await writeAudit(
+      request,
+      actor,
+      "冲销物流费用付款",
+      "logistics_bills",
+      billId,
+      {
+        paymentStatus,
+        paymentDate: currentRows[0]?.bill?.paymentDate || null,
+        costs: currentRows.map((row) => ({ id: row.costId || row.cost?.id || null, paymentStatus: row.cost?.paymentStatus || null })),
+      },
+      {
+        paymentStatus: "待付款",
+        paymentDate: null,
+        costIds,
+        costPaymentStatus: "待支付",
+        reason,
+        reversedAt,
+      },
+      tx,
+    );
+    const rows = await tx.logisticsExpense.findMany({
+      where: { billId, deletedAt: null },
+      include: includeLogisticsExpenseRelations(),
+      orderBy: [{ createdAt: "asc" }],
+    });
+    if (rows.length !== currentRows.length) {
+      throw codedError("物流费用明细状态已变化，付款冲销已取消。", 409, "LOGISTICS_PAYMENT_REVERSAL_ROWS_CHANGED");
+    }
+    return rows;
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+  invalidateWorkbenchTodosCache();
+  const serializedExpenses = savedRows.map(serializeLogisticsExpense);
+  return {
+    bill: serializeLogisticsExpenseBill(savedRows),
+    expenses: serializedExpenses,
+    expense: serializedExpenses.find((row) => row.id === billRows[0]?.id) || serializedExpenses[0] || null,
+  };
 }

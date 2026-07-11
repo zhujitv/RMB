@@ -415,6 +415,10 @@ test("cost delete backend enforces permissions, audit, and voids risky records",
   assert.match(costsMutation, /actor\.role === "业务员"/);
   assert.match(costsMutation, /普通业务员不可删除已确认成本/);
   assert.match(costsMutation, /function canPhysicallyDeleteCost/);
+  assert.match(costsMutation, /function assertCostCanBeManagedInCostModule/);
+  assert.match(costsMutation, /LOGISTICS_COST_MANAGED_BY_LOGISTICS/);
+  assert.match(costsMutation, /物流费用同步成本不能在成本管理\$\{action\}/);
+  assert.match(costsMutation, /物流费用同步成本请到物流费用模块操作/);
   assert.match(costsMutation, /!isLogisticsGeneratedCostSourceType\(sourceType\)/);
   assert.match(costsMutation, /status: ORDER_COST_STATUS_VOID/);
   assert.match(costsMutation, /action === "deleted" \? "删除成本明细" : "作废成本明细"/);

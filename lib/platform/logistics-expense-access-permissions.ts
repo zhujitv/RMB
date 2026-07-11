@@ -53,6 +53,11 @@ export function assertCanConfirmLogisticsInvoice(actor: LogisticsActor) {
   throw permissionError("只有管理员或财务可以确认物流发票", 403);
 }
 
+export function assertCanReverseLogisticsPayment(actor: LogisticsActor) {
+  if (["管理员", "财务"].includes(logisticsExpenseActorRole(actor))) return;
+  throw permissionError("只有管理员或财务可以冲销物流费用付款", 403);
+}
+
 export function logisticsExpenseStatusWhere(status = ""): Prisma.LogisticsExpenseWhereInput {
   const text = nonEmpty(status);
   if (!text || text === "all") return {};

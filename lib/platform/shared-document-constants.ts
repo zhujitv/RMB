@@ -106,7 +106,7 @@ export const TAX_REFUND_STATUS_LABELS = {
   READY: "资料完整待提交",
   PROBLEM: "资料异常",
   SUBMITTED: "已提交退税",
-  REFUND_RECEIVED: "已收到退税款",
+  REFUND_RECEIVED: "已提交退税",
 };
 export const TAX_REFUND_STATUSES = Object.keys(TAX_REFUND_STATUS_LABELS);
 export const CUSTOMS_PARSE_STATUSES = ["SUCCESS", "PARTIAL", "FAILED", "MANUAL"];

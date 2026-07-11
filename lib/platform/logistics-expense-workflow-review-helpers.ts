@@ -230,13 +230,21 @@ export function logisticsInvoiceReviewBlockReason(rows: LogisticsExpenseRow[] = 
 export async function updateLogisticsExpenseCostIds(tx: Prisma.TransactionClient | typeof prisma, costLinks: CostLink[] = []) {
   const links = costLinks.filter((item) => item.expenseId && item.costId);
   if (!links.length) return;
+  const expenseIds = [...new Set(links.map((item) => item.expenseId))];
+  const costIds = [...new Set(links.map((item) => item.costId))];
+  if (expenseIds.length !== links.length || costIds.length !== links.length) {
+    throw codedError("物流费用成本关联不唯一，已取消同步。", 409, "LOGISTICS_COST_LINK_CONFLICT");
+  }
   const cases = links.map((item) => Prisma.sql`WHEN ${item.expenseId} THEN ${item.costId}`);
-  const ids = links.map((item) => item.expenseId);
-  await tx.$executeRaw(Prisma.sql`
+  const updatedCount = await tx.$executeRaw(Prisma.sql`
     UPDATE "logistics_expenses"
     SET "cost_id" = CASE "id" ${Prisma.join(cases, " ")} END
-    WHERE "id" IN (${Prisma.join(ids)})
+    WHERE "id" IN (${Prisma.join(expenseIds)})
+      AND "deleted_at" IS NULL
   `);
+  if (updatedCount !== links.length) {
+    throw codedError("物流费用明细状态已变化，成本同步已取消，请刷新后重试。", 409, "LOGISTICS_COST_LINK_CHANGED");
+  }
 }
 
 export async function syncApprovedLogisticsExpenseCosts(tx: Prisma.TransactionClient | typeof prisma, rows: LogisticsExpenseRow[] = [], actor: ActorContext) {

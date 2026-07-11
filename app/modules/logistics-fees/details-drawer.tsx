@@ -25,6 +25,7 @@ export function LogisticsExpenseRows({
   onWithdraw,
   onResendInvoiceNotice,
   onMarkPaid,
+  onReversePayment,
   onSubmitDraft,
   onSaveDetails,
   onValidationError,
@@ -58,6 +59,7 @@ export function LogisticsExpenseRows({
   onWithdraw: (expense: LogisticsExpense) => void;
   onResendInvoiceNotice: (expense: LogisticsExpense) => void;
   onMarkPaid: (expense: LogisticsExpense) => void;
+  onReversePayment: (expense: LogisticsExpense) => void;
   onSubmitDraft: (expense: LogisticsExpense) => void;
   onSaveDetails: (payload: LogisticsExpenseBatchSavePayload) => Promise<LogisticsExpenseBatchSaveResult | null>;
   onValidationError: (message: string) => void;
@@ -102,6 +104,7 @@ export function LogisticsExpenseRows({
           onAddLine={drawer.addExpenseDetailRow}
           onApprove={onApprove}
           onMarkPaid={onMarkPaid}
+          onReversePayment={onReversePayment}
           onReject={onReject}
           onResendInvoiceNotice={onResendInvoiceNotice}
           onSave={drawer.handleSaveBillDetails}

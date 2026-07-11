@@ -53,6 +53,7 @@ import {
   normalizeBillingMethodValue,
 } from "./logistics-expense-access-model";
 import { orderOwnedBySalesperson } from "./order-access";
+import { assertBusinessNotArchived } from "./business-archive";
 
 export async function assertLogisticsExpenseOrder(input: UnknownRecord = {}, actor: LogisticsActor): Promise<LogisticsExpenseOrderForAccess> {
   const role = logisticsExpenseActorRole(actor);
@@ -85,12 +86,13 @@ export async function assertLogisticsExpenseOrder(input: UnknownRecord = {}, act
     },
   });
   if (!order) throw codedError("未找到对应发货订单，请先建立或完善发货订单后再录入费用。", 404, "LOGISTICS_EXPENSE_ORDER_NOT_FOUND");
-  if (role === "管理员") return order;
-  if (role === "业务员" && orderOwnedBySalesperson(order, id)) return order;
+  let canAccess = role === "管理员" || (role === "业务员" && orderOwnedBySalesperson(order, id));
   if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role)) {
-    if (supplierId && (order.logisticsSuppliers || []).some((row) => row.supplierId === supplierId)) return order;
+    canAccess = Boolean(supplierId && (order.logisticsSuppliers || []).some((row) => row.supplierId === supplierId));
   }
-  throw permissionError("无权限访问该发货订单", 403);
+  if (!canAccess) throw permissionError("无权限访问该发货订单", 403);
+  assertBusinessNotArchived(order, "该订单已提交退税并归档，不能再新增或修改物流费用。");
+  return order;
 }
 
 export async function assertLogisticsExpenseSupplier(actor: LogisticsActor, order: LogisticsExpenseOrderForAccess, input: UnknownRecord = {}): Promise<LogisticsSupplierForExpense> {
@@ -357,6 +359,7 @@ export async function loadLogisticsExpenseForAction(id: string, actor: Logistics
     include: includeLogisticsExpenseRelations(),
   });
   if (!expense) throw permissionError("物流费用不存在或无权访问", 404);
+  assertBusinessNotArchived(expense.order, "该订单已提交退税并归档，物流费用只允许查看和下载。");
   return expense;
 }
 
@@ -366,6 +369,7 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
 	const invoiceUploaded = Boolean(expense.invoiceDocumentId)
 		|| ["已上传", "已确认", "已上传发票", "已确认发票"].includes(nonEmpty(expense.invoiceStatus || expense.detailInvoiceStatus));
 	const paymentData = logisticsCostPaymentDataFromExpense(expense);
+	const confirmedAt = new Date();
 	const costData = {
     orderId: expense.orderId,
     supplierId: expense.supplierId,
@@ -381,10 +385,9 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
     amountCny: expense.amountCny ?? 0,
     paymentStatus: paymentData.paymentStatus,
     paid: paymentData.paid,
-    paidAt: paymentData.paidAt,
-    costConfirmed: true,
-    costConfirmedAt: new Date(),
-    paymentDate: paymentData.paymentDate,
+	    paidAt: paymentData.paidAt,
+	    costConfirmed: true,
+	    paymentDate: paymentData.paymentDate,
 		invoiceStatus: invoiceUploaded ? "已收到" : "未收到",
 		sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE,
 		sourceId: expense.id,
@@ -401,6 +404,11 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
 				status: { not: ORDER_COST_STATUS_VOID },
 			},
 		});
-  if (existing) return tx.orderCost.update({ where: { id: existing.id }, data: costData });
-  return tx.orderCost.create({ data: { ...costData, createdById: currentActorId || null } });
+	  if (existing) {
+	    return tx.orderCost.update({
+	      where: { id: existing.id },
+	      data: { ...costData, costConfirmedAt: existing.costConfirmedAt || confirmedAt },
+	    });
+	  }
+	  return tx.orderCost.create({ data: { ...costData, costConfirmedAt: confirmedAt, createdById: currentActorId || null } });
 }

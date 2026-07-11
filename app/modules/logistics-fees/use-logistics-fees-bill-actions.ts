@@ -105,12 +105,14 @@ export function useLogisticsFeesBillActions({
     rejectExpense,
     resendInvoiceNotice,
     markExpenseBillPaid,
+    reverseExpenseBillPayment,
     voidExpenseBill,
   } = createLogisticsFeesWorkflowActions({
     busyId,
     statementMonth,
     billStatus,
     loadStatement,
+    refreshCurrentPage: () => loadExpenses(page, submittedKeyword, status, costType, billStatus),
     requestConfirmation,
     setBusyId,
     setRows,
@@ -147,6 +149,7 @@ export function useLogisticsFeesBillActions({
     rejectExpense,
     resendInvoiceNotice,
     markExpenseBillPaid,
+    reverseExpenseBillPayment,
     voidExpenseBill,
   };
 }

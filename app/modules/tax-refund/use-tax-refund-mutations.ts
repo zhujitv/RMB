@@ -135,7 +135,7 @@ async function submitTaxRefund(row: TaxRefundRow) {
       }
       const forceResult = await requestConfirmation({
         title: "确认强制提交退税并归档？",
-        message: `当前完整度：${completed}/${total || 0}（${percent}%）。归档后，该订单将从当前退税资料、成本管理、物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。`,
+        message: `当前完整度：${completed}/${total || 0}（${percent}%）。提交前仍会强制检查全部有效物流费用已审核、发票齐全并完成付款。归档后历史数据可继续查询，利润分析不受影响。`,
         details: [
           `订单：${row.orderNo || "-"}`,
           `提单号：${row.blNo || "-"}`,
@@ -156,7 +156,7 @@ async function submitTaxRefund(row: TaxRefundRow) {
     } else {
       const submitResult = await requestConfirmation({
         title: "确认提交退税并归档？",
-        message: "归档后，该订单将从当前退税资料、成本管理、物流信息和经营待处理列表中隐藏，但仍可在退税档案和报表中心查询。",
+        message: "系统将再次检查全部有效物流费用已审核、发票齐全并完成付款。提交成功后业务进入档案，历史费用和单据保留，利润分析不受影响。",
         details: [
           `订单：${row.orderNo || "-"}`,
           `提单号：${row.blNo || "-"}`,

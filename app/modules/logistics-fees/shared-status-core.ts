@@ -22,8 +22,8 @@ export function compactStatusLabel(
     if (text.includes("已确认") || text.includes("已上传")) return "已上传";
     return "待开票";
   }
-  if (text.includes("已付款")) return "已付款";
   if (text.includes("部分")) return "部分付款";
+  if (text.includes("已付款")) return "已付款";
   return "待付款";
 }
 

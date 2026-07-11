@@ -32,6 +32,8 @@ type LogisticsFeesModuleViewProps = {
   status: string;
   costType: string;
   billStatus: string;
+  businessScope: string;
+  readOnlyArchive: boolean;
   expandedId: string;
   loading: boolean;
   error: string;
@@ -67,6 +69,7 @@ type LogisticsFeesModuleViewProps = {
   onStatusChange: (value: string) => void;
   onCostTypeChange: (value: string) => void;
   onBillStatusChange: (value: string) => void;
+  onBusinessScopeChange: (value: string) => void;
   onResetSearch: () => void;
   onReviewSelectedBills: () => void;
   onToggleAllReviewableBills: (checked: boolean) => void;
@@ -79,6 +82,7 @@ type LogisticsFeesModuleViewProps = {
   onWithdraw: (item: LogisticsExpense) => void;
   onResendInvoiceNotice: (item: LogisticsExpense) => void;
   onMarkPaid: (item: LogisticsExpense) => void;
+  onReversePayment: (item: LogisticsExpense) => void;
   onSubmitDraft: (item: LogisticsExpense) => void;
   onVoidBill: (item: LogisticsExpense) => void;
   onSaveDetails: (payload: LogisticsExpenseBatchSavePayload) => Promise<LogisticsExpenseBatchSaveResult | null>;
@@ -103,6 +107,8 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
     status,
     costType,
     billStatus,
+    businessScope,
+    readOnlyArchive,
     expandedId,
     loading,
     error,
@@ -160,6 +166,10 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
       />
 
       <div className={styles.listToolbar}>
+        <select aria-label="业务范围" value={businessScope} onChange={(event) => props.onBusinessScopeChange(event.target.value)} disabled={loading}>
+          <option value="current">当前业务</option>
+          <option value="archive">已归档业务</option>
+        </select>
         <input
           value={keyword}
           onChange={(event) => props.onKeywordChange(event.target.value)}
@@ -190,7 +200,7 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
         <button className={styles.secondaryButton} type="button" onClick={props.onResetSearch} disabled={loading}>
           重置
         </button>
-        {canReviewExpense ? (
+        {canReviewExpense && !readOnlyArchive ? (
           <button
             className={styles.billSaveButton}
             type="button"
@@ -206,11 +216,12 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
+      {readOnlyArchive ? <div className={styles.infoStrip}>已归档业务仅供查看，费用、发票和付款记录均已保留。</div> : null}
 
       <LogisticsExpenseBillTable
         rows={rows}
         loading={loading}
-        canReviewExpense={canReviewExpense}
+        canReviewExpense={canReviewExpense && !readOnlyArchive}
         hasReviewableRows={Boolean(reviewableRows.length)}
         allReviewableSelected={allReviewableSelected}
         selectedBillIds={selectedBillIds}
@@ -218,7 +229,7 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
         onToggleAllReviewableBills={props.onToggleAllReviewableBills}
         onOpen={props.onOpenExpense}
         onSelectBill={props.onSelectBill}
-        onVoidBill={canReviewExpense ? props.onVoidBill : undefined}
+        onVoidBill={canReviewExpense && !readOnlyArchive ? props.onVoidBill : undefined}
       />
 
       <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={props.onPage} />
@@ -230,20 +241,21 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
           deletingId={deletingId}
           saving={savingBillId === activeExpense.id}
           onClose={props.onCloseExpense}
-          canReview={canReviewExpense}
-          canWithdraw={isLogisticsSupplier}
+          canReview={canReviewExpense && !readOnlyArchive}
+          canWithdraw={isLogisticsSupplier && !readOnlyArchive}
           canEditAmount={isLogisticsSupplier}
-          canUploadInvoice={isLogisticsSupplier || canConfirmInvoice || canReviewExpense}
-          canManageInvoiceRecognition={canConfirmInvoice || canReviewExpense}
-          canMarkPaid={canConfirmInvoice}
-          canSubmitDraft={canCreateExpense}
-          canDeleteExpense={canCreateExpense}
+          canUploadInvoice={!readOnlyArchive && (isLogisticsSupplier || canConfirmInvoice || canReviewExpense)}
+          canManageInvoiceRecognition={!readOnlyArchive && (canConfirmInvoice || canReviewExpense)}
+          canMarkPaid={canConfirmInvoice && !readOnlyArchive}
+          canSubmitDraft={canCreateExpense && !readOnlyArchive}
+          canDeleteExpense={canCreateExpense && !readOnlyArchive}
           canShowSupplier={currentUserRole === "管理员" || currentUserRole === "财务"}
           onApprove={(item) => props.onApprove(item)}
           onReject={props.onReject}
           onWithdraw={props.onWithdraw}
           onResendInvoiceNotice={props.onResendInvoiceNotice}
           onMarkPaid={props.onMarkPaid}
+          onReversePayment={props.onReversePayment}
           onSubmitDraft={props.onSubmitDraft}
           onSaveDetails={props.onSaveDetails}
           onValidationError={props.onValidationError}

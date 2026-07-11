@@ -257,5 +257,4 @@ export const TAX_REFUND_STATUS_OPTIONS = [
   { value: "READY", label: "资料完整待提交" },
   { value: "PROBLEM", label: "资料异常" },
   { value: "SUBMITTED", label: "已提交退税" },
-  { value: "REFUND_RECEIVED", label: "已收到退税款" },
 ];

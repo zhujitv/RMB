@@ -12,6 +12,11 @@ import {
 import { summarizeCurrencyTotals, type CurrencyTotalInput } from "./currency-totals";
 import { orderAccessWhere, orderSalespersonOwnershipWhere } from "./order-access";
 import {
+  businessArchiveOrderWhere,
+  businessArchiveScope,
+  type BusinessArchiveScope,
+} from "./business-archive";
+import {
   assertCanReadLogisticsExpenses,
   includeLogisticsExpenseRelations,
   includeLogisticsExpenseListRelations,
@@ -69,6 +74,7 @@ type LogisticsExpenseListFilters = {
   costType: string;
   status: string;
   billStatus: string;
+  businessScope: BusinessArchiveScope;
 };
 type LogisticsQueryActor = {
   id?: string | null;
@@ -96,6 +102,7 @@ function logisticsExpenseListFiltersFromQuery(query: QueryLike): LogisticsExpens
     costType: String(query.get("costType") || "").trim(),
     status: String(query.get("status") || ""),
     billStatus: nonEmpty(query.get("billStatus") || query.get("voidStatus") || "normal"),
+    businessScope: businessArchiveScope(query.get("archiveScope") || query.get("businessScope")),
   };
 }
 
@@ -105,6 +112,7 @@ function logisticsExpenseListWhere(filters: LogisticsExpenseListFilters, actor: 
     { deletedAt: null },
     logisticsExpenseAccessWhere(actor),
     logisticsExpenseStatusWhere(filters.status),
+    { order: { is: businessArchiveOrderWhere(filters.businessScope) } },
   ];
   if (filters.supplierId && actor?.role === "管理员") conditions.push({ supplierId: filters.supplierId });
   if (filters.costType && LOGISTICS_COST_TYPES.includes(filters.costType)) conditions.push({ costType: filters.costType });
@@ -188,6 +196,7 @@ function logisticsExpenseBillListWhere(filters: LogisticsExpenseListFilters, act
     { deletedAt: null },
     logisticsExpenseBillVoidStatusWhere(filters.billStatus),
     logisticsExpenseBillAccessWhere(actor),
+    { order: { is: businessArchiveOrderWhere(filters.businessScope) } },
     { expenses: { some: expenseWhere } },
     logisticsExpenseBillStatusWhere(filters.status),
   ];
@@ -263,6 +272,7 @@ export async function listLogisticsExpenseOrders(query: QueryLike, actor: Logist
   const filters: Prisma.ReceivableOrderWhereInput[] = [
     { deletedAt: null },
     { status: { notIn: ["已关闭", "已取消"] } },
+    businessArchiveOrderWhere("current"),
   ];
   if (role === "业务员") filters.push(orderAccessWhere(actor));
   if ([LOGISTICS_OPERATOR_ROLE, LEGACY_LOGISTICS_OPERATOR_ROLE].includes(role) && supplierId) {

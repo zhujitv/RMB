@@ -9,6 +9,7 @@ import {
   assertJsonObject,
   assertWrite,
   codedError,
+  isLogisticsGeneratedCostSourceType,
   permissionError,
   requireText,
   runNonCriticalTask,
@@ -43,12 +44,18 @@ import {
 } from "./cost-records-mutation-shared";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
+function assertCostCanBeManagedInCostModule(cost: { sourceType?: string | null; generatedLogisticsExpense?: unknown }, action: string) {
+  if (!isLogisticsGeneratedCostSourceType(cost.sourceType) && !cost.generatedLogisticsExpense) return;
+  throw codedError(`物流费用同步成本不能在成本管理${action}，请到物流费用模块操作。`, 400, "LOGISTICS_COST_MANAGED_BY_LOGISTICS");
+}
+
 export async function saveCost(request: AuditRequestLike, actor: CostActorInput, input: unknown, id: string | null = null) {
   assertWrite(actor, "costs");
   const currentActor = requireCostActor(actor);
   const body = assertInputSchema(assertJsonObject(input), COST_INPUT_SCHEMA);
   const before = id ? await prisma.orderCost.findUnique({ where: { id }, include: { order: { include: { customer: true } } } }) : null;
   if (id && (!before || before.deletedAt || before.status === ORDER_COST_STATUS_VOID)) throw permissionError("成本记录不存在、已删除或已作废", 404);
+  if (before) assertCostCanBeManagedInCostModule(before, "修改");
   const ownCostScope = isOwnCostScope(currentActor);
   if (before && ownCostScope && before.createdById !== currentActor.id) throw permissionError("只能维护自己录入的成本记录");
   if (before && !ownCostScope && !canAccessOrder(currentActor, before.order)) throw permissionError("无权限修改该成本记录");
@@ -140,6 +147,7 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
     },
   });
   if (!before || before.deletedAt) throw permissionError("成本记录不存在或已删除", 404);
+  assertCostCanBeManagedInCostModule(before, "删除或作废");
   const ownCostScope = isOwnCostScope(currentActor);
   if (ownCostScope && before.createdById !== currentActor.id) throw permissionError("只能删除自己录入的成本记录");
   if (!ownCostScope && !canAccessOrder(currentActor, before.order)) throw permissionError("无权限删除该成本记录");
@@ -208,6 +216,7 @@ export async function restoreCost(request: AuditRequestLike, actor: CostActorInp
     include: includeCostRelations(),
   });
   if (!before || before.deletedAt) throw permissionError("成本记录不存在或已删除", 404);
+  assertCostCanBeManagedInCostModule(before, "恢复");
   if (!canAccessOrder(currentActor, before.order)) throw permissionError("无权限恢复该成本记录");
   if (!isVoidedCost(before)) throw codedError("该成本不是作废状态，无需恢复。", 400, "COST_NOT_VOID");
   const updated = await prisma.orderCost.update({
@@ -281,6 +290,10 @@ export async function batchVoidCosts(request: AuditRequestLike, actor: CostActor
     }
     if (isVoidedCost(row)) {
       skipped.push({ id: row.id, reason: "已作废" });
+      continue;
+    }
+    if (isLogisticsGeneratedCostSourceType(row.sourceType) || row.generatedLogisticsExpense) {
+      skipped.push({ id: row.id, reason: "物流费用同步成本请到物流费用模块操作" });
       continue;
     }
     const updated = await prisma.orderCost.update({

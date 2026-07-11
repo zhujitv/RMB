@@ -142,6 +142,7 @@ export const logisticsFeesShared = [
   "app/modules/logistics-fees/shared-monthly-summary.tsx",
   "app/modules/logistics-fees/shared-order-helpers.ts",
   "app/modules/logistics-fees/shared-row-reconcile.ts",
+  "app/modules/logistics-fees/shared-status-core.ts",
   "app/modules/logistics-fees/shared-status-bill.ts",
   "app/modules/logistics-fees/shared-status.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
@@ -218,6 +219,10 @@ export const approveLogisticsExpenseBillRowsSource =
 export const updateLogisticsExpensePaymentStatusSource =
   backend.match(
     /export async function updateLogisticsExpensePaymentStatus[\s\S]*?\n}\n\n/,
+  )?.[0] || "";
+export const reverseLogisticsExpensePaymentSource =
+  backend.match(
+    /export async function reverseLogisticsExpensePayment[\s\S]*?\n}\n(?=\nexport async function|\s*$)/,
   )?.[0] || "";
 export const logisticsCostRoute = readFileSync(
   "app/api/logistics-costs/[id]/route.ts",

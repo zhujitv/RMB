@@ -1,6 +1,5 @@
 import { prisma } from "../prisma";
 import {
-  TAX_REFUND_STATUSES,
   canWrite,
   codedError,
   getCommissionFormulaSettings,
@@ -25,6 +24,11 @@ import {
   type TaxRefundActionInput,
   hydrateTaxRefundOrderLogisticsInfo,
 } from "./tax-refunds-shared";
+import { assertTaxRefundLogisticsBusinessClosure } from "./tax-refund-business-closure";
+import { isBusinessArchived, lockBusinessOrderForUpdate } from "./business-archive";
+
+const EDITABLE_TAX_REFUND_STATUSES = ["NOT_READY", "READY", "PROBLEM", "SUBMITTED"];
+const TAX_REFUND_SUBMIT_TRANSACTION_OPTIONS = { timeout: 15000, maxWait: 10000 };
 
 export async function refreshTaxRefundCompletenessNow(request: AuditRequestLike, actor: ActorLike, orderId: string) {
   if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限重新计算退税完整度", 403);
@@ -62,14 +66,14 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
   if (!canWrite(actor, "taxRefund")) throw permissionError("没有权限修改退税状态", 403);
   const actorId = nonEmpty(actor?.id);
   if (!actorId) throw permissionError("请先登录", 401);
-  if (!TAX_REFUND_STATUSES.includes(status)) throw permissionError("请选择有效退税状态", 400);
+  if (!EDITABLE_TAX_REFUND_STATUSES.includes(status)) throw permissionError("请选择有效退税状态", 400);
   const before = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
     include: includeOrderRelations(),
   });
   if (!before) throw permissionError("应收订单不存在或已删除", 404);
   const beforeWithLogistics = await hydrateTaxRefundOrderLogisticsInfo(before);
-  const beforeArchived = Boolean(before.taxArchived || before.taxRefundStatus === "SUBMITTED" || before.taxRefundArchivedAt);
+  const beforeArchived = isBusinessArchived(before);
   if (beforeArchived && status !== "SUBMITTED" && input.cancelArchive !== true) {
     throw permissionError("已提交退税档案只允许查看和下载资料。", 400);
   }
@@ -100,9 +104,7 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
   }
   const archiveRemark = optional(input.archiveRemark || input.remark);
   const now = new Date();
-  const order = await prisma.receivableOrder.update({
-    where: { id: orderId },
-    data: {
+  const orderData = {
       taxRefundStatus: status,
       updatedById: actorId,
       ...(status === "SUBMITTED" ? {
@@ -113,9 +115,36 @@ export async function updateTaxRefundStatus(request: AuditRequestLike, actor: Ac
         taxSubmittedById: actorId,
         taxSubmittedAt: now,
       } : {}),
-    },
-    include: includeOrderRelations(),
-  });
+  };
+  const order = status === "SUBMITTED"
+    ? await prisma.$transaction(async (tx) => {
+      await lockBusinessOrderForUpdate(tx, orderId);
+      const current = await tx.receivableOrder.findUnique({
+        where: { id: orderId },
+        select: {
+          deletedAt: true,
+          taxArchived: true,
+          taxRefundStatus: true,
+          taxRefundArchivedAt: true,
+          taxSubmittedAt: true,
+        },
+      });
+      if (!current || current.deletedAt) throw permissionError("应收订单不存在或已删除", 404);
+      if (isBusinessArchived(current)) {
+        throw codedError("该订单已提交退税并归档，不能重复提交。", 400, "TAX_REFUND_ALREADY_SUBMITTED");
+      }
+      await assertTaxRefundLogisticsBusinessClosure(orderId, tx);
+      return tx.receivableOrder.update({
+        where: { id: orderId },
+        data: orderData,
+        include: includeOrderRelations(),
+      });
+    }, TAX_REFUND_SUBMIT_TRANSACTION_OPTIONS)
+    : await prisma.receivableOrder.update({
+      where: { id: orderId },
+      data: orderData,
+      include: includeOrderRelations(),
+    });
   await writeAudit(
     request,
     actor,
@@ -142,7 +171,7 @@ export async function cancelTaxRefundArchive(request: AuditRequestLike, actor: A
   if (actor?.role !== "管理员") throw permissionError("只有管理员可以取消归档。", 403);
   const actorId = nonEmpty(actor?.id);
   if (!actorId) throw permissionError("请先登录", 401);
-  const restoredStatus = TAX_REFUND_STATUSES.includes(nextStatus) && nextStatus !== "SUBMITTED" ? nextStatus : "NOT_READY";
+  const restoredStatus = EDITABLE_TAX_REFUND_STATUSES.includes(nextStatus) && nextStatus !== "SUBMITTED" ? nextStatus : "NOT_READY";
   const before = await prisma.receivableOrder.findFirst({
     where: { id: orderId, deletedAt: null, ...orderAccessWhere(actor) },
     include: includeOrderRelations(),

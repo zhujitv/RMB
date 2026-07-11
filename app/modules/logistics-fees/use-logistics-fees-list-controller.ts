@@ -45,6 +45,7 @@ export function useLogisticsFeesListController({
   const [status, setStatus] = useState(initialStatus);
   const [costType, setCostType] = useState("");
   const [billStatus, setBillStatus] = useState("normal");
+  const [businessScope, setBusinessScope] = useState("current");
   const [expandedId, setExpandedId] = useState("");
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
@@ -57,6 +58,7 @@ export function useLogisticsFeesListController({
     nextStatus = status,
     nextCostType = costType,
     nextBillStatus = billStatus,
+    nextBusinessScope = businessScope,
     options: { silent?: boolean } = {},
   ) {
     const requestId = ++listRequestRef.current;
@@ -73,6 +75,7 @@ export function useLogisticsFeesListController({
       if (nextStatus) params.set("status", nextStatus);
       if (nextCostType) params.set("costType", nextCostType);
       if (nextBillStatus) params.set("billStatus", nextBillStatus);
+      params.set("archiveScope", nextBusinessScope);
 
       const result = await apiJson<LogisticsExpensesResponse>(
         `/api/logistics-costs?${params}`,
@@ -105,13 +108,13 @@ export function useLogisticsFeesListController({
   }
 
   useEffect(() => {
-    void loadExpenses(1, "", initialStatus, "", billStatus);
+    void loadExpenses(1, "", initialStatus, "", billStatus, "current");
     void loadStatement(statementMonth);
   }, []);
 
   useEffect(() => {
     if (!refreshToken) return;
-    void loadExpenses(1, submittedKeyword, status, costType, billStatus);
+    void loadExpenses(1, submittedKeyword, status, costType, billStatus, businessScope);
     void loadStatement(statementMonth);
   }, [refreshToken]);
 
@@ -124,10 +127,10 @@ export function useLogisticsFeesListController({
     );
     if (!hasProcessingInvoice) return;
     const timer = window.setInterval(() => {
-      void loadExpenses(page, submittedKeyword, status, costType, billStatus, { silent: true });
+      void loadExpenses(page, submittedKeyword, status, costType, billStatus, businessScope, { silent: true });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [rows, page, submittedKeyword, status, costType, billStatus, loading]);
+  }, [rows, page, submittedKeyword, status, costType, billStatus, businessScope, loading]);
 
   useEffect(() => {
     if (!focusToken) return;
@@ -137,9 +140,10 @@ export function useLogisticsFeesListController({
     setStatus("");
     setCostType("");
     setBillStatus("normal");
+    setBusinessScope("current");
     setCreateOpen(false);
     setNotice("");
-    void loadExpenses(1, nextKeyword, "", "", "normal").then((nextRows) => {
+    void loadExpenses(1, nextKeyword, "", "", "normal", "current").then((nextRows) => {
       const matched =
         nextRows.find((row) => row.id === focusBillId) ||
         nextRows.find(
@@ -167,10 +171,10 @@ export function useLogisticsFeesListController({
       setSubmittedKeyword(value);
       setExpandedId("");
       setNotice("");
-      void loadExpenses(1, value, status, costType, billStatus);
+      void loadExpenses(1, value, status, costType, billStatus, businessScope);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [keyword, submittedKeyword, status, costType, billStatus]);
+  }, [keyword, submittedKeyword, status, costType, billStatus, businessScope]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const activeExpense = expandedId
@@ -194,7 +198,7 @@ export function useLogisticsFeesListController({
     setExpandedId("");
     setSelectedBillIds([]);
     setNotice("");
-    void loadExpenses(1, value, status, costType, billStatus);
+    void loadExpenses(1, value, status, costType, billStatus, businessScope);
   }
 
   function resetSearch() {
@@ -203,10 +207,11 @@ export function useLogisticsFeesListController({
     setStatus(initialStatus);
     setCostType("");
     setBillStatus("normal");
+    setBusinessScope("current");
     setExpandedId("");
     setSelectedBillIds([]);
     setNotice("");
-    void loadExpenses(1, "", initialStatus, "", "normal");
+    void loadExpenses(1, "", initialStatus, "", "normal", "current");
   }
 
   function toggleBillSelection(expense: LogisticsExpense, checked: boolean) {
@@ -244,6 +249,8 @@ export function useLogisticsFeesListController({
     setCostType,
     billStatus,
     setBillStatus,
+    businessScope,
+    setBusinessScope,
     expandedId,
     setExpandedId,
     loading,

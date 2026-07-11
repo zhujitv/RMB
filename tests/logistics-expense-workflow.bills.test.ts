@@ -87,6 +87,12 @@ test("logistics fee bills support audited voiding without affecting active stati
   assert.match(backend, /只有管理员可以作废物流费用账单/);
   assert.match(backend, /作废原因不能为空/);
   assert.match(backend, /已付款账单不能直接作废，请先取消付款或走红冲流程/);
+  assert.match(backend, /LOGISTICS_BILL_VOID_COST_LINK_INCOMPLETE/);
+  assert.match(backend, /costUpdate\.count !== costIds\.length/);
+  assert.match(backend, /LOGISTICS_BILL_VOID_COST_CHANGED/);
+  assert.match(backend, /assertBusinessOrderWritableInTransaction/);
+  assert.match(backend, /paymentStatus: \{ notIn: \["已付款", "部分付款", "部分已付款"\] \}/);
+  assert.match(backend, /paidAt: null/);
   assert.match(backend, /ORDER_COST_STATUS_VOID/);
   assert.match(backend, /writeAudit\(request, actor, "作废物流费用账单"/);
   assert.match(logisticsCostRoute, /action \|\| ""\) === "voidBill"/);
@@ -249,8 +255,9 @@ test("logistics expense approval works at bill level and pushes uploaded invoice
   );
   assert.match(logisticsReviewRoute, /maskLogisticsReviewTimeoutError/);
   assert.match(logisticsReviewRoute, /审核失败：系统处理超时，请稍后重试。/);
-  assert.match(logisticsCostRoute, /maskLogisticsReviewTimeoutError/);
+  assert.match(logisticsCostRoute, /maskLogisticsActionTimeoutError/);
   assert.match(logisticsCostRoute, /审核失败：系统处理超时，请稍后重试。/);
+  assert.match(logisticsCostRoute, /付款冲销失败：系统处理超时，请稍后重试。/);
   assert.match(backend, /logisticsExpenseBillAuditStatus/);
   assert.match(
     backendAggregateStatusSource,

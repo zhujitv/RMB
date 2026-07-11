@@ -25,6 +25,7 @@ type WorkflowActionsParams = {
   statementMonth: string;
   billStatus: string;
   loadStatement: (month?: string) => Promise<void>;
+  refreshCurrentPage: () => Promise<unknown>;
   requestConfirmation: (options: ConfirmationDialogState) => Promise<ConfirmationResult>;
   setBusyId: Dispatch<SetStateAction<string>>;
   setRows: Dispatch<SetStateAction<LogisticsExpense[]>>;
@@ -40,6 +41,7 @@ export function createLogisticsFeesWorkflowActions({
   statementMonth,
   billStatus,
   loadStatement,
+  refreshCurrentPage,
   requestConfirmation,
   setBusyId,
   setRows,
@@ -78,6 +80,7 @@ export function createLogisticsFeesWorkflowActions({
       });
       if (result.success !== true) throw new Error(result.message || "撤回物流费用账单失败");
       applyLogisticsExpenseMutationResult(result);
+      void refreshCurrentPage();
       void loadStatement(statementMonth);
       void onRefreshTodos?.();
       setNotice(result.message || "物流费用账单已撤回为草稿");
@@ -217,11 +220,59 @@ export function createLogisticsFeesWorkflowActions({
       });
       if (result.success !== true) throw new Error(result.message || "标记已付款失败");
       applyLogisticsExpenseMutationResult(result);
+      void refreshCurrentPage();
       void loadStatement(statementMonth);
       void onRefreshTodos?.();
       setNotice(result.message || "物流费用已标记为已付款");
     } catch (paymentError) {
       setError(paymentError instanceof Error ? paymentError.message : "标记已付款失败");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function reverseExpenseBillPayment(expense: LogisticsExpense) {
+    if (busyId === expense.id) return;
+    const payState = logisticsExpensePayButtonState(expense);
+    if (!payState.canReversePayment) {
+      setError("只有审核通过且已付款的物流费用账单可以冲销付款");
+      setNotice("");
+      return;
+    }
+    const confirmationResult = await requestConfirmation({
+      title: "付款更正/冲销",
+      message: "冲销后物流账单恢复为待付款，关联成本同步恢复为待支付；原付款信息和冲销原因保留在操作日志中。",
+      details: [
+        `订单：${expense.orderNo || "-"}`,
+        `提单号：${expense.blNo || expense.billOfLadingNo || "-"}`,
+        `原付款时间：${expense.paymentDate || "-"}`,
+        `账单合计：${logisticsCurrencySummaryPlainText(logisticsExpenseCurrencySummaryFromItems(logisticsExpenseBillItems(expense)))}`,
+      ],
+      requireInput: true,
+      inputLabel: "冲销原因",
+      inputPlaceholder: "例如：物流费用金额录入错误，需要作废后重新录入",
+      inputRequiredMessage: "请填写冲销原因。",
+      confirmLabel: "确认冲销",
+      cancelLabel: "取消",
+      variant: "danger",
+    });
+    if (!confirmationResult.confirmed) return;
+    setBusyId(expense.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<LogisticsExpenseMutationResult>(`/api/logistics-costs/${encodeURIComponent(expense.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "reversePayment", reason: confirmationResult.inputValue }),
+      });
+      if (result.success !== true) throw new Error(result.message || "冲销物流费用付款失败");
+      applyLogisticsExpenseMutationResult(result);
+      void refreshCurrentPage();
+      void loadStatement(statementMonth);
+      void onRefreshTodos?.();
+      setNotice(result.message || "物流费用付款已冲销");
+    } catch (reversalError) {
+      setError(reversalError instanceof Error ? reversalError.message : "冲销物流费用付款失败");
     } finally {
       setBusyId("");
     }
@@ -288,6 +339,7 @@ export function createLogisticsFeesWorkflowActions({
     rejectExpense,
     resendInvoiceNotice,
     markExpenseBillPaid,
+    reverseExpenseBillPayment,
     voidExpenseBill,
   };
 }

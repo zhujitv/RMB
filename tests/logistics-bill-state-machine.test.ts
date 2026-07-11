@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   canMarkLogisticsBillPaid,
+  canReverseLogisticsBillPayment,
   canRejectLogisticsBill,
   canSubmitLogisticsBill,
   canUploadLogisticsBillInvoice,
@@ -50,6 +51,11 @@ test("logistics bill payment requires approved bill and uploaded invoice", () =>
     invoiceStatus: "已上传发票",
     paymentStatus: "已付款",
   }), false);
+  assert.equal(canMarkLogisticsBillPaid({
+    auditStatus: "审核通过",
+    invoiceStatus: "已上传发票",
+    paymentStatus: "部分已付款",
+  }), true);
 
   assert.deepEqual(logisticsBillPayState({
     auditStatus: "审核通过",
@@ -61,11 +67,20 @@ test("logistics bill payment requires approved bill and uploaded invoice", () =>
     paymentStatus: "待付款",
     alreadyPaid: false,
     canMarkPaid: true,
+    canReversePayment: false,
     rule: {
       allow: ["审核通过 + 已上传发票 + 未付款"],
       deny: ["草稿", "待审核", "未上传发票", "已付款"],
     },
   });
+});
+
+test("logistics bill payment reversal only allows approved paid bills", () => {
+  assert.equal(canReverseLogisticsBillPayment({ auditStatus: "审核通过", paymentStatus: "已付款" }), true);
+  assert.equal(canReverseLogisticsBillPayment({ auditStatus: "审核通过", paymentStatus: "待付款" }), false);
+  assert.equal(canReverseLogisticsBillPayment({ auditStatus: "待审核", paymentStatus: "已付款" }), false);
+  assert.equal(canReverseLogisticsBillPayment({ auditStatus: "审核通过", paymentStatus: "已付款", status: "voided" }), false);
+  assert.equal(logisticsBillPayState({ auditStatus: "审核通过", paymentStatus: "已付款" }).canReversePayment, true);
 });
 
 test("logistics bill detail edit and delete reasons use the same state machine", () => {
@@ -110,6 +125,7 @@ test("logistics bill state exposes normalized booleans for UI and API guards", (
     canDeleteDetails: false,
     canUploadInvoice: true,
     canMarkPaid: true,
+    canReversePayment: false,
     isVoided: false,
   });
   const voided = logisticsBillState({
@@ -121,5 +137,6 @@ test("logistics bill state exposes normalized booleans for UI and API guards", (
   assert.equal(voided.isVoided, true);
   assert.equal(voided.canUploadInvoice, false);
   assert.equal(voided.canMarkPaid, false);
+  assert.equal(voided.canReversePayment, false);
   assert.equal(voided.canEditDetails, false);
 });

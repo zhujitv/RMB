@@ -18,6 +18,7 @@ export {
   confirmLogisticsExpenseInvoice,
   deleteLogisticsExpenseInvoice,
   rerunLogisticsExpenseInvoiceRecognition,
+  reverseLogisticsExpensePayment,
   updateLogisticsExpensePaymentStatus,
   uploadLogisticsExpenseInvoice,
 } from "./logistics-expense-workflow-invoice";

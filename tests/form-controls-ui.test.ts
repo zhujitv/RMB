@@ -302,7 +302,7 @@ test("native form controls are normalized by the workspace style layer", () => {
   assert.match(workspaceStyles, /background-image: url\("data:image\/svg\+xml/);
 });
 
-test("customer edit panel uses a portal drawer layer instead of inline table rendering", () => {
+test("customer edit panel uses the unified portal dialog instead of inline table rendering", () => {
   const customerDrawerSnippet = settingsModuleMain.match(/\{customerForm && activeTab === "customers"[\s\S]*?\) : null\}/)?.[0] || "";
   assert.match(components, /import \{ createPortal \} from "react-dom"/);
   assert.match(components, /const \[portalTarget, setPortalTarget\] = useState<HTMLElement \| null>\(null\)/);
@@ -311,13 +311,13 @@ test("customer edit panel uses a portal drawer layer instead of inline table ren
   assert.match(components, /document\.body\.style\.overflow = previousBodyOverflow/);
   assert.doesNotMatch(components, /document\.body\.style\.overflow = previousBodyOverflow \|\| "auto"/);
   assert.match(components, /return portalTarget \? createPortal\(layer, portalTarget\) : null/);
-  assert.match(customerDrawerSnippet, /<SideDetailDrawer/);
+  assert.match(customerDrawerSnippet, /<DismissibleLayer/);
   assert.match(customerDrawerSnippet, /ariaLabel=\{customerForm\.id \? "编辑客户资料" : "新建客户资料"\}/);
-  assert.match(customerDrawerSnippet, /surfaceClassName=\{styles\.settingsCustomerDrawer\}/);
+  assert.match(customerDrawerSnippet, /overlayClassName=\{styles\.modalOverlay\}/);
+  assert.match(customerDrawerSnippet, /surfaceClassName=\{styles\.supplierSettingsModalCard\}/);
   assert.match(customerDrawerSnippet, /<CustomerEditPanel/);
-  assert.match(workspaceStyles, /\.drawerOverlay \{[\s\S]*z-index: 9998;[\s\S]*background: rgba\(0, 0, 0, 0\.45\);/);
-  assert.match(workspaceStyles, /\.sideDrawer \{[\s\S]*position: fixed;[\s\S]*z-index: 9999;/);
-  assert.match(workspaceStyles, /\.sideDrawer\.settingsCustomerDrawer \{[\s\S]*width: min\(640px, 92vw\);/);
+  assert.match(workspaceStyles, /\.modalOverlay/);
+  assert.match(workspaceStyles, /\.supplierSettingsModalCard/);
 });
 
 test("system buttons use unified design tokens and avoid black backgrounds", () => {

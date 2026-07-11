@@ -80,12 +80,13 @@ export async function writeAudit(
   entityId: string | null,
   beforeData: unknown,
   afterData: unknown,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
   const sanitizeJson = (value: unknown): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined => (
     value == null ? undefined : sanitizeAuditData(value) as Prisma.InputJsonValue
   );
 
-  await prisma.auditLog.create({
+  await client.auditLog.create({
     data: {
       userId: user?.id,
       action,

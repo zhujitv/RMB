@@ -70,6 +70,8 @@ export function LogisticsFeesModule({
     setCostType,
     billStatus,
     setBillStatus,
+    businessScope,
+    setBusinessScope,
     expandedId,
     setExpandedId,
     loading,
@@ -98,12 +100,14 @@ export function LogisticsFeesModule({
     setError,
     setNotice,
   });
+  const readOnlyArchive = businessScope === "archive";
   const canCreateExpense =
+    !readOnlyArchive &&
     !hideCreateAction &&
     (canCreateExpenseProp ??
       ["管理员", "物流供应商"].includes(currentUserRole));
-  const canReviewExpense = currentUserRole === "管理员";
-  const canConfirmInvoice = ["管理员", "财务"].includes(currentUserRole);
+  const canReviewExpense = !readOnlyArchive && currentUserRole === "管理员";
+  const canConfirmInvoice = !readOnlyArchive && ["管理员", "财务"].includes(currentUserRole);
   const isLogisticsSupplier = currentUserRole === "物流供应商";
 
   const {
@@ -119,6 +123,7 @@ export function LogisticsFeesModule({
     rejectExpense,
     resendInvoiceNotice,
     markExpenseBillPaid,
+    reverseExpenseBillPayment,
     voidExpenseBill,
   } = useLogisticsFeesBillActions({
     rows,
@@ -155,6 +160,8 @@ export function LogisticsFeesModule({
       status={status}
       costType={costType}
       billStatus={billStatus}
+      businessScope={businessScope}
+      readOnlyArchive={readOnlyArchive}
       expandedId={expandedId}
       loading={loading}
       error={error}
@@ -164,7 +171,7 @@ export function LogisticsFeesModule({
       canCreateExpense={canCreateExpense}
       canReviewExpense={canReviewExpense}
       canConfirmInvoice={canConfirmInvoice}
-      isLogisticsSupplier={isLogisticsSupplier}
+      isLogisticsSupplier={isLogisticsSupplier && !readOnlyArchive}
       reviewableRows={reviewableRows}
       selectedReviewableRows={selectedReviewableRows}
       allReviewableSelected={allReviewableSelected}
@@ -184,14 +191,14 @@ export function LogisticsFeesModule({
       }}
       onRefresh={() => {
         setNotice("");
-        void loadExpenses(page, submittedKeyword, status, costType, billStatus);
+        void loadExpenses(page, submittedKeyword, status, costType, billStatus, businessScope);
       }}
       onCancelCreate={() => setCreateOpen(false)}
       onCreateSaved={(message) => {
         setCreateOpen(false);
         setExpandedId("");
         setNotice(message || "物流费用已保存");
-        void loadExpenses(1, submittedKeyword, status, costType, billStatus);
+        void loadExpenses(1, submittedKeyword, status, costType, billStatus, businessScope);
         void loadStatement(statementMonth);
         void onRefreshTodos?.();
       }}
@@ -203,17 +210,25 @@ export function LogisticsFeesModule({
       onStatusChange={(nextStatus) => {
         setStatus(nextStatus);
         setNotice("");
-        void loadExpenses(1, submittedKeyword, nextStatus, costType, billStatus);
+        void loadExpenses(1, submittedKeyword, nextStatus, costType, billStatus, businessScope);
       }}
       onCostTypeChange={(nextCostType) => {
         setCostType(nextCostType);
         setNotice("");
-        void loadExpenses(1, submittedKeyword, status, nextCostType, billStatus);
+        void loadExpenses(1, submittedKeyword, status, nextCostType, billStatus, businessScope);
       }}
       onBillStatusChange={(nextBillStatus) => {
         setBillStatus(nextBillStatus);
         setNotice("");
-        void loadExpenses(1, submittedKeyword, status, costType, nextBillStatus);
+        void loadExpenses(1, submittedKeyword, status, costType, nextBillStatus, businessScope);
+      }}
+      onBusinessScopeChange={(nextScope) => {
+        setBusinessScope(nextScope);
+        setCreateOpen(false);
+        setExpandedId("");
+        setSelectedBillIds([]);
+        setNotice("");
+        void loadExpenses(1, submittedKeyword, status, costType, billStatus, nextScope);
       }}
       onResetSearch={resetSearch}
       onReviewSelectedBills={() => void reviewSelectedBills()}
@@ -223,7 +238,7 @@ export function LogisticsFeesModule({
       onPage={(nextPage) => {
         setExpandedId("");
         setNotice("");
-        void loadExpenses(nextPage, submittedKeyword, status, costType, billStatus);
+        void loadExpenses(nextPage, submittedKeyword, status, costType, billStatus, businessScope);
       }}
       onCloseExpense={() => setExpandedId("")}
       onApprove={(item) => void reviewExpenseBills(logisticsExpenseShipmentBillIds(item), item)}
@@ -231,6 +246,7 @@ export function LogisticsFeesModule({
       onWithdraw={(item) => void withdrawExpense(item)}
       onResendInvoiceNotice={(item) => void resendInvoiceNotice(item)}
       onMarkPaid={(item) => void markExpenseBillPaid(item)}
+      onReversePayment={(item) => void reverseExpenseBillPayment(item)}
       onSubmitDraft={(item) => void submitDraftExpenseBill(item)}
       onVoidBill={(item) => void voidExpenseBill(item)}
       onSaveDetails={(payload) => saveBillDetails(activeExpense!, payload)}

@@ -21,6 +21,7 @@ export function LogisticsExpenseBillActions({
   onAddLine,
   onApprove,
   onMarkPaid,
+  onReversePayment,
   onReject,
   onResendInvoiceNotice,
   onSave,
@@ -44,6 +45,7 @@ export function LogisticsExpenseBillActions({
   onAddLine: () => void;
   onApprove: (expense: LogisticsExpense) => void;
   onMarkPaid: (expense: LogisticsExpense) => void;
+  onReversePayment: (expense: LogisticsExpense) => void;
   onReject: (expense: LogisticsExpense) => void;
   onResendInvoiceNotice: (expense: LogisticsExpense) => void;
   onSave: () => void | Promise<void>;
@@ -145,6 +147,20 @@ export function LogisticsExpenseBillActions({
           }}
         >
           {busy ? "更新中..." : payState.alreadyPaid ? "已付款" : "标记已付款"}
+        </button>
+      ) : null}
+      {canMarkPaid && payState.canReversePayment ? (
+        <button
+          className={styles.billRejectButton}
+          type="button"
+          disabled={busy || saving}
+          title="冲销物流账单及关联成本的付款状态，之后可作废并重新录入"
+          onClick={(event) => {
+            event.stopPropagation();
+            onReversePayment(expense);
+          }}
+        >
+          {busy ? "冲销中..." : "付款更正/冲销"}
         </button>
       ) : null}
       {canEditBillDetails ? (
