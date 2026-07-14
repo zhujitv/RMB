@@ -47,7 +47,19 @@ export function LogisticsExpenseBillTable({
   const colSpan = canReviewExpense ? 10 : 9;
   return (
     <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
-      <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
+      <table className={`${styles.dataTable} ${styles.logisticsCompactTable} ${styles.logisticsFeesBillListTable}`}>
+        <colgroup>
+          {canReviewExpense ? <col className={styles.selectionColumn} /> : null}
+          <col className={styles.orderNoColumn} />
+          <col className={styles.blNoColumn} />
+          <col className={styles.customerColumn} />
+          <col className={styles.amountColumn} />
+          <col className={styles.amountColumn} />
+          <col className={styles.statusColumn} />
+          <col className={styles.statusColumn} />
+          <col className={styles.statusColumn} />
+          <col className={styles.operationColumn} />
+        </colgroup>
         <thead>
           <tr>
             {canReviewExpense ? (
@@ -143,6 +155,17 @@ function LogisticsExpenseCompactRow({
   const items = expense.items?.length ? expense.items : [expense];
   const currencyTotals =
     expense.currencyTotals || logisticsExpenseCurrencySummaryFromItems(items);
+  const shipmentText = expense.shipmentNo || expense.orderNo || "-";
+  const billOfLadingText = expense.blNo || expense.billOfLadingNo || "-";
+  const customerText = expense.customer || customerDisplayName(expense);
+  const cnyAmountText = formatOriginalCurrencyValue(
+    "CNY",
+    logisticsCurrencyAmountByCode(currencyTotals, "CNY"),
+  );
+  const usdAmountText = formatOriginalCurrencyValue(
+    "USD",
+    logisticsCurrencyAmountByCode(currencyTotals, "USD"),
+  );
   return (
     <tr
       className={getBusinessEntityRowClass(
@@ -167,60 +190,56 @@ function LogisticsExpenseCompactRow({
           />
         </td>
       ) : null}
-      <td className={styles.orderNoColumn}>
-        <strong>{expense.shipmentNo || expense.orderNo || "-"}</strong>
+      <td className={styles.orderNoColumn} title={shipmentText}>
+        <strong>{shipmentText}</strong>
         {voided ? <StatusPill value="已作废" /> : null}
       </td>
-      <td className={styles.blNoColumn}>
-        {expense.blNo || expense.billOfLadingNo || "-"}
+      <td className={styles.blNoColumn} title={billOfLadingText}>
+        {billOfLadingText}
       </td>
       <td className={styles.customerColumn} title={customerLegalName(expense)}>
-        {expense.customer || customerDisplayName(expense)}
+        {customerText}
       </td>
-      <td className={styles.amountColumn}>
-        {formatOriginalCurrencyValue(
-          "CNY",
-          logisticsCurrencyAmountByCode(currencyTotals, "CNY"),
-        )}
+      <td className={styles.amountColumn} title={cnyAmountText}>
+        {cnyAmountText}
       </td>
-      <td className={styles.amountColumn}>
-        {formatOriginalCurrencyValue(
-          "USD",
-          logisticsCurrencyAmountByCode(currencyTotals, "USD"),
-        )}
+      <td className={styles.amountColumn} title={usdAmountText}>
+        {usdAmountText}
       </td>
-      <td className={styles.statusColumn}>
+      <td className={styles.statusColumn} title={auditStatus}>
         <StatusPill value={auditStatus} />
       </td>
-      <td className={styles.statusColumn}>
+      <td className={styles.statusColumn} title={invoiceStatus}>
         <StatusPill value={invoiceStatus} />
       </td>
-      <td className={styles.statusColumn}>
+      <td className={styles.statusColumn} title={paymentStatus}>
         <StatusPill value={paymentStatus} />
       </td>
       <td className={styles.operationColumn}>
-        <button
-          className={styles.rowDetailButton}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen();
-          }}
-        >
-          详情
-        </button>
-        {!voided && onVoidBill && logisticsExpenseBillCanVoid(expense) ? (
+        <div className={styles.logisticsBillRowActions}>
           <button
-            className={styles.fileDangerButton}
+            className={styles.rowDetailButton}
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              onVoidBill(expense);
+              onOpen();
             }}
           >
-            作废
+            详情
           </button>
-        ) : null}
+          {!voided && onVoidBill && logisticsExpenseBillCanVoid(expense) ? (
+            <button
+              className={styles.fileDangerButton}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onVoidBill(expense);
+              }}
+            >
+              作废
+            </button>
+          ) : null}
+        </div>
       </td>
     </tr>
   );

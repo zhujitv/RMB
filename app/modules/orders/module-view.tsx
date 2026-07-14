@@ -79,7 +79,7 @@ export function OrdersModuleView({
   ...actions
 }: OrdersModuleViewProps) {
   return (
-    <section className={styles.moduleCard}>
+    <section className={`${styles.moduleCard} ${styles.ordersModuleCard}`}>
       <div className={styles.moduleHeader}>
         <div>
           <h2>应收订单</h2>
@@ -156,7 +156,7 @@ export function OrdersModuleView({
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
-        <table className={styles.dataTable}>
+        <table className={`${styles.dataTable} ${styles.ordersListTable}`}>
           <thead>
             <tr>
               <th className={styles.orderNoColumn}>订单号</th>

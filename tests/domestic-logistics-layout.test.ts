@@ -16,6 +16,39 @@ import {
 const moduleSource = readDomesticLogisticsModuleSource();
 const taxModuleSource = readTaxRefundModuleSource();
 const css = readWorkspaceStylesSource();
+const tableStyleExports = readFileSync(
+  "app/styles/workspace-shell/tables-dashboard.module.css",
+  "utf8",
+);
+
+function extractCssBlock(source: string, blockHeader: string, requiredSelector: string) {
+  let searchStart = 0;
+  while (searchStart < source.length) {
+    const start = source.indexOf(blockHeader, searchStart);
+    if (start < 0) return "";
+    const openingBrace = source.indexOf("{", start + blockHeader.length);
+    if (openingBrace < 0) return "";
+
+    let depth = 0;
+    for (let index = openingBrace; index < source.length; index += 1) {
+      if (source[index] === "{") depth += 1;
+      if (source[index] !== "}") continue;
+      depth -= 1;
+      if (depth !== 0) continue;
+      const block = source.slice(start, index + 1);
+      if (block.includes(requiredSelector)) return block;
+      searchStart = index + 1;
+      break;
+    }
+  }
+  return "";
+}
+
+const mediumDesktopCss = extractCssBlock(
+  css,
+  "@media (min-width: 861px) and (max-width: 1535px)",
+  ".domesticLogisticsListTable",
+);
 const sharedBaseUtils = readSharedBaseUtilsSource();
 const domesticLogisticsOps = readDomesticLogisticsOpsSource();
 const domesticLogisticsApi = readDomesticLogisticsApiSource();
@@ -45,7 +78,7 @@ test("domestic logistics list keeps compact accepted columns", () => {
   assert.match(moduleSource, /<col className=\{styles\.blNoColumn\} \/>/);
   assert.match(moduleSource, /const destinationText = info\?\.destinationPlace \|\| firstItemValue\(info, "arrivalPlace"\) \|\| "-";/);
   assert.match(moduleSource, /const cargoText = info\?\.cargoDescription \|\| firstItemValue\(info, "cargoName"\) \|\| "-";/);
-  assert.match(moduleSource, /<td className=\{styles\.blNoColumn\}>\{row\.blNo \|\| row\.billOfLadingNo \|\| "-"\}<\/td>/);
+  assert.match(moduleSource, /<td className=\{styles\.blNoColumn\} title=\{row\.blNo \|\| row\.billOfLadingNo \|\| ""\}>\{row\.blNo \|\| row\.billOfLadingNo \|\| "-"\}<\/td>/);
   assert.match(moduleSource, /<td className=\{styles\.destinationColumn\} title=\{destinationText\}>\{destinationText\}<\/td>/);
   assert.match(moduleSource, /<td className=\{styles\.cargoColumn\} title=\{cargoText\}>\{cargoText\}<\/td>/);
   assert.match(css, /\.logisticsCompactTable \{[\s\S]*min-width: 1108px;[\s\S]*table-layout: fixed;/);
@@ -57,6 +90,14 @@ test("domestic logistics list keeps compact accepted columns", () => {
   assert.match(css, /\.logisticsCompactTable col\.detailActionColumn,[\s\S]*width: 70px;[\s\S]*min-width: 70px;[\s\S]*text-align: center;/);
   assert.match(css, /\.logisticsCompactTable td\.destinationColumn,[\s\S]*\.logisticsCompactTable td\.cargoColumn,[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
   assert.match(css, /\.logisticsCompactTableWrap \{[\s\S]*max-width: 100%;[\s\S]*overflow-x: auto;/);
+  assert.match(moduleSource, /<table className=\{`\$\{styles\.dataTable\} \$\{styles\.logisticsCompactTable\} \$\{styles\.domesticLogisticsListTable\}`\}>/);
+  assert.match(moduleSource, /<td className=\{styles\.orderNoColumn\} title=\{row\.orderNo \|\| ""\}>/);
+  assert.match(moduleSource, /<td className=\{styles\.blNoColumn\} title=\{row\.blNo \|\| row\.billOfLadingNo \|\| ""\}>/);
+  assert.match(moduleSource, /title=\{`\$\{status\}；\$\{status === "未录入"/);
+  assert.match(mediumDesktopCss, /\.domesticLogisticsListTable \{[\s\S]*min-width: 900px;/);
+  assert.match(mediumDesktopCss, /\.domesticLogisticsListTable col\.blNoColumn,[\s\S]*width: 175px;[\s\S]*min-width: 175px;/);
+  assert.match(mediumDesktopCss, /\.domesticLogisticsListTable col\.cargoColumn,[\s\S]*width: 110px;[\s\S]*min-width: 110px;/);
+  assert.doesNotMatch(mediumDesktopCss, /\.logisticsCompactTable(?:\s|\{|\.)/);
   assert.match(domesticLogisticsApi, /ro\.bl_no ILIKE \$\{keyword\}/);
   assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
   assert.match(moduleSource, /onOpenLogisticsFees/);
@@ -76,6 +117,10 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(taxModuleSource, /<td colSpan=\{8\}>/);
   assert.match(taxModuleSource, /const billOfLadingNumbers = taxRefundBillOfLadingNumbers\(row\);/);
   assert.match(taxModuleSource, /billOfLadingNumbers\.map\(\(blNo\) => <span key=\{blNo\}>\{blNo\}<\/span>\)/);
+  assert.match(taxModuleSource, /<td className=\{styles\.taxRefundOrderNoColumn\} title=\{row\.orderNo \|\| "-"\}>/);
+  assert.match(taxModuleSource, /const currentStatusLabel = row\.taxRefundStatusLabel \|\| taxStatusLabel\(currentStatus\);/);
+  assert.match(taxModuleSource, /<select[\s\S]*?value=\{currentStatus\}[\s\S]*?title=\{currentStatusLabel\}/);
+  assert.match(taxModuleSource, /className=\{`\$\{styles\.statusPill\} \$\{statusClass\(currentStatus\)\}`\} title=\{currentStatusLabel\}>\{currentStatusLabel\}<\/span>/);
   const listFunction = readFileSync("lib/platform/tax-refunds-list.ts", "utf8");
   assert.match(listFunction, /select: taxRefundLightListSelect/);
   assert.doesNotMatch(listFunction, /documents:\s*\{|costs:\s*\{/);
@@ -93,6 +138,24 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(css, /\.taxRefundTable td\.taxRefundActionColumn button \{[\s\S]*min-width: 64px;[\s\S]*height: 32px;[\s\S]*line-height: 20px;[\s\S]*white-space: nowrap;[\s\S]*overflow: visible;/);
   assert.match(css, /\.taxRefundTable th\.taxRefundBlNoColumn,[\s\S]*overflow-wrap: anywhere;/);
   assert.match(css, /\.taxRefundTableWrap \{[\s\S]*overflow-x: auto;/);
+  assert.match(mediumDesktopCss, /\.taxRefundTableWrap \.taxRefundTable\.dataTable \{[\s\S]*min-width: 900px;/);
+  assert.match(mediumDesktopCss, /\.taxRefundTable col\.taxRefundBlNoColumn,[\s\S]*width: 185px;[\s\S]*min-width: 185px;/);
+  assert.match(mediumDesktopCss, /\.taxRefundTable col\.taxRefundStatusColumn,[\s\S]*width: 140px;[\s\S]*min-width: 140px;/);
+  assert.match(mediumDesktopCss, /\.taxRefundTable td\.taxRefundStatusColumn > select \{[\s\S]*width: 100%;[\s\S]*min-width: 0;/);
+  assert.match(mediumDesktopCss, /\.taxRefundTable td\.taxRefundActionColumn button \{[\s\S]*min-width: 48px;/);
+  for (const className of [
+    "taxRefundTableWrap",
+    "taxRefundCustomerColumn",
+    "taxRefundBusinessEntityColumn",
+    "taxRefundDateColumn",
+    "taxRefundCompletenessColumn",
+    "taxRefundActionColumn",
+  ]) {
+    assert.match(
+      tableStyleExports,
+      new RegExp(`\\.${className} \\{[^}]*composes: ${className} from "\\./tax-refund-list-columns\\.module\\.css";`),
+    );
+  }
 });
 
 test("domestic logistics detail keeps per-order fee entry and customs uploads", () => {

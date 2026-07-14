@@ -11,6 +11,8 @@
 .logisticsContainerInfoList { composes: logisticsContainerInfoList from "./logistics-bill-summary.module.css"; }
 .logisticsBillSummaryActions { composes: logisticsBillSummaryActions from "./logistics-bill-summary.module.css"; }
 .logisticsBillDetailFooter { composes: logisticsBillDetailFooter from "./logistics-bill-summary.module.css"; }
+.logisticsFeesBillListTable { composes: logisticsFeesBillListTable from "./tax-refund-list-columns.module.css"; }
+.logisticsBillRowActions { composes: logisticsBillRowActions from "./tax-refund-list-columns.module.css"; }
 .billSaveButton { composes: billSaveButton from "./logistics-bill-summary.module.css"; composes: billSaveButton from "./logistics-bill-actions.module.css"; }
 .billAddLineButton { composes: billAddLineButton from "./logistics-bill-summary.module.css"; composes: billAddLineButton from "./logistics-bill-actions.module.css"; }
 .billPayButton { composes: billPayButton from "./logistics-bill-summary.module.css"; composes: billPayButton from "./logistics-bill-actions.module.css"; }

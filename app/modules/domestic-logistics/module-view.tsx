@@ -234,7 +234,7 @@ return (
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
       <div className={`${styles.tableWrap} ${styles.logisticsCompactTableWrap}`}>
-        <table className={`${styles.dataTable} ${styles.logisticsCompactTable}`}>
+        <table className={`${styles.dataTable} ${styles.logisticsCompactTable} ${styles.domesticLogisticsListTable}`}>
           <colgroup>
             {canArchiveDomesticLogistics ? <col className={styles.selectionColumn} /> : null}
             <col className={styles.orderNoColumn} />

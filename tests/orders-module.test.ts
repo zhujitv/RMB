@@ -20,6 +20,10 @@ const quickOrderFields = readFileSync("app/modules/orders/quick-order-fields.tsx
 const quickOrderController = readFileSync("app/modules/orders/quick-order-panel-controller.ts", "utf8");
 const quickOrderPanel = readFileSync("app/modules/orders/quick-order-panel.tsx", "utf8");
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
+const orderModuleView = readFileSync("app/modules/orders/module-view.tsx", "utf8");
+const orderTable = readFileSync("app/modules/orders/table.tsx", "utf8");
+const orderTableStyles = readFileSync("app/styles/workspace-shell/table-pinning-columns.module.css", "utf8");
+const workspaceShellStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
 
 test("orders page renders only the table list and not duplicate order cards", () => {
   assert.doesNotMatch(ordersModule, /OrderMobileCard/);
@@ -44,6 +48,39 @@ test("orders page renders only the table list and not duplicate order cards", ()
   assert.match(ordersModule, /<MoneyAmount currency=\{order\.currency\} amount=\{displayedBalanceAmount\} amountCny=\{displayedBalanceCny\}/);
   assert.doesNotMatch(ordersModule, /function moneyCell/);
   assert.match(ordersModule, /<PaginationBar total=\{total\} page=\{page\} totalPages=\{totalPages\} onPage=\{(?:gotoPage|actions\.onPage)\} \/>/);
+});
+
+test("orders list keeps all receivable columns inside the medium desktop width budget", () => {
+  assert.match(orderModuleView, /<section className=\{`\$\{styles\.moduleCard\} \$\{styles\.ordersModuleCard\}`\}>/);
+  assert.match(orderModuleView, /<table className=\{`\$\{styles\.dataTable\} \$\{styles\.ordersListTable\}`\}>/);
+  assert.match(workspaceShellStyles, /\.ordersListTable \{ composes: ordersListTable from "\.\/styles\/workspace-shell\/tables-dashboard\.module\.css"; \}/);
+  assert.match(workspaceShellStyles, /\.ordersModuleCard \{ composes: ordersModuleCard from "\.\/styles\/workspace-shell\/tables-dashboard\.module\.css"; \}/);
+
+  const tableHead = orderModuleView.match(/<th className=\{styles\.orderNoColumn\}>订单号<\/th>[\s\S]*?<th>详情<\/th>/)?.[0] || "";
+  for (const label of ["订单号", "客户简称", "业务主体", "提单号", "最终应收", "已收", "未收", "状态", "详情"]) {
+    assert.match(tableHead, new RegExp(label));
+  }
+
+  assert.match(orderTable, /<td className=\{styles\.orderNoColumn\} title=\{order\.orderNo \|\| ""\}>/);
+  assert.match(orderTable, /<td className=\{styles\.customerColumn\} title=\{customerLegalName\(order\)\}>/);
+  assert.match(orderTable, /<td className=\{styles\.businessEntityColumn\} title=\{businessEntityFullName \|\| ""\}>/);
+  assert.match(orderTable, /<td className=\{styles\.blNoColumn\} title=\{order\.blNo \|\| order\.billOfLadingNo \|\| ""\}>/);
+
+  const mediumDesktopCss = orderTableStyles.match(/@media \(min-width: 861px\) and \(max-width: 1535px\) \{[\s\S]*?\n\}\n\n\.taxCompletenessTooltipAnchor/)?.[0] || "";
+  assert.match(mediumDesktopCss, /\.ordersModuleCard \{[\s\S]*padding-right: 12px;[\s\S]*padding-left: 12px;/);
+  assert.match(mediumDesktopCss, /\.ordersListTable \{[\s\S]*min-width: 936px;[\s\S]*table-layout: fixed;/);
+  assert.match(mediumDesktopCss, /\.tablePinnedTwoCols \.ordersListTable th,[\s\S]*padding-right: 6px;[\s\S]*padding-left: 6px;/);
+  assert.match(mediumDesktopCss, /\.ordersListTable th\.amountColumn,[\s\S]*width: 134px;[\s\S]*min-width: 134px;/);
+  assert.match(mediumDesktopCss, /\.ordersListTable td\.amountColumn \{[\s\S]*overflow: visible;/);
+  assert.match(mediumDesktopCss, /\.ordersListTable td\.amountColumn > div > div \{[\s\S]*font-size: 12px;/);
+  assert.match(mediumDesktopCss, /\.ordersListTable td\.amountColumn > div > div \+ div \{[\s\S]*font-size: 11px;/);
+  assert.match(mediumDesktopCss, /\.ordersListTable td\.orderNoColumn,[\s\S]*\.ordersListTable td\.blNoColumn,[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;/);
+  assert.match(mediumDesktopCss, /\.ordersListTable td:nth-child\(9\) > button \{[\s\S]*white-space: nowrap;/);
+  assert.doesNotMatch(mediumDesktopCss, /\.dataTable th\.orderNoColumn|\.logisticsCompactTable|\.taxRefundTable|\.costTableWrap/);
+
+  const declaredWidth = 108 + 82 + 88 + 120 + (134 * 3) + 76 + 60;
+  assert.equal(declaredWidth, 936);
+  assert.ok(declaredWidth <= 960);
 });
 
 test("orders api sorts receivable orders by created time", () => {

@@ -65,6 +65,35 @@ import {
 } from "./logistics-expense-workflow-context.ts";
 import { extractLogisticsForeignCurrencyAmount } from "../lib/platform/logistics-invoice-amount-parser.ts";
 
+test("logistics fee bill list keeps all workflow columns visible on medium desktops", () => {
+  assert.match(
+    logisticsFeesBillTable,
+    /<table className=\{`\$\{styles\.dataTable\} \$\{styles\.logisticsCompactTable\} \$\{styles\.logisticsFeesBillListTable\}`\}>/,
+  );
+  assert.match(
+    logisticsFeesBillTable,
+    /<colgroup>[\s\S]*?<col className=\{styles\.orderNoColumn\} \/>[\s\S]*?<col className=\{styles\.operationColumn\} \/>[\s\S]*?<\/colgroup>/,
+  );
+  assert.match(logisticsFeesBillTable, /className=\{styles\.logisticsBillRowActions\}/);
+  assert.match(logisticsFeesBillTable, /onVoidBill\(expense\)/);
+  assert.match(
+    workspaceStyles,
+    /@media \(min-width: 861px\) and \(max-width: 1691px\) \{[\s\S]*?\.logisticsCompactTable\.logisticsFeesBillListTable \{[\s\S]*?min-width: 900px;/,
+  );
+  assert.match(
+    workspaceStyles,
+    /\.logisticsCompactTable\.logisticsFeesBillListTable col\.operationColumn,[\s\S]*?width: 108px;[\s\S]*?min-width: 108px;/,
+  );
+  assert.match(
+    workspaceStyles,
+    /\.logisticsCompactTable\.logisticsFeesBillListTable \.logisticsBillRowActions \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+  );
+  const scopedStart = workspaceStyles.indexOf("/* Keep every logistics-fee workflow column visible");
+  const scopedEnd = workspaceStyles.indexOf(".logisticsCompactRowActive", scopedStart);
+  assert.ok(scopedStart >= 0 && scopedEnd > scopedStart);
+  assert.doesNotMatch(workspaceStyles.slice(scopedStart, scopedEnd), /display:\s*none/);
+});
+
 test("logistics expense list reads avoid transactions for count and pagination", () => {
   assert.match(listLogisticsExpensesSource, /prisma\.logisticsBill\.count/);
   assert.match(listLogisticsExpensesSource, /prisma\.logisticsBill\.findMany/);

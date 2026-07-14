@@ -155,6 +155,118 @@
   vertical-align: middle;
 }
 
+.ordersModuleCard,
+.ordersListTable {
+  min-width: 0;
+}
+
+/*
+ * At 1920x1080 with 150% display scaling the browser exposes about 1280 CSS
+ * pixels. This order-only density keeps all nine receivable columns visible
+ * without changing the shared order/payment/profit column contracts.
+ */
+@media (min-width: 861px) and (max-width: 1535px) {
+  .ordersModuleCard {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .ordersListTable {
+    min-width: 936px;
+    table-layout: fixed;
+  }
+
+  .tablePinnedTwoCols .ordersListTable th,
+  .tablePinnedTwoCols .ordersListTable td {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .tablePinnedTwoCols .ordersListTable th.orderNoColumn,
+  .tablePinnedTwoCols .ordersListTable td.orderNoColumn {
+    width: 108px;
+    min-width: 108px;
+  }
+
+  .tablePinnedTwoCols .ordersListTable th.customerColumn,
+  .tablePinnedTwoCols .ordersListTable td.customerColumn {
+    left: 108px;
+    width: 82px;
+    min-width: 82px;
+  }
+
+  .ordersListTable th.businessEntityColumn,
+  .ordersListTable td.businessEntityColumn {
+    width: 88px;
+    min-width: 88px;
+    max-width: 88px;
+  }
+
+  .ordersListTable th.blNoColumn,
+  .ordersListTable td.blNoColumn {
+    width: 120px;
+    min-width: 120px;
+  }
+
+  .ordersListTable th.amountColumn,
+  .ordersListTable td.amountColumn {
+    width: 134px;
+    min-width: 134px;
+  }
+
+  .ordersListTable th:nth-child(8),
+  .ordersListTable td:nth-child(8) {
+    width: 76px;
+    min-width: 76px;
+    text-align: center;
+  }
+
+  .ordersListTable th:nth-child(9),
+  .ordersListTable td:nth-child(9) {
+    width: 60px;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  .ordersListTable td.orderNoColumn,
+  .ordersListTable td.customerColumn,
+  .ordersListTable td.businessEntityColumn,
+  .ordersListTable td.blNoColumn,
+  .ordersListTable td.orderNoColumn strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ordersListTable td.orderNoColumn strong {
+    display: block;
+  }
+
+  .ordersListTable td.amountColumn {
+    overflow: visible;
+  }
+
+  .ordersListTable td.amountColumn > div > div {
+    font-size: 12px;
+  }
+
+  .ordersListTable td.amountColumn > div > div + div {
+    font-size: 11px;
+  }
+
+  .ordersListTable td:nth-child(8) > span {
+    padding-right: 5px;
+    padding-left: 5px;
+    font-size: 12px;
+  }
+
+  .ordersListTable td:nth-child(9) > button {
+    padding-right: 8px;
+    padding-left: 8px;
+    white-space: nowrap;
+  }
+}
+
 .taxCompletenessTooltipAnchor {
   display: inline-block;
 }

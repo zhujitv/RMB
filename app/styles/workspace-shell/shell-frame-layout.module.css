@@ -185,6 +185,22 @@
   overflow: hidden;
 }
 
+/*
+ * A 1920x1080 Windows display commonly exposes a 1280px CSS viewport at 150%
+ * scaling. Reclaim a little horizontal space for the primary work tables while
+ * keeping the full mobile navigation breakpoint unchanged.
+ */
+@media (min-width: 861px) and (max-width: 1535px) {
+  .appShell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}
+
 .topbar {
   height: 76px;
   background: rgba(255, 255, 255, 0.92);

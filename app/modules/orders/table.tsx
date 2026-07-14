@@ -26,10 +26,10 @@ export function OrderTableRows({
   return (
     <>
       <tr className={getBusinessEntityRowClass(order, styles, styles.clickableRow)} onClick={onViewDetail}>
-        <td className={styles.orderNoColumn}><strong>{order.orderNo || "-"}</strong></td>
+        <td className={styles.orderNoColumn} title={order.orderNo || ""}><strong>{order.orderNo || "-"}</strong></td>
         <td className={styles.customerColumn} title={customerLegalName(order)}>{customerDisplayName(order)}</td>
         <td className={styles.businessEntityColumn} title={businessEntityFullName || ""}>{businessEntityDisplayName || "-"}</td>
-        <td className={styles.blNoColumn}>{order.blNo || order.billOfLadingNo || "-"}</td>
+        <td className={styles.blNoColumn} title={order.blNo || order.billOfLadingNo || ""}>{order.blNo || order.billOfLadingNo || "-"}</td>
         <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={order.finalReceivableAmount} amountCny={order.finalReceivableAmountCny} /></td>
         <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={receivedAmount} amountCny={receivedCny} /></td>
         <td className={styles.amountColumn}><MoneyAmount currency={order.currency} amount={displayedBalanceAmount} amountCny={displayedBalanceCny} prefix={overpaidCny > 0 ? "多收 " : ""} /></td>

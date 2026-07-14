@@ -99,8 +99,8 @@ export function DomesticLogisticsRows({
             />
           </td>
         ) : null}
-        <td className={styles.orderNoColumn}><strong>{row.orderNo || "-"}</strong></td>
-        <td className={styles.blNoColumn}>{row.blNo || row.billOfLadingNo || "-"}</td>
+        <td className={styles.orderNoColumn} title={row.orderNo || ""}><strong>{row.orderNo || "-"}</strong></td>
+        <td className={styles.blNoColumn} title={row.blNo || row.billOfLadingNo || ""}>{row.blNo || row.billOfLadingNo || "-"}</td>
         <td className={styles.customerColumn} title={customerLegalName(row)}>{customerDisplayName(row)}</td>
         <td className={styles.destinationColumn} title={destinationText}>{destinationText}</td>
         <td className={styles.cargoColumn} title={cargoText}>{cargoText}</td>
@@ -224,7 +224,7 @@ function DomesticLogisticsExpenseStatusButton({
     <button
       className={`${styles.logisticsFeeStatusBadge} ${domesticLogisticsExpenseStatusClass(status)}`}
       type="button"
-      title={status === "未录入" ? "点击录入物流费用" : "点击打开对应物流费用账单"}
+      title={`${status}；${status === "未录入" ? "点击录入物流费用" : "点击打开对应物流费用账单"}`}
       onClick={(event) => {
         event.stopPropagation();
         onOpen();

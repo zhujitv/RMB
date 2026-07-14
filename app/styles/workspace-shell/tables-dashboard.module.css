@@ -15,22 +15,25 @@
 .amountColumn { composes: amountColumn from "./table-pinning-columns.module.css"; composes: amountColumn from "./tax-refund-list-columns.module.css"; }
 .statusColumn { composes: statusColumn from "./table-pinning-columns.module.css"; composes: statusColumn from "./tax-refund-list-columns.module.css"; }
 .operationColumn { composes: operationColumn from "./table-pinning-columns.module.css"; composes: operationColumn from "./tax-refund-list-columns.module.css"; }
+.ordersModuleCard { composes: ordersModuleCard from "./table-pinning-columns.module.css"; }
+.ordersListTable { composes: ordersListTable from "./table-pinning-columns.module.css"; }
 .taxCompletenessTooltipAnchor { composes: taxCompletenessTooltipAnchor from "./table-pinning-columns.module.css"; }
 .taxCompletenessTooltipTrigger { composes: taxCompletenessTooltipTrigger from "./table-pinning-columns.module.css"; }
 .taxCompletenessTooltip { composes: taxCompletenessTooltip from "./table-pinning-columns.module.css"; }
-.taxRefundTableWrap { composes: taxRefundTableWrap from "./table-pinning-columns.module.css"; }
+.taxRefundTableWrap { composes: taxRefundTableWrap from "./table-pinning-columns.module.css"; composes: taxRefundTableWrap from "./tax-refund-list-columns.module.css"; }
 .taxRefundTable { composes: taxRefundTable from "./table-pinning-columns.module.css"; composes: taxRefundTable from "./tax-refund-list-columns.module.css"; }
 .taxRefundOrderNoColumn { composes: taxRefundOrderNoColumn from "./table-pinning-columns.module.css"; composes: taxRefundOrderNoColumn from "./tax-refund-list-columns.module.css"; }
 .taxRefundBlNoColumn { composes: taxRefundBlNoColumn from "./table-pinning-columns.module.css"; composes: taxRefundBlNoColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundCustomerColumn { composes: taxRefundCustomerColumn from "./table-pinning-columns.module.css"; }
-.taxRefundBusinessEntityColumn { composes: taxRefundBusinessEntityColumn from "./table-pinning-columns.module.css"; }
-.taxRefundDateColumn { composes: taxRefundDateColumn from "./table-pinning-columns.module.css"; }
-.taxRefundCompletenessColumn { composes: taxRefundCompletenessColumn from "./table-pinning-columns.module.css"; }
+.taxRefundCustomerColumn { composes: taxRefundCustomerColumn from "./table-pinning-columns.module.css"; composes: taxRefundCustomerColumn from "./tax-refund-list-columns.module.css"; }
+.taxRefundBusinessEntityColumn { composes: taxRefundBusinessEntityColumn from "./table-pinning-columns.module.css"; composes: taxRefundBusinessEntityColumn from "./tax-refund-list-columns.module.css"; }
+.taxRefundDateColumn { composes: taxRefundDateColumn from "./table-pinning-columns.module.css"; composes: taxRefundDateColumn from "./tax-refund-list-columns.module.css"; }
+.taxRefundCompletenessColumn { composes: taxRefundCompletenessColumn from "./table-pinning-columns.module.css"; composes: taxRefundCompletenessColumn from "./tax-refund-list-columns.module.css"; }
 .taxRefundStatusColumn { composes: taxRefundStatusColumn from "./table-pinning-columns.module.css"; composes: taxRefundStatusColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundActionColumn { composes: taxRefundActionColumn from "./table-pinning-columns.module.css"; }
+.taxRefundActionColumn { composes: taxRefundActionColumn from "./table-pinning-columns.module.css"; composes: taxRefundActionColumn from "./tax-refund-list-columns.module.css"; }
 .taxRefundBlNoList { composes: taxRefundBlNoList from "./tax-refund-list-columns.module.css"; }
 .logisticsCompactTableWrap { composes: logisticsCompactTableWrap from "./tax-refund-list-columns.module.css"; }
 .logisticsCompactTable { composes: logisticsCompactTable from "./tax-refund-list-columns.module.css"; }
+.domesticLogisticsListTable { composes: domesticLogisticsListTable from "./tax-refund-list-columns.module.css"; }
 .destinationColumn { composes: destinationColumn from "./tax-refund-list-columns.module.css"; }
 .cargoColumn { composes: cargoColumn from "./tax-refund-list-columns.module.css"; }
 .logisticsStatusColumn { composes: logisticsStatusColumn from "./tax-refund-list-columns.module.css"; }

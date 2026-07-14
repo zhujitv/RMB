@@ -37,6 +37,7 @@ export function TaxRefundTableRow({
     : total > 0 ? Math.round((completed / total) * 100) : 0;
   const declarationDate = formatDate(row.customsDeclarationDate || row.declarationDate);
   const currentStatus = taxRowStatus(row);
+  const currentStatusLabel = row.taxRefundStatusLabel || taxStatusLabel(currentStatus);
   const summaryItems = String(row.completenessIssuesSummary || "")
     .split("/")
     .map((item) => item.trim())
@@ -64,7 +65,7 @@ export function TaxRefundTableRow({
 
   return (
     <tr className={getBusinessEntityRowClass(row, styles, styles.clickableRow)} onClick={onViewDetail}>
-      <td className={styles.taxRefundOrderNoColumn}>{row.orderNo || "-"}</td>
+      <td className={styles.taxRefundOrderNoColumn} title={row.orderNo || "-"}>{row.orderNo || "-"}</td>
       <td className={styles.taxRefundBlNoColumn} title={billOfLadingTitle || "-"}>
         {billOfLadingNumbers.length ? (
           <span className={styles.taxRefundBlNoList}>
@@ -110,6 +111,7 @@ export function TaxRefundTableRow({
         {canUpdateStatus ? (
           <select
             value={currentStatus}
+            title={currentStatusLabel}
             onClick={(event) => event.stopPropagation()}
             onChange={(event) => onUpdateStatus(event.target.value)}
             disabled={submittingTax}
@@ -119,7 +121,7 @@ export function TaxRefundTableRow({
             ))}
           </select>
         ) : (
-          <span className={`${styles.statusPill} ${statusClass(currentStatus)}`}>{row.taxRefundStatusLabel || taxStatusLabel(currentStatus)}</span>
+          <span className={`${styles.statusPill} ${statusClass(currentStatus)}`} title={currentStatusLabel}>{currentStatusLabel}</span>
         )}
       </td>
       <td className={styles.taxRefundActionColumn}>
