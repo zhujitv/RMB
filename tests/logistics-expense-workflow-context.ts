@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { readCostRecordsMutationsSource, readCostRecordsQueriesSource, readCostsModuleSource, readDomesticLogisticsModuleSource, readLogisticsExpenseAccessSource, readLogisticsExpenseWorkflowSource, readLogisticsFeesModuleSource, readNotificationEngineSource, readProfitModuleSource, readReportsModuleSource, readSettingsModuleSource, readSharedConstantsSource, readSharedSerializationSource, readSharedTaxCompletenessSource, readSharedUsersSource, readTaxRefundsSource, readWorkspaceShellSource, readWorkspaceStylesSource } from "./source-helpers.ts";
 
+export const logisticsInvoiceNotificationOutboxSource = readFileSync(
+  "lib/platform/logistics-invoice-notification-outbox.ts",
+  "utf8",
+);
+
 export const backend = [
   readFileSync("lib/platform/logistics-cost-types.ts", "utf8"),
   readSharedConstantsSource(),
@@ -38,6 +43,7 @@ export const backend = [
   readFileSync("lib/platform/logistics-expense-workflow-mutations.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-workflow-invoice.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-invoice-notifications.ts", "utf8"),
+  logisticsInvoiceNotificationOutboxSource,
   readFileSync("lib/platform/notification-templates.ts", "utf8"),
   readNotificationEngineSource(),
   readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
@@ -215,7 +221,7 @@ export const reviewLogisticsExpenseBillsSource = readFileSync(
 ) + "\n" + readFileSync("lib/platform/logistics-expense-workflow-review-helpers.ts", "utf8");
 export const reviewLogisticsExpenseBillsFunctionSource =
   readFileSync("lib/platform/logistics-expense-workflow-review.ts", "utf8").match(
-    /export async function reviewLogisticsExpenseBills[\s\S]*?\n}\n(?=\n\nexport async function|\s*$)/,
+    /export async function reviewLogisticsExpenseBills[\s\S]*?\n}\n(?=\nexport async function|\s*$)/,
   )?.[0] || "";
 export const approveLogisticsExpenseBillRowsSource =
   backend.match(
@@ -241,6 +247,11 @@ export const logisticsReviewRoute = readFileSync(
   "app/api/logistics-costs/review/route.ts",
   "utf8",
 );
+export const logisticsNotificationOutboxCronRoute = readFileSync(
+  "app/api/cron/notification-outbox/route.ts",
+  "utf8",
+);
+export const vercelConfigSource = readFileSync("vercel.json", "utf8");
 export const notificationTemplateRoute = readFileSync(
   "app/api/settings/notification-templates/route.ts",
   "utf8",

@@ -11,12 +11,12 @@ import { assertJsonObject, isPlainRecord, nonEmpty, normalizeEmail, parseEmailLi
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
 import type { CurrencyTotals } from "./currency-totals";
+import { NOTIFICATION_TEMPLATE_TYPES } from "./notification-definitions";
 import {
   getNotificationTemplate,
-  NOTIFICATION_TEMPLATE_TYPES,
   saveNotificationCenterTemplate,
   serializeNotificationTemplate,
-} from "./notification-engine";
+} from "./notification-settings";
 
 const TEXT_LIMITS = {
   subject: 220,

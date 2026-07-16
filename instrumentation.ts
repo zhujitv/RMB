@@ -1,5 +1,9 @@
 export async function register() {
-  if (process.env.NEXT_RUNTIME === "edge" || process.env.DISABLE_ALIYUN_OCR_HEALTH_CHECK === "true") return;
+  if (
+    process.env.NEXT_RUNTIME === "edge"
+    || process.env.ENABLE_ALIYUN_OCR_STARTUP_HEALTH_CHECK !== "true"
+    || process.env.DISABLE_ALIYUN_OCR_HEALTH_CHECK === "true"
+  ) return;
   try {
     const { getOcrIntegrationSettings } = await import("./lib/platform/ocr-integration-shared");
     const { scheduleAliyunOcrStartupHealthCheck } = await import("./lib/platform/ocr-integration-clients");

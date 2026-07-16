@@ -204,14 +204,17 @@ test("logistics expense approval does not require an invoice and triggers suppli
   assert.match(logisticsReviewRoute, /export async function PATCH/);
   assert.match(
     logisticsReviewRoute,
-    /reviewLogisticsExpenseBills\(request, actor, body\)/,
+    /reviewLogisticsExpenseBills\(request, actor, body, \{/,
   );
 	assert.match(logisticsReviewRoute, /已通知供应商上传发票/);
 	assert.match(logisticsReviewRoute, /开票通知发送失败/);
 	assert.match(backend, /export async function reviewLogisticsExpenseBills/);
 	assert.match(backend, /normalizeLogisticsExpenseReviewIdentifiers/);
 	assert.match(backend, /loadLogisticsExpenseBillRowsForAction/);
-	assert.match(backend, /const sideEffects = await scheduleLogisticsExpenseReviewSideEffects\(request, actor, approvedRows, now\)/);
+	assert.match(backend, /createLogisticsInvoiceApprovalOutboxIntents\(tx, rows, actorId\(actor\), now\)/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /const processDurableSideEffects = async \(\) =>[\s\S]*processLogisticsInvoiceNotificationOutbox/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /options\.deferSideEffects\(async \(\) => \{[\s\S]*await processDurableSideEffects\(\);[\s\S]*\}\)/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /物流费用审核后台任务执行失败/);
 	assert.match(backend, /await syncApprovedLogisticsExpenseCosts\(tx, rows, actor\)/);
 	assert.match(backend, /createOrUpdateCostFromLogisticsExpense\(tx, row, actor, \{ settledCostMode \}\)/);
 	assert.match(backend, /linkLogisticsExpenseInvoiceDocumentsToCosts/);
@@ -258,8 +261,8 @@ test("logistics expense approval does not require an invoice and triggers suppli
 		/paymentStatus: \{ notIn: \["已付款", "部分付款", "部分已付款"\] \}/,
 	);
 	assert.doesNotMatch(backend, /logisticsInvoiceReviewBlockReason|未上传发票，不能审核通过/);
-	assert.match(reviewLogisticsExpenseBillsSource, /notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification/);
-	assert.match(reviewLogisticsExpenseBillsSource, /idempotencyScope: `approval-\$\{now\.toISOString\(\)\}`/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /processLogisticsInvoiceNotificationOutbox\(\{[\s\S]*idempotencyKeys: notificationOutboxKeys/);
+	assert.match(backend, /logisticsInvoiceApprovalOutboxKey\(billId, approvedAt\)/);
 	assert.match(backend, /function paymentStatusUpdateAfterInvoiceProgress/);
 	assert.match(backend, /billAuditStatus === "审核通过"/);
 	assert.match(backend, /\["已确认", "已确认发票"\]\.includes\(billInvoiceStatus\)/);
@@ -333,7 +336,7 @@ test("logistics expense approval does not require an invoice and triggers suppli
   assert.match(backend, /tx\.fileAsset\.updateMany/);
   assert.match(
     reviewLogisticsExpenseBillsSource,
-    /await approveLogisticsExpenseBillRowsInTransaction\(bill\.rows, actor, reviewRemark, now\)/,
+    /await approveLogisticsExpenseBillRowsInTransaction\(request, bill\.rows, actor, reviewRemark, now\)/,
   );
   assert.match(
     reviewLogisticsExpenseBillsSource,

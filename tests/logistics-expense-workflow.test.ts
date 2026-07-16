@@ -39,6 +39,7 @@ import {
   backendAggregateStatusSource,
   submitLogisticsExpenseBillSource,
   reviewLogisticsExpenseBillsSource,
+  reviewLogisticsExpenseBillsFunctionSource,
   approveLogisticsExpenseBillRowsSource,
   updateLogisticsExpensePaymentStatusSource,
   logisticsCostRoute,
@@ -145,9 +146,10 @@ test("approval generates official costs with source tracking", () => {
   assert.match(backend, /审核通过物流费用/);
   assert.match(backend, /reviewLogisticsExpenseBills/);
   assert.match(
-    backend,
-    /const sideEffects = await scheduleLogisticsExpenseReviewSideEffects\(request, actor, approvedRows, now\)/,
+    reviewLogisticsExpenseBillsFunctionSource,
+    /options\.deferSideEffects\(async \(\) => \{[\s\S]*await processDurableSideEffects\(\);[\s\S]*\}\)/,
   );
+  assert.match(backend, /createLogisticsInvoiceApprovalOutboxIntents/);
   assert.match(
     costsModule,
     /label="来源" value=\{cost\.sourceLabel \|\| "人工录入"\}/,
@@ -188,25 +190,26 @@ test("logistics review pushes costs and notifies invoice upload after approval",
   assert.match(backend, /linkLogisticsExpenseInvoiceDocumentsToCosts/);
   assert.match(backend, /tx\.orderDocument\.updateMany/);
   assert.match(backend, /tx\.fileAsset\.updateMany/);
-  assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核后重新读取账单"/);
-  assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核日志写入"/);
-  assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核后刷新退税完整度"/);
-  assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核后刷新待办缓存"/);
-  assert.doesNotMatch(backend, /await writeAudit\(request, actor, "审核通过物流费用账单"/);
-  assert.doesNotMatch(backend, /await refreshTaxRefundCompletenessBatch\(finalRows\.map/);
-  assert.match(reviewLogisticsExpenseBillsSource, /const rowsReadyForNotification = rowsByBill/);
+  assert.match(reviewLogisticsExpenseBillsSource, /const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents\(tx, rows, actorId\(actor\), now\)/);
+  assert.match(reviewLogisticsExpenseBillsSource, /rows\.length !== expectedRowCount[\s\S]*rowsByBillId\.size !== ids\.length[\s\S]*LOGISTICS_BILL_ROWS_INCOMPLETE/);
+  assert.match(reviewLogisticsExpenseBillsSource, /outboxIntents\.length !== ids\.length[\s\S]*LOGISTICS_INVOICE_OUTBOX_INCOMPLETE/);
   assert.match(
     reviewLogisticsExpenseBillsSource,
-    /await notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification, \{[\s\S]*idempotencyScope: `approval-/,
+    /await writeAudit\(request, actor, "审核通过物流费用账单"[\s\S]*notificationOutboxId:[\s\S]*\}, tx\)/,
   );
   assert.match(
-    reviewLogisticsExpenseBillsSource,
-    /catch \(error: unknown\) \{[\s\S]*logServerError\("物流费用审核后开票通知发送失败"/,
+    approveLogisticsExpenseBillRowsSource,
+    /const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents\(tx, savedRows, actorId\(actor\), now\)[\s\S]*await writeAudit\(request, actor, "审核通过物流费用账单"[\s\S]*notificationOutboxId: outboxIntents\[0\]\?\.id[\s\S]*\}, tx\)[\s\S]*return \{ outboxIntents, costLinks \}/,
   );
+  assert.match(reviewLogisticsExpenseBillsFunctionSource, /notificationOutboxKeys\.push\(\.\.\.outboxIntents\.map/);
+  assert.match(reviewLogisticsExpenseBillsFunctionSource, /processLogisticsInvoiceNotificationOutbox/);
+  assert.match(reviewLogisticsExpenseBillsFunctionSource, /refreshTaxRefundCompletenessBatch\(orderIds\)/);
+  assert.match(reviewLogisticsExpenseBillsFunctionSource, /invalidateWorkbenchTodosCache\(\)/);
   assert.match(
-    reviewLogisticsExpenseBillsSource,
-    /return \{ rows: finalRows, emailResults \}/,
+    reviewLogisticsExpenseBillsFunctionSource,
+    /options\.deferSideEffects\(async \(\) => \{[\s\S]*await processDurableSideEffects\(\);[\s\S]*\}\)/,
   );
+  assert.doesNotMatch(reviewLogisticsExpenseBillsFunctionSource, /scheduleLogisticsExpenseReviewSideEffects|notifyLogisticsSupplierInvoiceBills/);
   assert.doesNotMatch(
     approveLogisticsExpenseBillRowsSource,
     /logisticsInvoiceReviewBlockReason|未上传发票，不能审核通过/,

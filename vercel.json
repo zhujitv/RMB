@@ -21,6 +21,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/notification-outbox",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/shipsgo-sync",
       "schedule": "0 */6 * * *"
     }

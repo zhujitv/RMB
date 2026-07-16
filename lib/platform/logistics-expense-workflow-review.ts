@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
-import { codedError, nonEmpty, optional, requireText, runNonCriticalTask, writeAudit } from "./shared";
+import { codedError, logServerError, nonEmpty, optional, refreshTaxRefundCompletenessBatch, requireText, runNonCriticalTask, writeAudit } from "./shared";
 import {
   assertCanReviewLogisticsExpense,
   aggregateLogisticsExpenseStatus,
@@ -34,17 +34,19 @@ import {
   logisticsExpenseReviewSafeErrorMessage,
   logisticsExpenseReviewSummaryMessage,
   markLogisticsExpenseReviewNotificationResults,
-  scheduleLogisticsExpenseReviewSideEffects,
 } from "./logistics-expense-workflow-review-helpers";
+import { processLogisticsInvoiceNotificationOutbox } from "./logistics-invoice-notification-outbox";
 
 function logisticsExpenseRowsAfterCommittedApproval(
   rows: LogisticsExpenseRow[] = [],
   actor: ActorContext,
   reviewRemark: string | null | undefined,
   reviewedAt: Date,
+  costIdByExpenseId: Map<string, string> = new Map(),
 ) {
   return rows.map((row) => ({
     ...row,
+    costId: costIdByExpenseId.get(row.id) || row.costId,
     bill: row.bill
       ? {
           ...row.bill,
@@ -54,12 +56,56 @@ function logisticsExpenseRowsAfterCommittedApproval(
           reviewRemark,
           rejectReason: null,
           invoiceNotificationError: null,
+          updatedAt: reviewedAt,
         }
       : row.bill,
   })) as LogisticsExpenseRow[];
 }
 
-export async function reviewLogisticsExpense(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
+type LogisticsExpenseReviewExecutionOptions = {
+  deferSideEffects?: (task: () => Promise<void>) => void;
+};
+
+export async function getLogisticsExpenseReviewStatuses(
+  actor: ActorContext,
+  billIds: unknown[] = [],
+) {
+  assertCanReviewLogisticsExpense(actor);
+  const ids = [...new Set(billIds.map(nonEmpty).filter(Boolean))];
+  if (!ids.length) {
+    throw codedError("请选择需要核验的物流费用账单。", 400, "LOGISTICS_EXPENSE_REVIEW_STATUS_EMPTY");
+  }
+  if (ids.length > 100) {
+    throw codedError("单次最多核验 100 票物流费用账单。", 400, "LOGISTICS_EXPENSE_REVIEW_STATUS_LIMIT");
+  }
+
+  const rows = await reloadLogisticsExpenseRowsForBillIds(ids, actor);
+  const rowsByBillId = groupLogisticsExpenseRowsByBillId(rows);
+  const missingIds = ids.filter((billId) => !rowsByBillId.get(billId)?.length);
+  if (missingIds.length) {
+    throw codedError(
+      "部分物流费用账单不存在或已不可访问，请刷新后确认。",
+      404,
+      "LOGISTICS_EXPENSE_REVIEW_STATUS_NOT_FOUND",
+    );
+  }
+
+  return {
+    results: ids.map((billId) => ({
+      billId,
+      auditStatus: aggregateLogisticsExpenseStatus(rowsByBillId.get(billId) || [], "auditStatus"),
+    })),
+    bills: ids.map((billId) => serializeLogisticsExpenseBill(rowsByBillId.get(billId) || [])),
+  };
+}
+
+export async function reviewLogisticsExpense(
+  request: AuditRequestLike,
+  actor: ActorContext,
+  id: string,
+  input: UnknownRecord = {},
+  options: LogisticsExpenseReviewExecutionOptions = {},
+) {
   assertCanReviewLogisticsExpense(actor);
   const action = nonEmpty(input.action || input.reviewAction || input.auditAction);
   if (!["approve", "reject", "reopen"].includes(action)) throw codedError("请选择有效审核动作。", 400, "LOGISTICS_EXPENSE_ACTION_REQUIRED");
@@ -67,7 +113,7 @@ export async function reviewLogisticsExpense(request: AuditRequestLike, actor: A
     throw codedError("驳回物流费用必须填写原因。", 400, "LOGISTICS_EXPENSE_REJECT_REASON_REQUIRED");
   }
   if (action === "approve") {
-    const result = await reviewLogisticsExpenseBills(request, actor, { ...input, action, ids: [id] });
+    const result = await reviewLogisticsExpenseBills(request, actor, { ...input, action, ids: [id] }, options);
     if (result.success === false) {
       throw codedError(result.message || "审核物流费用失败。", 400, "LOGISTICS_EXPENSE_REVIEW_FAILED");
     }
@@ -78,6 +124,7 @@ export async function reviewLogisticsExpense(request: AuditRequestLike, actor: A
       emailNotified: result.emailNotified,
       emailError: result.emailError,
       emailResults: result.emailResults,
+      notificationQueued: result.notificationQueued,
     };
   }
   if (action === "reject") {
@@ -218,7 +265,12 @@ export async function rejectLogisticsExpenseBill(request: AuditRequestLike, acto
   };
 }
 
-export async function reviewLogisticsExpenseBills(request: AuditRequestLike, actor: ActorContext, input: UnknownRecord = {}) {
+export async function reviewLogisticsExpenseBills(
+  request: AuditRequestLike,
+  actor: ActorContext,
+  input: UnknownRecord = {},
+  options: LogisticsExpenseReviewExecutionOptions = {},
+) {
   assertCanReviewLogisticsExpense(actor);
   const action = nonEmpty(input.action || input.reviewAction || input.auditAction || "approve");
   if (action !== "approve") throw codedError("批量审核当前仅支持审核通过。", 400, "LOGISTICS_EXPENSE_BATCH_REVIEW_ACTION_INVALID");
@@ -232,11 +284,16 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
   const directBills = bills.filter((bill) => bill.rows.some((row) => row.billId) && !bill.billId.startsWith("bill:"));
   const legacyBills = bills.filter((bill) => !directBills.some((item) => item.billId === bill.billId));
   let finalRows: LogisticsExpenseRow[] = [];
+  const notificationOutboxKeys: string[] = [];
+  const costIdByExpenseId = new Map<string, string>();
   if (directBills.length) {
     const billIds = directBills.map((bill) => bill.billId);
     let committed = false;
     try {
-      await approveLogisticsExpenseBillsInTransaction(billIds, actor, reviewRemark, now);
+      const approval = await approveLogisticsExpenseBillsInTransaction(request, billIds, actor, reviewRemark, now);
+      const outboxIntents = approval?.outboxIntents || [];
+      notificationOutboxKeys.push(...outboxIntents.map((item) => item.idempotencyKey).filter(Boolean));
+      for (const link of approval?.costLinks || []) costIdByExpenseId.set(link.expenseId, link.costId);
       committed = true;
     } catch (error: unknown) {
       const safeMessage = logisticsExpenseReviewSafeErrorMessage(error);
@@ -249,7 +306,7 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
       }
     }
     if (committed) {
-      const reloaded = await runNonCriticalTask(
+      const reloaded = options.deferSideEffects ? null : await runNonCriticalTask(
         "物流费用审核提交后重新读取账单",
         () => reloadLogisticsExpenseRowsForBillIds(billIds, actor),
         { context: { billIds } },
@@ -257,7 +314,7 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
       const rowsByBillId = groupLogisticsExpenseRowsByBillId(Array.isArray(reloaded) ? reloaded : []);
       for (const bill of directBills) {
         const savedRows = rowsByBillId.get(bill.billId)
-          || logisticsExpenseRowsAfterCommittedApproval(bill.rows, actor, reviewRemark, now);
+          || logisticsExpenseRowsAfterCommittedApproval(bill.rows, actor, reviewRemark, now, costIdByExpenseId);
         finalRows.push(...savedRows);
         results.push(logisticsExpenseReviewResultFromRows(savedRows, {
           auditStatus: "审核通过",
@@ -270,7 +327,10 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
   for (const bill of legacyBills) {
     let committed = false;
     try {
-      await approveLogisticsExpenseBillRowsInTransaction(bill.rows, actor, reviewRemark, now);
+      const approval = await approveLogisticsExpenseBillRowsInTransaction(request, bill.rows, actor, reviewRemark, now);
+      const outboxIntents = approval?.outboxIntents || [];
+      notificationOutboxKeys.push(...outboxIntents.map((item) => item.idempotencyKey).filter(Boolean));
+      for (const link of approval?.costLinks || []) costIdByExpenseId.set(link.expenseId, link.costId);
       committed = true;
     } catch (error: unknown) {
       const safeMessage = logisticsExpenseReviewSafeErrorMessage(error);
@@ -281,14 +341,14 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
       }));
     }
     if (committed) {
-      const reloaded = await runNonCriticalTask(
+      const reloaded = options.deferSideEffects ? null : await runNonCriticalTask(
         "物流费用审核提交后重新读取历史账单",
         () => loadLogisticsExpenseBillRowsForAction(bill.billId, actor),
         { context: { billId: bill.billId } },
       );
       const savedRows = Array.isArray(reloaded) && reloaded.length
         ? reloaded
-        : logisticsExpenseRowsAfterCommittedApproval(bill.rows, actor, reviewRemark, now);
+        : logisticsExpenseRowsAfterCommittedApproval(bill.rows, actor, reviewRemark, now, costIdByExpenseId);
       finalRows.push(...savedRows);
       results.push(logisticsExpenseReviewResultFromRows(savedRows, {
         auditStatus: "审核通过",
@@ -297,16 +357,79 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
       }));
     }
   }
-	const approvedBillIds = [...new Set(results
-		.filter((result) => result.auditStatus === "审核通过" && !result.errorMessage)
-		.map((result) => result.billId)
-		.filter(Boolean))];
-	const approvedRows = finalRows.filter((row) => approvedBillIds.includes(rowBillId(row)));
-	const sideEffects = await scheduleLogisticsExpenseReviewSideEffects(request, actor, approvedRows, now);
-	if (sideEffects.rows.length) {
-		const syncedById = new Map(sideEffects.rows.map((row) => [row.id, row]));
-		finalRows = finalRows.map((row) => syncedById.get(row.id) || row);
-	}
+  const approvedBillIds = [...new Set(results
+    .filter((result) => result.auditStatus === "审核通过" && !result.errorMessage)
+    .map((result) => result.billId)
+    .filter(Boolean))];
+  const approvedRows = finalRows.filter((row) => approvedBillIds.includes(rowBillId(row)));
+  let sideEffects = {
+    rows: [] as LogisticsExpenseRow[],
+    emailResults: [] as Array<{
+      supplierName?: string;
+      sent?: boolean;
+      skipped?: boolean;
+      queued?: boolean;
+      error?: string;
+      expenseIds?: string[];
+    }>,
+  };
+  const notificationQueued = notificationOutboxKeys.length > 0;
+  const orderIds = [...new Set(approvedRows.map((row) => row.orderId).filter(Boolean))];
+  const processDurableSideEffects = async () => {
+    let notificationResult: Awaited<ReturnType<typeof processLogisticsInvoiceNotificationOutbox>> | null = null;
+    try {
+      notificationResult = await processLogisticsInvoiceNotificationOutbox({
+        idempotencyKeys: notificationOutboxKeys,
+        limit: Math.min(8, Math.max(1, notificationOutboxKeys.length)),
+      });
+    } catch (error: unknown) {
+      logServerError("物流费用审核后台任务执行失败", error, {
+        task: "notification-outbox",
+        billIds: approvedBillIds,
+      });
+    }
+    try {
+      await refreshTaxRefundCompletenessBatch(orderIds);
+    } catch (error: unknown) {
+      logServerError("物流费用审核后台任务执行失败", error, {
+        task: "tax-refund-completeness",
+        billIds: approvedBillIds,
+      });
+    }
+    try {
+      invalidateWorkbenchTodosCache();
+    } catch (error: unknown) {
+      logServerError("物流费用审核后台任务执行失败", error, {
+        task: "workbench-cache",
+        billIds: approvedBillIds,
+      });
+    }
+    return notificationResult;
+  };
+  if (approvedRows.length && options.deferSideEffects) {
+    options.deferSideEffects(async () => {
+      await processDurableSideEffects();
+    });
+  } else if (approvedRows.length) {
+    const notificationResult = await processDurableSideEffects();
+    if (notificationResult) {
+      sideEffects = {
+        rows: approvedRows,
+        emailResults: notificationResult.results.map((result) => ({
+          supplierName: result.supplierName,
+          sent: result.sent,
+          skipped: result.skipped,
+          queued: result.queued,
+          error: result.error,
+          expenseIds: result.expenseIds || [],
+        })),
+      };
+    }
+  }
+  if (sideEffects.rows.length) {
+    const syncedById = new Map(sideEffects.rows.map((row) => [row.id, row]));
+    finalRows = finalRows.map((row) => syncedById.get(row.id) || row);
+  }
   markLogisticsExpenseReviewNotificationResults(results, approvedRows, sideEffects.emailResults);
   if (approvedRows.length) invalidateWorkbenchTodosCache();
   const serializedBills = approvedBillIds
@@ -319,6 +442,7 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
     .map((result) => `${result.supplierName || "供应商"}：${result.error || "邮件发送失败"}`);
   const emailError = emailErrors.join("；");
   const emailNotified = sideEffects.emailResults.some((result) => result.sent);
+  const summaryMessage = logisticsExpenseReviewSummaryMessage(successCount, failedCount, results, emailError, emailNotified);
   return {
     success: successCount > 0,
     successCount,
@@ -329,7 +453,8 @@ export async function reviewLogisticsExpenseBills(request: AuditRequestLike, act
     emailResults: sideEffects.emailResults,
     emailNotified,
     emailError,
-    message: logisticsExpenseReviewSummaryMessage(successCount, failedCount, results, emailError, emailNotified),
+    notificationQueued,
+    message: notificationQueued ? `${summaryMessage}；开票通知已进入后台发送队列` : summaryMessage,
   };
 }
 
@@ -337,7 +462,7 @@ export async function resendLogisticsExpenseInvoiceNotice(request: AuditRequestL
   assertCanReviewLogisticsExpense(actor);
   const rows = await loadLogisticsExpenseBillRowsForAction(identifier, actor);
   if (!rows.length) throw codedError("未找到可通知开票的物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
-	const blocked = rows.find((row) => rowAuditStatus(row) !== "审核通过");
+  const blocked = rows.find((row) => rowAuditStatus(row) !== "审核通过");
   if (blocked) throw codedError("只有审核通过的物流费用账单可以重新发送开票通知。", 400, "LOGISTICS_EXPENSE_NOTICE_STATUS_INVALID");
   const emailResults = await notifyLogisticsSupplierInvoiceBills(rows, {
     idempotencyScope: `resend-${new Date().toISOString()}`,

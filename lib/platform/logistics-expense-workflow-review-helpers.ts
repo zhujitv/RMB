@@ -1,14 +1,11 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
-import { codedError, logServerError, nonEmpty, refreshTaxRefundCompletenessBatch, runNonCriticalTask, writeAudit } from "./shared";
+import { codedError, nonEmpty, writeAudit } from "./shared";
 import {
   aggregateLogisticsExpenseInvoiceStatus,
   aggregateLogisticsExpenseStatus,
   createOrUpdateCostFromLogisticsExpense,
   includeLogisticsExpenseRelations,
-  notifyLogisticsSupplierInvoiceBills,
-  serializeLogisticsExpense,
-  serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
 import {
   LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS,
@@ -31,8 +28,8 @@ import {
   type ReviewResult,
 } from "./logistics-expense-workflow-core";
 import { isVoidedLogisticsBill } from "./logistics-bill-state-machine";
-import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 import { assertNoSettledLogisticsCostConflict } from "./logistics-expense-cost-safety";
+import { createLogisticsInvoiceApprovalOutboxIntents } from "./logistics-invoice-notification-outbox";
 
 export async function loadLogisticsExpenseReviewBills(identifiers: string[] = [], actor: ActorContext) {
   const results: ReviewResult[] = [];
@@ -86,11 +83,19 @@ export function collectLogisticsExpenseReviewBill(rows: LogisticsExpenseRow[] = 
   bills.push({ billId, rows });
 }
 
-export async function approveLogisticsExpenseBillsInTransaction(billIds: string[] = [], actor: ActorContext, reviewRemark: string | null | undefined, now = new Date()) {
+export async function approveLogisticsExpenseBillsInTransaction(
+  request: AuditRequestLike,
+  billIds: string[] = [],
+  actor: ActorContext,
+  reviewRemark: string | null | undefined,
+  now = new Date(),
+) {
   assertWorkflowActor(actor);
   const ids = [...new Set(billIds.map(nonEmpty).filter(Boolean))];
   if (!ids.length) return;
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SET LOCAL lock_timeout = '5s'`);
+    await tx.$executeRaw(Prisma.sql`SET LOCAL statement_timeout = '12s'`);
     const billUpdate = await tx.logisticsBill.updateMany({
       where: {
         id: { in: ids },
@@ -123,109 +128,56 @@ export async function approveLogisticsExpenseBillsInTransaction(billIds: string[
       orderBy: [{ billId: "asc" }, { createdAt: "asc" }],
       take: ids.length * 500,
     });
-    for (const [billId, billRows] of groupLogisticsExpenseRowsByBillId(rows)) {
+    const expectedRowCount = await tx.logisticsExpense.count({
+      where: { billId: { in: ids }, deletedAt: null },
+    });
+    const rowsByBillId = groupLogisticsExpenseRowsByBillId(rows);
+    if (
+      rows.length !== expectedRowCount
+      || rowsByBillId.size !== ids.length
+      || ids.some((billId) => !rowsByBillId.has(billId))
+    ) {
+      throw codedError("物流费用账单明细不完整，审核已取消，请刷新后重试。", 409, "LOGISTICS_BILL_ROWS_INCOMPLETE");
+    }
+    for (const [billId, billRows] of rowsByBillId) {
       await assertLogisticsBillRowsMatchHeader(tx, billId, billRows);
     }
-    await syncApprovedLogisticsExpenseCosts(tx, rows, actor);
+    const costLinks = await syncApprovedLogisticsExpenseCosts(tx, rows, actor);
     await syncApprovedLogisticsBillWorkflowStates(tx, rows, actor);
+    const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents(tx, rows, actorId(actor), now);
+    if (outboxIntents.length !== ids.length) {
+      throw codedError("物流开票通知任务未完整入队，审核已取消。", 409, "LOGISTICS_INVOICE_OUTBOX_INCOMPLETE");
+    }
+    for (const [billId, billRows] of rowsByBillId) {
+      await writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", billId, {
+        auditStatus: "待审核",
+      }, {
+        auditStatus: "审核通过",
+        invoiceStatus: aggregateLogisticsExpenseInvoiceStatus(billRows),
+        paymentStatus: "待开票",
+        reviewedAt: now,
+        reviewRemark: reviewRemark || "",
+        notificationOutboxId: outboxIntents.find((item) => item.idempotencyKey.includes(`:${billId}:`))?.id || "",
+      }, tx);
+    }
+    return { outboxIntents, costLinks };
   }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
 }
 
-export async function scheduleLogisticsExpenseReviewSideEffects(request: AuditRequestLike, actor: ActorContext, approvedRows: LogisticsExpenseRow[] = [], now = new Date()) {
-  if (!approvedRows.length) return { rows: [], emailResults: [] as EmailResult[] };
-  const billIds = [...new Set(approvedRows.map(rowBillId).filter(Boolean))];
-  const reloadedRows = await runNonCriticalTask(
-    "物流费用审核后重新读取账单",
-    () => reloadLogisticsExpenseRowsForBillIds(billIds, actor),
-    { context: { billIds } },
-  );
-  let finalRows = Array.isArray(reloadedRows) && reloadedRows.length ? reloadedRows : approvedRows;
-  let emailResults: EmailResult[] = [];
-  const rowsByBill = [...groupLogisticsExpenseRowsByBillId(finalRows).values()];
-  const rowsReadyForNotification = rowsByBill
-    .filter((billRows) => !["已上传发票", "已确认", "已确认发票"].includes(aggregateLogisticsExpenseInvoiceStatus(billRows)))
-    .flat();
-  const alreadyInvoicedResults: EmailResult[] = rowsByBill
-    .filter((billRows) => ["已上传发票", "已确认", "已确认发票"].includes(aggregateLogisticsExpenseInvoiceStatus(billRows)))
-    .map((billRows) => ({
-      supplierId: billRows[0]?.supplierId || "",
-      supplierName: billRows[0]?.supplierNameSnapshot || billRows[0]?.supplier?.supplierName || "供应商",
-      sent: false,
-      skipped: true,
-      error: "",
-      expenseIds: billRows.map((row) => row.id).filter(Boolean),
-    }));
-  try {
-    const sentResults = rowsReadyForNotification.length
-      ? await notifyLogisticsSupplierInvoiceBills(rowsReadyForNotification, {
-          idempotencyScope: `approval-${now.toISOString()}`,
-        })
-      : [];
-    emailResults = [...alreadyInvoicedResults, ...sentResults];
-  } catch (error: unknown) {
-    logServerError("物流费用审核后开票通知发送失败", error, { billIds });
-    emailResults = [
-      ...alreadyInvoicedResults,
-      logisticsExpenseNotificationFailureResult(rowsReadyForNotification, errorMessage(error, "邮件发送失败")),
-    ];
-  }
-  try {
-    const notificationRows = await applyLogisticsExpenseInvoiceNotificationResults(finalRows, emailResults, actor, now);
-    if (notificationRows.length) finalRows = notificationRows;
-  } catch (error: unknown) {
-    const message = errorMessage(error, "开票通知状态记录失败");
-    logServerError("物流费用开票通知状态记录失败", error, { billIds });
-    emailResults = emailResults.length
-      ? emailResults.map((result) => result.sent ? { ...result, trackingError: message } : result)
-      : [logisticsExpenseNotificationFailureResult(finalRows, message)];
-  }
-  const finalReloadedRows = await runNonCriticalTask(
-    "物流费用开票通知后重新读取账单",
-    () => reloadLogisticsExpenseRowsForBillIds(billIds, actor),
-    { context: { billIds } },
-  );
-  if (Array.isArray(finalReloadedRows) && finalReloadedRows.length) finalRows = finalReloadedRows;
-  for (const [billId, billRows] of groupLogisticsExpenseRowsByBillId(finalRows)) {
-    await runNonCriticalTask(
-      "物流费用审核日志写入",
-      () => writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", billId, approvedRows.filter((row) => rowBillId(row) === billId).map(serializeLogisticsExpense), {
-        bill: serializeLogisticsExpenseBill(billRows),
-        emailResults: emailResults.filter((result) => (result.expenseIds || []).some((id) => billRows.some((row) => row.id === id))),
-      }),
-      { context: { billId } },
-    );
-  }
-  for (const result of emailResults.filter((item) => !item.sent && !item.skipped)) {
-    await runNonCriticalTask(
-      "物流费用开票通知失败日志写入",
-      () => writeAudit(request, actor, "物流费用开票通知失败", "logistics_bills", result.supplierId || "supplier", null, {
-        supplierName: result.supplierName,
-        errorMessage: result.error,
-        expenseIds: result.expenseIds,
-      }),
-      { context: { supplierId: result.supplierId || "" } },
-    );
-  }
-  const orderIds = [...new Set(finalRows.map((row) => row.orderId).filter(Boolean))];
-  await runNonCriticalTask(
-    "物流费用审核后刷新退税完整度",
-    () => refreshTaxRefundCompletenessBatch(orderIds),
-    { context: { orderIds } },
-  );
-  await runNonCriticalTask(
-    "物流费用审核后刷新待办缓存",
-    () => invalidateWorkbenchTodosCache(),
-    { context: { billIds } },
-  );
-  return { rows: finalRows, emailResults };
-}
-
-export async function approveLogisticsExpenseBillRowsInTransaction(rows: LogisticsExpenseRow[] = [], actor: ActorContext, reviewRemark: string | null | undefined, now = new Date()) {
+export async function approveLogisticsExpenseBillRowsInTransaction(
+  request: AuditRequestLike,
+  rows: LogisticsExpenseRow[] = [],
+  actor: ActorContext,
+  reviewRemark: string | null | undefined,
+  now = new Date(),
+) {
   assertWorkflowActor(actor);
   const ids = rows.map((row) => row.id).filter(Boolean);
   if (!ids.length) return;
   const billId = rowBillId(rows[0]);
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SET LOCAL lock_timeout = '5s'`);
+    await tx.$executeRaw(Prisma.sql`SET LOCAL statement_timeout = '12s'`);
     if (rows[0]?.billId) {
       const billUpdate = await tx.logisticsBill.updateMany({
         where: {
@@ -259,10 +211,30 @@ export async function approveLogisticsExpenseBillRowsInTransaction(rows: Logisti
         orderBy: [{ createdAt: "asc" }],
         take: ids.length,
       });
+      const expectedRowCount = await tx.logisticsExpense.count({
+        where: { billId, deletedAt: null },
+      });
+      if (savedRows.length !== expectedRowCount || savedRows.length !== ids.length) {
+        throw codedError("物流费用账单明细不完整，审核已取消，请刷新后重试。", 409, "LOGISTICS_BILL_ROWS_INCOMPLETE");
+      }
       await assertLogisticsBillRowsMatchHeader(tx, billId, savedRows);
-      await syncApprovedLogisticsExpenseCosts(tx, savedRows, actor);
+      const costLinks = await syncApprovedLogisticsExpenseCosts(tx, savedRows, actor);
       await syncApprovedLogisticsBillWorkflowStates(tx, savedRows, actor);
-      return;
+      const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents(tx, savedRows, actorId(actor), now);
+      if (outboxIntents.length !== 1) {
+        throw codedError("物流开票通知任务未完整入队，审核已取消。", 409, "LOGISTICS_INVOICE_OUTBOX_INCOMPLETE");
+      }
+      await writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", billId, {
+        auditStatus: "待审核",
+      }, {
+        auditStatus: "审核通过",
+        invoiceStatus: aggregateLogisticsExpenseInvoiceStatus(savedRows),
+        paymentStatus: "待开票",
+        reviewedAt: now,
+        reviewRemark: reviewRemark || "",
+        notificationOutboxId: outboxIntents[0]?.id || "",
+      }, tx);
+      return { outboxIntents, costLinks };
     }
     throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
   }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
@@ -417,6 +389,11 @@ export function markLogisticsExpenseReviewNotificationResults(results: ReviewRes
     const result = resultByBillId.get(billId);
     if (!result || result.auditStatus !== "审核通过") continue;
     const rowEmailResults = emailResults.filter((item) => (item.expenseIds || []).includes(row.id));
+    if (rowEmailResults.some((item) => item.queued)) {
+      result.notificationStatus = "pending";
+      result.errorMessage = "";
+      continue;
+    }
     if (rowEmailResults.some((item) => item.skipped)) {
       result.notificationStatus = "skipped";
       result.errorMessage = "";
@@ -441,7 +418,7 @@ export function logisticsExpenseReviewSummaryMessage(successCount = 0, failedCou
       ? failures.map((result) => `${result.orderNo || result.billId || "账单"}${result.blNo ? `/${result.blNo}` : ""}：${result.errorMessage}`).join("；")
       : "审核物流费用失败";
   }
-	const parts = [`已审核 ${successCount} 票物流费用，已同步成本管理`];
+  const parts = [`已审核 ${successCount} 票物流费用，已同步成本管理`];
   if (emailNotified) parts.push("已通知供应商上传发票");
   if (emailError) parts.push(`开票通知发送失败，可稍后重发：${emailError}`);
   if (failedCount) parts.push(`有 ${failedCount} 票未审核：${failures.map((result) => `${result.orderNo || result.billId || "账单"}${result.blNo ? `/${result.blNo}` : ""}：${result.errorMessage || "审核失败"}`).join("；")}`);

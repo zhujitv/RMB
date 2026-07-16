@@ -53,6 +53,8 @@ export type EmailResult = {
   supplierName?: string;
   sent?: boolean;
   skipped?: boolean;
+  queued?: boolean;
+  outboxId?: string;
   error?: string;
   trackingError?: string;
   expenseIds?: string[];

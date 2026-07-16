@@ -38,11 +38,13 @@ import {
   submitLogisticsExpenseBillSource,
   reviewLogisticsExpenseBillsSource,
   reviewLogisticsExpenseBillsFunctionSource,
+  logisticsInvoiceNotificationOutboxSource,
   approveLogisticsExpenseBillRowsSource,
   updateLogisticsExpensePaymentStatusSource,
   logisticsCostRoute,
   logisticsInvoiceRoute,
   logisticsReviewRoute,
+  logisticsNotificationOutboxCronRoute,
   notificationTemplateRoute,
   logisticsExpenseDeleteRoute,
   logisticsExpenseBatchRoute,
@@ -59,7 +61,8 @@ import {
   workspaceStyles,
   logisticsExpenseQueries,
   listLogisticsExpensesSource,
-  logisticsSupplierStatementSource
+  logisticsSupplierStatementSource,
+  vercelConfigSource,
 } from "./logistics-expense-workflow-context.ts";
 
 test("approved logistics expenses notify supplier contacts without coupling email delivery to approval", () => {
@@ -91,16 +94,43 @@ test("approved logistics expenses notify supplier contacts without coupling emai
     backend,
     /invoiceNotificationError: result\.sent \|\| result\.skipped \? null/,
   );
-	assert.match(reviewLogisticsExpenseBillsSource, /const sideEffects = await scheduleLogisticsExpenseReviewSideEffects\(request, actor, approvedRows, now\)/);
-	assert.match(reviewLogisticsExpenseBillsSource, /notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification/);
-	assert.match(reviewLogisticsExpenseBillsSource, /catch \(error: unknown\) \{[\s\S]*物流费用审核后开票通知发送失败[\s\S]*logisticsExpenseNotificationFailureResult/);
-	assert.match(reviewLogisticsExpenseBillsSource, /result\.sent \? \{ \.\.\.result, trackingError: message \} : result/);
-	assert.doesNotMatch(reviewLogisticsExpenseBillsSource, /refreshLogisticsBillWorkflowStatus/);
-	assert.match(reviewLogisticsExpenseBillsSource, /prisma\.logisticsBill\.updateMany\([\s\S]*invoiceNotifiedAt/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /const approval = await approveLogisticsExpenseBillsInTransaction[\s\S]*const outboxIntents = approval\?\.outboxIntents \|\| \[\]/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /costIdByExpenseId\.set\(link\.expenseId, link\.costId\)/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /notificationOutboxKeys\.push\(\.\.\.outboxIntents\.map/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /const processDurableSideEffects = async \(\) =>/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /processLogisticsInvoiceNotificationOutbox\(\{[\s\S]*idempotencyKeys: notificationOutboxKeys/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /refreshTaxRefundCompletenessBatch\(orderIds\)/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /invalidateWorkbenchTodosCache\(\)/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /options\.deferSideEffects\(async \(\) => \{[\s\S]*await processDurableSideEffects\(\);[\s\S]*\}\)/);
+	assert.doesNotMatch(reviewLogisticsExpenseBillsFunctionSource, /notifyLogisticsSupplierInvoiceBills|scheduleLogisticsExpenseReviewSideEffects/);
+	assert.match(reviewLogisticsExpenseBillsSource, /createLogisticsInvoiceApprovalOutboxIntents\(tx, rows, actorId\(actor\), now\)/);
+	assert.match(reviewLogisticsExpenseBillsSource, /await writeAudit\(request, actor, "审核通过物流费用账单"[\s\S]*notificationOutboxId:[\s\S]*\}, tx\)/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /LOGISTICS_INVOICE_APPROVAL_OUTBOX_PREFIX = "logistics-invoice-approval:"/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /return `\$\{LOGISTICS_INVOICE_APPROVAL_OUTBOX_PREFIX\}\$\{nonEmpty\(billId\)\}:\$\{approvedAtIso\}`/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /tx\.notificationOutbox\.createMany\(\{ data: intents, skipDuplicates: true \}\)/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /persisted\.length !== keys\.length[\s\S]*LOGISTICS_INVOICE_OUTBOX_INCOMPLETE/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /const claimed = await prisma\.notificationOutbox\.updateMany\([\s\S]*status: \{ in: \["pending", "failed"\] \}[\s\S]*status: "sending", updatedAt: \{ lte: staleBefore \}[\s\S]*attempts: \{ increment: 1 \}/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /relatedEntityType: "logistics_bills"[\s\S]*idempotencyKey: \{ startsWith: LOGISTICS_INVOICE_APPROVAL_OUTBOX_PREFIX \}/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /where: \{ id: outbox\.id, status: "sending", attempts: outbox\.attempts \}/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /currentReviewedAt !== nonEmpty\(context\.approvedAt\)/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /nonEmpty\(currentBill\?\.invoiceStatus\) !== "待开票"/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /if \(options\.idempotencyKeys && !keys\.length\)[\s\S]*scanned: 0/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /persistLogisticsInvoiceDeliverySuccess[\s\S]*prisma\.\$transaction\(async \(tx\)[\s\S]*notificationOutbox\.updateMany[\s\S]*notificationDeliveryLog\.create[\s\S]*logisticsExpense\.updateMany[\s\S]*logisticsBill\.updateMany/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /persistLogisticsInvoiceDeliveryFailure[\s\S]*scheduledAt[\s\S]*status: "failed"/);
+	assert.match(logisticsInvoiceNotificationOutboxSource, /for \(const candidate of candidates\) \{\s*results\.push\(await processLogisticsInvoiceNotificationOutboxRow\(candidate\.id\)\)/);
 	assert.match(reviewLogisticsExpenseBillsFunctionSource, /const successCount = approvedBillIds\.length/);
-	assert.match(reviewLogisticsExpenseBillsFunctionSource, /emailError,[\s\S]*message: logisticsExpenseReviewSummaryMessage/);
+	assert.match(reviewLogisticsExpenseBillsSource, /costId: costIdByExpenseId\.get\(row\.id\) \|\| row\.costId/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /notificationQueued,[\s\S]*开票通知已进入后台发送队列/);
 	assert.match(logisticsReviewRoute, /费用已审核并同步成本，开票通知发送失败/);
 	assert.match(logisticsReviewRoute, /物流费用已审核，已通知供应商上传发票/);
+	assert.match(logisticsReviewRoute, /deferSideEffects: \(task\) => after\(task\)/);
+	assert.match(logisticsReviewRoute, /maxDuration = 300/);
+	assert.match(logisticsCostRoute, /deferSideEffects: \(task\) => after\(task\)/);
+	assert.match(logisticsCostRoute, /maxDuration = 300/);
+	assert.match(logisticsNotificationOutboxCronRoute, /assertCronSecret\(request\)/);
+	assert.match(logisticsNotificationOutboxCronRoute, /processLogisticsInvoiceNotificationOutbox\(\{ limit: 8 \}\)/);
+	assert.match(logisticsNotificationOutboxCronRoute, /maxDuration = 300/);
+	assert.match(vercelConfigSource, /"path": "\/api\/cron\/notification-outbox"[\s\S]*"schedule": "\*\/5 \* \* \* \*"/);
 	assert.match(backend, /isLegacyLogisticsTemplateFingerprint/);
 	assert.match(backend, /AbortSignal\.timeout\(timeoutMs\)/);
 	assert.match(backend, /if \(providerDelivered\)[\s\S]*sent: true[\s\S]*trackingError: message/);

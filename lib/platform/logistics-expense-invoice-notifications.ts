@@ -125,62 +125,70 @@ export async function notifyLogisticsSupplierInvoiceBills(
     group.bills.push(bill);
     group.expenses.push(...bill.expenses);
   }
-  return Promise.all([...bySupplier.values()].map(async (group): Promise<InvoiceNotificationResult> => {
-    const expenseIds = group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean);
-    if (settings.autoSendOnApproval === false) {
-      return {
-        supplierId: group.supplierId || "",
-        supplierName: group.supplierName || "供应商",
-        sent: false,
-        skipped: true,
-        error: "",
-        expenseIds,
-      };
-    }
-    const resolved = resolveLogisticsSupplierInvoiceRecipients(group.supplier || { email: group.supplierEmail }, settings.recipientEmailFields);
-    if (!resolved.emails.length) {
-      return {
-        supplierId: group.supplierId || "",
-        supplierName: group.supplierName || "供应商",
-        sent: false,
-        error: `${resolved.error}未发送开票通知。`,
-        expenseIds,
-      };
-    }
-    try {
-      const { subject, body } = await renderLogisticsInvoiceNotificationEmail(group.supplierName || "供应商", group.bills);
-      const delivery = await sendNotificationEmail({
-        type: NOTIFICATION_TEMPLATE_TYPES.LOGISTICS_INVOICE_NOTICE,
-        recipientEmails: resolved.emails,
-        subjectOverride: subject,
-        bodyOverride: body,
-        idempotencyKey: `logistics-expense-invoice-${nonEmpty(options.idempotencyScope || "default")}-${group.supplierId || resolved.email}-${group.bills.map((bill) => `${bill.orderNo}-${bill.blNo}`).join("-")}`.slice(0, 180),
-        relatedEntityType: "logistics_expense_invoice_notice",
-        relatedEntityId: group.supplierId || resolved.email,
-        relatedOrderId: group.expenses[0]?.orderId || "",
-        context: {
+  const results: InvoiceNotificationResult[] = [];
+  for (const group of bySupplier.values()) {
+    const result = await (async (): Promise<InvoiceNotificationResult> => {
+      const expenseIds = group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean);
+      if (settings.autoSendOnApproval === false) {
+        return {
           supplierId: group.supplierId || "",
-          supplierName: group.supplierName || "",
-          expenseIds: group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean),
-          bills: group.bills.map((bill) => ({ orderNo: bill.orderNo, blNo: bill.blNo })),
-        },
-      });
-      if (delivery.sent !== true) throw codedError(delivery.error || "物流费用开票通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
-      return {
-        supplierId: group.supplierId || "",
-        supplierName: group.supplierName || "供应商",
-        sent: true,
-        error: "",
-        expenseIds,
-      };
-    } catch (error: unknown) {
-      return {
-        supplierId: group.supplierId || "",
-        supplierName: group.supplierName || "供应商",
-        sent: false,
-        error: errorMessage(error, "邮件发送失败"),
-        expenseIds,
-      };
-    }
-  }));
+          supplierName: group.supplierName || "供应商",
+          sent: false,
+          skipped: true,
+          error: "",
+          expenseIds,
+        };
+      }
+      const resolved = resolveLogisticsSupplierInvoiceRecipients(
+        group.supplier || { email: group.supplierEmail },
+        settings.recipientEmailFields,
+      );
+      if (!resolved.emails.length) {
+        return {
+          supplierId: group.supplierId || "",
+          supplierName: group.supplierName || "供应商",
+          sent: false,
+          error: `${resolved.error}未发送开票通知。`,
+          expenseIds,
+        };
+      }
+      try {
+        const { subject, body } = await renderLogisticsInvoiceNotificationEmail(group.supplierName || "供应商", group.bills);
+        const delivery = await sendNotificationEmail({
+          type: NOTIFICATION_TEMPLATE_TYPES.LOGISTICS_INVOICE_NOTICE,
+          recipientEmails: resolved.emails,
+          subjectOverride: subject,
+          bodyOverride: body,
+          idempotencyKey: `logistics-expense-invoice-${nonEmpty(options.idempotencyScope || "default")}-${group.supplierId || resolved.email}-${group.bills.map((bill) => `${bill.orderNo}-${bill.blNo}`).join("-")}`.slice(0, 180),
+          relatedEntityType: "logistics_expense_invoice_notice",
+          relatedEntityId: group.supplierId || resolved.email,
+          relatedOrderId: group.expenses[0]?.orderId || "",
+          context: {
+            supplierId: group.supplierId || "",
+            supplierName: group.supplierName || "",
+            expenseIds: group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean),
+            bills: group.bills.map((bill) => ({ orderNo: bill.orderNo, blNo: bill.blNo })),
+          },
+        });
+        if (delivery.sent !== true) throw codedError(delivery.error || "物流费用开票通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
+        return {
+          supplierId: group.supplierId || "",
+          supplierName: group.supplierName || "供应商",
+          sent: true,
+          error: "",
+          expenseIds,
+        };
+      } catch (error: unknown) {
+        return {
+          supplierId: group.supplierId || "",
+          supplierName: group.supplierName || "供应商",
+          sent: false,
+          error: errorMessage(error, "邮件发送失败"),
+          expenseIds,
+        };
+      }
+    })();
+    results.push(result);
+  }
+  return results;
 }

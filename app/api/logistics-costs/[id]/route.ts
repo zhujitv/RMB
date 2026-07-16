@@ -1,4 +1,4 @@
-import type { NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import {
   apiError,
   codedError,
@@ -22,7 +22,7 @@ import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -43,14 +43,18 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     requestAction = String(body.action || body.reviewAction || body.auditAction || "");
     const reviewAction = body.action || body.reviewAction || body.auditAction || "";
     if (["approve", "reject", "reopen"].includes(reviewAction)) {
-      const result = await reviewLogisticsExpense(request, actor, id, body);
-	      const message = reviewAction === "reject"
-	        ? "物流费用账单已驳回"
-	        : result.emailError
-	          ? "物流费用已审核并同步成本，开票通知发送失败，可稍后重发"
-	          : result.emailNotified
-	            ? "物流费用已审核，已通知供应商上传发票"
-	            : "物流费用已审核，已同步成本管理";
+      const result = await reviewLogisticsExpense(request, actor, id, body, {
+        deferSideEffects: (task) => after(task),
+      });
+      const message = reviewAction === "reject"
+        ? "物流费用账单已驳回"
+        : result.emailError
+          ? "物流费用已审核并同步成本，开票通知发送失败，可稍后重发"
+          : result.emailNotified
+            ? "物流费用已审核，已通知供应商上传发票"
+            : result.notificationQueued
+              ? "物流费用已审核，开票通知已进入后台发送队列"
+              : "物流费用已审核，已同步成本管理";
       return ok({ success: true, ...result, message });
     }
     if ((body.action || "") === "submitBill" || (body.action || "") === "submit") {

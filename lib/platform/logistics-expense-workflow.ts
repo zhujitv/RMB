@@ -1,9 +1,15 @@
 export {
+  getLogisticsExpenseReviewStatuses,
   rejectLogisticsExpenseBill,
   resendLogisticsExpenseInvoiceNotice,
   reviewLogisticsExpense,
   reviewLogisticsExpenseBills,
 } from "./logistics-expense-workflow-review";
+export {
+  createLogisticsInvoiceApprovalOutboxIntents,
+  logisticsInvoiceApprovalOutboxKey,
+  processLogisticsInvoiceNotificationOutbox,
+} from "./logistics-invoice-notification-outbox";
 export {
   batchSaveLogisticsExpenses,
   batchUpdateLogisticsExpenses,

@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { apiJson } from "../../api";
+import { ApiRequestError, apiJson } from "../../api";
 import type { ConfirmationDialogState, ConfirmationResult } from "../../components";
 import type { LogisticsExpense, LogisticsExpenseMutationResult } from "./model";
 import {
@@ -35,6 +35,18 @@ type ReviewActionsParams = {
   onRefreshTodos?: () => Promise<void> | void;
 };
 
+const LOGISTICS_REVIEW_RECONCILIATION_STATUSES = new Set([408, 502, 503, 504]);
+
+export function shouldReconcileLogisticsExpenseReview(error: unknown) {
+  return error instanceof TypeError || (
+    error instanceof ApiRequestError
+    && (
+      LOGISTICS_REVIEW_RECONCILIATION_STATUSES.has(error.status)
+      || error.code === "LOGISTICS_REVIEW_TIMEOUT"
+    )
+  );
+}
+
 export function createLogisticsFeesReviewActions({
   selectedReviewableRows,
   expandedId,
@@ -54,8 +66,64 @@ export function createLogisticsFeesReviewActions({
   setNotice,
   onRefreshTodos,
 }: ReviewActionsParams) {
+  function applySuccessfulReview(
+    result: LogisticsExpenseMutationResult,
+    reviewedIds: string[],
+    sourceExpense: LogisticsExpense | null,
+    notice: string,
+  ) {
+    applyLogisticsExpenseMutationResultToRows(setRows, result);
+    setSelectedBillIds((current) => current.filter((id) => !reviewedIds.includes(id)));
+    if (sourceExpense && expandedId === sourceExpense.id) setExpandedId(sourceExpense.id);
+    void loadStatement(statementMonth);
+    void onRefreshTodos?.();
+    setNotice(notice);
+  }
+
+  async function reconcileReviewResult(
+    ids: string[],
+    sourceExpense: LogisticsExpense | null,
+    originalMessage: string,
+  ) {
+    const query = new URLSearchParams();
+    for (const billId of ids) query.append("billId", billId);
+    try {
+      const result = await apiJson<LogisticsExpenseMutationResult>(
+        `/api/logistics-costs/review?${query}`,
+        { timeoutMs: 10000 },
+      );
+      if (result.success !== true) throw new Error("审核状态核验失败");
+      const statusByBillId = new Map(
+        (result.results || []).map((item) => [item.billId || "", item.auditStatus || ""]),
+      );
+      if (ids.some((id) => !statusByBillId.has(id))) throw new Error("审核状态核验结果不完整");
+
+      const approvedIds = ids.filter((id) => statusByBillId.get(id) === "审核通过");
+      if (approvedIds.length) {
+        applySuccessfulReview(
+          result,
+          approvedIds,
+          sourceExpense,
+          approvedIds.length === ids.length
+            ? "物流费用已审核，开票通知已进入后台发送队列"
+            : `已确认 ${approvedIds.length} 票审核通过，其他账单请刷新确认`,
+        );
+      }
+      if (approvedIds.length === ids.length) {
+        setError("");
+        return;
+      }
+      setError(approvedIds.length
+        ? "部分账单审核结果已确认，请勿重复提交已完成账单。"
+        : originalMessage);
+    } catch {
+      setNotice("");
+      setError("审核结果未知，请刷新确认，勿重复操作。");
+    }
+  }
+
   async function reviewExpenseBills(billIds: string[], sourceExpense: LogisticsExpense | null = null) {
-    const ids = billIds.filter(Boolean);
+    const ids = [...new Set(billIds.filter(Boolean))];
     if (!ids.length) {
       setError("请选择需要审核的物流费用账单");
       setNotice("");
@@ -66,18 +134,24 @@ export function createLogisticsFeesReviewActions({
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<LogisticsExpenseMutationResult>("/api/logistics-costs/review", {
-        method: "PATCH",
-        body: JSON.stringify({ action: "approve", billIds: ids }),
-      });
+      let result: LogisticsExpenseMutationResult;
+      try {
+        result = await apiJson<LogisticsExpenseMutationResult>("/api/logistics-costs/review", {
+          method: "PATCH",
+          body: JSON.stringify({ action: "approve", billIds: ids }),
+        });
+      } catch (requestError) {
+        const message = requestError instanceof Error ? requestError.message : "审核物流费用失败";
+        if (shouldReconcileLogisticsExpenseReview(requestError)) {
+          await reconcileReviewResult(ids, sourceExpense, message);
+        } else {
+          setError(message);
+        }
+        return;
+      }
       const failureMessage = logisticsExpenseReviewFailureMessage(result);
       if (result.success !== true) throw new Error(failureMessage || result.message || "审核物流费用失败");
-      applyLogisticsExpenseMutationResultToRows(setRows, result);
-      setSelectedBillIds((current) => current.filter((id) => !ids.includes(id)));
-      if (sourceExpense && expandedId === sourceExpense.id) setExpandedId(sourceExpense.id);
-      void loadStatement(statementMonth);
-      void onRefreshTodos?.();
-      setNotice(logisticsExpenseReviewNotice(result));
+      applySuccessfulReview(result, ids, sourceExpense, logisticsExpenseReviewNotice(result));
       if (failureMessage) setError(failureMessage);
     } catch (reviewError) {
       setError(reviewError instanceof Error ? reviewError.message : "审核物流费用失败");

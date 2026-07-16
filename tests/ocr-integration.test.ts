@@ -126,6 +126,7 @@ test("Aliyun OCR requests retry and log provider diagnostics before surfacing fa
   assert.match(service, /scheduleAliyunOcrStartupHealthCheck/);
   assert.match(instrumentation, /scheduleAliyunOcrStartupHealthCheck/);
   assert.match(instrumentation, /getOcrIntegrationSettings/);
+  assert.match(instrumentation, /ENABLE_ALIYUN_OCR_STARTUP_HEALTH_CHECK !== "true"/);
   assert.match(service, /connectTimeout: Math\.min\(settings\.timeoutMs, 10000\)/);
 });
 
