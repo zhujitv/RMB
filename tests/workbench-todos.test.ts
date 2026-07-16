@@ -103,6 +103,14 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.equal(workbenchRules.canActivateTodo({ status: "ACTIVE" }), true);
   assert.equal(workbenchRules.canActivateTodo({ status: "BLOCKED" }), false);
   assert.equal(workbenchRules.canActivateTodo({ status: "DRAFT" }), false);
+  for (const disabledType of [
+    "PAYMENT_VOUCHER_UPLOAD",
+    "COMMISSION_SETTLEMENT",
+    "CONTAINER_TRACKING_EXCEPTION",
+    "TAX_REFUND_INCOMPLETE",
+  ]) {
+    assert.equal(workbenchRules.canActivateTodo({ type: disabledType, status: "ACTIVE" }), false);
+  }
   for (const completedType of [
     "CUSTOMER_PAYMENT_CONFIRMED",
     "FACTORY_PAYMENT_COMPLETED",

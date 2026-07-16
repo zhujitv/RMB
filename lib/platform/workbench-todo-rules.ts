@@ -251,6 +251,13 @@ export const DEFAULT_WORKBENCH_TODO_ACTIVATION_RULE: WorkbenchTodoActivationRule
   activationCondition: "source-specific active business condition",
 };
 
+export const DISABLED_WORKBENCH_TODO_TYPES = new Set([
+  "PAYMENT_VOUCHER_UPLOAD",
+  "COMMISSION_SETTLEMENT",
+  "CONTAINER_TRACKING_EXCEPTION",
+  "TAX_REFUND_INCOMPLETE",
+]);
+
 export function todoActivationRuleForType(type: string): WorkbenchTodoActivationRule {
   return WORKBENCH_TODO_ACTIVATION_RULES[type] || DEFAULT_WORKBENCH_TODO_ACTIVATION_RULE;
 }
@@ -263,8 +270,8 @@ export function isCompletedWorkbenchTodoStatus(status: WorkbenchTodoStatus | Leg
   return status === "DONE" || status === "ARCHIVED" || status === "completed";
 }
 
-export function canActivateTodo<T extends { status?: WorkbenchTodoStatus | LegacyWorkbenchTodoStatus | null }>(todo: T) {
-  return todo.status === "ACTIVE";
+export function canActivateTodo<T extends { type?: string | null; status?: WorkbenchTodoStatus | LegacyWorkbenchTodoStatus | null }>(todo: T) {
+  return !DISABLED_WORKBENCH_TODO_TYPES.has(todo.type || "") && todo.status === "ACTIVE";
 }
 
 export function summarizeWorkbenchTodos<T extends WorkbenchTodoForSummary>(todos: T[], completed = 0, now = new Date()): WorkbenchTodoSummary {
