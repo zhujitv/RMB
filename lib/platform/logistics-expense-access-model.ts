@@ -135,6 +135,7 @@ export type LogisticsExpenseLike = {
   invoiceUploadedBy?: unknown;
   invoiceUploadedAt?: unknown;
   invoiceConfirmedBy?: unknown;
+  invoiceConfirmedById?: string | null;
   invoiceConfirmedAt?: unknown;
   invoiceValidationStatus?: string | null;
   invoiceValidationMessage?: string | null;

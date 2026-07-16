@@ -43,6 +43,48 @@ export async function refreshLogisticsBillWorkflowStatus(rows: LogisticsExpenseR
   });
 }
 
+export async function lockLogisticsBillForWorkflow(tx: Prisma.TransactionClient, billId: string) {
+  const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id"
+    FROM "logistics_bills"
+    WHERE "id" = ${billId}
+      AND "deleted_at" IS NULL
+      AND "status" <> 'voided'
+    FOR UPDATE
+  `);
+  if (locked.length !== 1) {
+    throw codedError("物流费用账单状态已变化，请刷新后重试。", 409, "LOGISTICS_BILL_WORKFLOW_LOCK_FAILED");
+  }
+}
+
+export async function assertLogisticsBillRowsMatchHeader(
+  tx: Prisma.TransactionClient,
+  billId: string,
+  rows: Array<{
+    billId?: string | null;
+    orderId?: string | null;
+    supplierId?: string | null;
+  }> = [],
+) {
+  const bill = await tx.logisticsBill.findUnique({
+    where: { id: billId },
+    select: { id: true, orderId: true, supplierId: true },
+  });
+  if (!bill || !rows.length) {
+    throw codedError("物流费用账单缺少有效主表或费用明细。", 409, "LOGISTICS_BILL_SCOPE_MISSING");
+  }
+  const mismatched = rows.find((row) => (
+    row.billId !== bill.id
+    || row.orderId !== bill.orderId
+    || !bill.supplierId
+    || row.supplierId !== bill.supplierId
+  ));
+  if (mismatched) {
+    throw codedError("物流费用账单存在跨订单或跨供应商异常关联，已阻止审核、发票或付款操作，请先修复历史数据。", 409, "LOGISTICS_BILL_SCOPE_MISMATCH");
+  }
+  return bill;
+}
+
 export async function reloadLogisticsExpenseRowsForBillIds(billIds: string[] = [], actor: ActorContext) {
   const rows: LogisticsExpenseRow[] = [];
   const uniqueBillIds = [...new Set(billIds.map(nonEmpty).filter(Boolean))];

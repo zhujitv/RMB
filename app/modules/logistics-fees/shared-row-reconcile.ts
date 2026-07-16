@@ -102,7 +102,9 @@ export function logisticsExpenseReviewNotice(
 	    return `费用已审核，开票通知发送失败，可稍后重发：${result.emailError}`;
 	const successCount = Number(result.successCount || 0);
 	if (successCount > 0)
-	    return `已审核 ${successCount} 票物流费用，已同步成本管理`;
+	    return result.emailNotified
+	      ? `已审核 ${successCount} 票物流费用，已同步成本并通知供应商上传发票`
+	      : `已审核 ${successCount} 票物流费用，已同步成本管理`;
 	return "物流费用已审核，已同步成本管理";
 }
 
@@ -166,8 +168,6 @@ export function markLogisticsExpenseBillRejected(
       const nextItems = items.map((item) => ({
         ...item,
         auditStatus: "已驳回",
-        invoiceStatus: "未通知",
-        paymentStatus: "待开票",
         reviewedAt,
         rejectedAt: reviewedAt,
         rejectReason,

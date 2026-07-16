@@ -46,7 +46,11 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       const result = await reviewLogisticsExpense(request, actor, id, body);
 	      const message = reviewAction === "reject"
 	        ? "物流费用账单已驳回"
-	        : (result.emailError ? "物流费用已审核，历史开票通知发送失败" : "物流费用已审核，已同步成本管理");
+	        : result.emailError
+	          ? "物流费用已审核并同步成本，开票通知发送失败，可稍后重发"
+	          : result.emailNotified
+	            ? "物流费用已审核，已通知供应商上传发票"
+	            : "物流费用已审核，已同步成本管理";
       return ok({ success: true, ...result, message });
     }
     if ((body.action || "") === "submitBill" || (body.action || "") === "submit") {
@@ -69,8 +73,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       return ok({ success: true, ...result, message });
     }
     if ((body.action || "") === "confirmInvoice") {
-      const expense = await confirmLogisticsExpenseInvoice(request, actor, id, body);
-      return ok({ success: true, expense, message: "物流发票已确认" });
+      const result = await confirmLogisticsExpenseInvoice(request, actor, id, body);
+      return ok({ success: true, ...result, message: "物流发票已确认" });
     }
     if ((body.action || "") === "manualConfirmInvoiceValidation") {
       const result = await manuallyConfirmLogisticsInvoiceValidation(request, actor, id, body);

@@ -31,6 +31,7 @@ export function LogisticsInvoiceGroupsPanel({
   items,
   groups,
   canUploadInvoice,
+  canConfirmInvoice,
   canManageInvoiceRecognition,
   onUploaded,
 }: {
@@ -38,11 +39,13 @@ export function LogisticsInvoiceGroupsPanel({
   items: LogisticsExpense[];
   groups: LogisticsInvoiceGroupSummary[];
   canUploadInvoice: boolean;
+  canConfirmInvoice: boolean;
   canManageInvoiceRecognition: boolean;
   onUploaded: (result: LogisticsExpenseMutationResult) => void;
 }) {
   const [deletingGroupKey, setDeletingGroupKey] = useState("");
-  const [confirmingGroupKey, setConfirmingGroupKey] = useState("");
+  const [confirmingValidationGroupKey, setConfirmingValidationGroupKey] = useState("");
+  const [confirmingInvoiceGroupKey, setConfirmingInvoiceGroupKey] = useState("");
   const [recognizingGroupKey, setRecognizingGroupKey] = useState("");
   const [groupMessage, setGroupMessage] = useState<Record<string, string>>({});
   const visibleGroups = groups.filter(
@@ -50,10 +53,10 @@ export function LogisticsInvoiceGroupsPanel({
       (group.itemIds?.length || 0) > 0 ||
       !logisticsCurrencySummaryIsZero(group.currencyTotals),
   );
-  const uploadableItems = items.filter(
-    (item) => ["待审核", "审核通过"].includes(logisticsExpenseBillAuditStatusFromRow(item)),
+  const workflowItems = items.filter(
+    (item) => logisticsExpenseBillAuditStatusFromRow(item) === "审核通过",
   );
-  if (!visibleGroups.length || !uploadableItems.length) return null;
+  if (!visibleGroups.length || !workflowItems.length) return null;
 
   async function deleteInvoiceGroup(
     targetExpense: LogisticsExpense,
@@ -97,7 +100,7 @@ export function LogisticsInvoiceGroupsPanel({
   ) {
     const reason = window.prompt("请填写人工确认原因。");
     if (!reason?.trim()) return;
-    setConfirmingGroupKey(group.key);
+    setConfirmingValidationGroupKey(group.key);
     setGroupMessage((current) => ({ ...current, [group.key]: "" }));
     try {
       const response = await fetch(`/api/logistics-costs/${encodeURIComponent(targetExpense.id)}`, {
@@ -121,7 +124,40 @@ export function LogisticsInvoiceGroupsPanel({
         [group.key]: error instanceof Error ? error.message : "人工确认失败",
       }));
     } finally {
-      setConfirmingGroupKey("");
+      setConfirmingValidationGroupKey("");
+    }
+  }
+
+  async function confirmInvoiceGroup(
+    targetExpense: LogisticsExpense,
+    group: LogisticsInvoiceGroupSummary,
+  ) {
+    if (!group.invoiceDocumentId) return;
+    if (!window.confirm(`确认${group.label}已核对无误？确认后该分组将进入付款准备流程。`)) return;
+    setConfirmingInvoiceGroupKey(group.key);
+    setGroupMessage((current) => ({ ...current, [group.key]: "" }));
+    try {
+      const result = await apiJson<LogisticsExpenseMutationResult>(
+        `/api/logistics-costs/${encodeURIComponent(targetExpense.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            action: "confirmInvoice",
+            invoiceGroup: group.key,
+            documentId: group.invoiceDocumentId,
+          }),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "确认发票失败");
+      onUploaded(result);
+      setGroupMessage((current) => ({ ...current, [group.key]: "发票已确认" }));
+    } catch (error) {
+      setGroupMessage((current) => ({
+        ...current,
+        [group.key]: logisticsApiErrorMessage(error, "确认发票失败"),
+      }));
+    } finally {
+      setConfirmingInvoiceGroupKey("");
     }
   }
 
@@ -212,7 +248,7 @@ export function LogisticsInvoiceGroupsPanel({
             canUploadInvoice &&
             groupItems.length > 0 &&
             groupItems.every((item) =>
-              ["待审核", "审核通过"].includes(logisticsExpenseBillAuditStatusFromRow(item)),
+              logisticsExpenseBillAuditStatusFromRow(item) === "审核通过",
             ) &&
             !uploaded &&
             !confirmed;
@@ -220,6 +256,13 @@ export function LogisticsInvoiceGroupsPanel({
             canUploadInvoice &&
             uploaded &&
             !confirmed &&
+            !recognizing &&
+            Boolean(group.invoiceDocumentId);
+          const canConfirmGroup =
+            canConfirmInvoice &&
+            uploaded &&
+            !confirmed &&
+            validationPassed &&
             !recognizing &&
             Boolean(group.invoiceDocumentId);
           return (
@@ -347,7 +390,7 @@ export function LogisticsInvoiceGroupsPanel({
                       {group.validationMessage}
                     </div>
                   ) : null}
-                  {canManageInvoiceRecognition && group.invoiceDocumentId ? (
+                  {canManageInvoiceRecognition && group.invoiceDocumentId && !confirmed ? (
                     <div className={styles.logisticsInvoiceValidationActions}>
                       <button
                         className={styles.secondaryButton}
@@ -361,10 +404,20 @@ export function LogisticsInvoiceGroupsPanel({
                         <button
                           className={styles.secondaryButton}
                           type="button"
-                          disabled={confirmingGroupKey === group.key}
+                          disabled={confirmingValidationGroupKey === group.key}
                           onClick={() => manuallyConfirmValidation(targetExpense, group)}
                         >
-                          {confirmingGroupKey === group.key ? "确认中..." : "人工确认通过"}
+                          {confirmingValidationGroupKey === group.key ? "确认中..." : "人工确认通过"}
+                        </button>
+                      ) : null}
+                      {canConfirmGroup ? (
+                        <button
+                          className={styles.primaryButtonCompact}
+                          type="button"
+                          disabled={confirmingInvoiceGroupKey === group.key}
+                          onClick={() => confirmInvoiceGroup(targetExpense, group)}
+                        >
+                          {confirmingInvoiceGroupKey === group.key ? "确认中..." : "确认发票"}
                         </button>
                       ) : null}
                     </div>
@@ -376,7 +429,6 @@ export function LogisticsInvoiceGroupsPanel({
                   expense={targetExpense}
                   group={group}
                   onUploaded={onUploaded}
-                  onRecognize={rerunInvoiceRecognition}
                 />
               ) : null}
               {groupMessage[group.key] ? (
@@ -438,12 +490,10 @@ function InvoiceUploadForm({
   expense,
   group,
   onUploaded,
-  onRecognize,
 }: {
   expense: LogisticsExpense;
   group: LogisticsInvoiceGroupSummary;
   onUploaded: (result: LogisticsExpenseMutationResult) => void;
-  onRecognize: (targetExpense: LogisticsExpense, group: LogisticsInvoiceGroupSummary) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -484,10 +534,8 @@ function InvoiceUploadForm({
         );
       setProgress(100);
       setStatus("success");
-      setMessage("上传成功，正在识别...");
+      setMessage("上传成功，系统正在识别");
       onUploaded(result);
-      await onRecognize(expense, group);
-      setMessage("上传成功");
     } catch (uploadError) {
       setStatus("failed");
       setMessage(

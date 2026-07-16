@@ -103,7 +103,9 @@ export function normalizeLogisticsInvoiceNotificationSettings(value: unknown = {
     ...DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS,
     autoSendOnApproval: input.autoSendOnApproval !== false,
     recipientEmailFields: cleanRecipientEmailFields(input.recipientEmailFields),
-    ccAdminEmails: input.ccAdminEmails !== false,
+    ccAdminEmails: typeof input.ccAdminEmails === "boolean"
+      ? input.ccAdminEmails
+      : DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.ccAdminEmails,
     ccEmails: requireValidEmailList(input.ccEmails || [], "通知抄送邮箱"),
     singleSubjectTemplate: cleanTemplateText(
       input.singleSubjectTemplate,

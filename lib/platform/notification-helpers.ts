@@ -157,24 +157,48 @@ export function templateMetadataNeedsSync(existing: JsonRecord, definition: Noti
   );
 }
 
+const LEGACY_LOGISTICS_INVOICE_SUBJECT = "物流费用已审核通过，请开票并上传发票 - {orderNo}/{blNo}";
+const LEGACY_LOGISTICS_INVOICE_BATCH_SUBJECT = "待开票物流费用清单（{billCount} 票）";
+const LEGACY_LOGISTICS_INVOICE_RECIPIENT_FIELDS = ["operatorUsers.email", "contactEmail", "email", "financeEmail"];
+
+function isLegacyLogisticsTemplateFingerprint(subject: unknown, recipientFields: unknown, batchSubject: unknown) {
+  return subject === LEGACY_LOGISTICS_INVOICE_SUBJECT
+    && jsonEqual(recipientFields, LEGACY_LOGISTICS_INVOICE_RECIPIENT_FIELDS)
+    && batchSubject === LEGACY_LOGISTICS_INVOICE_BATCH_SUBJECT;
+}
+
 export async function legacyLogisticsTemplateOverrides(definition: NotificationTypeDefinition) {
   if (definition.type !== NOTIFICATION_TYPES.LOGISTICS_INVOICE_NOTICE) return {};
   const setting = await prisma.systemSetting.findUnique({ where: { key: LOGISTICS_INVOICE_NOTIFICATION_SETTING_KEY } }).catch(() => null);
   const value = isPlainRecord(setting?.value) ? setting.value : {};
+  const subjectTemplate = cleanTemplateText(value.singleSubjectTemplate, definition.subjectTemplate, TEXT_LIMITS.subject);
+  const recipientEmailFields = Array.isArray(value.recipientEmailFields) && value.recipientEmailFields.length
+    ? value.recipientEmailFields
+    : DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS;
+  const batchSubjectTemplate = cleanTemplateText(
+    value.batchSubjectTemplate,
+    DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.batchSubjectTemplate,
+    TEXT_LIMITS.subject,
+  );
+  const usesLegacyDefaults = isLegacyLogisticsTemplateFingerprint(subjectTemplate, recipientEmailFields, batchSubjectTemplate);
   return {
     defaultEnabled: value.autoSendOnApproval !== false,
-    subjectTemplate: cleanTemplateText(value.singleSubjectTemplate, definition.subjectTemplate, TEXT_LIMITS.subject),
+    subjectTemplate: usesLegacyDefaults ? definition.subjectTemplate : subjectTemplate,
     bodyTemplate: cleanTemplateText(value.bodyTemplate, definition.bodyTemplate, TEXT_LIMITS.body),
     recipientConfig: {
-      recipientEmailFields: Array.isArray(value.recipientEmailFields) && value.recipientEmailFields.length
-        ? value.recipientEmailFields
-        : DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS,
+      recipientEmailFields: usesLegacyDefaults ? DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS : recipientEmailFields,
     },
     ccEmails: requireValidEmailList(value.ccEmails || [], "通知抄送邮箱"),
-    ccAdminEmails: value.ccAdminEmails !== false,
+    ccAdminEmails: usesLegacyDefaults
+      ? DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.ccAdminEmails
+      : typeof value.ccAdminEmails === "boolean"
+      ? value.ccAdminEmails
+      : DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.ccAdminEmails,
     extraConfig: {
       autoSendOnApproval: value.autoSendOnApproval !== false,
-      batchSubjectTemplate: cleanTemplateText(value.batchSubjectTemplate, DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.batchSubjectTemplate, TEXT_LIMITS.subject),
+      batchSubjectTemplate: usesLegacyDefaults
+        ? DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.batchSubjectTemplate
+        : batchSubjectTemplate,
       invoiceRequirements: cleanTemplateText(value.invoiceRequirements, DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.invoiceRequirements, 4000),
       uploadUrl: cleanTemplateText(value.uploadUrl, "", 300),
       signature: cleanTemplateText(value.signature, DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.signature, 180),
@@ -183,18 +207,43 @@ export async function legacyLogisticsTemplateOverrides(definition: NotificationT
   };
 }
 
+function legacyLogisticsTemplateSyncData(existing: JsonRecord, definition: NotificationTypeDefinition) {
+  if (definition.type !== NOTIFICATION_TYPES.LOGISTICS_INVOICE_NOTICE) return {};
+  const update: JsonRecord = {};
+  const recipientConfig = isPlainRecord(existing.recipientConfig) ? existing.recipientConfig : {};
+  const extraConfig = isPlainRecord(existing.extraConfig) ? existing.extraConfig : {};
+  if (!isLegacyLogisticsTemplateFingerprint(
+    existing.subjectTemplate,
+    recipientConfig.recipientEmailFields,
+    extraConfig.batchSubjectTemplate,
+  )) return update;
+  update.subjectTemplate = definition.subjectTemplate;
+  update.recipientConfig = jsonOrNull({ recipientEmailFields: DEFAULT_LOGISTICS_INVOICE_SUPPLIER_EMAIL_FIELDS });
+  update.ccAdminEmails = DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.ccAdminEmails;
+  update.extraConfig = jsonOrNull({
+    ...extraConfig,
+    batchSubjectTemplate: DEFAULT_LOGISTICS_INVOICE_NOTIFICATION_SETTINGS.batchSubjectTemplate,
+  });
+  return update;
+}
+
 export async function ensureNotificationTemplate(type: unknown) {
   const definition = definitionByType(type);
   if (!definition) throw codedError("未知邮件通知类型。", 400, "NOTIFICATION_TYPE_INVALID");
   const existing = await prisma.notificationTemplate.findUnique({ where: { type: definition.type } });
   if (existing) {
-    if (!templateMetadataNeedsSync(existing as unknown as JsonRecord, definition)) return existing;
-    const metadata = templateMetadataSyncData(definition);
+    const existingRecord = existing as unknown as JsonRecord;
+    const metadata: JsonRecord = templateMetadataNeedsSync(existingRecord, definition) ? templateMetadataSyncData(definition) : {};
+    const legacySync = legacyLogisticsTemplateSyncData(existingRecord, definition);
+    if (!Object.keys(metadata).length && !Object.keys(legacySync).length) return existing;
     return prisma.notificationTemplate.update({
       where: { id: existing.id },
       data: {
         ...metadata,
-        variables: jsonOrNull(metadata.variables),
+        ...legacySync,
+        ...(Object.prototype.hasOwnProperty.call(metadata, "variables")
+          ? { variables: jsonOrNull(metadata.variables) }
+          : {}),
       },
     });
   }
@@ -228,6 +277,10 @@ export async function sendResendEmail({
   idempotencyKey?: string | null;
 }) {
   const { apiKey, from, endpoint } = notificationMailConfig();
+  const configuredTimeout = Number(process.env.RESEND_SEND_TIMEOUT_MS || 10000);
+  const timeoutMs = Number.isFinite(configuredTimeout)
+    ? Math.min(30000, Math.max(1000, configuredTimeout))
+    : 10000;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -243,6 +296,7 @@ export async function sendResendEmail({
       text: body,
       attachments: attachments.length ? resendAttachmentPayload(attachments) : undefined,
     }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({})) as unknown;

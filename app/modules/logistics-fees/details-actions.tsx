@@ -98,7 +98,7 @@ export function LogisticsExpenseBillActions({
             className={styles.billApproveButton}
             type="button"
             disabled={busy || saving}
-	            title="审核当前提单账单，审核通过后同步到成本管理"
+	            title="审核当前提单账单，通过后同步成本并通知供应商上传发票"
             onClick={(event) => {
               event.stopPropagation();
               onApprove(expense);

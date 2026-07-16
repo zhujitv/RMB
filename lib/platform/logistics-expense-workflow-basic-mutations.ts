@@ -30,6 +30,7 @@ import {
   loadLogisticsExpenseBillRowsForSubmit,
   logisticsExpenseBillEditBlockReason,
   logisticsExpenseUpdateBlockReason,
+  lockLogisticsBillForWorkflow,
   rowAuditStatus,
   rowBillId,
   rowBillStatus,
@@ -47,21 +48,47 @@ export async function saveLogisticsExpenses(request: AuditRequestLike, actor: Ac
   assertCanWriteLogisticsExpense(actor);
   const order = await assertLogisticsExpenseOrder(input, actor);
   const items = Array.isArray(input.items) && input.items.length ? input.items.map(asRecord) : [input];
-  const rows: LogisticsExpenseCreateData[] = [];
+  const prepared: Array<{
+    supplier: NonNullable<Awaited<ReturnType<typeof assertLogisticsExpenseSupplier>>>;
+    auditStatus: string;
+    data: LogisticsExpenseCreateData;
+  }> = [];
   for (const item of items) {
     const supplier = await assertLogisticsExpenseSupplier(actor, order, { ...input, ...item });
     const auditStatus = logisticsExpenseRequestedAuditStatus({ ...input, ...item });
     const data = await buildLogisticsExpenseData(order, supplier, actor, { ...input, ...item });
-    const bill = await ensureLogisticsExpenseBill(order, supplier, actor, {
-      auditStatus,
-      submittedAt: auditStatus === "待审核" ? new Date() : null,
-    });
-    rows.push({ ...data, billId: bill.id });
+    prepared.push({ supplier, auditStatus, data });
   }
-  const expenses: LogisticsExpenseRow[] = [];
-  for (const data of rows) {
-    const expense = await prisma.logisticsExpense.create({ data, include: includeLogisticsExpenseRelations() });
-    expenses.push(expense);
+  const groups = new Map<string, typeof prepared>();
+  for (const item of prepared) {
+    const supplierId = String(item.supplier.id || "").trim();
+    if (!groups.has(supplierId)) groups.set(supplierId, []);
+    groups.get(supplierId)!.push(item);
+  }
+  const expenses = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      order.id,
+      "该订单已提交退税并归档，不能新增物流费用。",
+    );
+    const created: LogisticsExpenseRow[] = [];
+    for (const [, group] of [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      const auditStatus = group.some((item) => item.auditStatus === "待审核") ? "待审核" : "草稿";
+      const submittedAt = auditStatus === "待审核" ? new Date() : null;
+      const bill = await ensureLogisticsExpenseBill(order, group[0].supplier, actor, {
+        auditStatus,
+        submittedAt,
+      }, tx);
+      for (const item of group) {
+        created.push(await tx.logisticsExpense.create({
+          data: { ...item.data, billId: bill.id },
+          include: includeLogisticsExpenseRelations(),
+        }));
+      }
+    }
+    return created;
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+  for (const expense of expenses) {
     await runNonCriticalTask("物流费用提交日志写入", () => writeAudit(request, actor, rowAuditStatus(expense) === "草稿" ? "保存物流费用草稿" : "提交物流费用审核", "logistics_expenses", expense.id, null, expense));
   }
   invalidateWorkbenchTodosCache();
@@ -83,7 +110,25 @@ export async function updateLogisticsExpense(request: AuditRequestLike, actor: A
   const blockReason = logisticsExpenseUpdateBlockReason(before);
   if (blockReason) throw codedError(blockReason, 400, "LOGISTICS_EXPENSE_STATUS_BLOCKED");
   const data = await buildLogisticsExpenseData(order, supplier, actor, { ...input, supplierId: before.supplierId }, before);
-  const saved = await prisma.logisticsExpense.update({ where: { id }, data, include: includeLogisticsExpenseRelations() });
+  const billId = rowBillId(before);
+  const saved = await prisma.$transaction(async (tx) => {
+    await lockLogisticsBillForWorkflow(tx, billId);
+    const updated = await tx.logisticsExpense.updateMany({
+      where: {
+        id,
+        billId,
+        deletedAt: null,
+        bill: { is: { auditStatus: { in: ["草稿", "已驳回"] }, status: { not: LOGISTICS_BILL_STATUS_VOIDED } } },
+      },
+      data,
+    });
+    if (updated.count !== 1) {
+      throw codedError("账单状态已变化，费用修改已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_UPDATE_STATE_CHANGED");
+    }
+    const row = await tx.logisticsExpense.findUnique({ where: { id }, include: includeLogisticsExpenseRelations() });
+    if (!row) throw codedError("物流费用不存在或已删除。", 404, "LOGISTICS_EXPENSE_NOT_FOUND");
+    return row;
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
   invalidateWorkbenchTodosCache();
   await runNonCriticalTask("物流费用修改日志写入", () => writeAudit(request, actor, "修改物流费用", "logistics_expenses", id, before, saved));
   return serializeLogisticsExpense(saved);
@@ -114,15 +159,26 @@ export async function withdrawLogisticsExpenseBill(request: AuditRequestLike, ac
   }
   const ids = rows.map((row) => row.id).filter(Boolean);
   if (!rows[0]?.billId) throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
-  await prisma.logisticsBill.update({
-    where: { id: billId },
-    data: {
-      auditStatus: "草稿",
-      submittedAt: null,
-      submittedById: null,
-      updatedById: actorId(actor),
-    },
-  });
+  await prisma.$transaction(async (tx) => {
+    await lockLogisticsBillForWorkflow(tx, billId);
+    const billUpdate = await tx.logisticsBill.updateMany({
+      where: {
+        id: billId,
+        deletedAt: null,
+        status: { not: LOGISTICS_BILL_STATUS_VOIDED },
+        auditStatus: "待审核",
+      },
+      data: {
+        auditStatus: "草稿",
+        submittedAt: null,
+        submittedById: null,
+        updatedById: actorId(actor),
+      },
+    });
+    if (billUpdate.count !== 1) {
+      throw codedError("账单状态已变化，撤回已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_WITHDRAW_STATE_CHANGED");
+    }
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
   const savedRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
   invalidateWorkbenchTodosCache();
   void runNonCriticalTask("物流费用账单撤回日志写入", () => writeAudit(request, actor, "撤回物流费用账单", "logistics_bills", billId, rows.map(serializeLogisticsExpense), {
@@ -151,17 +207,29 @@ export async function submitLogisticsExpenseBill(request: AuditRequestLike, acto
     const submittedAt = new Date();
     const ids = rows.map((row) => row.id).filter(Boolean);
     if (!rows[0]?.billId) throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
-    await prisma.logisticsBill.update({
-      where: { id: billId },
-      data: {
-        auditStatus: "待审核",
-        submittedAt,
-        submittedById: actorId(actor) || null,
-        rejectReason: null,
-        invoiceNotificationError: null,
-        updatedById: actorId(actor),
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      await lockLogisticsBillForWorkflow(tx, billId);
+      const billUpdate = await tx.logisticsBill.updateMany({
+        where: {
+          id: billId,
+          deletedAt: null,
+          status: { not: LOGISTICS_BILL_STATUS_VOIDED },
+          auditStatus: { in: ["草稿", "已驳回"] },
+          paymentStatus: { in: ["待开票", "未付款"] },
+        },
+        data: {
+          auditStatus: "待审核",
+          submittedAt,
+          submittedById: actorId(actor) || null,
+          rejectReason: null,
+          invoiceNotificationError: null,
+          updatedById: actorId(actor),
+        },
+      });
+      if (billUpdate.count !== 1) {
+        throw codedError("账单状态已变化，提交审核已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_SUBMIT_STATE_CHANGED");
+      }
+    }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
     const submittedAtIso = submittedAt.toISOString();
     void runNonCriticalTask("物流费用提交审核日志写入", () => writeAudit(request, actor, "提交物流费用审核", "logistics_bills", billId, rows.map((row) => ({
       id: row.id,

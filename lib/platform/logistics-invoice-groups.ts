@@ -72,10 +72,17 @@ export function logisticsInvoiceGroupForCostType(costType: unknown) {
 }
 
 export function logisticsInvoiceGroupForExpense(expense: LogisticsInvoiceGroupExpenseLike = {}) {
-  if (normalizedInvoiceCurrency(expense.currency) === "USD") {
+  const currency = normalizedInvoiceCurrency(expense.currency);
+  if (currency === "USD") {
     return logisticsInvoiceGroupForKey(OCEAN_FREIGHT_INVOICE_GROUP_KEY);
   }
-  return logisticsInvoiceGroupForCostType(expense.costType);
+  const normalizedCostType = normalizedInvoiceCostType(expense.costType);
+  if (!normalizedCostType) return null;
+  const configuredGroup = logisticsInvoiceGroupForCostType(normalizedCostType);
+  if (configuredGroup) return configuredGroup;
+  return !currency || currency === "CNY"
+    ? logisticsInvoiceGroupForKey(TRUCKING_OTHER_INVOICE_GROUP_KEY)
+    : null;
 }
 
 export function logisticsInvoiceExpenseMatchesGroup(expense: LogisticsInvoiceGroupExpenseLike = {}, group: LogisticsInvoiceGroupDefinition | null = null) {
@@ -96,7 +103,7 @@ export function logisticsInvoiceGroupCurrencies(expenses: LogisticsInvoiceGroupE
 
 export function logisticsInvoiceGroupMixedCurrencyViolation(expenses: LogisticsInvoiceGroupExpenseLike[] = [], group: LogisticsInvoiceGroupDefinition | null = null) {
   const currencies = logisticsInvoiceGroupCurrencies(expenses);
-  if (group && currencies.length > 1) {
+  if (group && group.key !== OCEAN_FREIGHT_INVOICE_GROUP_KEY && currencies.length > 1) {
     return `${group.label}包含多个币种（${currencies.join(" / ")}），请按币种拆分发票后再上传。`;
   }
   return "";

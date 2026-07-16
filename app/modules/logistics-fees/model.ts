@@ -148,6 +148,7 @@ export type LogisticsExpense = {
   rejectReason?: string;
   invoiceNotifiedAt?: string | null;
   invoiceNotificationError?: string;
+  supplierAllowLogisticsInvoiceUpload?: boolean;
   paymentDate?: string | null;
   invoiceDocumentId?: string;
   invoiceDocument?: DocumentLite | null;
@@ -350,6 +351,8 @@ export type LogisticsExpenseMutationResult = {
   bill?: LogisticsExpense;
   bills?: LogisticsExpense[];
   invoiceGroup?: string;
+  emailNotified?: boolean;
+  emailResults?: Array<{ supplierId?: string; supplierName?: string; sent?: boolean; skipped?: boolean; error?: string; expenseIds?: string[] }>;
   emailError?: string;
   successCount?: number;
   failedCount?: number;

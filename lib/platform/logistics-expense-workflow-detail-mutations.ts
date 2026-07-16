@@ -21,6 +21,7 @@ import {
 } from "./logistics-expense-shared";
 import { logisticsCostTypeDefaultCurrency } from "./logistics-cost-types";
 import {
+  LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS,
   actorId,
   asRecord,
   batchSaveLogisticsExpenseBillIdentifier,
@@ -32,9 +33,9 @@ import {
   logisticsExpenseBillEditBlockReason,
   logisticsExpenseDeleteBlock,
   logisticsExpenseUpdateBlockReason,
+  lockLogisticsBillForWorkflow,
   normalizeBatchBillingMethod,
   normalizeBatchBillingQuantity,
-  refreshLogisticsBillWorkflowStatus,
   resolveLogisticsExpenseBatchExchange,
   rowAuditStatus,
   rowBillId,
@@ -92,11 +93,28 @@ export async function batchUpdateLogisticsExpenses(request: AuditRequestLike, ac
   }
   const savedRows: LogisticsExpenseRow[] = [];
   for (const item of prepared) {
-    const saved = await prisma.logisticsExpense.update({
-      where: { id: item.before.id },
-      data: item.data,
-      include: includeLogisticsExpenseRelations(),
-    });
+    const billId = rowBillId(item.before);
+    const saved = await prisma.$transaction(async (tx) => {
+      await lockLogisticsBillForWorkflow(tx, billId);
+      const updated = await tx.logisticsExpense.updateMany({
+        where: {
+          id: item.before.id,
+          billId,
+          deletedAt: null,
+          bill: { is: { auditStatus: { in: ["草稿", "已驳回"] }, status: { not: "voided" } } },
+        },
+        data: item.data,
+      });
+      if (updated.count !== 1) {
+        throw codedError("账单状态已变化，费用修改已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_BATCH_UPDATE_STATE_CHANGED");
+      }
+      const row = await tx.logisticsExpense.findUnique({
+        where: { id: item.before.id },
+        include: includeLogisticsExpenseRelations(),
+      });
+      if (!row) throw codedError("物流费用不存在或已删除。", 404, "LOGISTICS_EXPENSE_NOT_FOUND");
+      return row;
+    }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
     savedRows.push(saved);
     await runNonCriticalTask("物流费用批量修改日志写入", () => writeAudit(request, actor, "批量修改物流费用明细", "logistics_expenses", item.before.id, item.before, saved));
   }
@@ -152,14 +170,6 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
   const deletedIds = preparedDeletes.map((row) => row.id);
   await persistLogisticsExpenseBatch(preparedUpdates, preparedCreates, deletedIds, targetBillId, actor);
   const savedBillRows = await loadLogisticsExpenseBillRowsForAction(targetBillId, actor);
-  if (!savedBillRows.length && targetBillId) {
-    await prisma.logisticsBill.update({
-      where: { id: targetBillId },
-      data: { deletedAt: new Date(), updatedById: actorId(actor) || null },
-    }).catch(() => null);
-  } else {
-    await refreshLogisticsBillWorkflowStatus(savedBillRows, actor).catch(() => null);
-  }
   const serializedItems = savedBillRows.map(serializeLogisticsExpense);
   const serializedBill = savedBillRows.length ? serializeLogisticsExpenseBill(savedBillRows) : null;
   const affectedOrderIds = [...savedBillRows.map((row) => row.orderId), ...preparedDeletes.map((row) => row.orderId)].filter(Boolean);
@@ -260,20 +270,46 @@ async function persistLogisticsExpenseBatch(
   targetBillId: string,
   actor: ActorContext,
 ) {
-  const transactionOperations = [
-    ...preparedUpdates.map((item) => prisma.logisticsExpense.update({
-      where: { id: item.before.id },
-      data: { ...item.data, billId: targetBillId },
-    })),
-    ...(preparedCreates.length ? [prisma.logisticsExpense.createMany({
-      data: preparedCreates.map((item) => item.data),
-    })] : []),
-    ...(deletedIds.length ? [prisma.logisticsExpense.updateMany({
-      where: { id: { in: deletedIds }, deletedAt: null, ...logisticsExpenseAccessWhere(actor) },
-      data: { deletedAt: new Date(), updatedById: actorId(actor) },
-    })] : []),
-  ];
-  if (transactionOperations.length) await prisma.$transaction(transactionOperations);
+  await prisma.$transaction(async (tx) => {
+    await lockLogisticsBillForWorkflow(tx, targetBillId);
+    const bill = await tx.logisticsBill.findUnique({ where: { id: targetBillId } });
+    if (!bill || !["草稿", "已驳回"].includes(bill.auditStatus)) {
+      throw codedError("账单状态已变化，明细保存已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_BATCH_SAVE_STATE_CHANGED");
+    }
+    for (const item of preparedUpdates) {
+      const updated = await tx.logisticsExpense.updateMany({
+        where: { id: item.before.id, billId: targetBillId, deletedAt: null },
+        data: { ...item.data, billId: targetBillId },
+      });
+      if (updated.count !== 1) {
+        throw codedError("费用明细状态已变化，保存已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_BATCH_ITEM_CHANGED");
+      }
+    }
+    if (preparedCreates.length) {
+      await tx.logisticsExpense.createMany({ data: preparedCreates.map((item) => item.data) });
+    }
+    if (deletedIds.length) {
+      const deleted = await tx.logisticsExpense.updateMany({
+        where: {
+          id: { in: deletedIds },
+          billId: targetBillId,
+          deletedAt: null,
+          ...logisticsExpenseAccessWhere(actor),
+        },
+        data: { deletedAt: new Date(), updatedById: actorId(actor) },
+      });
+      if (deleted.count !== deletedIds.length) {
+        throw codedError("费用明细状态已变化，删除已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_BATCH_DELETE_CHANGED");
+      }
+    }
+    const remainingCount = await tx.logisticsExpense.count({ where: { billId: targetBillId, deletedAt: null } });
+    await tx.logisticsBill.update({
+      where: { id: targetBillId },
+      data: remainingCount
+        ? { invoiceStatus: "待开票", paymentStatus: "待开票", updatedById: actorId(actor) || null }
+        : { deletedAt: new Date(), updatedById: actorId(actor) || null },
+    });
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
 }
 
 export async function deleteLogisticsExpense(request: AuditRequestLike, actor: ActorContext, id: string) {
@@ -282,24 +318,49 @@ export async function deleteLogisticsExpense(request: AuditRequestLike, actor: A
   const billId = rowBillId(before);
   const block = logisticsExpenseDeleteBlock(before);
   if (block) throw codedError(block.message, 400, block.code);
-  const saved = await prisma.logisticsExpense.update({
-    where: { id },
-    data: { deletedAt: new Date(), updatedById: actorId(actor) },
-    include: includeLogisticsExpenseRelations(),
-  });
+  const mutation = await prisma.$transaction(async (tx) => {
+    await lockLogisticsBillForWorkflow(tx, billId);
+    const current = await tx.logisticsExpense.findFirst({
+      where: { id, billId, deletedAt: null, ...logisticsExpenseAccessWhere(actor) },
+      include: includeLogisticsExpenseRelations(),
+    });
+    if (!current) throw codedError("物流费用不存在或已删除。", 404, "LOGISTICS_EXPENSE_NOT_FOUND");
+    const currentBlock = logisticsExpenseDeleteBlock(current);
+    if (currentBlock) throw codedError(currentBlock.message, 400, currentBlock.code);
+    const deletedAt = new Date();
+    const deleted = await tx.logisticsExpense.updateMany({
+      where: {
+        id,
+        billId,
+        deletedAt: null,
+        bill: { is: { auditStatus: { in: ["草稿", "已驳回"] }, status: { not: "voided" } } },
+      },
+      data: { deletedAt, updatedById: actorId(actor) },
+    });
+    if (deleted.count !== 1) {
+      throw codedError("账单状态已变化，费用删除已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_DELETE_STATE_CHANGED");
+    }
+    const saved = await tx.logisticsExpense.findUnique({ where: { id }, include: includeLogisticsExpenseRelations() });
+    if (!saved) throw codedError("物流费用不存在或已删除。", 404, "LOGISTICS_EXPENSE_NOT_FOUND");
+    const remainingCount = await tx.logisticsExpense.count({ where: { billId, deletedAt: null } });
+    if (!remainingCount) {
+      await tx.logisticsBill.update({
+        where: { id: billId },
+        data: { deletedAt, updatedById: actorId(actor) || null },
+      });
+    } else {
+      await tx.logisticsBill.update({
+        where: { id: billId },
+        data: { invoiceStatus: "待开票", paymentStatus: "待开票", updatedById: actorId(actor) || null },
+      });
+    }
+    return saved;
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+  const saved = mutation;
   scheduleTaxRefundCompletenessRefresh(saved.orderId);
   const billRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
   let serializedBill: ReturnType<typeof serializeLogisticsExpenseBill> | null = null;
-  if (!billRows.length && before.billId) {
-    await prisma.logisticsBill.update({
-      where: { id: billId },
-      data: { deletedAt: new Date(), updatedById: actorId(actor) || null },
-    }).catch(() => null);
-  } else {
-    await refreshLogisticsBillWorkflowStatus(billRows, actor).catch(() => null);
-    const refreshedBillRows = await loadLogisticsExpenseBillRowsForAction(billId, actor);
-    serializedBill = refreshedBillRows.length ? serializeLogisticsExpenseBill(refreshedBillRows) : null;
-  }
+  if (billRows.length) serializedBill = serializeLogisticsExpenseBill(billRows);
   const serializedExpense = serializeLogisticsExpense(saved);
   await runNonCriticalTask("物流费用删除日志写入", () => writeAudit(request, actor, "删除物流费用明细", "logistics_expenses", id, {
     ...before,

@@ -45,7 +45,7 @@ function blockedReasons(row: { auditStatus?: string | null; invoiceStatus?: stri
     reasons.push("物流发票待上传关闭：未处于审核通过且待开票状态");
   }
   if (!(auditStatus === "审核通过" && LOGISTICS_PAYMENT_READY_INVOICE_STATUSES.includes(invoiceStatus) && !LOGISTICS_PAYMENT_DONE_STATUSES.includes(paymentStatus))) {
-    reasons.push("物流付款待登记关闭：未处于已上传发票且未付款状态");
+    reasons.push("物流付款待登记关闭：未处于已确认发票且待付款状态");
   }
   if (LOGISTICS_PAYMENT_DONE_STATUSES.includes(paymentStatus)) reasons.push("付款已完成");
   return reasons;

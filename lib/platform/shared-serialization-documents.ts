@@ -71,6 +71,7 @@ export function serializeOrderDocument(documentInput: unknown, orderOverride: un
     uploadedBy: serializeUser(document.uploadedBy),
     uploadedByName: document.uploadedBy?.name || "",
     uploadedAt: document.uploadedAt,
+    deletedAt: document.deletedAt || null,
     createdAt: document.createdAt,
     updatedAt: document.updatedAt,
   };

@@ -64,6 +64,9 @@ const LOGISTICS_PAYMENT_NOT_READY_INVOICE_STATUSES = new Set([
   "部分已确认",
   "部分已上传",
   "部分上传",
+  "已上传发票",
+  "已上传",
+  "已开票",
 ]);
 
 export function normalizeLogisticsBillPaymentStatus(invoiceStatus: unknown, paymentStatus: unknown) {

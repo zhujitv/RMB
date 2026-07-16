@@ -30,7 +30,7 @@ export const LEGACY_COST_TYPE_LABELS = {
 } satisfies Record<string, string>;
 export const NON_PARTICIPATING_COST_TYPES = ["目的港费用"];
 export const LOGISTICS_EXPENSE_AUDIT_STATUSES = ["草稿", "待审核", "审核通过", "已驳回"];
-export const LOGISTICS_EXPENSE_INVOICE_STATUSES = ["未通知", "已通知开票", "已上传", "已确认"];
+export const LOGISTICS_EXPENSE_INVOICE_STATUSES = ["待开票", "已上传", "已确认", "未通知", "已通知开票", "通知失败"];
 export const LOGISTICS_EXPENSE_PAYMENT_STATUSES = ["待开票", "已开票", "待付款", "已付款"];
 export const LOGISTICS_BILL_STATUS_NORMAL = "normal";
 export const LOGISTICS_BILL_STATUS_VOIDED = "voided";

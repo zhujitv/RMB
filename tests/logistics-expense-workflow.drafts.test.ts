@@ -66,7 +66,12 @@ test("draft logistics expense bills can be submitted for review", () => {
   assert.match(backend, /loadLogisticsExpenseBillRowsForSubmit/);
   assert.match(
     submitLogisticsExpenseBillSource,
-    /prisma\.logisticsBill\.update/,
+    /tx\.logisticsBill\.updateMany/,
+  );
+  assert.match(submitLogisticsExpenseBillSource, /lockLogisticsBillForWorkflow/);
+  assert.match(
+    submitLogisticsExpenseBillSource,
+    /LOGISTICS_EXPENSE_SUBMIT_STATE_CHANGED/,
   );
   assert.doesNotMatch(
     submitLogisticsExpenseBillSource,
@@ -108,6 +113,17 @@ test("draft logistics expense bills can be submitted for review", () => {
       /async function submitDraftExpenseBill[\s\S]*?\n  async function rejectExpense/,
     )?.[0] || "",
     /loadExpenses|loadStatement/,
+  );
+});
+
+test("logistics status columns do not show pre-invoice bills as pending payment", () => {
+  assert.match(
+    logisticsFeesShared,
+    /if \(!text \|\| text === "-"\) \{[\s\S]*if \(type === "invoice"\) return "待开票";[\s\S]*return "待开票";/,
+  );
+  assert.match(
+    logisticsFeesShared,
+    /text\.includes\("待开票"\)[\s\S]*return "待开票"/,
   );
 });
 
@@ -287,6 +303,14 @@ test("logistics expense bills use compact table and drawer instead of nested tab
   assert.match(
     logisticsModule,
     /订单号 \/ Shipment[\s\S]*客户[\s\S]*CNY 合计[\s\S]*USD 合计[\s\S]*审核[\s\S]*发票[\s\S]*付款[\s\S]*操作/,
+  );
+  assert.match(
+    logisticsFeesBillTable,
+    /<th className=\{styles\.statusColumn\}>审核<\/th>[\s\S]*<th className=\{styles\.statusColumn\}>发票<\/th>/,
+  );
+  assert.match(
+    logisticsFeesBillTable,
+    /const auditStatus = compactStatusLabel\([\s\S]*"audit"[\s\S]*const invoiceStatus = compactStatusLabel\([\s\S]*"invoice"/,
   );
   assert.match(
     logisticsModule,

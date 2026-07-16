@@ -87,19 +87,9 @@ export const NOTIFICATION_RECIPIENT_EMAIL_OPTIONS = [
     description: "读取物流供应商绑定的系统登录账号邮箱。",
   },
   {
-    value: "contactEmail",
-    label: "供应商联系邮箱",
-    description: "读取供应商资料中的联系邮箱。",
-  },
-  {
     value: "email",
-    label: "供应商主邮箱",
-    description: "读取供应商资料中的主邮箱。",
-  },
-  {
-    value: "financeEmail",
-    label: "供应商财务邮箱",
-    description: "读取供应商资料中的财务邮箱。",
+    label: "供应商联系人邮箱",
+    description: "读取供应商资料中的联系人邮箱。",
   },
 ] as const;
 export const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
@@ -111,8 +101,8 @@ export const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
   editable: true,
   supportsAttachments: false,
   securitySensitive: false,
-  subjectTemplate: "物流费用已审核通过，请开票并上传发票 - {orderNo}/{blNo}",
-  ccAdminEmails: true,
+  subjectTemplate: "物流费用审核通过，请上传发票 - {orderNo}/{blNo}",
+  ccAdminEmails: false,
   ccEmails: "",
   bodyTemplate: [
     "{supplierName}，您好：",
@@ -130,10 +120,10 @@ export const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
     "{signature}",
   ].join("\n"),
   variables: NOTIFICATION_TEMPLATE_VARIABLES.map(([key, label]) => ({ key: key.replace(/[{}]/g, ""), label })),
-  recipientConfig: { recipientEmailFields: NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.map((item) => item.value) },
+  recipientConfig: { recipientEmailFields: ["email"] },
   extraConfig: {
     autoSendOnApproval: true,
-    batchSubjectTemplate: "待开票物流费用清单（{billCount} 票）",
+    batchSubjectTemplate: "物流费用审核通过，请上传发票（{billCount} 票）",
     invoiceRequirements: [
       "1. 发票金额需与系统审核通过的费用合计一致。",
       "2. 发票抬头、税号、供应商信息需与系统资料一致。",

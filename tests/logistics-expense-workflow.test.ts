@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
   backend,
@@ -62,6 +62,9 @@ import {
   listLogisticsExpensesSource,
   logisticsSupplierStatementSource
 } from "./logistics-expense-workflow-context.ts";
+
+const logisticsInvoiceOcrCron = readFileSync("app/api/cron/logistics-invoice-ocr/route.ts", "utf8");
+const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("logistics expenses are stored outside official costs until approved", () => {
   assert.match(schema, /model LogisticsExpense/);
@@ -143,7 +146,7 @@ test("approval generates official costs with source tracking", () => {
   assert.match(backend, /reviewLogisticsExpenseBills/);
   assert.match(
     backend,
-    /await scheduleLogisticsExpenseReviewSideEffects\(request, actor, approvedRows, now\)/,
+    /const sideEffects = await scheduleLogisticsExpenseReviewSideEffects\(request, actor, approvedRows, now\)/,
   );
   assert.match(
     costsModule,
@@ -177,10 +180,10 @@ test("logistics bill supplier key does not reuse deleted or sampled legacy bills
   assert.doesNotMatch(backend, /include: \{ expenses: \{ where: \{ deletedAt: null \}, select: \{ supplierId: true \}, take: 20 \} \}/);
 });
 
-test("logistics review side effects synchronously push costs and do not notify invoice upload", () => {
+test("logistics review pushes costs and notifies invoice upload after approval", () => {
   assert.doesNotMatch(backend, /costSyncFailures/);
   assert.match(backend, /await syncApprovedLogisticsExpenseCosts\(tx, rows, actor\)/);
-  assert.match(backend, /createOrUpdateCostFromLogisticsExpense\(tx, row, actor\)/);
+  assert.match(backend, /createOrUpdateCostFromLogisticsExpense\(tx, row, actor, \{ settledCostMode \}\)/);
   assert.match(backend, /await updateLogisticsExpenseCostIds\(tx, links\)/);
   assert.match(backend, /linkLogisticsExpenseInvoiceDocumentsToCosts/);
   assert.match(backend, /tx\.orderDocument\.updateMany/);
@@ -191,9 +194,27 @@ test("logistics review side effects synchronously push costs and do not notify i
   assert.match(backend, /runNonCriticalTask\(\s*"物流费用审核后刷新待办缓存"/);
   assert.doesNotMatch(backend, /await writeAudit\(request, actor, "审核通过物流费用账单"/);
   assert.doesNotMatch(backend, /await refreshTaxRefundCompletenessBatch\(finalRows\.map/);
-  assert.match(backend, /return finalRows/);
-  assert.doesNotMatch(backend, /rowsReadyForNotification = approvedRows\.filter/);
-  assert.doesNotMatch(backend, /emailResults\.push\(\.\.\.await notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification\)\)/);
+  assert.match(reviewLogisticsExpenseBillsSource, /const rowsReadyForNotification = rowsByBill/);
+  assert.match(
+    reviewLogisticsExpenseBillsSource,
+    /await notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification, \{[\s\S]*idempotencyScope: `approval-/,
+  );
+  assert.match(
+    reviewLogisticsExpenseBillsSource,
+    /catch \(error: unknown\) \{[\s\S]*logServerError\("物流费用审核后开票通知发送失败"/,
+  );
+  assert.match(
+    reviewLogisticsExpenseBillsSource,
+    /return \{ rows: finalRows, emailResults \}/,
+  );
+  assert.doesNotMatch(
+    approveLogisticsExpenseBillRowsSource,
+    /logisticsInvoiceReviewBlockReason|未上传发票，不能审核通过/,
+  );
+  assert.match(
+    approveLogisticsExpenseBillRowsSource,
+    /auditStatus: "审核通过"[\s\S]*paymentStatus: "待开票"[\s\S]*invoiceStatus: "待开票"/,
+  );
 });
 
 test("supplier role is renamed and scoped to assigned logistics work", () => {
@@ -412,6 +433,13 @@ test("logistics invoice upload starts on file selection and shows upload progres
   assert.match(invoiceUploadFormSource, /uploadFormDataWithProgress/);
   assert.match(invoiceUploadFormSource, /validatePdfUploadFile/);
   assert.match(invoiceUploadFormSource, /上传中 \$\{nextProgress\}%/);
+  assert.match(invoiceUploadFormSource, /上传成功，系统正在识别/);
+  assert.doesNotMatch(invoiceUploadFormSource, /onRecognize/);
+  assert.match(backend, /status: "QUEUED"[\s\S]*系统将自动识别/);
+  assert.match(backend, /createLogisticsInvoiceRecognitionTask\([\s\S]*, tx\)/);
+  assert.match(logisticsInvoiceOcrCron, /assertCronSecret\(request\)/);
+  assert.match(logisticsInvoiceOcrCron, /runPendingLogisticsInvoiceOcrTasks\(5\)/);
+  assert.match(vercelConfig, /"path": "\/api\/cron\/logistics-invoice-ocr"[\s\S]*"schedule": "\*\/5 \* \* \* \*"/);
   assert.match(invoiceUploadFormSource, /styles\.invoiceUploadProgressBar/);
   assert.match(invoiceUploadFormSource, /accept=\{PDF_UPLOAD_ACCEPT\}/);
   assert.match(

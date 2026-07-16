@@ -269,7 +269,7 @@ export function createTemporaryLogisticsExpenseRow(
     auditStatus: ["草稿", "已驳回"].includes(base.auditStatus || "")
       ? base.auditStatus
       : "草稿",
-    invoiceStatus: "未通知",
+    invoiceStatus: "待开票",
     paymentStatus: "待开票",
     order: expense.order || base.order,
   };

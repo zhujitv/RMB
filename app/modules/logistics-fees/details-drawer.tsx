@@ -34,6 +34,7 @@ export function LogisticsExpenseRows({
   canWithdraw,
   canEditAmount,
   canUploadInvoice,
+  canConfirmInvoice,
   canManageInvoiceRecognition,
   canMarkPaid,
   canSubmitDraft,
@@ -49,6 +50,7 @@ export function LogisticsExpenseRows({
   canWithdraw: boolean;
   canEditAmount: boolean;
   canUploadInvoice: boolean;
+  canConfirmInvoice: boolean;
   canManageInvoiceRecognition: boolean;
   canMarkPaid: boolean;
   canSubmitDraft: boolean;
@@ -168,6 +170,7 @@ export function LogisticsExpenseRows({
             items={drawer.editingExpenseRows}
             groups={drawer.invoiceGroups}
             canUploadInvoice={canUploadInvoice && !drawer.isVoided}
+            canConfirmInvoice={canConfirmInvoice && !drawer.isVoided}
             canManageInvoiceRecognition={canManageInvoiceRecognition && !drawer.isVoided}
             onUploaded={onInvoiceUploaded}
           />

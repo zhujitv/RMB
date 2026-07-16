@@ -56,7 +56,7 @@ function normalizedDomesticExpenseStatus(value = "") {
   if (["未通知", "已通知开票", "通知失败", "待开票 / 通知失败", "部分未通知", "部分已通知", "部分上传发票", "部分上传", "部分已上传", "部分已确认"].includes(text)) {
     return "待开票";
   }
-  if (["已上传", "已上传发票"].includes(text)) return "已上传发票";
+  if (["已上传", "已上传发票", "已确认", "已确认发票"].includes(text)) return "已上传发票";
   if (["部分已付款"].includes(text)) return "部分付款";
   if (["部分待付款"].includes(text)) return "待付款";
   return text;
@@ -135,7 +135,7 @@ export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike =
     }).sort((left, right) => left.rank - right.rank || right.updatedAtValue - left.updatedAtValue);
     return rankedBills[0] || {
       status: "未录入",
-      invoiceStatus: "未通知",
+      invoiceStatus: "待开票",
       billId: "",
       updatedAt: null,
       count: 0,
@@ -146,7 +146,7 @@ export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike =
   if (!expenses.length) {
     return {
       status: "未录入",
-      invoiceStatus: "未通知",
+      invoiceStatus: "待开票",
       billId: "",
       updatedAt: null,
       count: 0,
@@ -156,7 +156,7 @@ export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike =
     const status = domesticLogisticsExpenseDisplayStatus(expense);
     return {
       status,
-      invoiceStatus: normalizedDomesticExpenseStatus(expense.invoiceStatus || "未通知") || "未通知",
+      invoiceStatus: normalizedDomesticExpenseStatus(expense.invoiceStatus || "待开票") || "待开票",
       billId: domesticLogisticsExpenseBillId(order, expense),
       updatedAt: expense.updatedAt || expense.createdAt || null,
       count: expenses.length,
@@ -166,7 +166,7 @@ export function domesticLogisticsExpenseStatusSummary(order: DomesticOrderLike =
   }).sort((left, right) => left.rank - right.rank || right.updatedAtValue - left.updatedAtValue);
   return ranked[0] || {
     status: "未录入",
-    invoiceStatus: "未通知",
+    invoiceStatus: "待开票",
     billId: "",
     updatedAt: null,
     count: 0,

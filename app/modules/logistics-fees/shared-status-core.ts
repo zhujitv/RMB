@@ -8,7 +8,7 @@ export function compactStatusLabel(
   if (!text || text === "-") {
     if (type === "audit") return "草稿";
     if (type === "invoice") return "待开票";
-    return "待付款";
+    return "待开票";
   }
   if (type === "audit") {
     if (text.includes("待审核")) return "待审核";
@@ -17,13 +17,15 @@ export function compactStatusLabel(
     return "草稿";
   }
   if (type === "invoice") {
-    if (text.includes("通知失败")) return "通知失败";
+    if (text.includes("通知失败")) return "待开票";
     if (text.includes("部分")) return "部分上传";
-    if (text.includes("已确认") || text.includes("已上传")) return "已上传";
+    if (text.includes("已确认")) return "已确认";
+    if (text.includes("已上传")) return "已上传";
     return "待开票";
   }
   if (text.includes("部分")) return "部分付款";
   if (text.includes("已付款")) return "已付款";
+  if (text.includes("待开票") || text.includes("未付款")) return "待开票";
   return "待付款";
 }
 
@@ -31,28 +33,18 @@ export function normalizePayButtonInvoiceStatus(values: unknown[]) {
   const statuses = values
     .map((value) => String(value || "").trim())
     .filter(Boolean);
-  if (
-    statuses.some((status) =>
-      status.includes("部分") ||
-      status.includes("通知失败") ||
-      status.includes("待开票") ||
-      status.includes("未通知") ||
-      status.includes("已通知开票")
-    )
-  ) {
-    return "未上传发票";
-  }
-  if (
-    statuses.some(
-      (status) =>
-        status.includes("已上传发票") ||
-        status === "已上传" ||
-        status.includes("已确认"),
-    )
-  ) {
-    return "已上传发票";
-  }
-  return statuses.length ? "未上传发票" : "未上传发票";
+  if (!statuses.length) return "待开票";
+  if (statuses.some((status) =>
+    status.includes("通知失败") ||
+    status.includes("待开票") ||
+    status.includes("未通知") ||
+    status.includes("已通知开票")
+  )) return "待开票";
+  const allConfirmed = statuses.every((status) => status.includes("已确认"));
+  if (allConfirmed) return "已确认发票";
+  if (statuses.some((status) => status.includes("部分") || status.includes("已确认"))) return "部分确认发票";
+  if (statuses.some((status) => status.includes("已上传") || status.includes("已开票"))) return "已上传发票";
+  return "待开票";
 }
 
 export function aggregateClientStatusValues(

@@ -4,6 +4,8 @@ import { apiError, deleteLogisticsExpenseInvoice, parseJsonBody, uploadLogistics
 import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type RouteContext = {
   params: Promise<{ id: string }>;

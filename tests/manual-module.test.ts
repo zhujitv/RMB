@@ -37,7 +37,11 @@ test("manual explains unified logistics cost entry and review flow", () => {
   assert.match(manualModule, /页面只保留物流列表和运输监控/);
   assert.match(manualModule, /title: "物流费用"/);
   assert.match(manualModule, /物流费用以物流账单为单位管理费用明细、发票上传校验、审核、月结汇总和付款状态/);
-  assert.match(manualModule, /合并审核 \/ 批量审核/);
+  assert.match(manualModule, /管理员核对订单、提单、客户、费用类型、金额和币种后可直接审核通过，不要求预先上传发票/);
+  assert.match(manualModule, /审核通过后账单进入待开票，系统自动通知物流供应商上传对应发票/);
+  assert.match(manualModule, /供应商上传 PDF 后发票状态变为已上传/);
+  assert.match(manualModule, /管理员或财务核对并确认全部发票后，账单才进入待付款/);
+  assert.match(manualModule, /只有审核通过、发票全部确认且处于待付款的账单才可标记已付款/);
   assert.match(manualModule, /标记已付款时必须录入付款时间/);
   assert.match(manualModule, /海运费、ENS费、保险费及所有 USD 费用归入海运费发票/);
 });

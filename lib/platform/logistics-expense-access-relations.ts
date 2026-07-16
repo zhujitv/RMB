@@ -25,7 +25,13 @@ export function includeLogisticsExpenseRelations() {
         },
       },
     },
-    supplier: { include: { operatorUsers: true } },
+    supplier: {
+      include: {
+        operatorUsers: {
+          where: { isActive: true, approvalStatus: "APPROVED", deletedAt: null },
+        },
+      },
+    },
     cost: { include: includeCostRelations() },
     createdBy: true,
     updatedBy: true,

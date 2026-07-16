@@ -51,6 +51,7 @@ export function serializeLogisticsExpense(expense: LogisticsExpenseLike = {}) {
     supplierId: expense.supplierId || "",
     supplierName: expense.supplierNameSnapshot || expense.supplier?.supplierName || "",
     supplierEmail: expense.supplier?.email || "",
+    supplierAllowLogisticsInvoiceUpload: Boolean(expense.supplier?.allowLogisticsInvoiceUpload),
     costId: expense.costId || "",
     costType: normalizedCostType(nonEmpty(expense.costType)),
     currency: expense.currency || "CNY",
@@ -77,7 +78,7 @@ export function serializeLogisticsExpense(expense: LogisticsExpenseLike = {}) {
     voidedById: bill.voidedById || "",
     voidReason: bill.voidReason || "",
     voidRemark: bill.voidRemark || "",
-    detailInvoiceStatus: expense.invoiceStatus || "未通知",
+    detailInvoiceStatus: expense.invoiceStatus || "待开票",
     detailPaymentStatus: expense.paymentStatus || "待开票",
     billInvoiceStatus: bill.invoiceStatus || "",
     billPaymentStatus: bill.paymentStatus || "",
@@ -171,8 +172,15 @@ export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []
     const groupItems = items.filter((item) => logisticsInvoiceGroupForExpense(item)?.key === group.key);
     const includedFeeTypes = [...new Set(groupItems.map((item) => nonEmpty(item.costType)).filter(Boolean))];
     const currencyTotals = summarizeCurrencyTotals(groupItems);
-    const uploaded = groupItems.length > 0 && groupItems.every((item) => ["已上传", "已确认"].includes(logisticsExpenseDetailInvoiceStatusValue(item)));
-    const confirmed = groupItems.length > 0 && groupItems.every((item) => logisticsExpenseDetailInvoiceStatusValue(item) === "已确认");
+    const uploaded = groupItems.length > 0 && groupItems.every((item) => (
+      logisticsExpenseInvoiceDocumentIsUsable(item)
+      && ["已上传", "已确认"].includes(logisticsExpenseDetailInvoiceStatusValue(item))
+    ));
+    const confirmed = groupItems.length > 0 && groupItems.every((item) => (
+      logisticsExpenseInvoiceDocumentIsUsable(item)
+      && logisticsExpenseDetailInvoiceStatusValue(item) === "已确认"
+      && logisticsExpenseInvoiceConfirmationIsComplete(item)
+    ));
     const failed = groupItems.some((item) => logisticsExpenseDetailInvoiceStatusValue(item) === "通知失败");
     const notified = groupItems.some((item) => logisticsExpenseDetailInvoiceStatusValue(item) === "已通知开票");
     return {
@@ -188,7 +196,7 @@ export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []
       confirmed,
       failed,
       notified,
-      invoiceDocumentId: groupItems.find((item) => item.invoiceDocumentId)?.invoiceDocumentId || "",
+      invoiceDocumentId: groupItems.find(logisticsExpenseInvoiceDocumentIsUsable)?.invoiceDocumentId || "",
       invoiceNotificationError: groupItems.map((item) => item.invoiceNotificationError || "").find(Boolean) || "",
       validationStatus: groupItems.map((item) => item.invoiceValidationStatus || "").find(Boolean) || "未上传",
       validationMessage: groupItems.map((item) => item.invoiceValidationMessage || "").find(Boolean) || "",
@@ -206,11 +214,38 @@ export function logisticsExpenseInvoiceGroups(items: LogisticsExpenseLike[] = []
   });
 }
 
+export function logisticsExpenseInvoiceDocumentIsUsable(item: LogisticsExpenseLike = {}) {
+  if (!nonEmpty(item.invoiceDocumentId)) return false;
+  if (!item.invoiceDocument || typeof item.invoiceDocument !== "object") return true;
+  const document = item.invoiceDocument as UnknownRecord;
+  if (document.deletedAt) return false;
+  const uploadStatus = nonEmpty(document.uploadStatus);
+  if (uploadStatus && uploadStatus !== "SUCCESS") return false;
+  const documentType = nonEmpty(document.documentType);
+  const relatedModule = nonEmpty(document.relatedModule);
+  if (documentType && documentType !== "SUPPLIER_INVOICE") return false;
+  if (relatedModule && relatedModule !== "SUPPLIER") return false;
+  if (nonEmpty(document.mimeType).toLowerCase() !== "application/pdf") return false;
+  if (Number(document.fileSize || 0) <= 0) return false;
+  if (!nonEmpty(document.storageKey)) return false;
+  if (item.orderId && document.orderId !== item.orderId) return false;
+  if (item.supplierId && document.supplierId !== item.supplierId) return false;
+  return true;
+}
+
+export function logisticsExpenseInvoiceConfirmationIsComplete(item: LogisticsExpenseLike = {}) {
+  const confirmedBy = item.invoiceConfirmedBy && typeof item.invoiceConfirmedBy === "object"
+    ? nonEmpty((item.invoiceConfirmedBy as UnknownRecord).id)
+    : "";
+  return Boolean(item.invoiceConfirmedAt && nonEmpty(item.invoiceConfirmedById || confirmedBy));
+}
+
 export function aggregateLogisticsExpenseInvoiceStatus(items: LogisticsExpenseLike[] = []) {
   const groups = logisticsExpenseInvoiceGroups(items);
-  if (!groups.length) return aggregateLogisticsExpenseStatus(items, "invoiceStatus");
-  if (groups.every((group) => group.confirmed)) return "已确认";
-  if (groups.every((group) => group.uploaded || group.confirmed)) return "已上传发票";
+  const hasUngroupedItems = items.some((item) => !logisticsInvoiceGroupForExpense(item));
+  if (!groups.length) return items.length ? "待开票" : aggregateLogisticsExpenseStatus(items, "invoiceStatus");
+  if (!hasUngroupedItems && groups.every((group) => group.confirmed)) return "已确认";
+  if (!hasUngroupedItems && groups.every((group) => group.uploaded || group.confirmed)) return "已上传发票";
   if (groups.some((group) => group.uploaded || group.confirmed)) return "部分上传发票";
   if (groups.some((group) => group.failed)) return "待开票 / 通知失败";
   return "待开票";

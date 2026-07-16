@@ -1,12 +1,12 @@
 export const LOGISTICS_BILL_PAY_BUTTON_RULE = {
-  allow: ["审核通过 + 已上传发票 + 未付款"],
-  deny: ["草稿", "待审核", "未上传发票", "已付款"],
+  allow: ["审核通过 + 已确认发票 + 待付款"],
+  deny: ["草稿", "待审核", "未上传发票", "发票未确认", "已付款"],
 } as const;
 
-export const LOGISTICS_BILL_PAY_DISABLED_TOOLTIP = "需审核通过且已上传发票后才可标记付款";
+export const LOGISTICS_BILL_PAY_DISABLED_TOOLTIP = "需审核通过、发票已确认且状态为待付款后才可标记付款";
 
 export type LogisticsBillAuditStatus = "草稿" | "待审核" | "审核通过" | "已驳回";
-export type LogisticsBillInvoiceStatus = "待开票" | "待开票 / 通知失败" | "部分上传发票" | "已上传发票";
+export type LogisticsBillInvoiceStatus = "待开票" | "待开票 / 通知失败" | "部分上传发票" | "已上传发票" | "部分确认发票" | "已确认发票";
 export type LogisticsBillPaymentStatus = "待开票" | "待付款" | "部分付款" | "已付款";
 export type LogisticsBillDefaultTab = "basic" | "details" | "invoice" | "history";
 
@@ -50,8 +50,10 @@ export function normalizeLogisticsBillAuditStatus(value: unknown): LogisticsBill
 export function normalizeLogisticsBillInvoiceStatus(value: unknown): LogisticsBillInvoiceStatus {
   const text = String(value || "").trim();
   if (text.includes("通知失败")) return "待开票 / 通知失败";
+  if (text.includes("部分") && text.includes("确认")) return "部分确认发票";
   if (text.includes("部分")) return "部分上传发票";
-  if (text.includes("已确认") || text.includes("已上传") || text.includes("已开票")) return "已上传发票";
+  if (text.includes("已确认")) return "已确认发票";
+  if (text.includes("已上传") || text.includes("已开票")) return "已上传发票";
   return "待开票";
 }
 
@@ -112,14 +114,14 @@ export function canRejectLogisticsBill(input: LogisticsBillStateInput = {}) {
 
 export function canUploadLogisticsBillInvoice(input: LogisticsBillStateInput = {}) {
   if (isVoidedLogisticsBill(input)) return false;
-  return ["待审核", "审核通过"].includes(normalizeLogisticsBillAuditStatus(input.auditStatus));
+  return normalizeLogisticsBillAuditStatus(input.auditStatus) === "审核通过";
 }
 
 export function canMarkLogisticsBillPaid(input: LogisticsBillStateInput = {}) {
   if (isVoidedLogisticsBill(input)) return false;
   return normalizeLogisticsBillAuditStatus(input.auditStatus) === "审核通过"
-    && normalizeLogisticsBillInvoiceStatus(input.invoiceStatus) === "已上传发票"
-    && normalizeLogisticsBillPaymentStatus(input.paymentStatus) !== "已付款";
+    && normalizeLogisticsBillInvoiceStatus(input.invoiceStatus) === "已确认发票"
+    && normalizeLogisticsBillPaymentStatus(input.paymentStatus) === "待付款";
 }
 
 export function canReverseLogisticsBillPayment(input: LogisticsBillStateInput = {}) {
@@ -136,7 +138,7 @@ export function logisticsBillDefaultTab(input: LogisticsBillStateInput = {}): Lo
   if (["草稿", "已驳回"].includes(auditStatus)) return "details";
   if (auditStatus === "待审核") return "basic";
   if (auditStatus === "审核通过") return "invoice";
-  if (["待开票", "待开票 / 通知失败", "部分上传发票", "已上传发票"].includes(invoiceStatus)) return "invoice";
+  if (["待开票", "待开票 / 通知失败", "部分上传发票", "已上传发票", "部分确认发票", "已确认发票"].includes(invoiceStatus)) return "invoice";
   if (["已付款", "部分付款"].includes(paymentStatus)) return "invoice";
   return "details";
 }

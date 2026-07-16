@@ -244,7 +244,15 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
           canReview={canReviewExpense && !readOnlyArchive}
           canWithdraw={isLogisticsSupplier && !readOnlyArchive}
           canEditAmount={isLogisticsSupplier}
-          canUploadInvoice={!readOnlyArchive && (isLogisticsSupplier || canConfirmInvoice || canReviewExpense)}
+          canUploadInvoice={Boolean(!readOnlyArchive && (
+            canConfirmInvoice
+            || canReviewExpense
+            || isLogisticsSupplier && (
+              activeExpense.supplierAllowLogisticsInvoiceUpload
+              || activeExpense.items?.some((item) => item.supplierAllowLogisticsInvoiceUpload)
+            )
+          ))}
+          canConfirmInvoice={canConfirmInvoice && !readOnlyArchive}
           canManageInvoiceRecognition={!readOnlyArchive && (canConfirmInvoice || canReviewExpense)}
           canMarkPaid={canConfirmInvoice && !readOnlyArchive}
           canSubmitDraft={canCreateExpense && !readOnlyArchive}

@@ -255,6 +255,7 @@ test("domestic logistics batch archive uses logistics view archive only", () => 
   assert.match(domesticLogisticsApi, /domesticLogisticsCanArchiveOrder\(order, currentActor\)/);
   assert.match(domesticLogisticsOps, /domesticLogisticsBillDisplayStatus\(bill\) === "审核通过"/);
   assert.match(domesticLogisticsOps, /domesticLogisticsBillInvoiceStatus\(bill\) === "已上传发票"/);
+  assert.match(domesticLogisticsOps, /\["已上传", "已上传发票", "已确认", "已确认发票"\]\.includes\(text\)/);
   assert.match(domesticLogisticsApi, /isArchived: true/);
   assert.doesNotMatch(
     domesticLogisticsApi.match(/export async function archiveDomesticLogisticsOrders[\s\S]*?\n}\n\nasync function/)?.[0] || "",

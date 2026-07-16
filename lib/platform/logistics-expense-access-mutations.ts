@@ -33,6 +33,7 @@ import {
   logisticsExpenseOrderSummary,
 } from "./logistics-expense-access-serialization";
 import { logisticsCostPaymentDataFromExpense } from "./logistics-expense-cost-payment";
+import { logisticsCostHasSettlementEvidence } from "./logistics-expense-cost-safety";
 import { logisticsExpenseAccessWhere } from "./logistics-expense-access-permissions";
 import {
   DEFAULT_LOGISTICS_EXPENSE_BILLING_METHOD,
@@ -191,14 +192,83 @@ export async function buildLogisticsExpenseData(
 export function logisticsExpenseRequestedAuditStatus(input: UnknownRecord = {}, before: LogisticsExpenseLike | null = null) {
   const beforeAuditStatus = before ? logisticsExpenseBillAuditStatusValue(before) : "";
   const requestedStatus = nonEmpty(input.auditStatus || input.status || (before ? beforeAuditStatus : (input.submit === false ? "草稿" : "待审核")));
-  return LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "待审核";
+  return ["草稿", "待审核"].includes(requestedStatus) ? requestedStatus : "待审核";
+}
+
+const LOGISTICS_BILL_APPENDABLE_INVOICE_STATUSES = [
+  "待开票",
+  "未通知",
+  "已通知开票",
+  "通知失败",
+  "待开票 / 通知失败",
+];
+
+const LOGISTICS_BILL_APPENDABLE_PAYMENT_STATUSES = ["待开票", "未付款"];
+
+type LogisticsExpenseBillWriteDb = Prisma.TransactionClient | typeof prisma;
+
+async function updateAppendableLogisticsExpenseBill(
+  db: LogisticsExpenseBillWriteDb,
+  billId: string,
+  actor: LogisticsActor,
+  auditStatus: string,
+  submittedAt: unknown,
+  now: Date,
+  extraData: Prisma.LogisticsBillUncheckedUpdateManyInput = {},
+) {
+  await db.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id"
+    FROM "logistics_bills"
+    WHERE "id" = ${billId}
+    FOR UPDATE
+  `);
+  const current = await db.logisticsBill.findUnique({ where: { id: billId } });
+  if (!current) {
+    throw codedError("物流费用账单状态已变化，请刷新后重试。", 409, "LOGISTICS_BILL_APPEND_STATE_CHANGED");
+  }
+  if (current.status === "voided") {
+    throw codedError("该订单/供应商对应物流费用账单已作废，不能继续追加费用，请重新核对订单后创建新账单。", 400, "LOGISTICS_BILL_VOIDED_CREATE_BLOCKED");
+  }
+  if (
+    !["草稿", "已驳回"].includes(current.auditStatus)
+    || !LOGISTICS_BILL_APPENDABLE_INVOICE_STATUSES.includes(current.invoiceStatus)
+    || !LOGISTICS_BILL_APPENDABLE_PAYMENT_STATUSES.includes(current.paymentStatus)
+  ) {
+    throw codedError("该订单/供应商已有进入审核、发票或付款流程的物流费用账单，不能继续追加明细。", 409, "LOGISTICS_BILL_APPEND_STATE_BLOCKED");
+  }
+  const updated = await db.logisticsBill.updateMany({
+    where: {
+      id: billId,
+      status: { not: "voided" },
+      auditStatus: { in: ["草稿", "已驳回"] },
+      invoiceStatus: { in: LOGISTICS_BILL_APPENDABLE_INVOICE_STATUSES },
+      paymentStatus: { in: LOGISTICS_BILL_APPENDABLE_PAYMENT_STATUSES },
+    },
+    data: {
+      ...extraData,
+      deletedAt: null,
+      updatedById: logisticsExpenseActorId(actor) || null,
+      ...(auditStatus === "待审核" ? {
+        auditStatus,
+        submittedAt: dateFromInput(submittedAt) || now,
+        submittedById: logisticsExpenseActorId(actor) || null,
+        rejectReason: null,
+        invoiceNotificationError: null,
+      } : {}),
+    },
+  });
+  if (updated.count !== 1) {
+    throw codedError("物流费用账单状态已变化，新增明细已取消，请刷新后重试。", 409, "LOGISTICS_BILL_APPEND_STATE_CHANGED");
+  }
+  return db.logisticsBill.findUniqueOrThrow({ where: { id: billId } });
 }
 
 export async function ensureLogisticsExpenseBill(
   order: LogisticsExpenseOrderForAccess,
   supplier: LogisticsSupplierForExpense | null,
   actor: LogisticsActor,
-  input: UnknownRecord = {}
+  input: UnknownRecord = {},
+  db: LogisticsExpenseBillWriteDb = prisma,
 ) {
   const billOfLadingNo = logisticsExpenseBillOfLadingNo(order);
   const supplierId = nonEmpty(supplier?.id || input.supplierId || input.supplier_id);
@@ -208,19 +278,26 @@ export async function ensureLogisticsExpenseBill(
   const requestedStatus = nonEmpty(input.auditStatus || input.status || "草稿");
   const auditStatus = LOGISTICS_EXPENSE_AUDIT_STATUSES.includes(requestedStatus) ? requestedStatus : "草稿";
   const now = new Date();
-  const existing = await prisma.logisticsBill.findUnique({ where: { billKey } });
-  if (existing?.status === "voided") {
-    throw codedError("该订单/供应商对应物流费用账单已作废，不能继续追加费用，请重新核对订单后创建新账单。", 400, "LOGISTICS_BILL_VOIDED_CREATE_BLOCKED");
+  const existing = await db.logisticsBill.findUnique({ where: { billKey } });
+  if (existing) {
+    return updateAppendableLogisticsExpenseBill(
+      db,
+      existing.id,
+      actor,
+      auditStatus,
+      input.submittedAt,
+      now,
+      supplierId ? { supplierId } : {},
+    );
   }
-  if (!existing) {
-    const legacyBill = legacyBillKey
-      ? await prisma.logisticsBill.findFirst({
+  const legacyBill = legacyBillKey
+      ? await db.logisticsBill.findFirst({
         where: { billKey: legacyBillKey, deletedAt: null },
         select: { id: true, supplierId: true },
       })
       : null;
     const legacySuppliers = legacyBill
-      ? await prisma.logisticsExpense.findMany({
+      ? await db.logisticsExpense.findMany({
         where: {
           billId: legacyBill.id,
           deletedAt: null,
@@ -236,53 +313,42 @@ export async function ensureLogisticsExpenseBill(
       && (!legacyBill.supplierId || legacyBill.supplierId === supplierId)
       && (!legacySupplierIds.length || (legacySupplierIds.length === 1 && legacySupplierIds[0] === supplierId));
     if (legacyHasOnlyThisSupplier) {
-      return prisma.logisticsBill.update({
-        where: { id: legacyBill.id },
-        data: {
+      return updateAppendableLogisticsExpenseBill(
+        db,
+        legacyBill.id,
+        actor,
+        auditStatus,
+        input.submittedAt,
+        now,
+        {
           billKey,
           supplierId,
           billOfLadingNo,
-          deletedAt: null,
-          updatedById: logisticsExpenseActorId(actor) || null,
-          ...(auditStatus === "待审核" ? {
-            auditStatus,
-            submittedAt: dateFromInput(input.submittedAt) || now,
-            submittedById: logisticsExpenseActorId(actor) || null,
-            rejectReason: null,
-            invoiceNotificationError: null,
-          } : {}),
         },
-      });
+      );
     }
-  }
-  return prisma.logisticsBill.upsert({
-    where: { billKey },
-    update: {
-      ...(supplierId ? { supplierId } : {}),
-      deletedAt: null,
-      updatedById: logisticsExpenseActorId(actor) || null,
-      ...(auditStatus === "待审核" ? {
-        auditStatus,
-        submittedAt: dateFromInput(input.submittedAt) || now,
-        submittedById: logisticsExpenseActorId(actor) || null,
-        rejectReason: null,
-        invoiceNotificationError: null,
-      } : {}),
-    },
-    create: {
+  try {
+    return await db.logisticsBill.create({
+      data: {
       billKey,
       orderId: order.id,
       supplierId: supplierId || null,
       billOfLadingNo,
       auditStatus,
-      invoiceStatus: "未通知",
+      invoiceStatus: "待开票",
       paymentStatus: "待开票",
       submittedAt: auditStatus === "待审核" ? (dateFromInput(input.submittedAt) || now) : null,
       submittedById: auditStatus === "待审核" ? (logisticsExpenseActorId(actor) || null) : null,
       createdById: logisticsExpenseActorId(actor) || null,
       updatedById: logisticsExpenseActorId(actor) || null,
     },
-  });
+    });
+  } catch (error: unknown) {
+    if ((error as { code?: string })?.code === "P2002") {
+      throw codedError("同一订单/供应商的物流费用账单正在创建，请刷新后重试。", 409, "LOGISTICS_BILL_CREATE_CONFLICT");
+    }
+    throw error;
+  }
 }
 
 function integerBillingMethod(method: unknown) {
@@ -363,7 +429,12 @@ export async function loadLogisticsExpenseForAction(id: string, actor: Logistics
   return expense;
 }
 
-export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.TransactionClient | typeof prisma, expense: LogisticsExpenseForCostSync, actor: LogisticsActor) {
+export async function createOrUpdateCostFromLogisticsExpense(
+	tx: Prisma.TransactionClient | typeof prisma,
+	expense: LogisticsExpenseForCostSync,
+	actor: LogisticsActor,
+	options: { settledCostMode?: "reject" | "preserve-required" } = {},
+) {
 	const costType = String(normalizedCostType(nonEmpty(expense.costType)));
 	const currentActorId = logisticsExpenseActorId(actor);
 	const invoiceUploaded = Boolean(expense.invoiceDocumentId)
@@ -394,21 +465,98 @@ export async function createOrUpdateCostFromLogisticsExpense(tx: Prisma.Transact
     remark: expense.remark || "",
     updatedById: currentActorId || null,
 	};
-	const existing = expense.costId
+	let existing = expense.costId
 		? await tx.orderCost.findFirst({ where: { id: expense.costId, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } } })
-		: await tx.orderCost.findFirst({
-			where: {
-				sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
-				sourceId: expense.id,
-				deletedAt: null,
-				status: { not: ORDER_COST_STATUS_VOID },
-			},
-		});
+		: null;
+	if (existing) {
+		const sourceMatches = LOGISTICS_GENERATED_COST_SOURCE_TYPES.includes(existing.sourceType)
+			&& existing.sourceId === expense.id;
+		const scopeMatches = existing.orderId === expense.orderId
+			&& (!existing.supplierId || existing.supplierId === expense.supplierId);
+		if (!sourceMatches || !scopeMatches) {
+			throw codedError(
+				"物流费用关联的成本来源、订单或供应商不一致，已阻止覆盖正式成本，请先修复历史关联。",
+				409,
+				"LOGISTICS_COST_LINK_SCOPE_MISMATCH",
+			);
+		}
+	}
+	const sourceCosts = await tx.orderCost.findMany({
+		where: {
+			sourceType: { in: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
+			sourceId: expense.id,
+			deletedAt: null,
+			status: { not: ORDER_COST_STATUS_VOID },
+		},
+		orderBy: [{ createdAt: "asc" }],
+		take: 2,
+	});
+	if (
+		sourceCosts.length > 1
+		|| existing && sourceCosts.some((cost) => cost.id !== existing?.id)
+	) {
+		throw codedError(
+			"同一物流费用关联了多条有效成本，已阻止自动覆盖，请先清理重复成本。",
+			409,
+			"LOGISTICS_COST_SOURCE_DUPLICATE",
+		);
+	}
+	if (!existing) existing = sourceCosts[0] || null;
+	const settledCostMode = options.settledCostMode || "reject";
+	const existingIsSettled = logisticsCostHasSettlementEvidence(existing);
+	if (settledCostMode === "reject" && existingIsSettled) {
+		throw codedError(
+			"关联正式成本已存在付款记录，已阻止自动覆盖，请先核对账单状态；如需更正请使用付款冲销。",
+			409,
+			"LOGISTICS_COST_PAYMENT_STATE_CONFLICT",
+		);
+	}
+	if (settledCostMode === "preserve-required" && (!existing || !existingIsSettled)) {
+		throw codedError(
+			"账单显示已付款，但关联正式成本缺少完整付款记录，冲销已取消，请先修复历史状态。",
+			409,
+			"LOGISTICS_PAYMENT_REVERSAL_COST_STATE_CONFLICT",
+		);
+	}
+	if (settledCostMode === "preserve-required" && existing) {
+		return existing;
+	}
+	const physicalTargetConflict = await tx.orderCost.findFirst({
+		where: {
+			...(existing ? { id: { not: existing.id } } : {}),
+			sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE,
+			sourceId: expense.id,
+		},
+		select: { id: true },
+	});
+	if (physicalTargetConflict) {
+		throw codedError(
+			"物流费用成本来源键已被历史记录占用，已阻止覆盖，请先修复重复成本。",
+			409,
+			"LOGISTICS_COST_SOURCE_KEY_CONFLICT",
+		);
+	}
 	  if (existing) {
-	    return tx.orderCost.update({
-	      where: { id: existing.id },
+	    const updated = await tx.orderCost.updateMany({
+	      where: {
+	        id: existing.id,
+	        paid: false,
+	        paymentStatus: { notIn: ["已支付", "部分支付", "已付款", "部分付款"] },
+	        paidAt: null,
+	        paymentDate: null,
+	      },
 	      data: { ...costData, costConfirmedAt: existing.costConfirmedAt || confirmedAt },
 	    });
+	    if (updated.count !== 1) {
+	      throw codedError(
+	        "关联正式成本付款状态已变化，已阻止自动覆盖，请刷新后核对。",
+	        409,
+	        "LOGISTICS_COST_PAYMENT_STATE_CONFLICT",
+	      );
+	    }
+	    const saved = await tx.orderCost.findUnique({ where: { id: existing.id } });
+	    if (!saved) throw codedError("物流费用成本状态已变化，请刷新后重试。", 409, "LOGISTICS_COST_SYNC_CHANGED");
+	    return saved;
 	  }
 	  return tx.orderCost.create({ data: { ...costData, costConfirmedAt: confirmedAt, createdById: currentActorId || null } });
 }

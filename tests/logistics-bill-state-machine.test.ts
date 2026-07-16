@@ -27,15 +27,15 @@ test("logistics bill state machine centralizes workflow transitions", () => {
   assert.equal(canRejectLogisticsBill({ auditStatus: "草稿" }), false);
 
 	assert.equal(canUploadLogisticsBillInvoice({ auditStatus: "审核通过" }), true);
-	assert.equal(canUploadLogisticsBillInvoice({ auditStatus: "待审核" }), true);
+	assert.equal(canUploadLogisticsBillInvoice({ auditStatus: "待审核" }), false);
 });
 
-test("logistics bill payment requires approved bill and uploaded invoice", () => {
+test("logistics bill payment requires approved bill, confirmed invoice, and pending payment", () => {
   assert.equal(canMarkLogisticsBillPaid({
     auditStatus: "审核通过",
     invoiceStatus: "已上传发票",
     paymentStatus: "待付款",
-  }), true);
+  }), false);
   assert.equal(canMarkLogisticsBillPaid({
     auditStatus: "审核通过",
     invoiceStatus: "已确认",
@@ -48,29 +48,29 @@ test("logistics bill payment requires approved bill and uploaded invoice", () =>
   }), false);
   assert.equal(canMarkLogisticsBillPaid({
     auditStatus: "审核通过",
-    invoiceStatus: "已上传发票",
+    invoiceStatus: "已确认发票",
     paymentStatus: "已付款",
   }), false);
   assert.equal(canMarkLogisticsBillPaid({
     auditStatus: "审核通过",
-    invoiceStatus: "已上传发票",
+    invoiceStatus: "已确认发票",
     paymentStatus: "部分已付款",
-  }), true);
+  }), false);
 
   assert.deepEqual(logisticsBillPayState({
     auditStatus: "审核通过",
-    invoiceStatus: "已上传发票",
+    invoiceStatus: "已确认发票",
     paymentStatus: "待付款",
   }), {
     auditStatus: "审核通过",
-    invoiceStatus: "已上传发票",
+    invoiceStatus: "已确认发票",
     paymentStatus: "待付款",
     alreadyPaid: false,
     canMarkPaid: true,
     canReversePayment: false,
     rule: {
-      allow: ["审核通过 + 已上传发票 + 未付款"],
-      deny: ["草稿", "待审核", "未上传发票", "已付款"],
+      allow: ["审核通过 + 已确认发票 + 待付款"],
+      deny: ["草稿", "待审核", "未上传发票", "发票未确认", "已付款"],
     },
   });
 });
@@ -111,11 +111,11 @@ test("logistics bill default tab follows workflow state", () => {
 test("logistics bill state exposes normalized booleans for UI and API guards", () => {
   assert.deepEqual(logisticsBillState({
     auditStatus: "审核通过",
-    invoiceStatus: "已上传",
+    invoiceStatus: "已确认",
     paymentStatus: "待付款",
   }), {
     auditStatus: "审核通过",
-    invoiceStatus: "已上传发票",
+    invoiceStatus: "已确认发票",
     paymentStatus: "待付款",
     alreadyPaid: false,
     canSubmit: false,

@@ -54,6 +54,7 @@ export type EmailResult = {
   sent?: boolean;
   skipped?: boolean;
   error?: string;
+  trackingError?: string;
   expenseIds?: string[];
 };
 

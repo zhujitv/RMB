@@ -54,7 +54,7 @@ export function logisticsExpenseBillPaymentStatusFromRow(expense: LogisticsExpen
   );
   if (
     paymentStatus === "待付款" &&
-    ["待开票", "未通知", "已通知开票", "通知失败", "待开票 / 通知失败", "部分未通知", "部分已通知", "部分待开票", "部分上传发票", "部分已确认", "部分已上传", "部分上传"].includes(invoiceStatus)
+    ["待开票", "未通知", "已通知开票", "通知失败", "待开票 / 通知失败", "部分未通知", "部分已通知", "部分待开票", "部分上传发票", "部分已确认", "部分已上传", "部分上传", "已上传发票", "已上传", "已开票"].includes(invoiceStatus)
   ) return "待开票";
   return paymentStatus;
 }
@@ -67,7 +67,7 @@ export function isVoidedLogisticsExpenseBill(expense: LogisticsExpense) {
 }
 
 export function logisticsExpenseDetailInvoiceStatus(expense: LogisticsExpense) {
-  return String(expense.detailInvoiceStatus || "未通知").trim() || "未通知";
+  return String(expense.detailInvoiceStatus || "待开票").trim() || "待开票";
 }
 
 export function logisticsExpenseDetailPaymentStatus(expense: LogisticsExpense) {

@@ -102,9 +102,11 @@ test("logistics expense bill details can add create and delete rows through one 
     backend,
     /loadLogisticsExpenseBillRowsForAction\(identifier, actor\)/,
   );
-  assert.match(backend, /prisma\.\$transaction\(transactionOperations\)/);
-  assert.match(backend, /prisma\.logisticsExpense\.createMany/);
-  assert.match(backend, /prisma\.logisticsExpense\.updateMany/);
+  assert.match(backend, /prisma\.\$transaction\(async \(tx\) =>/);
+  assert.match(backend, /lockLogisticsBillForWorkflow\(tx, targetBillId\)/);
+  assert.match(backend, /LOGISTICS_EXPENSE_BATCH_SAVE_STATE_CHANGED/);
+  assert.match(backend, /tx\.logisticsExpense\.createMany/);
+  assert.match(backend, /tx\.logisticsExpense\.updateMany/);
   assert.match(backend, /details: serializedItems/);
   assert.doesNotMatch(
     backend.match(
@@ -251,7 +253,7 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
 test("logistics paid button is locked by bill state machine", () => {
   assert.match(
     logisticsBillStateMachine,
-    /LOGISTICS_BILL_PAY_BUTTON_RULE = \{[\s\S]*审核通过 \+ 已上传发票 \+ 未付款[\s\S]*草稿[\s\S]*待审核[\s\S]*未上传发票[\s\S]*已付款/,
+    /LOGISTICS_BILL_PAY_BUTTON_RULE = \{[\s\S]*审核通过 \+ 已确认发票 \+ 待付款[\s\S]*草稿[\s\S]*待审核[\s\S]*未上传发票[\s\S]*发票未确认[\s\S]*已付款/,
   );
   assert.match(
     logisticsModule,
@@ -268,7 +270,10 @@ test("logistics paid button is locked by bill state machine", () => {
     /<DetailField[\s\S]*?label="付款时间"[\s\S]*?value=\{formatDate\(expense\.paymentDate\)\}/,
   );
   assert.match(logisticsModule, /function logisticsExpensePayButtonState/);
-  assert.match(logisticsModule, /status\.includes\("部分"\)[\s\S]*return "未上传发票"[\s\S]*status\.includes\("已上传发票"\)/);
+  assert.match(logisticsModule, /const invoiceStatus = normalizePayButtonInvoiceStatus\(\[/);
+  assert.match(logisticsFeesShared, /const allConfirmed = statuses\.every\(\(status\) => status\.includes\("已确认"\)\)/);
+  assert.match(logisticsFeesShared, /if \(allConfirmed\) return "已确认发票"/);
+  assert.match(logisticsFeesShared, /status\.includes\("已上传"\)[\s\S]*return "已上传发票"/);
   assert.match(
     logisticsModule,
     /logisticsBillPayState\(\{[\s\S]*auditStatus,[\s\S]*invoiceStatus,[\s\S]*paymentStatus,[\s\S]*status: isVoidedLogisticsExpenseBill\(expense\) \? "voided" : expense\.status,[\s\S]*\}\)/,
@@ -282,7 +287,7 @@ test("logistics paid button is locked by bill state machine", () => {
   );
   assert.match(
     logisticsBillStateMachine,
-    /normalizeLogisticsBillAuditStatus\(input\.auditStatus\) === "审核通过"[\s\S]*normalizeLogisticsBillInvoiceStatus\(input\.invoiceStatus\) === "已上传发票"[\s\S]*normalizeLogisticsBillPaymentStatus\(input\.paymentStatus\) !== "已付款"/,
+    /normalizeLogisticsBillAuditStatus\(input\.auditStatus\) === "审核通过"[\s\S]*normalizeLogisticsBillInvoiceStatus\(input\.invoiceStatus\) === "已确认发票"[\s\S]*normalizeLogisticsBillPaymentStatus\(input\.paymentStatus\) === "待付款"/,
   );
   assert.match(logisticsModule, /if \(!payState\.canMarkPaid\) return/);
   assert.match(logisticsModule, /className=\{styles\.billPayButton\}/);
@@ -327,7 +332,8 @@ test("logistics paid button is locked by bill state machine", () => {
   assert.match(reverseLogisticsExpensePaymentSource, /assertCanReverseLogisticsPayment\(actor\)/);
   assert.match(reverseLogisticsExpensePaymentSource, /LOGISTICS_PAYMENT_REVERSAL_REASON_REQUIRED/);
   assert.match(reverseLogisticsExpensePaymentSource, /prisma\.\$transaction/);
-  assert.match(reverseLogisticsExpensePaymentSource, /syncApprovedLogisticsExpenseCosts\(tx, currentRows, actor\)/);
+  assert.match(reverseLogisticsExpensePaymentSource, /syncApprovedLogisticsExpenseCosts\(tx, currentRows, actor, \{[\s\S]*settledCostMode: "preserve-required"/);
+  assert.match(reverseLogisticsExpensePaymentSource, /LOGISTICS_PAYMENT_REVERSAL_COST_LINK_INCOMPLETE/);
   assert.match(reverseLogisticsExpensePaymentSource, /paymentStatus: "待付款"/);
   assert.match(reverseLogisticsExpensePaymentSource, /paymentStatus: "待支付"/);
   assert.match(reverseLogisticsExpensePaymentSource, /costUpdate\.count !== costIds\.length/);
@@ -337,7 +343,7 @@ test("logistics paid button is locked by bill state machine", () => {
   assert.match(reverseLogisticsExpensePaymentSource, /bill: serializeLogisticsExpenseBill\(savedRows\)/);
   assert.match(reverseLogisticsExpensePaymentSource, /const serializedExpenses = savedRows\.map\(serializeLogisticsExpense\)/);
   assert.match(reverseLogisticsExpensePaymentSource, /expenses: serializedExpenses/);
-  assert.match(updateLogisticsExpensePaymentStatusSource, /bill: serializeLogisticsExpenseBill\(reloadedRows\)/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /const finalRows = Array\.isArray\(reloadedRows\)[\s\S]*bill: serializeLogisticsExpenseBill\(finalRows\)/);
   assert.match(updateLogisticsExpensePaymentStatusSource, /expenses: serializedExpenses/);
   assert.match(backend, /costConfirmedAt: existing\.costConfirmedAt \|\| confirmedAt/);
   assert.match(logisticsFeesShared, /text\.includes\("部分"\)[\s\S]*text\.includes\("已付款"\)/);

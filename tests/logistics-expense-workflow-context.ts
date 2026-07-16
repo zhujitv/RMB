@@ -24,6 +24,7 @@ export const backend = [
   readFileSync("lib/platform/logistics-expense-access.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access-model.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-cost-payment.ts", "utf8"),
+  readFileSync("lib/platform/logistics-expense-cost-safety.ts", "utf8"),
   readLogisticsExpenseAccessSource(),
   readFileSync("lib/platform/logistics-expense-access-permissions.ts", "utf8"),
   readFileSync("lib/platform/logistics-expense-access-mutations.ts", "utf8"),
@@ -94,6 +95,10 @@ export const logisticsBillSupplierKeyMigration = readFileSync(
 );
 export const logisticsBillVoidMigration = readFileSync(
   "prisma/migrations/20260707160000_logistics_bill_void_status/migration.sql",
+  "utf8",
+);
+export const logisticsReviewInvoicePaymentMigration = readFileSync(
+  "prisma/migrations/20260716090000_decouple_logistics_review_invoice_payment/migration.sql",
   "utf8",
 );
 export const logisticsBillStateMachine = readFileSync(

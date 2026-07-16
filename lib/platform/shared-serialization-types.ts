@@ -182,6 +182,7 @@ export type CostDocumentLike = Record<string, unknown> & {
   uploadProgress?: unknown;
   uploadedBy?: UserLike | null;
   uploadedAt?: Date | string | null;
+  deletedAt?: Date | string | null;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
   source?: string | null;

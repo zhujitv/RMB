@@ -94,7 +94,7 @@ export function createLogisticsFeesReviewActions({
     }
 	    const confirmationResult = await requestConfirmation({
 	      title: "合并审核 / 批量审核",
-	      message: "审核通过后系统会同步生成或更新成本管理记录。",
+	      message: "审核通过后系统会同步生成或更新成本管理记录，并通知物流供应商上传对应发票。",
 	      details: [`选中账单：${selectedReviewableRows.length} 票`],
 	      confirmLabel: "审核通过",
       cancelLabel: "取消",

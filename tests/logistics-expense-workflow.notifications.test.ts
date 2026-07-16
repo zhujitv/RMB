@@ -37,6 +37,7 @@ import {
   backendAggregateStatusSource,
   submitLogisticsExpenseBillSource,
   reviewLogisticsExpenseBillsSource,
+  reviewLogisticsExpenseBillsFunctionSource,
   approveLogisticsExpenseBillRowsSource,
   updateLogisticsExpensePaymentStatusSource,
   logisticsCostRoute,
@@ -61,7 +62,7 @@ import {
   logisticsSupplierStatementSource
 } from "./logistics-expense-workflow-context.ts";
 
-test("legacy logistics invoice notification remains available outside approval flow", () => {
+test("approved logistics expenses notify supplier contacts without coupling email delivery to approval", () => {
   assert.match(backend, /notifyLogisticsSupplierInvoice/);
   assert.match(backend, /notifyLogisticsSupplierInvoiceBills/);
   assert.match(backend, /renderLogisticsInvoiceNotificationEmail/);
@@ -76,21 +77,33 @@ test("legacy logistics invoice notification remains available outside approval f
   assert.match(backend, /logisticsInvoiceNotificationAdminEmails/);
   assert.match(backend, /logisticsInvoiceNotificationCcEmails/);
   assert.match(backend, /supplier\.operatorUsers\.email/);
-  assert.match(backend, /supplier\.contactEmail/);
-  assert.match(backend, /supplier\.financeEmail/);
+  assert.match(backend, /供应商联系人邮箱[\s\S]*supplier\.email/);
+  assert.doesNotMatch(backend, /field: "supplier\.(?:contactEmail|financeEmail)"/);
   assert.match(backend, /物流供应商未配置有效邮箱(?:，已检查|（已检查：)/);
-  assert.match(backend, /物流费用已审核通过，请开票并上传发票/);
+  assert.match(backend, /物流费用审核通过，请上传发票/);
   assert.match(backend, /recipientEmails: resolved\.emails/);
   assert.match(backend, /role: "管理员"/);
   assert.match(backend, /applyLogisticsExpenseInvoiceNotificationResults/);
   assert.match(backend, /重新发送物流费用开票通知/);
-  assert.match(backend, /invoiceStatus: nextInvoiceStatus/);
+	assert.doesNotMatch(backend, /invoiceStatus: nextInvoiceStatus/);
+	assert.match(backend, /invoiceNotifiedAt: result\.sent \? now : row\.invoiceNotifiedAt/);
   assert.match(
     backend,
     /invoiceNotificationError: result\.sent \|\| result\.skipped \? null/,
   );
-  assert.match(logisticsReviewRoute, /历史开票通知发送失败/);
-  assert.doesNotMatch(logisticsReviewRoute, /开票通知已按供应商合并发送/);
+	assert.match(reviewLogisticsExpenseBillsSource, /const sideEffects = await scheduleLogisticsExpenseReviewSideEffects\(request, actor, approvedRows, now\)/);
+	assert.match(reviewLogisticsExpenseBillsSource, /notifyLogisticsSupplierInvoiceBills\(rowsReadyForNotification/);
+	assert.match(reviewLogisticsExpenseBillsSource, /catch \(error: unknown\) \{[\s\S]*物流费用审核后开票通知发送失败[\s\S]*logisticsExpenseNotificationFailureResult/);
+	assert.match(reviewLogisticsExpenseBillsSource, /result\.sent \? \{ \.\.\.result, trackingError: message \} : result/);
+	assert.doesNotMatch(reviewLogisticsExpenseBillsSource, /refreshLogisticsBillWorkflowStatus/);
+	assert.match(reviewLogisticsExpenseBillsSource, /prisma\.logisticsBill\.updateMany\([\s\S]*invoiceNotifiedAt/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /const successCount = approvedBillIds\.length/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /emailError,[\s\S]*message: logisticsExpenseReviewSummaryMessage/);
+	assert.match(logisticsReviewRoute, /费用已审核并同步成本，开票通知发送失败/);
+	assert.match(logisticsReviewRoute, /物流费用已审核，已通知供应商上传发票/);
+	assert.match(backend, /isLegacyLogisticsTemplateFingerprint/);
+	assert.match(backend, /AbortSignal\.timeout\(timeoutMs\)/);
+	assert.match(backend, /if \(providerDelivered\)[\s\S]*sent: true[\s\S]*trackingError: message/);
 });
 
 test("settings include configurable logistics invoice notification template", () => {

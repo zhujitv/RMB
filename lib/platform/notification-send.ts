@@ -85,6 +85,7 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
           relatedOrderId: nonEmpty(input.relatedOrderId) || null,
         },
       });
+  let providerDelivered = false;
   try {
     await prisma.notificationOutbox.update({
       where: { id: outbox.id },
@@ -98,6 +99,7 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
       attachments,
       idempotencyKey: idempotencyKey || outbox.id,
     });
+    providerDelivered = true;
     const sentAt = new Date();
     await prisma.$transaction([
       prisma.notificationOutbox.update({
@@ -125,6 +127,14 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
     return { sent: true, skipped: false, outboxId: outbox.id, error: "" };
   } catch (error: unknown) {
     const message = publicSendError(error);
+    if (providerDelivered) {
+      console.error("notification-delivery-tracking-failed", {
+        outboxId: outbox.id,
+        type: template.type,
+        message,
+      });
+      return { sent: true, skipped: false, outboxId: outbox.id, error: "", trackingError: message };
+    }
     await prisma.$transaction([
       prisma.notificationOutbox.update({
         where: { id: outbox.id },

@@ -987,7 +987,7 @@ model LogisticsBill {
   supplierId               String?   @map("supplier_id")
   billOfLadingNo           String    @default("") @map("bill_of_lading_no")
   auditStatus              String    @default("草稿") @map("audit_status")
-  invoiceStatus            String    @default("未通知") @map("invoice_status")
+  invoiceStatus            String    @default("待开票") @map("invoice_status")
   paymentStatus            String    @default("待开票") @map("payment_status")
   status                   String    @default("normal")
   submittedById            String?   @map("submitted_by")
@@ -1062,7 +1062,7 @@ model LogisticsExpense {
   billingQuantity          Decimal?  @map("billing_quantity") @db.Decimal(18, 4)
   remark                   String?
   auditStatus              String    @default("草稿") @map("audit_status")
-  invoiceStatus            String    @default("未通知") @map("invoice_status")
+  invoiceStatus            String    @default("待开票") @map("invoice_status")
   paymentStatus            String    @default("待开票") @map("payment_status")
   submittedAt              DateTime? @map("submitted_at")
   reviewedById             String?   @map("reviewed_by")

@@ -4,6 +4,8 @@ import { apiError, codedError, logServerError, ok, parseJsonBody, reviewLogistic
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -11,8 +13,10 @@ export async function PATCH(request: NextRequest) {
     const body = await parseJsonBody(request);
     const result = await reviewLogisticsExpenseBills(request, actor, body);
     const message = result.message || (result.emailError
-      ? `费用已审核，历史开票通知发送失败：${result.emailError}`
-      : "物流费用已审核，已同步成本管理");
+      ? `费用已审核并同步成本，开票通知发送失败：${result.emailError}`
+      : result.emailNotified
+        ? "物流费用已审核，已通知供应商上传发票"
+        : "物流费用已审核，已同步成本管理");
     return ok({ ...result, success: result.success !== false, message });
   } catch (error: unknown) {
     return apiError(maskLogisticsReviewTimeoutError(error), "审核物流费用失败");

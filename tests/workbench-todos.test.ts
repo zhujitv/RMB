@@ -156,7 +156,7 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /reviewAccessWhere/);
   assert.match(workbenchSource, /\{ invoiceStatus: \{ in: LOGISTICS_INVOICE_TO_UPLOAD_STATUSES \} \}/);
   assert.match(workbenchSource, /LOGISTICS_INVOICE_TO_UPLOAD_STATUSES = \["待开票", "未通知", "已通知开票", "通知失败", "待开票 \/ 通知失败", "部分未通知", "部分已通知", "部分待开票", "部分上传发票", "部分已上传", "部分上传", "部分已确认"\]/);
-  assert.match(workbenchSource, /LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = \["已上传发票", "已上传", "已确认", "已确认发票"\]/);
+  assert.match(workbenchSource, /LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = \["已确认", "已确认发票"\]/);
   assert.match(workbenchSource, /LOGISTICS_INVOICE_TO_UPLOAD_STATUSES/);
   assert.match(workbenchSource, /logisticsBillNeedsInvoiceUpload/);
   assert.match(workbenchSource, /logisticsBillNeedsPaymentRegistration/);
