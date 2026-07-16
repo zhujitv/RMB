@@ -58,7 +58,7 @@ import {
   type WorkbenchTodo,
   type WorkbenchTodoContext,
 } from "./workbench-todos-core";
-import { requiresLogisticsFeeEntry } from "./workbench-todo-rules";
+import { requiresContainerNumber, requiresLogisticsFeeEntry } from "./workbench-todo-rules";
 import {
   billOfLadingExists,
   customsDeclarationUploaded,
@@ -202,7 +202,7 @@ export async function listDomesticLogisticsTodos(context: WorkbenchTodoContext) 
         owner: logisticsOwner,
       }));
     }
-    const hasContainerMissing = order.domesticLogisticsInfos.some((info) => (
+    const hasContainerMissing = order.domesticLogisticsInfos.some((info) => requiresContainerNumber(info.transportType) && (
       !info.transportItems.length || info.transportItems.some((item) => !nonEmpty(item.containerNo))
     ));
     if (hasContainerMissing) {

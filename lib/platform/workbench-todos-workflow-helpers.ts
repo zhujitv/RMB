@@ -65,7 +65,7 @@ export const FINAL_TAX_REFUND_STATUSES = ["SUBMITTED", "REFUND_RECEIVED", "COMPL
 export type WorkbenchWorkflowOrder = TodoOrder & {
   customsDeclarationNo?: string | null;
   customsDeclarationDate?: Date | string | null;
-  domesticLogisticsInfos?: Array<{ transportItems?: Array<{ containerNo?: string | null }> | null }> | null;
+  domesticLogisticsInfos?: Array<{ transportType?: string | null; transportItems?: Array<{ containerNo?: string | null }> | null }> | null;
   logisticsExpenses?: Array<{ id?: string | null }> | null;
   costs?: Array<{
     id?: string | null;

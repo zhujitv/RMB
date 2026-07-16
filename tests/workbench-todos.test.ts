@@ -55,6 +55,15 @@ test("EXW orders do not prompt for logistics fee entry", () => {
   );
 });
 
+test("bulk warehouse cargo does not prompt for a container number", () => {
+  assert.equal(workbenchRules.requiresContainerNumber("BULK_WAREHOUSE"), false);
+  assert.equal(workbenchRules.requiresContainerNumber("散货进舱"), false);
+  assert.equal(workbenchRules.requiresContainerNumber("散货进仓"), false);
+  assert.equal(workbenchRules.requiresContainerNumber("TRUCK"), true);
+  assert.equal(workbenchRules.requiresContainerNumber("MULTIMODAL"), true);
+  assert.match(workbenchSource, /requiresContainerNumber\(info\.transportType\)/);
+});
+
 test("workbench todo summary counts pending, today due, overdue and completed", () => {
   const now = new Date("2026-07-01T04:00:00.000Z");
   const base = {

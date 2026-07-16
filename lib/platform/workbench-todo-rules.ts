@@ -76,6 +76,11 @@ export function requiresLogisticsFeeEntry(tradeTerm: string | null | undefined) 
   return !String(tradeTerm || "").trim().toUpperCase().includes("EXW");
 }
 
+export function requiresContainerNumber(transportType: string | null | undefined) {
+  const normalized = String(transportType || "").trim().toUpperCase();
+  return normalized !== "BULK_WAREHOUSE" && !normalized.includes("散货进舱") && !normalized.includes("散货进仓");
+}
+
 export const WORKBENCH_TODO_ACTIVATION_RULES: Record<string, WorkbenchTodoActivationRule> = {
   NEW_ORDER_REVIEW: {
     flowStage: "SALES_ORDER_CREATED",
@@ -110,7 +115,7 @@ export const WORKBENCH_TODO_ACTIVATION_RULES: Record<string, WorkbenchTodoActiva
   CONTAINER_NO_MISSING: {
     flowStage: "LOGISTICS_INFO_COMPLETED",
     prerequisiteStage: "SUPPLIER_DOCUMENT_COMPLETED",
-    activationCondition: "logistics info exists AND logistics supplier assigned AND container number is missing",
+    activationCondition: "logistics info exists AND transport type requires a container AND container number is missing",
   },
   LOGISTICS_FEE_ENTRY: {
     flowStage: "LOGISTICS_COST_RECORDED",
