@@ -58,6 +58,7 @@ import {
   type WorkbenchTodo,
   type WorkbenchTodoContext,
 } from "./workbench-todos-core";
+import { requiresLogisticsFeeEntry } from "./workbench-todo-rules";
 import {
   billOfLadingExists,
   customsDeclarationUploaded,
@@ -228,7 +229,7 @@ export async function listDomesticLogisticsTodos(context: WorkbenchTodoContext) 
         owner: logisticsOwner,
       }));
     }
-    if (!order.logisticsExpenses.length && transportInfoExists(workflowOrder) && (isAdmin(actor) || isSalesperson(actor) || isLogisticsSupplier(actor))) {
+    if (requiresLogisticsFeeEntry(order.tradeTerm) && !order.logisticsExpenses.length && transportInfoExists(workflowOrder) && (isAdmin(actor) || isSalesperson(actor) || isLogisticsSupplier(actor))) {
       todos.push(todoForOrder({
         type: "LOGISTICS_FEE_ENTRY",
         title: "物流费用待录入",

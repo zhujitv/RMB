@@ -45,6 +45,16 @@ test("workbench todo priority follows due date rules", () => {
   assert.equal(workbenchRules.todoPriorityFromDueAt(null, now), "normal");
 });
 
+test("EXW orders do not prompt for logistics fee entry", () => {
+  assert.equal(workbenchRules.requiresLogisticsFeeEntry("EXW"), false);
+  assert.equal(workbenchRules.requiresLogisticsFeeEntry("EXW 报关"), false);
+  assert.equal(workbenchRules.requiresLogisticsFeeEntry("FOB"), true);
+  assert.match(
+    workbenchRules.WORKBENCH_TODO_ACTIVATION_RULES.LOGISTICS_FEE_ENTRY.activationCondition,
+    /tradeTerm != 'EXW'/,
+  );
+});
+
 test("workbench todo summary counts pending, today due, overdue and completed", () => {
   const now = new Date("2026-07-01T04:00:00.000Z");
   const base = {

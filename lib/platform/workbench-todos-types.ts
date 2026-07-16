@@ -42,6 +42,7 @@ export type TodoOrder = {
   id: string;
   orderNo: string;
   blNo?: string | null;
+  tradeTerm?: string | null;
   status?: string | null;
   customerNameSnapshot?: string | null;
   dueDate?: Date | string | null;

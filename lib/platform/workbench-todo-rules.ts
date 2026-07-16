@@ -72,6 +72,10 @@ export function isOverdue(dueAt: string | null | undefined, now = new Date()) {
   return due < startOfChinaDay(now);
 }
 
+export function requiresLogisticsFeeEntry(tradeTerm: string | null | undefined) {
+  return !String(tradeTerm || "").trim().toUpperCase().includes("EXW");
+}
+
 export const WORKBENCH_TODO_ACTIVATION_RULES: Record<string, WorkbenchTodoActivationRule> = {
   NEW_ORDER_REVIEW: {
     flowStage: "SALES_ORDER_CREATED",
@@ -111,7 +115,7 @@ export const WORKBENCH_TODO_ACTIVATION_RULES: Record<string, WorkbenchTodoActiva
   LOGISTICS_FEE_ENTRY: {
     flowStage: "LOGISTICS_COST_RECORDED",
     prerequisiteStage: "LOGISTICS_INFO_COMPLETED",
-    activationCondition: "logistics info is complete AND bill of lading or transport info exists AND no logistics expense exists",
+    activationCondition: "tradeTerm != 'EXW' AND logistics info is complete AND bill of lading or transport info exists AND no logistics expense exists",
   },
   LOGISTICS_FEE_REVIEW: {
     flowStage: "LOGISTICS_COST_AUDITED",
