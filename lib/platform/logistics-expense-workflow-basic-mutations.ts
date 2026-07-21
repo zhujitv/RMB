@@ -43,6 +43,7 @@ import {
 } from "./logistics-expense-workflow-core";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 import { assertBusinessOrderWritableInTransaction } from "./business-archive";
+import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
 
 export async function saveLogisticsExpenses(request: AuditRequestLike, actor: ActorContext, input: UnknownRecord = {}) {
   assertCanWriteLogisticsExpense(actor);
@@ -71,6 +72,7 @@ export async function saveLogisticsExpenses(request: AuditRequestLike, actor: Ac
       order.id,
       "该订单已提交退税并归档，不能新增物流费用。",
     );
+    await assertCommissionOrderWritableInTransaction(tx, order.id);
     const created: LogisticsExpenseRow[] = [];
     for (const [, group] of [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))) {
       const auditStatus = group.some((item) => item.auditStatus === "待审核") ? "待审核" : "草稿";
@@ -112,6 +114,12 @@ export async function updateLogisticsExpense(request: AuditRequestLike, actor: A
   const data = await buildLogisticsExpenseData(order, supplier, actor, { ...input, supplierId: before.supplierId }, before);
   const billId = rowBillId(before);
   const saved = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      before.orderId,
+      "该订单已提交退税并归档，不能修改物流费用。",
+    );
+    await assertCommissionOrderWritableInTransaction(tx, before.orderId);
     await lockLogisticsBillForWorkflow(tx, billId);
     const updated = await tx.logisticsExpense.updateMany({
       where: {
@@ -158,8 +166,14 @@ export async function withdrawLogisticsExpenseBill(request: AuditRequestLike, ac
     throw codedError(`只有待审核账单可以撤回。当前账单状态：${billAuditStatus || "未知"}。`, 400, "LOGISTICS_EXPENSE_WITHDRAW_NOT_ALLOWED");
   }
   const ids = rows.map((row) => row.id).filter(Boolean);
+  const orderId = String(rows[0]?.orderId || "");
   if (!rows[0]?.billId) throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
   await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      orderId,
+      "该订单已提交退税并归档，不能撤回物流费用账单。",
+    );
     await lockLogisticsBillForWorkflow(tx, billId);
     const billUpdate = await tx.logisticsBill.updateMany({
       where: {
@@ -206,8 +220,14 @@ export async function submitLogisticsExpenseBill(request: AuditRequestLike, acto
     if (blocked) throw codedError("只有草稿或已驳回费用可以提交审核。", 400, "LOGISTICS_EXPENSE_SUBMIT_NOT_ALLOWED");
     const submittedAt = new Date();
     const ids = rows.map((row) => row.id).filter(Boolean);
+    const orderId = String(rows[0]?.orderId || "");
     if (!rows[0]?.billId) throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
     await prisma.$transaction(async (tx) => {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        orderId,
+        "该订单已提交退税并归档，不能提交物流费用审核。",
+      );
       await lockLogisticsBillForWorkflow(tx, billId);
       const billUpdate = await tx.logisticsBill.updateMany({
         where: {
@@ -281,6 +301,7 @@ export async function voidLogisticsExpenseBill(request: AuditRequestLike, actor:
       orderId,
       "该订单已提交退税并归档，不能作废物流费用账单。",
     );
+    await assertCommissionOrderWritableInTransaction(tx, orderId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
       include: includeLogisticsExpenseRelations(),

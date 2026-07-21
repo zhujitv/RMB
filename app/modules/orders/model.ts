@@ -16,6 +16,8 @@ export const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "
 export type OrderSummary = {
   arrivedPaymentsCny?: number;
   arrivedPaymentsAmount?: number;
+  pendingPaymentsAmount?: number;
+  arrivedOutstandingAmount?: number;
   arrivedOutstandingCny?: number;
   confirmedPaymentsCny?: number;
   confirmedPaymentsAmount?: number;
@@ -23,6 +25,7 @@ export type OrderSummary = {
   outstandingAmount?: number;
   overpaidCny?: number;
   overpaidAmount?: number;
+  exchangeDifferenceCny?: number;
   requiredDepositAmount?: number;
   receivedDepositCny?: number;
   depositGapCny?: number;
@@ -61,6 +64,8 @@ export type PaymentInstallment = {
 
 export type OrderRow = {
   id: string;
+  updatedAt?: string;
+  hasCurrencyLockPayments?: boolean;
   orderNo: string;
   customerId?: string;
   blNo?: string;
@@ -151,6 +156,7 @@ export type ExchangeRateResponse = {
 };
 
 export type QuickOrderForm = {
+  expectedUpdatedAt: string;
   customerId: string;
   orderNo: string;
   blNo: string;
@@ -182,6 +188,7 @@ export type QuickOrderForm = {
 export const PAGE_SIZE = 20;
 
 export const emptyQuickOrderForm: QuickOrderForm = {
+  expectedUpdatedAt: "",
   customerId: "",
   orderNo: "",
   blNo: "",

@@ -195,6 +195,11 @@ export async function uploadLogisticsExpenseInvoice(request: AuditRequestLike, a
   let savedRows: LogisticsExpenseRow[] = [];
   try {
     savedRows = await prisma.$transaction(async (tx) => {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        nonEmpty(before.orderId),
+        "该订单已提交退税并归档，不能上传物流费用发票。",
+      );
       await lockLogisticsBillForWorkflow(tx, billId);
       const currentRows = await tx.logisticsExpense.findMany({
         where: { billId, deletedAt: null },
@@ -321,6 +326,11 @@ export async function rerunLogisticsExpenseInvoiceRecognition(request: AuditRequ
   if (!invoiceGroup) throw codedError("请选择有效发票分组。", 400, "LOGISTICS_INVOICE_GROUP_INVALID");
   const billId = rowBillId(before);
   const reserved = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      nonEmpty(before.orderId),
+      "该订单已提交退税并归档，不能重新识别物流费用发票。",
+    );
     await lockLogisticsBillForWorkflow(tx, billId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
@@ -432,6 +442,11 @@ export async function deleteLogisticsExpenseInvoice(request: AuditRequestLike, a
   const billId = rowBillId(before);
   const deletedAt = new Date();
   const deleted = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      nonEmpty(before.orderId),
+      "该订单已提交退税并归档，不能删除物流费用发票。",
+    );
     await lockLogisticsBillForWorkflow(tx, billId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
@@ -576,6 +591,11 @@ export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, 
   const confirmedAt = new Date();
   const billId = rowBillId(before);
   const confirmed = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      nonEmpty(before.orderId),
+      "该订单已提交退税并归档，不能确认物流费用发票。",
+    );
     await lockLogisticsBillForWorkflow(tx, billId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
@@ -710,12 +730,12 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
   const billId = rowBillId(before);
   const orderId = nonEmpty(before.orderId);
   const savedRows = await prisma.$transaction(async (tx) => {
-    await lockLogisticsBillForWorkflow(tx, billId);
     await assertBusinessOrderWritableInTransaction(
       tx,
       orderId,
       "该订单已提交退税并归档，不能再修改物流费用付款状态。",
     );
+    await lockLogisticsBillForWorkflow(tx, billId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
       include: includeLogisticsExpenseRelations(),
@@ -747,7 +767,12 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
       throw codedError("物流费用尚未审核通过，不能同步成本付款状态。", 400, "LOGISTICS_COST_SYNC_AUDIT_REQUIRED");
     }
     await assertNoSettledLogisticsCostConflict(tx, currentRows);
-    const costLinks = await syncApprovedLogisticsExpenseCosts(tx, currentRows, actor);
+    const costLinks = await syncApprovedLogisticsExpenseCosts(tx, currentRows, actor, {
+      settledCostMode: "preserve-existing",
+      allowCommissionSettled: true,
+      orderLocksAlreadyHeld: true,
+      expectedOrderIds: [orderId],
+    });
     const costIds = [...new Set(costLinks.map((link) => nonEmpty(link.costId)).filter(Boolean))];
     if (costIds.length !== currentRows.length) {
       throw codedError("物流费用未完整生成对应成本，付款状态未更新。", 409, "LOGISTICS_COST_SYNC_INCOMPLETE");
@@ -828,12 +853,12 @@ export async function reverseLogisticsExpensePayment(request: AuditRequestLike, 
   const orderId = nonEmpty(billRows[0]?.orderId);
   const reversedAt = new Date();
   const savedRows = await prisma.$transaction(async (tx) => {
-    await lockLogisticsBillForWorkflow(tx, billId);
     await assertBusinessOrderWritableInTransaction(
       tx,
       orderId,
       "该订单已提交退税并归档，不能冲销物流费用付款。",
     );
+    await lockLogisticsBillForWorkflow(tx, billId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
       include: includeLogisticsExpenseRelations(),
@@ -855,6 +880,9 @@ export async function reverseLogisticsExpensePayment(request: AuditRequestLike, 
     }
     const costLinks = await syncApprovedLogisticsExpenseCosts(tx, currentRows, actor, {
       settledCostMode: "preserve-required",
+      allowCommissionSettled: true,
+      orderLocksAlreadyHeld: true,
+      expectedOrderIds: [orderId],
     });
     const costIds = [...new Set(costLinks.map((link) => nonEmpty(link.costId)).filter(Boolean))];
     if (costIds.length !== currentRows.length) {

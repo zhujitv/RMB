@@ -5,8 +5,9 @@ import {
   assertRead,
   businessEntityWhereFromQuery,
   codedError,
+  getCommissionFormulaSettings,
   includeOrderListRelations,
-  includeOrderRelations,
+  includeOrderRelationsWithCommissionSettlement,
   nonEmpty,
   pageParams,
   pageResult,
@@ -42,22 +43,33 @@ type PaginatedOrderList = PageResult<OrderPageRow> & {
   summary: ReturnType<typeof summarizeCurrencyTotals>;
 };
 
-export async function listOrders(query: QueryLike, actor: ActorLike, options: { paginated: true }): Promise<PaginatedOrderList>;
-export async function listOrders(query: QueryLike, actor: ActorLike, options?: { paginated?: false }): Promise<OrderListRow[]>;
-export async function listOrders(query: QueryLike, actor: ActorLike, options: { paginated?: boolean } = {}): Promise<OrderListRow[] | PaginatedOrderList> {
+type CommissionFormulaSettings = Awaited<ReturnType<typeof getCommissionFormulaSettings>>;
+type OrderListOptions = {
+  paginated?: boolean;
+  commissionFormulaSettings?: CommissionFormulaSettings;
+};
+
+export async function listOrders(query: QueryLike, actor: ActorLike, options: OrderListOptions & { paginated: true }): Promise<PaginatedOrderList>;
+export async function listOrders(query: QueryLike, actor: ActorLike, options?: OrderListOptions & { paginated?: false }): Promise<OrderListRow[]>;
+export async function listOrders(query: QueryLike, actor: ActorLike, options: OrderListOptions = {}): Promise<OrderListRow[] | PaginatedOrderList> {
   assertRead(actor, "orders");
   const filters = orderListFiltersFromQuery(query);
   const where = orderListWhere(filters, actor);
   if (options.paginated) return listPaginatedOrders(query, actor, where);
 
-  const orders = await prisma.receivableOrder.findMany({
-    where,
-    include: includeOrderRelations(),
-    orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
-    take: ORDER_UNPAGINATED_SCAN_LIMIT,
-  });
+  const [orders, commissionFormulaSettings] = await Promise.all([
+    prisma.receivableOrder.findMany({
+      where,
+      include: includeOrderRelationsWithCommissionSettlement(),
+      orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
+      take: ORDER_UNPAGINATED_SCAN_LIMIT,
+    }),
+    options.commissionFormulaSettings
+      ? Promise.resolve(options.commissionFormulaSettings)
+      : getCommissionFormulaSettings(),
+  ]);
   return applyCommonFilters(
-    orders.map((order) => serializeOrder(scopeOrderForActor(order, actor))),
+    orders.map((order) => serializeOrder(scopeOrderForActor(order, actor), commissionFormulaSettings)),
     query,
   );
 }
@@ -156,10 +168,13 @@ function orderKeywordWhere(keyword: string): Prisma.ReceivableOrderWhereInput {
 
 export async function getOrder(id: string, actor: ActorLike) {
   assertRead(actor, "orders");
-  const order = await prisma.receivableOrder.findFirst({
-    where: { id, deletedAt: null, ...orderAccessWhere(actor) },
-    include: includeOrderRelations(),
-  });
+  const [order, commissionFormulaSettings] = await Promise.all([
+    prisma.receivableOrder.findFirst({
+      where: { id, deletedAt: null, ...orderAccessWhere(actor) },
+      include: includeOrderRelationsWithCommissionSettlement(),
+    }),
+    getCommissionFormulaSettings(),
+  ]);
   if (!order) throw codedError("应收订单不存在或无权查看", 404, "ORDER_NOT_FOUND");
-  return serializeOrder(scopeOrderForActor(order, actor));
+  return serializeOrder(scopeOrderForActor(order, actor), commissionFormulaSettings);
 }

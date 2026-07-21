@@ -9,6 +9,9 @@ export type ProfitSummary = {
   commissionBaseCny?: number;
   commissionFormulaLabel?: string;
   commissionFormulaDescription?: string;
+  commissionFormulaFloorAtZero?: boolean;
+  commissionFormulaVersion?: string;
+  commissionSnapshotMissing?: boolean;
   taxLogisticsCostsComplete?: boolean;
   taxLogisticsMissingLabels?: string[];
   expectedGrossProfit?: number;

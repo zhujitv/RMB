@@ -27,6 +27,7 @@ export function ProfitModule({
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [detailRow, setDetailRow] = useState<ProfitRow | null>(null);
   const [settlingId, setSettlingId] = useState("");
+  const [reversingId, setReversingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -39,6 +40,7 @@ export function ProfitModule({
     updateConfirmationInput,
   } = useConfirmationDialog();
   const canSettleCommission = ["管理员", "财务"].includes(currentUser.role);
+  const canReverseCommission = currentUser.role === "管理员";
 
   async function loadRows(nextPage = page, nextKeyword = submittedKeyword) {
     const requestId = ++listRequestRef.current;
@@ -156,13 +158,53 @@ export function ProfitModule({
         },
       );
       if (result.success !== true) throw new Error(result.message || "结算业务员提成失败");
-      await loadRows(page, submittedKeyword);
-      setDetailRow(row);
+      const nextRows = await loadRows(page, submittedKeyword);
+      setDetailRow(nextRows.find((item) => item.id === row.id) || null);
       setNotice(result.message || "业务员提成已结算");
     } catch (settleError) {
       setError(settleError instanceof Error ? settleError.message : "结算业务员提成失败");
     } finally {
       setSettlingId("");
+    }
+  }
+
+  async function reverseCommission(row: ProfitRow) {
+    const confirmationResult = await requestConfirmation({
+      title: "撤销该订单的提成结算？",
+      message: "撤销后订单会恢复为未结算，才可更正订单、收款或成本。原结算快照和撤销原因会保留在审计日志中。",
+      details: [
+        `订单号：${row.orderNo || "-"}`,
+        `结算时间：${row.commissionSettledAt ? new Date(row.commissionSettledAt).toLocaleString("zh-CN") : "-"}`,
+        `结算人：${row.commissionSettledByName || "-"}`,
+      ],
+      confirmLabel: "确认撤销结算",
+      cancelLabel: "取消",
+      variant: "danger",
+      requireInput: true,
+      inputLabel: "撤销原因",
+      inputPlaceholder: "例如：收款金额录入错误，需要更正后重新结算",
+      inputRequiredMessage: "撤销提成结算必须填写原因。",
+    });
+    if (!confirmationResult.confirmed) return;
+    setReversingId(row.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await apiJson<{ success?: boolean; message?: string }>(
+        `/api/commissions/${encodeURIComponent(row.id)}/settle`,
+        {
+          method: "DELETE",
+          body: JSON.stringify({ reason: confirmationResult.inputValue }),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "撤销业务员提成结算失败");
+      const nextRows = await loadRows(page, submittedKeyword);
+      setDetailRow(nextRows.find((item) => item.id === row.id) || null);
+      setNotice(result.message || "业务员提成结算已撤销");
+    } catch (reverseError) {
+      setError(reverseError instanceof Error ? reverseError.message : "撤销业务员提成结算失败");
+    } finally {
+      setReversingId("");
     }
   }
 
@@ -250,8 +292,11 @@ export function ProfitModule({
         <ProfitDetailDrawer
           row={detailRow}
           settling={settlingId === detailRow.id}
+          reversing={reversingId === detailRow.id}
           canSettleCommission={canSettleCommission}
+          canReverseCommission={canReverseCommission}
           onSettle={() => void settleCommission(detailRow)}
+          onReverse={() => void reverseCommission(detailRow)}
           onClose={() => setDetailRow(null)}
         />
       ) : null}

@@ -1,4 +1,4 @@
-import { apiJson } from "../../api";
+import { ApiRequestError, apiJson } from "../../api";
 import { moneyText } from "../../formatters";
 import { customerDisplayName } from "../../utils";
 import type { PaymentFilters, PaymentRow } from "./types";
@@ -17,7 +17,7 @@ type PaymentActionControllerOptions = {
   submittedFilters: PaymentFilters;
   payments: PaymentRow[];
   requestConfirmation: ConfirmationRequester;
-  loadPayments: (page: number, filters: PaymentFilters) => Promise<void>;
+  loadPayments: (page: number, filters: PaymentFilters) => Promise<PaymentRow[] | null>;
   paymentMatchesSubmittedFilters: (payment: PaymentRow) => boolean;
   mergePaymentRow: (payment: PaymentRow, options?: { shouldShow?: boolean }) => void;
   setDetailPayment: (payment: PaymentRow | null) => void;
@@ -27,6 +27,26 @@ type PaymentActionControllerOptions = {
   setDeletingId: (id: string) => void;
   setConfirmingId: (id: string) => void;
 };
+
+async function refreshPaymentAfterConflict(
+  payment: PaymentRow,
+  options: PaymentActionControllerOptions,
+  actionLabel: string,
+) {
+  const refreshedRows = await options.loadPayments(options.page, options.submittedFilters);
+  if (!refreshedRows) {
+    options.setError(`该收款记录已被其他人更新，但自动刷新失败。请手动刷新后再${actionLabel}。`);
+    return;
+  }
+  const latestPayment = refreshedRows.find((row) => row.id === payment.id) || null;
+  if (latestPayment) {
+    options.mergePaymentRow(latestPayment, { shouldShow: true });
+    options.setError(`该收款记录已被其他人更新，详情已刷新。请核对最新数据后再${actionLabel}。`);
+    return;
+  }
+  options.setDetailPayment(null);
+  options.setError("该收款记录已被删除或已不在当前筛选结果中，列表已刷新。");
+}
 
 export async function deletePaymentRecord(payment: PaymentRow, options: PaymentActionControllerOptions) {
   const result = await options.requestConfirmation({
@@ -45,7 +65,10 @@ export async function deletePaymentRecord(payment: PaymentRow, options: PaymentA
   options.setError("");
   options.setNotice("");
   try {
-    const response = await apiJson<{ success?: boolean; message?: string }>(`/api/payments/${encodeURIComponent(payment.id)}`, {
+    const expectedVersion = payment.updatedAt
+      ? `?expectedUpdatedAt=${encodeURIComponent(payment.updatedAt)}`
+      : "";
+    const response = await apiJson<{ success?: boolean; message?: string }>(`/api/payments/${encodeURIComponent(payment.id)}${expectedVersion}`, {
       method: "DELETE",
     });
     if (response.success !== true) throw new Error(response.message || "删除收款失败");
@@ -53,6 +76,10 @@ export async function deletePaymentRecord(payment: PaymentRow, options: PaymentA
     await options.loadPayments(options.page, options.submittedFilters);
     options.setNotice(response.message || "收款已删除");
   } catch (deleteError) {
+    if (deleteError instanceof ApiRequestError && deleteError.status === 409) {
+      await refreshPaymentAfterConflict(payment, options, "删除");
+      return;
+    }
     options.setError(deleteError instanceof Error ? deleteError.message : "删除收款失败");
   } finally {
     options.setDeletingId("");
@@ -92,6 +119,7 @@ export async function confirmPaymentRecordArrived(payment: PaymentRow, options: 
         status: "已到账",
         bankReference: payment.bankReference || "",
         remark: payment.remark || "",
+        expectedUpdatedAt: payment.updatedAt || undefined,
       }),
     });
     if (response.success !== true) throw new Error(response.message || "确认到账失败");
@@ -102,6 +130,10 @@ export async function confirmPaymentRecordArrived(payment: PaymentRow, options: 
     if (existedInRows && !shouldShow) options.setTotal((current) => Math.max(0, current - 1));
     options.setNotice(response.message || "收款已确认到账");
   } catch (confirmError) {
+    if (confirmError instanceof ApiRequestError && confirmError.status === 409) {
+      await refreshPaymentAfterConflict(payment, options, "确认到账");
+      return;
+    }
     options.setError(confirmError instanceof Error ? confirmError.message : "确认到账失败");
   } finally {
     options.setConfirmingId("");

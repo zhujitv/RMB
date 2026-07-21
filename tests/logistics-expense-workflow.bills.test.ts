@@ -215,8 +215,8 @@ test("logistics expense approval does not require an invoice and triggers suppli
 	assert.match(reviewLogisticsExpenseBillsFunctionSource, /const processDurableSideEffects = async \(\) =>[\s\S]*processLogisticsInvoiceNotificationOutbox/);
 	assert.match(reviewLogisticsExpenseBillsFunctionSource, /options\.deferSideEffects\(async \(\) => \{[\s\S]*await processDurableSideEffects\(\);[\s\S]*\}\)/);
 	assert.match(reviewLogisticsExpenseBillsFunctionSource, /物流费用审核后台任务执行失败/);
-	assert.match(backend, /await syncApprovedLogisticsExpenseCosts\(tx, rows, actor\)/);
-	assert.match(backend, /createOrUpdateCostFromLogisticsExpense\(tx, row, actor, \{ settledCostMode \}\)/);
+	assert.match(backend, /await syncApprovedLogisticsExpenseCosts\(tx, rows, actor, \{/);
+	assert.match(backend, /createOrUpdateCostFromLogisticsExpense\(tx, row, actor, \{[\s\S]*settledCostMode,[\s\S]*commissionLockAlreadyHeld: true/);
 	assert.match(backend, /linkLogisticsExpenseInvoiceDocumentsToCosts/);
 	assert.match(backend, /LOGISTICS_FEE_COST_SOURCE_TYPE/);
 	assert.match(backend, /NOTIFICATION_TEMPLATE_TYPES\.LOGISTICS_INVOICE_NOTICE/);
@@ -318,7 +318,7 @@ test("logistics expense approval does not require an invoice and triggers suppli
     approveLogisticsExpenseBillRowsSource,
     /tx\.logisticsExpense\.updateMany\(\{[\s\S]*auditStatus: "审核通过"/,
   );
-	assert.match(approveLogisticsExpenseBillRowsSource, /syncApprovedLogisticsExpenseCosts\(tx, savedRows, actor\)/);
+	assert.match(approveLogisticsExpenseBillRowsSource, /syncApprovedLogisticsExpenseCosts\(tx, savedRows, actor, \{/);
   assert.match(
     approveLogisticsExpenseBillRowsSource,
     /tx\.logisticsExpense\.findMany/,

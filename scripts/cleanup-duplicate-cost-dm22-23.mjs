@@ -30,34 +30,85 @@ async function main() {
   });
   if (!supplier) throw new Error(`未找到供应商：${TARGET_SUPPLIER_NAME}`);
 
-  const costs = await prisma.orderCost.findMany({
-    where: {
-      orderId: order.id,
-      supplierId: supplier.id,
-      costType: TARGET_COST_TYPE,
-      amount: TARGET_AMOUNT,
-      deletedAt: null,
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: { id: true, createdAt: true, amount: true },
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id"
+      FROM "receivable_orders"
+      WHERE "id" = ${order.id}
+      FOR UPDATE
+    `);
+    const currentOrder = await tx.receivableOrder.findUnique({
+      where: { id: order.id },
+      select: {
+        deletedAt: true,
+        taxArchived: true,
+        taxRefundStatus: true,
+        taxRefundArchivedAt: true,
+        taxSubmittedAt: true,
+        commissionStatus: true,
+        commissionSettledAt: true,
+        _count: {
+          select: {
+            commissionSettlementRecords: {
+              where: { status: "ACTIVE", reversedAt: null },
+            },
+          },
+        },
+      },
+    });
+    if (!currentOrder || currentOrder.deletedAt) {
+      throw new Error("订单不存在或已删除，重复成本清理已取消。");
+    }
+    const businessArchived = Boolean(
+      currentOrder.taxArchived
+      || currentOrder.taxRefundArchivedAt
+      || currentOrder.taxSubmittedAt
+      || ["SUBMITTED", "REFUND_RECEIVED", "COMPLETED", "ARCHIVED"].includes(String(currentOrder.taxRefundStatus || "")),
+    );
+    if (businessArchived) {
+      throw new Error("订单已提交退税并归档，已阻止清理成本；请先在系统中取消归档。");
+    }
+    const commissionSettled = ["已结算", "SETTLED"].includes(String(currentOrder?.commissionStatus || ""))
+      || Boolean(currentOrder?.commissionSettledAt)
+      || Number(currentOrder?._count?.commissionSettlementRecords || 0) > 0;
+    if (commissionSettled) {
+      throw new Error("订单业务员提成已结算，已阻止清理成本；请先在系统中撤销提成结算。");
+    }
+    const costs = await tx.orderCost.findMany({
+      where: {
+        orderId: order.id,
+        supplierId: supplier.id,
+        costType: TARGET_COST_TYPE,
+        amount: TARGET_AMOUNT,
+        deletedAt: null,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, createdAt: true, amount: true },
+    });
+    if (costs.length <= 1) return { kept: costs[0] || null, duplicates: [] };
+    const [kept, ...duplicates] = costs;
+    const updated = await tx.orderCost.updateMany({
+      where: {
+        id: { in: duplicates.map((cost) => cost.id) },
+        orderId: order.id,
+        supplierId: supplier.id,
+        costType: TARGET_COST_TYPE,
+        amount: TARGET_AMOUNT,
+        deletedAt: null,
+      },
+      data: { deletedAt: new Date() },
+    });
+    if (updated.count !== duplicates.length) {
+      throw new Error("成本记录已变化，重复成本清理已取消。");
+    }
+    return { kept, duplicates };
   });
 
-  if (costs.length <= 1) {
-    console.log(`无需清理：匹配成本 ${costs.length} 条。`);
+  if (!result.duplicates.length) {
+    console.log(`无需清理：匹配成本 ${result.kept ? 1 : 0} 条。`);
     return;
   }
-
-  const [kept, ...duplicates] = costs;
-  await prisma.$transaction(
-    duplicates.map((cost) => (
-      prisma.orderCost.update({
-        where: { id: cost.id },
-        data: { deletedAt: new Date() },
-      })
-    )),
-  );
-
-  console.log(`已保留成本 ${kept.id}，软删除重复成本 ${duplicates.map((cost) => cost.id).join(", ")}。`);
+  console.log(`已保留成本 ${result.kept.id}，软删除重复成本 ${result.duplicates.map((cost) => cost.id).join(", ")}。`);
 }
 
 main()

@@ -16,6 +16,10 @@ const orderAccess = readFileSync("lib/platform/order-access.ts", "utf8");
 const sharedConstants = readSharedConstantsSource();
 const sharedSerialization = readSharedSerializationSource();
 const schema = readFileSync("prisma/schema.prisma", "utf8");
+const paymentRecordActions = readFileSync("app/modules/payments/use-payment-record-actions.ts", "utf8");
+const paymentDetailRoute = readFileSync("app/api/payments/[id]/route.ts", "utf8");
+const quickPaymentPanel = readFileSync("app/modules/payments/quick-payment-panel.tsx", "utf8");
+const paymentsModuleController = readFileSync("app/modules/PaymentsModule.tsx", "utf8");
 
 test("payments page keeps summary cards and avoids duplicate recent payment list", () => {
   assert.match(paymentsModule, /已到账金额/);
@@ -75,13 +79,117 @@ test("CNY payment saves with automatic exchange rate while foreign currency requ
 });
 
 test("payment save synchronizes order receipt status with a lightweight transaction query", () => {
-  const syncStatusBlock = paymentsService.match(/async function syncOrderStatusInPaymentTransaction[\s\S]*?\n}\n\ntype PageResult/);
+  const syncStatusBlock = paymentsService.match(/async function syncOrderStatusInPaymentTransaction[\s\S]*?\n}\n\ntype PaymentStatusSyncResult/);
   assert.ok(syncStatusBlock, "syncOrderStatusInPaymentTransaction block should exist");
   assert.match(syncStatusBlock[0], /select: \{\s*id: true,\s*status: true,/);
-  assert.match(syncStatusBlock[0], /tx\.payment\.aggregate\(\{/);
-  assert.match(syncStatusBlock[0], /_sum: \{ amountCny: true \}/);
+  assert.match(syncStatusBlock[0], /tx\.payment\.groupBy\(\{/);
+  assert.match(syncStatusBlock[0], /_sum: \{ amount: true, amountCny: true \}/);
+  assert.match(syncStatusBlock[0], /paymentAmountForOrderCurrency/);
+  assert.match(syncStatusBlock[0], /deriveOrderCollectionBalance/);
+  assert.match(syncStatusBlock[0], /deriveOrderCollectionStatus/);
   assert.match(syncStatusBlock[0], /select: \{ id: true, status: true \}/);
+  assert.match(syncStatusBlock[0], /arrivedPaymentGroups\.some\([\s\S]*PAYMENT_CURRENCY_MISMATCH_SYNC_REASON/);
+  assert.ok(
+    syncStatusBlock[0].indexOf("PAYMENT_CURRENCY_MISMATCH_SYNC_REASON")
+      < syncStatusBlock[0].indexOf("deriveOrderCollectionBalance"),
+    "historical currency mismatches must preserve the current status before recalculation",
+  );
   assert.doesNotMatch(syncStatusBlock[0], /includeOrderRelations\(\)|summarizeOrder\(/);
+});
+
+test("payment writes serialize same-order status synchronization and retry concurrency conflicts", () => {
+  const transactionRunner = paymentsService.match(/function isPaymentWriteSerializationConflict[\s\S]*?async function runPaymentWriteTransaction[\s\S]*?\n}\n\nasync function loadCurrentPaymentInTransaction/);
+  assert.ok(transactionRunner, "payment transaction runner should exist");
+  assert.match(transactionRunner[0], /=== "P2034"/);
+  assert.match(paymentsService, /PAYMENT_WRITE_TRANSACTION_MAX_ATTEMPTS = 3/);
+  assert.match(transactionRunner[0], /attempt <= PAYMENT_WRITE_TRANSACTION_MAX_ATTEMPTS/);
+  assert.match(transactionRunner[0], /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(transactionRunner[0], /attempt === PAYMENT_WRITE_TRANSACTION_MAX_ATTEMPTS/);
+  assert.match(transactionRunner[0], /codedError\("收款记录刚刚被其他操作更新，请刷新后重试。", 409, "PAYMENT_UPDATE_CONFLICT"\)/);
+  assert.equal((paymentsService.match(/runPaymentWriteTransaction\(async \(tx\) => \{/g) || []).length, 2);
+});
+
+test("each payment retry reloads and revalidates the current payment and target order", () => {
+  const transactionHelpers = paymentsService.slice(
+    paymentsService.indexOf("async function loadCurrentPaymentInTransaction"),
+    paymentsService.indexOf("type PageResult"),
+  );
+  assert.match(transactionHelpers, /tx\.payment\.findUnique\(\{[\s\S]*where: \{ id \}[\s\S]*include: paymentAccessInclude/);
+  assert.match(transactionHelpers, /!payment \|\| payment\.deletedAt/);
+  assert.match(transactionHelpers, /canAccessOrder\(actor, payment\.order\)/);
+  assert.match(transactionHelpers, /tx\.receivableOrder\.findFirst\(\{[\s\S]*where: \{ id: orderId, deletedAt: null \}/);
+  assert.match(transactionHelpers, /canAccessOrder\(actor, order\)/);
+  assert.match(transactionHelpers, /\["已关闭", "已取消"\]\.includes\(order\.status\)/);
+  assert.match(transactionHelpers, /tx\.payment\.updateMany\(\{[\s\S]*orderId: currentPayment\.orderId,[\s\S]*deletedAt: null,[\s\S]*updatedAt: currentPayment\.updatedAt/);
+  assert.match(transactionHelpers, /if \(update\.count !== 1\) throw paymentWriteSerializationConflict\(\)/);
+
+  const saveBlock = paymentsService.slice(
+    paymentsService.indexOf("export async function savePayment"),
+    paymentsService.indexOf("export async function deletePayment"),
+  );
+  const retryBlock = saveBlock.slice(
+    saveBlock.indexOf("const transactionResult = await runPaymentWriteTransaction"),
+    saveBlock.indexOf("logSkippedPaymentStatusSyncs"),
+  );
+  assert.match(retryBlock, /loadCurrentPaymentInTransaction\(tx, id, actor, "update"\)/);
+  assert.match(retryBlock, /assertCurrentPaymentVersion\(transactionBefore, expectedUpdatedAt\)/);
+  assert.match(retryBlock, /loadTargetOrderInPaymentTransaction\(tx, order\.id, actor\)/);
+  assert.match(retryBlock, /assertOrderCanReceivePayment\(transactionOrder\)/);
+  assert.match(retryBlock, /requestedCurrency !== transactionOrderCurrency \|\| exchange\.currency !== transactionOrderCurrency/);
+  assert.match(retryBlock, /assertFinalPaymentHasHistory\(transactionOrder\.id, paymentType, id, tx\)/);
+  assert.match(retryBlock, /\[transactionOrder\.id, transactionBefore\?\.orderId\][\s\S]*\.sort\(\)/);
+  assert.match(retryBlock, /await writeAudit\(request, actor, auditAction, "payments", saved\.id, transactionBefore, saved, tx\)/);
+  assert.doesNotMatch(retryBlock, /logServerError|runNonCriticalTask/);
+  const afterCommitBlock = saveBlock.slice(saveBlock.indexOf("logSkippedPaymentStatusSyncs"));
+  assert.doesNotMatch(afterCommitBlock, /writeAudit|runNonCriticalTask/);
+});
+
+test("payment edits reject a stale form version instead of overwriting a concurrent update", () => {
+  assert.match(paymentsModule, /expectedUpdatedAt: editingSnapshot\?\.updatedAt \|\| undefined/);
+  assert.match(paymentRecordActions, /expectedUpdatedAt: payment\.updatedAt \|\| undefined/);
+  assert.match(paymentRecordActions, /confirmError instanceof ApiRequestError && confirmError\.status === 409/);
+  assert.match(paymentRecordActions, /await options\.loadPayments\(options\.page, options\.submittedFilters\)/);
+  assert.match(paymentsService, /function expectedPaymentUpdatedAt/);
+  assert.match(paymentsService, /input\.expectedUpdatedAt \|\| input\.updatedAt/);
+  assert.match(paymentsService, /current\.updatedAt\.getTime\(\) !== expectedUpdatedAt\.getTime\(\)/);
+  assert.match(paymentsService, /PAYMENT_UPDATE_VERSION_INVALID/);
+  assert.match(paymentsService, /PAYMENT_UPDATE_CONFLICT/);
+});
+
+test("payment editor keeps its form and version on one opening snapshot and recovers conflicts safely", () => {
+  assert.match(quickPaymentPanel, /const \[editingSnapshot\] = useState<PaymentRow \| null>\(\(\) => initialPayment \? \{ \.\.\.initialPayment \} : null\)/);
+  assert.match(quickPaymentPanel, /paymentFormFromRow\(editingSnapshot\)/);
+  assert.match(quickPaymentPanel, /expectedUpdatedAt: editingSnapshot\?\.updatedAt \|\| undefined/);
+  assert.doesNotMatch(quickPaymentPanel, /expectedUpdatedAt: initialPayment\?\.updatedAt/);
+  assert.match(quickPaymentPanel, /saveError instanceof ApiRequestError && saveError\.status === 409 && editingSnapshot\?\.id/);
+  assert.match(quickPaymentPanel, /await onConflict\(editingSnapshot\.id\)/);
+  assert.match(paymentsModuleController, /key=\{editPayment\?\.id \? `edit:\$\{editPayment\.id\}` : "create"\}/);
+  assert.match(paymentsModuleController, /onConflict=\{async \(paymentId\) => \{[\s\S]*?await loadPayments\(page, submittedFilters\)[\s\S]*?setEditPayment\(null\)/);
+  assert.match(paymentRecordActions, /async function refreshPaymentAfterConflict/);
+  assert.match(paymentRecordActions, /const latestPayment = refreshedRows\.find\(\(row\) => row\.id === payment\.id\) \|\| null/);
+  assert.match(paymentRecordActions, /options\.mergePaymentRow\(latestPayment, \{ shouldShow: true \}\)/);
+  assert.match(paymentRecordActions, /options\.setDetailPayment\(null\)/);
+});
+
+test("payment deletion reloads authorization and uses a conditional soft-delete inside every retry", () => {
+  const deleteBlock = paymentsService.slice(paymentsService.indexOf("export async function deletePayment"));
+  const retryBlock = deleteBlock.slice(
+    deleteBlock.indexOf("const transactionResult = await runPaymentWriteTransaction"),
+    deleteBlock.indexOf("logSkippedPaymentStatusSyncs"),
+  );
+  assert.match(retryBlock, /loadCurrentPaymentInTransaction\(tx, id, actor, "delete"\)/);
+  assert.match(retryBlock, /assertCurrentPaymentVersion\(transactionBefore, expectedUpdatedAt\)/);
+  assert.match(retryBlock, /tx\.payment\.updateMany\(\{[\s\S]*id,[\s\S]*orderId: transactionBefore\.orderId,[\s\S]*deletedAt: null,[\s\S]*updatedAt: transactionBefore\.updatedAt/);
+  assert.match(retryBlock, /if \(update\.count !== 1\) throw paymentWriteSerializationConflict\(\)/);
+  assert.match(retryBlock, /syncOrderStatusInPaymentTransaction\(tx, transactionBefore\.orderId\)/);
+  assert.match(retryBlock, /await writeAudit\(request, actor, "删除收款", "payments", id, transactionBefore, saved, tx\)/);
+  assert.doesNotMatch(retryBlock, /logServerError|runNonCriticalTask/);
+  const afterCommitBlock = deleteBlock.slice(deleteBlock.indexOf("logSkippedPaymentStatusSyncs"));
+  assert.doesNotMatch(afterCommitBlock, /writeAudit|runNonCriticalTask/);
+  assert.match(paymentRecordActions, /\?expectedUpdatedAt=\$\{encodeURIComponent\(payment\.updatedAt\)\}/);
+  assert.match(paymentRecordActions, /deleteError instanceof ApiRequestError && deleteError\.status === 409/);
+  assert.match(paymentDetailRoute, /searchParams\.get\("expectedUpdatedAt"\)/);
+  assert.match(paymentDetailRoute, /deletePayment\(request, actor, id, expectedUpdatedAt\)/);
 });
 
 test("payment save refreshes only the payments list and summary after success", () => {
@@ -167,9 +275,10 @@ test("payments list exposes payment type filter and row display", () => {
 });
 
 test("payment completion is based on arrived amount, not payment type", () => {
-  assert.match(ordersService, /if \(Number\(summary\.overpaidCny \|\| 0\) > 0\) status = "多收款"/);
-  assert.match(ordersService, /else if \(Number\(summary\.outstandingCny \|\| 0\) <= 0\) status = "已收齐"/);
-  assert.match(ordersService, /else if \(Number\(summary\.confirmedPaymentsCny \|\| 0\) > 0\) status = "部分收款"/);
+  assert.match(ordersService, /deriveOrderCollectionStatus\(\{/);
+  assert.match(ordersService, /receivedAmount: summary\.confirmedPaymentsAmount/);
+  assert.match(ordersService, /outstandingAmount: summary\.outstandingAmount/);
+  assert.match(ordersService, /overpaidAmount: summary\.overpaidAmount/);
   assert.match(orderAccess, /throw codedError\("已关闭或已取消订单不能新增收款"/);
   assert.doesNotMatch(orderAccess, /ORDER_FULLY_PAID/);
   assert.doesNotMatch(orderAccess, /订单已收齐，不能新增收款/);

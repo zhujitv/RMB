@@ -100,8 +100,9 @@ export function rowAuditStatus(row: UnknownRecord = {}) {
   return nonEmpty(rowBillRecord(row).auditStatus || "草稿");
 }
 
-export function rowBillSubmittedAt(row: UnknownRecord = {}) {
-  return rowBillRecord(row).submittedAt || row.submittedAt || null;
+export function rowBillSubmittedAt(row: UnknownRecord = {}): Date | string | null {
+  const value = rowBillRecord(row).submittedAt || row.submittedAt || null;
+  return value instanceof Date || typeof value === "string" ? value : null;
 }
 
 export function rowBillReviewedAt(row: UnknownRecord = {}) {

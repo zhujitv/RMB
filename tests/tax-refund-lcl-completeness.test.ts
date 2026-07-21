@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createJiti } from "jiti";
 import {
   readCostRecordsMutationsSource,
   readDomesticLogisticsApiSource,
@@ -12,6 +13,10 @@ import {
   readTaxRefundModuleSource,
   readTaxRefundsSource,
 } from "./source-helpers.ts";
+
+process.env.DATABASE_URL ||= "postgresql://test:test@localhost:5432/test";
+const jiti = createJiti(import.meta.url);
+const { createTrailingRefreshCoordinator } = jiti("../lib/platform/shared-tax-sync.ts") as typeof import("../lib/platform/shared-tax-sync.ts");
 
 const completeness = readSharedTaxCompletenessSource();
 const constants = readSharedConstantsSource();
@@ -165,7 +170,11 @@ test("historical tax refund completeness refresh and report wording use the shar
 });
 
 test("tax refund completeness cache refresh is deduped batched and non-blocking for mutation side effects", () => {
-  assert.match(taxSync, /pendingTaxRefundCompletenessRefreshes = new Map/);
+  assert.match(taxSync, /createTrailingRefreshCoordinator<T>/);
+  assert.match(taxSync, /pending\.dirty = true/);
+  assert.match(taxSync, /pending\.nextTask = task/);
+  assert.match(taxSync, /if \(!state\.dirty\) return result/);
+  assert.match(taxSync, /currentTask = state\.nextTask \|\| task/);
   assert.match(taxSync, /export async function refreshTaxRefundCompletenessForOrder/);
   assert.match(taxSync, /export async function refreshTaxRefundCompletenessBatch/);
   assert.match(taxSync, /export function scheduleTaxRefundCompletenessRefresh/);
@@ -175,6 +184,13 @@ test("tax refund completeness cache refresh is deduped batched and non-blocking 
   assert.doesNotMatch(listFunction, /scheduleTaxRefundCompletenessRefreshBatch|needsTaxRefundCompletenessRefresh|refreshTaxRefundCompletenessForOrder/);
   assert.match(taxSync, /taxRefundOverallCompleteness/);
   assert.match(taxSync, /taxRefundCompletenessIssuesSummary/);
+  assert.match(taxSync, /TAX_REFUND_COMPLETENESS_PERSIST_MAX_ATTEMPTS = 3/);
+  assert.match(taxSync, /receivableOrder\.updateMany\(\{/);
+  assert.match(taxSync, /updatedAt: order\.updatedAt,[\s\S]*taxRefundCompletenessUpdatedAt: order\.taxRefundCompletenessUpdatedAt/);
+  assert.match(taxSync, /Math\.max\(Date\.now\(\), currentTime \+ 1\)/);
+  assert.match(taxSync, /taxRefundCompletenessUpdatedAt: completenessVersion/);
+  assert.match(taxSync, /updatedAt: order\.updatedAt/);
+  assert.match(taxSync, /computeAndPersistTaxRefundCompleteness\(latestOrder, attempt \+ 1\)/);
   assert.match(taxRefundService, /refreshTaxRefundCompletenessForOrder\(orderWithLogistics\)/);
   assert.doesNotMatch(taxRefundService, /Promise\.all\(staleCompletenessOrderIds\.map/);
   assert.match(orderDocuments, /scheduleTaxRefundCompletenessRefresh\(order\.id\)/);
@@ -192,6 +208,31 @@ test("tax refund completeness cache refresh is deduped batched and non-blocking 
   assert.doesNotMatch(orderDocuments, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);
   assert.doesNotMatch(costMutations, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);
   assert.doesNotMatch(domesticLogisticsApi, /runNonCriticalTask\("退税资料完整度刷新", \(\) => refreshTaxRefundCompleteness/);
+});
+
+test("overlapping completeness refreshes run one trailing recalculation and share its result", async () => {
+  const runRefresh = createTrailingRefreshCoordinator<number>();
+  const events: string[] = [];
+  let releaseFirst!: () => void;
+  const firstGate = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const first = runRefresh("order-1", async () => {
+    events.push("first:start");
+    await firstGate;
+    events.push("first:end");
+    return 1;
+  });
+  await Promise.resolve();
+  const overlapping = runRefresh("order-1", async () => {
+    events.push("trailing");
+    return 2;
+  });
+
+  assert.strictEqual(overlapping, first);
+  releaseFirst();
+  assert.equal(await first, 2);
+  assert.deepEqual(events, ["first:start", "first:end", "trailing"]);
 });
 
 test("factory tax refund documents are calculated per cost slot", () => {

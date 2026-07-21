@@ -6,9 +6,13 @@ import {
   nonEmpty,
   permissionError,
   requireText,
-  runNonCriticalTask,
   writeAudit,
 } from "./shared";
+import {
+  assertCommissionOrderWritableInTransaction,
+  isCommissionSettled,
+} from "./commission-settlement-lock";
+import { assertBusinessOrderWritableInTransaction, isBusinessArchived } from "./business-archive";
 
 type ActorLike = ({
   id?: string | null;
@@ -42,34 +46,59 @@ export async function repairMissingOrderSalespeople(request: AuditRequestLike, a
   const repaired: Array<{ orderId: string; orderNo: string; salespersonUserId: string; source: string }> = [];
   const unresolved: Array<{ orderId: string; orderNo: string; reason: string }> = [];
   for (const row of rows) {
-    const customerSalespersonId = nonEmpty(row.customer?.salespersonUserId);
-    const createdBySalespersonId = row.createdBy?.role === "业务员" ? nonEmpty(row.createdById) : "";
-    const nextSalespersonId = customerSalespersonId || createdBySalespersonId;
-    if (!nextSalespersonId) {
-      unresolved.push({ orderId: row.id, orderNo: row.orderNo, reason: "缺少客户负责业务员，创建人也不是业务员" });
+    if (isCommissionSettled(row)) {
+      unresolved.push({ orderId: row.id, orderNo: row.orderNo, reason: "业务员提成已结算，需先走撤销结算流程" });
       continue;
     }
-    const patch: Prisma.ReceivableOrderUpdateInput = {
-      salesperson: { connect: { id: nextSalespersonId } },
-      updatedBy: { connect: { id: actorId(actor) } },
-    };
-    if (!Number(row.salespersonCommissionRate || 0) && customerSalespersonId) {
-      patch.salespersonCommissionRate = Math.max(0, Number(row.customer?.commissionStatus === "停用" ? 0 : row.customer?.commissionRate || 0));
+    if (isBusinessArchived(row)) {
+      unresolved.push({ orderId: row.id, orderNo: row.orderNo, reason: "订单已提交退税并归档，需先取消归档" });
+      continue;
     }
-    const updated = await prisma.receivableOrder.update({
-      where: { id: row.id },
-      data: patch,
-      include: includeOrderRelations(),
+    const result = await prisma.$transaction(async (tx) => {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        row.id,
+        "该订单已提交退税并归档，修正业务员前请先取消归档。",
+      );
+      await assertCommissionOrderWritableInTransaction(tx, row.id);
+      const current = await tx.receivableOrder.findUnique({
+        where: { id: row.id },
+        include: { customer: true, createdBy: true },
+      });
+      if (!current || current.deletedAt || current.salespersonUserId) return null;
+      const customerSalespersonId = nonEmpty(current.customer?.salespersonUserId);
+      const createdBySalespersonId = current.createdBy?.role === "业务员" ? nonEmpty(current.createdById) : "";
+      const nextSalespersonId = customerSalespersonId || createdBySalespersonId;
+      if (!nextSalespersonId) return null;
+      const patch: Prisma.ReceivableOrderUpdateInput = {
+        salesperson: { connect: { id: nextSalespersonId } },
+        updatedBy: { connect: { id: actorId(actor) } },
+      };
+      if (!Number(current.salespersonCommissionRate || 0) && customerSalespersonId) {
+        patch.salespersonCommissionRate = Math.max(0, Number(current.customer?.commissionStatus === "停用" ? 0 : current.customer?.commissionRate || 0));
+      }
+      const updated = await tx.receivableOrder.update({
+        where: { id: row.id },
+        data: patch,
+        include: includeOrderRelations(),
+      });
+      await writeAudit(request, actor, "修正订单业务员归属", "receivable_orders", row.id, current, updated, tx);
+      return {
+        updated,
+        salespersonUserId: nextSalespersonId,
+        source: customerSalespersonId ? "customer.salespersonUserId" : "createdById",
+      };
     });
+    if (!result) {
+      unresolved.push({ orderId: row.id, orderNo: row.orderNo, reason: "缺少客户负责业务员，创建人也不是业务员，或订单已由其他操作修正" });
+      continue;
+    }
     repaired.push({
       orderId: row.id,
       orderNo: row.orderNo,
-      salespersonUserId: nextSalespersonId,
-      source: customerSalespersonId ? "customer.salespersonUserId" : "createdById",
+      salespersonUserId: result.salespersonUserId,
+      source: result.source,
     });
-    await runNonCriticalTask("订单业务员历史修正日志写入", () => (
-      writeAudit(request, actor, "修正订单业务员归属", "receivable_orders", row.id, row, updated)
-    ), { context: { orderId: row.id, source: customerSalespersonId ? "customer" : "createdBy" } });
   }
   return {
     scanned: rows.length,

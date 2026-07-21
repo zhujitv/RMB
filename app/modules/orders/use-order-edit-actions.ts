@@ -72,6 +72,7 @@ export function useOrderEditActions({
     });
     setDetailOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
     setEditOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
+    setReturnDetailOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
   }
 
   function openEditOrder(order: OrderRow | null, options: { returnToDetail?: boolean } = {}) {
@@ -113,6 +114,15 @@ export function useOrderEditActions({
     }
   }
 
+  function handleOrderConflictRefreshed(order: OrderRow) {
+    const existedInRows = orders.some((item) => item.id === order.id);
+    const shouldShow = orderMatchesSubmittedFilters(order);
+    mergeOrderRow(order, { shouldShow });
+    if (existedInRows && !shouldShow) setTotal((current) => Math.max(0, current - 1));
+    if (!existedInRows && page === 1 && shouldShow) setTotal((current) => current + 1);
+    setNotice("订单已刷新为服务器最新数据，请在编辑区重新核对后再保存。");
+  }
+
   function handleOrderEditCancel() {
     const detailToRestore = returnDetailOrder;
     setCreateOpen(false);
@@ -140,6 +150,7 @@ export function useOrderEditActions({
 
   return {
     openEditOrder,
+    handleOrderConflictRefreshed,
     handleOrderSaved,
     handleOrderEditCancel,
     applyOrderPatch,

@@ -25,6 +25,7 @@ export const PATCH = withApiWrite<RouteContext>("payments", async (request, acto
 
 export const DELETE = withApiWrite<RouteContext>("payments", async (request, actor, { params }) => {
     const { id } = await params;
-    await deletePayment(request, actor, id);
+    const expectedUpdatedAt = new URL(request.url).searchParams.get("expectedUpdatedAt");
+    await deletePayment(request, actor, id, expectedUpdatedAt);
     return ok({ success: true, ok: true, message: "收款已删除" });
 }, { errorMessage: "删除收款失败" });

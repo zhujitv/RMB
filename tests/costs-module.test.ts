@@ -6,6 +6,10 @@ import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const costsModule = readCostsModuleSource();
 const costsMutation = readCostRecordsMutationsSource();
+const costSupplierMutations = readFileSync("lib/platform/cost-records-supplier-mutations.ts", "utf8");
+const costLogisticsMutations = readFileSync("lib/platform/cost-records-logistics-mutations.ts", "utf8");
+const costPaymentMutations = readFileSync("lib/platform/cost-records-payment-mutations.ts", "utf8");
+const costTypeMutations = readFileSync("lib/platform/cost-records-mutation-cost-type.ts", "utf8");
 const costModuleView = readFileSync("app/modules/costs/module-view.tsx", "utf8");
 const costTable = readFileSync("app/modules/costs/cost-table.tsx", "utf8");
 const costDocumentActions = readFileSync("app/modules/costs/use-cost-document-actions.ts", "utf8");
@@ -104,12 +108,12 @@ test("cost registration preserves exchange snapshots and does not silently merge
   assert.match(costsShared, /paymentDate: duplicateDate\(data\.paymentDate\)/);
   assert.match(costsShared, /sourceType: duplicateText\(data\.sourceType, "MANUAL"\) \|\| "MANUAL"/);
   assert.match(costsShared, /remark: data\.remark \|\| null/);
-  assert.match(costsMutation, /prisma\.\$transaction\(\(tx\) => Promise\.all/);
+  assert.match(costsMutation, /prisma\.\$transaction\(async \(tx\) => \{[\s\S]*assertCommissionOrderWritableInTransaction/);
   assert.match(costsMutation, /const idempotencyCutoff = new Date\(\)/);
-  assert.match(costsMutation, /rows\.map\(\(data\) => createCostIdempotently\(data, tx, \{/);
+  assert.match(costsMutation, /Promise\.all\(rows\.map\(\(data\) => createCostIdempotently\(data, tx, \{/);
   assert.match(costsMutation, /attachDocuments: false/);
   assert.match(costsMutation, /createdBefore: idempotencyCutoff/);
-  assert.match(costsMutation, /const createdCosts = results\.filter\(\(result\) => !result\.reused\)/);
+  assert.match(costsMutation, /const createdCosts = saved\.filter\(\(result\) => !result\.reused\)/);
   assert.doesNotMatch(costsMutation, /uniqueRows|seen\.has|duplicateCostFingerprint\(data\)/);
 });
 
@@ -265,7 +269,7 @@ test("payment voucher replacement refreshes current cost and bypasses stale prev
   assert.match(costsMutation, /previousFileId: previousStorageKey/);
   assert.match(costsMutation, /nextFileId: storedFile\.storageKey/);
   assert.match(costsMutation, /operatorId: currentActor\.id/);
-  assert.match(costsMutation, /replacedAt: new Date\(\)\.toISOString\(\)/);
+  assert.match(costsMutation, /replacedAt: storedFile\.uploadedAt/);
 });
 
 test("cost detail tables always keep an invoice operation column", () => {
@@ -421,7 +425,8 @@ test("cost delete backend enforces permissions, audit, and voids risky records",
   assert.match(costsMutation, /物流费用同步成本请到物流费用模块操作/);
   assert.match(costsMutation, /!isLogisticsGeneratedCostSourceType\(sourceType\)/);
   assert.match(costsMutation, /status: ORDER_COST_STATUS_VOID/);
-  assert.match(costsMutation, /action === "deleted" \? "删除成本明细" : "作废成本明细"/);
+  assert.match(costsMutation, /"删除成本明细"/);
+  assert.match(costsMutation, /"作废成本明细"/);
   assert.match(costsMutation, /deletedById: actor\.id/);
   assert.match(costsMutation, /deletedAt/);
   assert.match(costsMutation, /orderNo: cost\.order\.orderNo/);
@@ -430,6 +435,37 @@ test("cost delete backend enforces permissions, audit, and voids risky records",
   assert.match(costsMutation, /amount: Number\(cost\.amount\)/);
   assert.match(costsMutation, /orderSummary: await costOrderSummaryForMutation\(before\.orderId, currentActor\)/);
   assert.match(costsMutation, /scheduleCostLifecycleRefresh\(before\.orderId\)/);
+});
+
+test("cost writes use optimistic concurrency and transaction-bound audit logs", () => {
+  for (const source of [costSupplierMutations, costLogisticsMutations, costPaymentMutations, costTypeMutations]) {
+    assert.match(source, /updatedAt: before\.updatedAt/);
+    assert.match(source, /\.orderCost\.updateMany\(/);
+    assert.match(source, /changed\.count !== 1|restored\.count !== 1|deleted\.count !== 1/);
+    assert.match(source, /409, "(?:COST_RECORD_CONFLICT|COST_PAYMENT_CONFLICT|PAYMENT_VOUCHER_REPLACE_CONFLICT)"/);
+    assert.match(source, /writeAudit\([\s\S]*?tx,?\s*\)/);
+  }
+  assert.doesNotMatch(costSupplierMutations, /runNonCriticalTask\("(?:成本操作日志写入|成本删除操作日志写入|成本恢复操作日志写入|批量作废成本日志写入)"/);
+  assert.doesNotMatch(costLogisticsMutations, /runNonCriticalTask\("物流费用(?:操作|删除操作)日志写入"/);
+  assert.doesNotMatch(costPaymentMutations, /runNonCriticalTask\("成本付款(?:信息|凭证)操作日志写入"/);
+  assert.doesNotMatch(costTypeMutations, /runNonCriticalTask\("成本类型修改日志写入"/);
+});
+
+test("settled commission still allows pure cost payment progress and voucher replacement cleans rejected uploads", () => {
+  const paymentStatusBlock = costPaymentMutations.slice(
+    costPaymentMutations.indexOf("export async function updateProductSupplierCostPayment"),
+    costPaymentMutations.indexOf("export async function uploadProductSupplierCostPaymentVoucher"),
+  );
+  const voucherBlock = costPaymentMutations.slice(
+    costPaymentMutations.indexOf("export async function uploadProductSupplierCostPaymentVoucher"),
+    costPaymentMutations.indexOf("export async function getProductSupplierCostPaymentVoucherMetadata"),
+  );
+  assert.doesNotMatch(paymentStatusBlock, /assertCommissionOrderWritableInTransaction/);
+  assert.doesNotMatch(voucherBlock, /assertCommissionOrderWritableInTransaction/);
+  assert.match(voucherBlock, /updatedAt: before\.updatedAt/);
+  assert.match(voucherBlock, /PAYMENT_VOUCHER_REPLACE_CONFLICT/);
+  assert.match(voucherBlock, /catch \(error: unknown\) \{\s*await deleteManagedStoredFile\(storedFile\.storageKey\);\s*throw error;/);
+  assert.doesNotMatch(voucherBlock, /deleteManagedStoredFile\(storedFile\.storageKey\)\.catch/);
 });
 
 test("cost create and edit interactions use right side drawers instead of inline panels", () => {

@@ -43,6 +43,11 @@ import {
   type DeletedCostAction,
 } from "./cost-records-mutation-shared";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
+import {
+  assertCommissionOrderWritableInTransaction,
+  isCommissionSettled,
+} from "./commission-settlement-lock";
+import { assertBusinessOrderWritableInTransaction, isBusinessArchived } from "./business-archive";
 
 function assertCostCanBeManagedInCostModule(cost: { sourceType?: string | null; generatedLogisticsExpense?: unknown }, action: string) {
   if (!isLogisticsGeneratedCostSourceType(cost.sourceType) && !cost.generatedLogisticsExpense) return;
@@ -61,18 +66,49 @@ export async function saveCost(request: AuditRequestLike, actor: CostActorInput,
   if (before && !ownCostScope && !canAccessOrder(currentActor, before.order)) throw permissionError("无权限修改该成本记录");
   const order = await assertCostWritableOrder(requireText(body.orderId || body.receivableOrderId || body.order_id, "关联订单"), currentActor, before);
   const data = await buildCostData(order, currentActor, body, id, before);
-  const result = id
-    ? { cost: await prisma.orderCost.update({ where: { id }, data, include: includeCostRelations() }), reused: false }
-    : await createCostIdempotently(data);
+  const result = await prisma.$transaction(async (tx) => {
+    const affectedOrderIds = [...new Set([order.id, before?.orderId].filter((value): value is string => Boolean(value)))].sort();
+    for (const affectedOrderId of affectedOrderIds) {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        affectedOrderId,
+        "该订单已提交退税并归档，不能修改成本。",
+      );
+      await assertCommissionOrderWritableInTransaction(tx, affectedOrderId);
+    }
+    let saved;
+    if (id && before) {
+      const changed = await tx.orderCost.updateMany({
+        where: {
+          id,
+          updatedAt: before.updatedAt,
+          deletedAt: null,
+          status: { not: ORDER_COST_STATUS_VOID },
+        },
+        data,
+      });
+      if (changed.count !== 1) {
+        throw codedError("成本记录已被其他操作修改，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+      }
+      const cost = await tx.orderCost.findUnique({ where: { id }, include: includeCostRelations() });
+      if (!cost) throw codedError("成本记录已发生变化，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+      saved = { cost, reused: false };
+    } else {
+      saved = await createCostIdempotently(data, tx, { attachDocuments: false });
+    }
+    if (!saved.reused) {
+      const isConfirmed = Boolean(data?.costConfirmed);
+      const wasConfirmed = Boolean(before?.costConfirmed);
+      const action = id
+        ? (isConfirmed !== wasConfirmed && isConfirmed ? "确认成本" : "更新成本")
+        : "新增成本";
+      await writeAudit(request, currentActor, action, "order_costs", saved.cost.id, before, saved.cost, tx);
+    }
+    return saved;
+  });
   const { cost, reused } = result;
   if (!reused) {
     await runNonCriticalTask("成本发票状态同步", () => syncCostInvoiceStatus(cost.id));
-    const isConfirmed = Boolean(data?.costConfirmed);
-    const wasConfirmed = Boolean(before?.costConfirmed);
-    const action = id
-      ? (isConfirmed !== wasConfirmed && isConfirmed ? "确认成本" : "更新成本")
-      : "新增成本";
-    await runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, action, "order_costs", cost.id, before, cost));
   }
   scheduleTaxRefundCompletenessRefresh(cost.orderId);
   return safeSerializeCost(await attachBusinessDocumentsToCost(cost));
@@ -99,15 +135,24 @@ export async function saveCosts(request: AuditRequestLike, actor: CostActorInput
     remark: item.remark ?? body.remark,
   })));
   const idempotencyCutoff = new Date();
-  const results = await prisma.$transaction((tx) => Promise.all(
-    rows.map((data) => createCostIdempotently(data, tx, {
+  const results = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      order.id,
+      "该订单已提交退税并归档，不能新增成本。",
+    );
+    await assertCommissionOrderWritableInTransaction(tx, order.id);
+    const saved = await Promise.all(rows.map((data) => createCostIdempotently(data, tx, {
       attachDocuments: false,
       createdBefore: idempotencyCutoff,
-    })),
-  ));
+    })));
+    const createdCosts = saved.filter((result) => !result.reused).map((result) => result.cost);
+    for (const cost of createdCosts) {
+      await writeAudit(request, currentActor, "新增成本", "order_costs", cost.id, null, cost, tx);
+    }
+    return saved;
+  });
   const costs = results.map((result) => result.cost);
-  const createdCosts = results.filter((result) => !result.reused).map((result) => result.cost);
-  await Promise.all(createdCosts.map((cost) => runNonCriticalTask("成本操作日志写入", () => writeAudit(request, currentActor, "新增成本", "order_costs", cost.id, null, cost))));
   scheduleTaxRefundCompletenessRefresh(order.id);
   return (await attachBusinessDocumentsToCosts(costs)).map(safeSerializeCost);
 }
@@ -131,7 +176,11 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
       order: {
         include: {
           customer: true,
-          commissionSettlementRecords: { select: { id: true }, take: 1 },
+          commissionSettlementRecords: {
+            where: { status: "ACTIVE", reversedAt: null },
+            select: { id: true, status: true, reversedAt: true },
+            take: 1,
+          },
         },
       },
       supplier: true,
@@ -168,6 +217,12 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
     deleteBlockReasons,
   };
   const cost = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      before.orderId,
+      "该订单已提交退税并归档，不能删除或作废成本。",
+    );
+    await assertCommissionOrderWritableInTransaction(tx, before.orderId);
     if (action === "deleted") {
       await softDeleteFileAssetBySource(
         tx,
@@ -176,10 +231,36 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
         FILE_ASSET_ROLES.PAYMENT_VOUCHER,
         deletedAt,
       );
-      return tx.orderCost.delete({ where: { id } });
+      const deleted = await tx.orderCost.deleteMany({
+        where: {
+          id,
+          updatedAt: before.updatedAt,
+          deletedAt: null,
+          status: { not: ORDER_COST_STATUS_VOID },
+        },
+      });
+      if (deleted.count !== 1) {
+        throw codedError("成本记录已被其他操作修改，删除已取消，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+      }
+      await writeAudit(
+        request,
+        currentActor,
+        "删除成本明细",
+        "order_costs",
+        id,
+        before,
+        { ...auditPayload, costId: id },
+        tx,
+      );
+      return before;
     }
-    return tx.orderCost.update({
-        where: { id },
+    const changed = await tx.orderCost.updateMany({
+        where: {
+          id,
+          updatedAt: before.updatedAt,
+          deletedAt: null,
+          status: { not: ORDER_COST_STATUS_VOID },
+        },
         data: {
           status: ORDER_COST_STATUS_VOID,
           voidedAt: deletedAt,
@@ -188,16 +269,23 @@ export async function deleteCost(request: AuditRequestLike, actor: CostActorInpu
           updatedById: currentActor.id,
         },
       });
+    if (changed.count !== 1) {
+      throw codedError("成本记录已被其他操作修改，作废已取消，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+    }
+    const updated = await tx.orderCost.findUnique({ where: { id } });
+    if (!updated) throw codedError("成本记录已发生变化，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+    await writeAudit(
+      request,
+      currentActor,
+      "作废成本明细",
+      "order_costs",
+      id,
+      before,
+      { ...auditPayload, costId: id },
+      tx,
+    );
+    return updated;
   });
-  await runNonCriticalTask("成本删除操作日志写入", () => writeAudit(
-    request,
-    currentActor,
-    action === "deleted" ? "删除成本明细" : "作废成本明细",
-    "order_costs",
-    id,
-    before,
-    { ...auditPayload, costId: id },
-  ));
   scheduleCostLifecycleRefresh(before.orderId);
   return {
     action,
@@ -219,29 +307,39 @@ export async function restoreCost(request: AuditRequestLike, actor: CostActorInp
   assertCostCanBeManagedInCostModule(before, "恢复");
   if (!canAccessOrder(currentActor, before.order)) throw permissionError("无权限恢复该成本记录");
   if (!isVoidedCost(before)) throw codedError("该成本不是作废状态，无需恢复。", 400, "COST_NOT_VOID");
-  const updated = await prisma.orderCost.update({
-    where: { id },
-    data: {
-      ...restoreOrderCostData(currentActor, reason),
-      ...(before.paymentStatus === "已取消" ? { paymentStatus: "待支付" } : {}),
-    },
-    include: includeCostRelations(),
-  });
-  await runNonCriticalTask("成本恢复操作日志写入", () => writeAudit(
-    request,
-    currentActor,
-    "恢复作废成本",
-    "order_costs",
-    id,
-    before,
-    {
+  const updated = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      before.orderId,
+      "该订单已提交退税并归档，不能恢复成本。",
+    );
+    await assertCommissionOrderWritableInTransaction(tx, before.orderId);
+    const restored = await tx.orderCost.updateMany({
+      where: {
+        id,
+        updatedAt: before.updatedAt,
+        deletedAt: null,
+        status: ORDER_COST_STATUS_VOID,
+      },
+      data: {
+        ...restoreOrderCostData(currentActor, reason),
+        ...(before.paymentStatus === "已取消" ? { paymentStatus: "待支付" } : {}),
+      },
+    });
+    if (restored.count !== 1) {
+      throw codedError("成本记录已被其他操作修改，恢复已取消，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+    }
+    const current = await tx.orderCost.findUnique({ where: { id }, include: includeCostRelations() });
+    if (!current) throw codedError("成本记录已发生变化，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+    await writeAudit(request, currentActor, "恢复作废成本", "order_costs", id, before, {
       costId: id,
       orderNo: before.order.orderNo,
       reason,
       restoredById: currentActor.id,
-      restoredAt: updated.restoredAt,
-    },
-  ));
+      restoredAt: current.restoredAt,
+    }, tx);
+    return current;
+  });
   scheduleCostLifecycleRefresh(updated.orderId);
   return {
     action: "restored",
@@ -275,7 +373,11 @@ export async function batchVoidCosts(request: AuditRequestLike, actor: CostActor
           customer: true,
           businessEntity: true,
           salesperson: true,
-          commissionSettlementRecords: { select: { id: true }, take: 1 },
+          commissionSettlementRecords: {
+            where: { status: "ACTIVE", reversedAt: null },
+            select: { id: true, status: true, reversedAt: true },
+            take: 1,
+          },
         },
       },
     },
@@ -296,34 +398,61 @@ export async function batchVoidCosts(request: AuditRequestLike, actor: CostActor
       skipped.push({ id: row.id, reason: "物流费用同步成本请到物流费用模块操作" });
       continue;
     }
-    const updated = await prisma.orderCost.update({
-      where: { id: row.id },
-      data: {
-        status: ORDER_COST_STATUS_VOID,
-        voidedAt: new Date(),
-        voidedById: currentActor.id,
-        voidReason: reason,
-        updatedById: currentActor.id,
-      },
-      include: includeCostRelations(),
-    });
+    if (isCommissionSettled(row.order)) {
+      skipped.push({ id: row.id, reason: "业务员提成已结算" });
+      continue;
+    }
+    if (isBusinessArchived(row.order)) {
+      skipped.push({ id: row.id, reason: "订单已提交退税并归档" });
+      continue;
+    }
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        await assertBusinessOrderWritableInTransaction(
+          tx,
+          row.orderId,
+          "该订单已提交退税并归档，不能批量作废成本。",
+        );
+        await assertCommissionOrderWritableInTransaction(tx, row.orderId);
+        const changed = await tx.orderCost.updateMany({
+          where: {
+            id: row.id,
+            updatedAt: row.updatedAt,
+            deletedAt: null,
+            status: { not: ORDER_COST_STATUS_VOID },
+          },
+          data: {
+            status: ORDER_COST_STATUS_VOID,
+            voidedAt: new Date(),
+            voidedById: currentActor.id,
+            voidReason: reason,
+            updatedById: currentActor.id,
+          },
+        });
+        if (changed.count !== 1) {
+          throw codedError("成本记录已被其他操作修改，批量作废已取消，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+        }
+        const current = await tx.orderCost.findUnique({ where: { id: row.id }, include: includeCostRelations() });
+        if (!current) throw codedError("成本记录已发生变化，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+        await writeAudit(request, currentActor, "批量作废成本", "order_costs", row.id, row, {
+          costId: row.id,
+          orderNo: row.order.orderNo,
+          reason,
+          voidedById: currentActor.id,
+          voidedAt: current.voidedAt,
+        }, tx);
+        return current;
+      });
+    } catch (error: unknown) {
+      if (String((error as { code?: string })?.code || "") === "COMMISSION_SETTLEMENT_LOCKED") {
+        skipped.push({ id: row.id, reason: "业务员提成已结算" });
+        continue;
+      }
+      throw error;
+    }
     voidedCosts.push(updated);
     scheduleCostLifecycleRefresh(updated.orderId);
-    await runNonCriticalTask("批量作废成本日志写入", () => writeAudit(
-      request,
-      currentActor,
-      "批量作废成本",
-      "order_costs",
-      row.id,
-      row,
-      {
-        costId: row.id,
-        orderNo: row.order.orderNo,
-        reason,
-        voidedById: currentActor.id,
-        voidedAt: updated.voidedAt,
-      },
-    ));
   }
   const missingIds = ids.filter((id) => !rows.some((row) => row.id === id));
   missingIds.forEach((id) => skipped.push({ id, reason: "成本不存在或已删除" }));

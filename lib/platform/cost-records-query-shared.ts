@@ -75,7 +75,11 @@ export function includeCostListRelations() {
         customer: true,
         businessEntity: true,
         salesperson: true,
-        commissionSettlementRecords: { select: { id: true }, take: 1 },
+        commissionSettlementRecords: {
+          where: { status: "ACTIVE", reversedAt: null },
+          select: { id: true, status: true, reversedAt: true },
+          take: 1,
+        },
       },
     },
     supplier: true,

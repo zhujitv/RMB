@@ -13,7 +13,6 @@ import {
   normalizedCostType,
   permissionError,
   requireText,
-  runNonCriticalTask,
   safeSerializeCost,
   scheduleTaxRefundCompletenessRefresh,
   syncCostInvoiceStatus,
@@ -22,6 +21,8 @@ import {
 import { costOrderSummaryForMutation, requireCostActor, type AuditRequestLike, type CostActorInput } from "./cost-records-mutation-shared";
 import { includeCostRelations } from "./cost-records-shared";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
+import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
+import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 
 const COST_TYPE_UPDATE_SCHEMA: InputSchema = {
   costType: { label: "成本类型", kind: "text", required: true },
@@ -70,6 +71,27 @@ export async function updateCostType(request: AuditRequestLike, actor: CostActor
 	].filter((value): value is string => Boolean(value));
 
 	let updated = await prisma.$transaction(async (tx) => {
+		await assertBusinessOrderWritableInTransaction(
+			tx,
+			before.orderId,
+			"该订单已提交退税并归档，不能修改成本类型。",
+		);
+		await assertCommissionOrderWritableInTransaction(tx, before.orderId);
+    const changed = await tx.orderCost.updateMany({
+      where: {
+        id,
+        updatedAt: before.updatedAt,
+        deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
+      },
+      data: {
+        costType: nextCostType,
+        updatedById: currentActor.id,
+      },
+    });
+    if (changed.count !== 1) {
+      throw codedError("成本记录已被其他操作修改，类型变更已取消，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+    }
 		if (relatedLogisticsExpenseIds.length || isLogisticsGeneratedCostSourceType(before.sourceType)) {
       await tx.logisticsExpense.updateMany({
         where: {
@@ -85,41 +107,36 @@ export async function updateCostType(request: AuditRequestLike, actor: CostActor
         },
       });
     }
-    return tx.orderCost.update({
-      where: { id },
-      data: {
-        costType: nextCostType,
-        updatedById: currentActor.id,
+    const current = await tx.orderCost.findUnique({ where: { id }, include: includeCostRelations() });
+    if (!current) throw codedError("成本记录已发生变化，请刷新后重试。", 409, "COST_RECORD_CONFLICT");
+    await writeAudit(
+      request,
+      currentActor,
+      "修改成本类型",
+      "order_costs",
+      id,
+      {
+        costId: id,
+        orderNo: before.order.orderNo,
+        supplier: before.supplierNameSnapshot || before.supplier?.supplierName || before.vendorName,
+        oldCostType: before.costType,
+        amount: Number(before.amount),
+        currency: before.currency,
       },
-      include: includeCostRelations(),
-    });
+      {
+        costId: id,
+        orderNo: before.order.orderNo,
+        supplier: before.supplierNameSnapshot || before.supplier?.supplierName || before.vendorName,
+        oldCostType: before.costType,
+        newCostType: nextCostType,
+        reason,
+        changedById: currentActor.id,
+        changedAt,
+      },
+      tx,
+    );
+    return current;
   });
-
-  await runNonCriticalTask("成本类型修改日志写入", () => writeAudit(
-    request,
-    currentActor,
-    "修改成本类型",
-    "order_costs",
-    id,
-    {
-      costId: id,
-      orderNo: before.order.orderNo,
-      supplier: before.supplierNameSnapshot || before.supplier?.supplierName || before.vendorName,
-      oldCostType: before.costType,
-      amount: Number(before.amount),
-      currency: before.currency,
-    },
-    {
-      costId: id,
-      orderNo: before.order.orderNo,
-      supplier: before.supplierNameSnapshot || before.supplier?.supplierName || before.vendorName,
-      oldCostType: before.costType,
-      newCostType: nextCostType,
-      reason,
-      changedById: currentActor.id,
-      changedAt,
-    },
-  ));
 
   const synced = await syncCostInvoiceStatus(updated.id);
   if (synced) {

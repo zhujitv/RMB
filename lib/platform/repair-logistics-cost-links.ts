@@ -10,6 +10,14 @@ import {
 import { createOrUpdateCostFromLogisticsExpense } from "./logistics-expense-access-mutations";
 import { logisticsCostPaymentDataFromExpense } from "./logistics-expense-cost-payment";
 import { linkLogisticsExpenseInvoiceDocumentsToCosts } from "./logistics-expense-workflow-review-helpers";
+import {
+  assertCommissionOrderWritableInTransaction,
+  isCommissionSettled,
+} from "./commission-settlement-lock";
+import {
+  assertBusinessOrderWritableInTransaction,
+  isBusinessArchived,
+} from "./business-archive";
 
 type RepairInput = {
   orderNos?: string[];
@@ -108,6 +116,19 @@ const repairExpenseSelect = Prisma.validator<Prisma.LogisticsExpenseSelect>()({
     select: {
       id: true,
       orderNo: true,
+      taxArchived: true,
+      taxRefundStatus: true,
+      taxRefundArchivedAt: true,
+      taxSubmittedAt: true,
+      commissionStatus: true,
+      commissionSettledAt: true,
+      _count: {
+        select: {
+          commissionSettlementRecords: {
+            where: { status: "ACTIVE", reversedAt: null },
+          },
+        },
+      },
     },
   },
   supplier: {
@@ -193,20 +214,36 @@ export async function repairLogisticsCostLinks(input: RepairInput = {}) {
   const usedCostIds = new Set<string>();
 
   for (const expense of expenses) {
+    if (isCommissionSettled(expense.order)) {
+      issues.push(repairIssue(expense, "业务员提成已结算，未修改正式成本；如需调整请先走撤销结算流程。"));
+      continue;
+    }
+    if (isBusinessArchived(expense.order)) {
+      issues.push(repairIssue(expense, "订单已提交退税并归档，未修改正式成本；如需调整请先取消归档。"));
+      continue;
+    }
     const linkedCost = expense.costId ? costs.find((cost) => cost.id === expense.costId) : null;
     if (linkedCost && linkedCost.sourceType === LOGISTICS_FEE_COST_SOURCE_TYPE && linkedCost.sourceId === expense.id) {
       skipped.push({ logisticsFeeId: expense.id, costId: linkedCost.id, reason: "already-linked" });
       if (!dryRun) {
         const paymentData = logisticsCostPaymentDataFromExpense(expense);
-        await prisma.orderCost.update({
-          where: { id: linkedCost.id },
-          data: {
-            invoiceStatus: logisticsInvoiceStatusForCost(expense),
-            paymentStatus: paymentData.paymentStatus,
-            paid: paymentData.paid,
-            paidAt: paymentData.paidAt,
-            paymentDate: paymentData.paymentDate,
-          },
+        await prisma.$transaction(async (tx) => {
+          await assertBusinessOrderWritableInTransaction(
+            tx,
+            expense.orderId,
+            "该订单已提交退税并归档，不能运行物流成本关联修复。",
+          );
+          await assertCommissionOrderWritableInTransaction(tx, expense.orderId);
+          await tx.orderCost.update({
+            where: { id: linkedCost.id },
+            data: {
+              invoiceStatus: logisticsInvoiceStatusForCost(expense),
+              paymentStatus: paymentData.paymentStatus,
+              paid: paymentData.paid,
+              paidAt: paymentData.paidAt,
+              paymentDate: paymentData.paymentDate,
+            },
+          });
         });
         syncedPayment.push({ logisticsFeeId: expense.id, costId: linkedCost.id, paymentStatus: paymentData.paymentStatus });
       }
@@ -221,16 +258,19 @@ export async function repairLogisticsCostLinks(input: RepairInput = {}) {
           createdMissing.push({ logisticsFeeId: expense.id, costId: "__would_create__" });
           continue;
         }
-        const cost = await createOrUpdateCostFromLogisticsExpense(prisma, expense, { id: null, role: "系统修复" });
-        await prisma.logisticsExpense.update({
-          where: { id: expense.id },
-          data: { costId: cost.id },
+        const cost = await prisma.$transaction(async (tx) => {
+          const createdCost = await createOrUpdateCostFromLogisticsExpense(tx, expense, { id: null, role: "系统修复" });
+          await tx.logisticsExpense.update({
+            where: { id: expense.id },
+            data: { costId: createdCost.id },
+          });
+          await linkLogisticsExpenseInvoiceDocumentsToCosts(tx, [{
+            expenseId: expense.id,
+            costId: createdCost.id,
+            invoiceDocumentId: expense.invoiceDocumentId || null,
+          }]);
+          return createdCost;
         });
-        await linkLogisticsExpenseInvoiceDocumentsToCosts(prisma, [{
-          expenseId: expense.id,
-          costId: cost.id,
-          invoiceDocumentId: expense.invoiceDocumentId || null,
-        }]);
         createdMissing.push({ logisticsFeeId: expense.id, costId: cost.id });
         continue;
       }
@@ -243,24 +283,32 @@ export async function repairLogisticsCostLinks(input: RepairInput = {}) {
     repaired.push({ logisticsFeeId: expense.id, costId: cost.id });
     if (dryRun) continue;
 
-    await prisma.orderCost.update({
-      where: { id: cost.id },
-      data: {
-        sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE,
-        sourceId: expense.id,
-        invoiceStatus: logisticsInvoiceStatusForCost(expense),
-        ...logisticsCostPaymentDataFromExpense(expense),
-      },
+    await prisma.$transaction(async (tx) => {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        expense.orderId,
+        "该订单已提交退税并归档，不能运行物流成本关联修复。",
+      );
+      await assertCommissionOrderWritableInTransaction(tx, expense.orderId);
+      await tx.orderCost.update({
+        where: { id: cost.id },
+        data: {
+          sourceType: LOGISTICS_FEE_COST_SOURCE_TYPE,
+          sourceId: expense.id,
+          invoiceStatus: logisticsInvoiceStatusForCost(expense),
+          ...logisticsCostPaymentDataFromExpense(expense),
+        },
+      });
+      await tx.logisticsExpense.update({
+        where: { id: expense.id },
+        data: { costId: cost.id },
+      });
+      await linkLogisticsExpenseInvoiceDocumentsToCosts(tx, [{
+        expenseId: expense.id,
+        costId: cost.id,
+        invoiceDocumentId: expense.invoiceDocumentId || null,
+      }]);
     });
-    await prisma.logisticsExpense.update({
-      where: { id: expense.id },
-      data: { costId: cost.id },
-    });
-    await linkLogisticsExpenseInvoiceDocumentsToCosts(prisma, [{
-      expenseId: expense.id,
-      costId: cost.id,
-      invoiceDocumentId: expense.invoiceDocumentId || null,
-    }]);
   }
 
   return {

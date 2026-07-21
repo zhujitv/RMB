@@ -13,7 +13,49 @@ type TaxRefundCompletenessOrder = Prisma.ReceivableOrderGetPayload<{ include: Re
 type TaxRefundCompletenessResult = ReturnType<typeof taxDocumentCompleteness>;
 
 const TAX_REFUND_COMPLETENESS_BATCH_CONCURRENCY = 3;
-const pendingTaxRefundCompletenessRefreshes = new Map<string, Promise<TaxRefundCompletenessResult | null>>();
+const TAX_REFUND_COMPLETENESS_PERSIST_MAX_ATTEMPTS = 3;
+
+export function createTrailingRefreshCoordinator<T>() {
+  type RefreshTask = () => Promise<T>;
+  type PendingRefresh = {
+    promise: Promise<T>;
+    dirty: boolean;
+    nextTask: RefreshTask | null;
+  };
+  const pendingRefreshes = new Map<string, PendingRefresh>();
+
+  return function run(key: string, task: RefreshTask): Promise<T> {
+    const pending = pendingRefreshes.get(key);
+    if (pending) {
+      pending.dirty = true;
+      pending.nextTask = task;
+      return pending.promise;
+    }
+    const state = {
+      promise: Promise.resolve(undefined as T),
+      dirty: false,
+      nextTask: null,
+    } as PendingRefresh;
+    state.promise = (async () => {
+      let currentTask = task;
+      let result: T;
+      while (true) {
+        state.dirty = false;
+        state.nextTask = null;
+        result = await currentTask();
+        await Promise.resolve();
+        if (!state.dirty) return result;
+        currentTask = state.nextTask || task;
+      }
+    })().finally(() => {
+      if (pendingRefreshes.get(key) === state) pendingRefreshes.delete(key);
+    });
+    pendingRefreshes.set(key, state);
+    return state.promise;
+  };
+}
+
+const runDedupedTaxRefundCompletenessRefresh = createTrailingRefreshCoordinator<TaxRefundCompletenessResult | null>();
 
 function normalizedOrderId(orderId: string | null | undefined) {
   return String(orderId || "").trim();
@@ -24,14 +66,6 @@ async function loadTaxRefundCompletenessOrder(orderId: string) {
     where: { id: orderId, deletedAt: null },
     include: includeOrderRelations(),
   });
-}
-
-function safeCompletenessJson(value: unknown) {
-  try {
-    return JSON.stringify(value || null);
-  } catch {
-    return "";
-  }
 }
 
 function taxRefundOverallCompletenessValue(completeness: TaxRefundCompletenessResult | null | undefined) {
@@ -54,46 +88,46 @@ function taxRefundCompletenessIssuesSummary(completeness: TaxRefundCompletenessR
   return text.length > 500 ? `${text.slice(0, 500)}...` : text;
 }
 
-async function computeAndPersistTaxRefundCompleteness(order: TaxRefundCompletenessOrder) {
+function nextTaxRefundCompletenessVersion(current: Date | null | undefined) {
+  const currentTime = current?.getTime() || 0;
+  return new Date(Math.max(Date.now(), currentTime + 1));
+}
+
+async function computeAndPersistTaxRefundCompleteness(
+  order: TaxRefundCompletenessOrder,
+  attempt = 1,
+): Promise<TaxRefundCompletenessResult | null> {
   const completeness = JSON.parse(JSON.stringify(taxDocumentCompleteness(order))) as TaxRefundCompletenessResult;
   const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
-  const completenessChanged = safeCompletenessJson(order.taxRefundCompleteness) !== safeCompletenessJson(completeness);
   const statusChanged = status !== order.taxRefundStatus;
   const overallCompleteness = taxRefundOverallCompletenessValue(completeness);
   const issuesSummary = taxRefundCompletenessIssuesSummary(completeness);
-  if (
-    !completenessChanged
-    && !statusChanged
-    && order.taxRefundCompletenessUpdatedAt
-    && order.taxRefundOverallCompleteness === overallCompleteness
-    && String(order.taxRefundCompletenessIssuesSummary || "") === issuesSummary
-  ) {
-    return completeness;
-  }
-  await prisma.receivableOrder.update({
-    where: { id: order.id },
+  const completenessVersion = nextTaxRefundCompletenessVersion(order.taxRefundCompletenessUpdatedAt);
+  const update = await prisma.receivableOrder.updateMany({
+    where: {
+      id: order.id,
+      deletedAt: null,
+      updatedAt: order.updatedAt,
+      taxRefundCompletenessUpdatedAt: order.taxRefundCompletenessUpdatedAt,
+    },
     data: {
       taxRefundCompleteness: completeness as Prisma.InputJsonValue,
-      taxRefundCompletenessUpdatedAt: new Date(),
+      taxRefundCompletenessUpdatedAt: completenessVersion,
       taxRefundOverallCompleteness: overallCompleteness,
       taxRefundCompletenessIssuesSummary: issuesSummary,
       ...(statusChanged ? { taxRefundStatus: status } : {}),
+      // Completeness is a derived cache with its own timestamp. It must not
+      // invalidate the optimistic-lock version used by business edits.
+      updatedAt: order.updatedAt,
     },
   });
+  if (update.count !== 1) {
+    if (attempt >= TAX_REFUND_COMPLETENESS_PERSIST_MAX_ATTEMPTS) return null;
+    const latestOrder = await loadTaxRefundCompletenessOrder(order.id);
+    if (!latestOrder) return null;
+    return computeAndPersistTaxRefundCompleteness(latestOrder, attempt + 1);
+  }
   return completeness;
-}
-
-function runDedupedTaxRefundCompletenessRefresh(
-  orderId: string,
-  task: () => Promise<TaxRefundCompletenessResult | null>,
-) {
-  const pending = pendingTaxRefundCompletenessRefreshes.get(orderId);
-  if (pending) return pending;
-  const promise = task().finally(() => {
-    pendingTaxRefundCompletenessRefreshes.delete(orderId);
-  });
-  pendingTaxRefundCompletenessRefreshes.set(orderId, promise);
-  return promise;
 }
 
 export async function refreshTaxRefundCompletenessForOrder(order: TaxRefundCompletenessOrder | null | undefined) {

@@ -10,7 +10,7 @@ import {
 } from "./shared-serialization";
 import { taxDocumentCompleteness, derivedTaxRefundStatus } from "./shared-tax";
 import { serializeUser } from "./shared-users";
-import { summarizeOrder } from "./shared-order-calculations";
+import { summarizeOrderWithCommissionSnapshot } from "./shared-commission-summary";
 import {
   asShippingOrder,
   type OrderPaymentInstallmentLike,
@@ -18,9 +18,15 @@ import {
 import { serializeOrderListRow } from "./shared-order-list-serialization";
 import { shippingDocumentDraft } from "./shared-order-shipping-documents";
 
-export function serializeOrder(orderInput: unknown) {
+export function serializeOrder(
+  orderInput: unknown,
+  commissionFormulaSettings?: Record<string, unknown> | null,
+) {
   const order = asShippingOrder(orderInput);
-  const summary = summarizeOrder(order as Parameters<typeof summarizeOrder>[0]);
+  const summary = summarizeOrderWithCommissionSnapshot(
+    order as Parameters<typeof summarizeOrderWithCommissionSnapshot>[0],
+    commissionFormulaSettings,
+  );
   const paymentInstallments = Array.isArray(order.paymentInstallments) ? order.paymentInstallments as OrderPaymentInstallmentLike[] : [];
   const documents = (order.documents || []).map((document) => serializeOrderDocument(document, order));
   const costs = (order.costs || []).map(safeSerializeCost);
@@ -31,7 +37,7 @@ export function serializeOrder(orderInput: unknown) {
   const domesticLogisticsRows = Array.isArray(order.domesticLogisticsInfos) ? order.domesticLogisticsInfos : [];
   const domesticLogisticsInfo = serializeDomesticLogisticsInfo(domesticLogisticsRows[0]);
   return {
-    ...serializeOrderListRow(order),
+    ...serializeOrderListRow(order, commissionFormulaSettings),
     blNo: order.blNo || "",
     billOfLadingNo: order.blNo || "",
     exchangeRate: Number(order.exchangeRate),

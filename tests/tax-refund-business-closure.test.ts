@@ -62,6 +62,15 @@ test("tax refund closure uses bill-level paid state and accepts a settled logist
   assert.deepEqual(summary.blockers, []);
 });
 
+test("tax refund closure accepts the legacy system-generated logistics cost source", () => {
+  const row = settledRow();
+  row.cost = { ...row.cost!, sourceType: "LOGISTICS_EXPENSE" };
+  const result = analyzeTaxRefundLogisticsClosure([row]);
+
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.blockers, []);
+});
+
 test("a paid historical fee with a valid invoice file does not depend on legacy OCR status", () => {
   const summary = analyzeTaxRefundLogisticsClosure([
     settledRow({ invoiceValidationStatus: "未上传" }),
@@ -167,14 +176,41 @@ test("profit analysis query remains independent from tax refund archive status",
 
 test("tax refund submit and logistics mutations are wired to the closure archive guard", () => {
   const taxActions = readFileSync(new URL("../lib/platform/tax-refunds-actions.ts", import.meta.url), "utf8");
+  const taxShared = readFileSync(new URL("../lib/platform/tax-refunds-shared.ts", import.meta.url), "utf8");
+  const payments = readFileSync(new URL("../lib/platform/payments-module.ts", import.meta.url), "utf8");
   const logisticsQueries = readFileSync(new URL("../lib/platform/logistics-expense-queries.ts", import.meta.url), "utf8");
   const logisticsMutations = readFileSync(new URL("../lib/platform/logistics-expense-access-mutations.ts", import.meta.url), "utf8");
   const logisticsInvoiceWorkflow = readFileSync(new URL("../lib/platform/logistics-expense-workflow-invoice.ts", import.meta.url), "utf8");
+  const statusStart = taxActions.indexOf("export async function updateTaxRefundStatus");
+  const cancelStart = taxActions.indexOf("export async function cancelTaxRefundArchive", statusStart);
+  const settleStart = taxActions.indexOf("export async function settleCommission", cancelStart);
+  assert.ok(statusStart >= 0 && cancelStart > statusStart && settleStart > cancelStart);
+  const statusMutation = taxActions.slice(statusStart, cancelStart);
+  const cancelMutation = taxActions.slice(cancelStart, settleStart);
   assert.match(taxActions, /const EDITABLE_TAX_REFUND_STATUSES = \["NOT_READY", "READY", "PROBLEM", "SUBMITTED"\]/);
-  assert.match(taxActions, /await lockBusinessOrderForUpdate\(tx, orderId\)/);
-  assert.match(taxActions, /await assertTaxRefundLogisticsBusinessClosure\(orderId, tx\)/);
-  assert.match(taxActions, /return tx\.receivableOrder\.update/);
+  assert.match(taxActions, /const TAX_REFUND_STATUS_TRANSACTION_OPTIONS = \{[\s\S]*isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(taxActions, /function runTaxRefundStatusTransaction/);
+  assert.match(statusMutation, /runTaxRefundStatusTransaction\(async \(tx\) =>/);
+  assert.match(statusMutation, /await lockBusinessOrderForUpdate\(tx, orderId\)/);
+  assert.match(statusMutation, /hydrateTaxRefundOrderLogisticsInfo\(before, tx\)/);
+  assert.match(statusMutation, /exchangeRateSettingsInTransaction\(tx\)/);
+  assert.match(statusMutation, /await assertTaxRefundLogisticsBusinessClosure\(orderId, tx\)/);
+  assert.match(statusMutation, /tx\.receivableOrder\.updateMany\(\{[\s\S]*updatedAt: before\.updatedAt,[\s\S]*taxRefundCompletenessUpdatedAt: before\.taxRefundCompletenessUpdatedAt/);
+  assert.match(statusMutation, /if \(updated\.count !== 1\) throw taxRefundStatusSerializationConflict\(\)/);
+  assert.match(statusMutation, /writeAudit\([\s\S]*taxRefundCompletenessUpdatedAt: mutationVersion,[\s\S]*tx,[\s\S]*\);/);
+  assert.ok(statusMutation.indexOf("lockBusinessOrderForUpdate") < statusMutation.indexOf("receivableOrder.findFirst"));
+  assert.ok(statusMutation.indexOf("hydrateTaxRefundOrderLogisticsInfo(before, tx)") < statusMutation.indexOf("exchangeRateSettingsInTransaction(tx)"));
+  assert.ok(statusMutation.indexOf("assertTaxRefundLogisticsBusinessClosure") < statusMutation.indexOf("receivableOrder.updateMany"));
+  assert.match(cancelMutation, /runTaxRefundStatusTransaction\(async \(tx\) =>/);
+  assert.match(cancelMutation, /await lockBusinessOrderForUpdate\(tx, orderId\)/);
+  assert.match(cancelMutation, /hydrateTaxRefundOrderLogisticsInfo\(before, tx\)/);
+  assert.match(cancelMutation, /tx\.receivableOrder\.updateMany\(\{[\s\S]*updatedAt: before\.updatedAt,[\s\S]*taxRefundCompletenessUpdatedAt: before\.taxRefundCompletenessUpdatedAt/);
+  assert.match(cancelMutation, /writeAudit\([\s\S]*"取消归档"[\s\S]*tx,[\s\S]*\);/);
+  assert.match(taxShared, /hydrateTaxRefundOrderLogisticsInfo\([\s\S]*client: Prisma\.TransactionClient \| typeof prisma = prisma/);
+  assert.match(taxShared, /client\.logisticsBill/);
+  assert.match(taxShared, /client\.receivableOrder/);
   assert.doesNotMatch(taxActions.match(/const EDITABLE_TAX_REFUND_STATUSES[^;]+/)?.[0] || "", /REFUND_RECEIVED/);
+  assert.doesNotMatch(payments, /assertBusinessNotArchived|assertBusinessOrderWritableInTransaction|BUSINESS_ARCHIVED_READ_ONLY/);
   assert.match(logisticsQueries, /businessArchiveOrderWhere\(filters\.businessScope\)/);
   assert.match(logisticsQueries, /businessArchiveOrderWhere\("current"\)/);
   assert.match(logisticsMutations, /assertBusinessNotArchived\(expense\.order/);
@@ -182,7 +218,7 @@ test("tax refund submit and logistics mutations are wired to the closure archive
   assert.ok(paymentStart >= 0);
   const paymentSource = logisticsInvoiceWorkflow.slice(paymentStart);
   assert.match(paymentSource, /prisma\.\$transaction/);
-  assert.match(paymentSource, /syncApprovedLogisticsExpenseCosts\(tx, currentRows, actor\)/);
+  assert.match(paymentSource, /syncApprovedLogisticsExpenseCosts\(tx, currentRows, actor(?:, \{[\s\S]*?\})?\)/);
   assert.match(paymentSource, /costUpdate\.count !== costIds\.length/);
   assert.doesNotMatch(paymentSource, /orderCost\.updateMany\([\s\S]*?\.catch\(\(\) => null\)/);
 });

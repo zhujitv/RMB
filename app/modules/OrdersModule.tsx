@@ -167,6 +167,7 @@ export function OrdersModule({
 
   const {
     openEditOrder,
+    handleOrderConflictRefreshed,
     handleOrderSaved,
     handleOrderEditCancel,
     applyOrderPatch,
@@ -245,6 +246,7 @@ export function OrdersModule({
       }}
       onToggleCreate={toggleCreateOrder}
       onRepairSalespeople={() => void repairMissingSalespeople()}
+      onOrderConflictRefreshed={handleOrderConflictRefreshed}
       onOrderSaved={(order) => void handleOrderSaved(order)}
       onOrderEditCancel={handleOrderEditCancel}
       onPage={gotoPage}

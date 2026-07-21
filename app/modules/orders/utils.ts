@@ -6,6 +6,7 @@ export function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
   if (!order) return { ...emptyQuickOrderForm };
   const paymentTermType = order.paymentTermType || (String(order.paymentTerm || "").toUpperCase().includes("OA") ? "OA" : "COPY_BL");
   return {
+    expectedUpdatedAt: order.updatedAt || "",
     customerId: order.customerId || "",
     orderNo: order.orderNo || "",
     blNo: order.blNo || order.billOfLadingNo || "",

@@ -184,8 +184,11 @@ test("logistics bill supplier key does not reuse deleted or sampled legacy bills
 
 test("logistics review pushes costs and notifies invoice upload after approval", () => {
   assert.doesNotMatch(backend, /costSyncFailures/);
-  assert.match(backend, /await syncApprovedLogisticsExpenseCosts\(tx, rows, actor\)/);
-  assert.match(backend, /createOrUpdateCostFromLogisticsExpense\(tx, row, actor, \{ settledCostMode \}\)/);
+  assert.match(backend, /await syncApprovedLogisticsExpenseCosts\(tx, rows, actor(?:, \{[\s\S]*?\})?\)/);
+  assert.match(
+    backend,
+    /createOrUpdateCostFromLogisticsExpense\(tx, row, actor, \{[\s\S]*settledCostMode,[\s\S]*commissionLockAlreadyHeld: true,[\s\S]*\}\)/,
+  );
   assert.match(backend, /await updateLogisticsExpenseCostIds\(tx, links\)/);
   assert.match(backend, /linkLogisticsExpenseInvoiceDocumentsToCosts/);
   assert.match(backend, /tx\.orderDocument\.updateMany/);

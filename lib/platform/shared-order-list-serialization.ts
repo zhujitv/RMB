@@ -7,13 +7,16 @@ import {
 import { serializeUser } from "./shared-users";
 import { paymentTermLabel } from "./shared-utils";
 import { summarizeOrder } from "./shared-order-calculations";
+import { summarizeOrderWithCommissionSnapshot } from "./shared-commission-summary";
 import { businessEntityFieldsFromOrder } from "./business-entities";
 import {
   asShippingOrder,
   type OrderPaymentInstallmentLike,
 } from "./shared-order-serialization-types";
 
-export function serializeOrderListSummary(summary: ReturnType<typeof summarizeOrder>) {
+export function serializeOrderListSummary(
+  summary: ReturnType<typeof summarizeOrder> | ReturnType<typeof summarizeOrderWithCommissionSnapshot>,
+) {
   return {
     receivableCny: summary.receivableCny,
     receivableAmount: summary.receivableAmount,
@@ -37,7 +40,9 @@ export function serializeOrderListSummary(summary: ReturnType<typeof summarizeOr
     depositRatio: summary.depositRatio,
     pendingPaymentsCny: summary.pendingPaymentsCny,
     pendingPaymentsAmount: summary.pendingPaymentsAmount,
+    arrivedBalanceAmount: summary.arrivedBalanceAmount,
     arrivedBalanceCny: summary.arrivedBalanceCny,
+    arrivedOutstandingAmount: summary.arrivedOutstandingAmount,
     arrivedOutstandingCny: summary.arrivedOutstandingCny,
     balanceCny: summary.balanceCny,
     balanceAmount: summary.balanceAmount,
@@ -45,6 +50,7 @@ export function serializeOrderListSummary(summary: ReturnType<typeof summarizeOr
     outstandingAmount: summary.outstandingAmount,
     overpaidCny: summary.overpaidCny,
     overpaidAmount: summary.overpaidAmount,
+    exchangeDifferenceCny: summary.exchangeDifferenceCny,
     isOverpaid: summary.isOverpaid,
     isUnderpaid: summary.isUnderpaid,
     reminderStatus: summary.reminderStatus,
@@ -52,9 +58,23 @@ export function serializeOrderListSummary(summary: ReturnType<typeof summarizeOr
   };
 }
 
-export function serializeOrderListRow(orderInput: unknown) {
+function hasCurrencyLockPayments(payments: unknown) {
+  return Array.isArray(payments) && payments.some((payment) => {
+    if (!payment || typeof payment !== "object") return false;
+    const row = payment as { deletedAt?: unknown; status?: unknown };
+    return !row.deletedAt && ["待确认", "已到账"].includes(String(row.status || ""));
+  });
+}
+
+export function serializeOrderListRow(
+  orderInput: unknown,
+  commissionFormulaSettings?: Record<string, unknown> | null,
+) {
   const order = asShippingOrder(orderInput);
-  const summary = summarizeOrder(order as Parameters<typeof summarizeOrder>[0]);
+  const summary = summarizeOrderWithCommissionSnapshot(
+    order as Parameters<typeof summarizeOrderWithCommissionSnapshot>[0],
+    commissionFormulaSettings,
+  );
   const paymentInstallments = Array.isArray(order.paymentInstallments) ? order.paymentInstallments as OrderPaymentInstallmentLike[] : [];
   const paymentTermDisplay = paymentTermLabel(order.paymentTermType || undefined, order.paymentTerm || undefined);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot);
@@ -62,6 +82,7 @@ export function serializeOrderListRow(orderInput: unknown) {
   const logisticsSupplierRows = Array.isArray(order.logisticsSuppliers) ? order.logisticsSuppliers : [];
   return {
     id: order.id,
+    hasCurrencyLockPayments: hasCurrencyLockPayments(order.payments),
     orderNo: order.orderNo,
     blNo: order.blNo || order.billOfLadingNo || "",
     billOfLadingNo: order.blNo || order.billOfLadingNo || "",

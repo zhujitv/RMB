@@ -34,6 +34,7 @@ export function OrderDetailDrawer({
   const [transferMessage, setTransferMessage] = useState("");
   const [transferring, setTransferring] = useState(false);
   const currentBusinessEntityId = order.businessEntityId || "";
+  const exchangeDifferenceCny = Number(order.summary?.exchangeDifferenceCny || 0);
   const targetBusinessEntity = useMemo(() => (
     businessEntities.find((entity) => entity.id === targetBusinessEntityId) || null
   ), [businessEntities, targetBusinessEntityId]);
@@ -135,6 +136,11 @@ export function OrderDetailDrawer({
             order.summary?.outstandingAmount,
             order.summary?.arrivedOutstandingCny ?? order.summary?.outstandingCny,
           )}
+        />
+        <DetailField
+          label="汇兑差额"
+          value={`${formatCny(Math.abs(exchangeDifferenceCny))}（${exchangeDifferenceCny > 0 ? "汇兑收益" : "汇兑损失"}）`}
+          hidden={Math.abs(exchangeDifferenceCny) < 0.01}
         />
         <DetailField label="预付款要求" value={formatCny(order.summary?.requiredDepositAmount)} />
         <DetailField label="已收预付款" value={formatCny(order.summary?.receivedDepositCny)} />

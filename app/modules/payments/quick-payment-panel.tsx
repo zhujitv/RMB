@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { apiJson } from "../../api";
+import { ApiRequestError, apiJson } from "../../api";
 import { SearchAutocomplete } from "../../SearchAutocomplete";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import { moneyText } from "../../formatters";
@@ -30,14 +30,17 @@ export function QuickCreatePaymentPanel({
   initialPayment,
   canConfirmArrived,
   onCancel,
+  onConflict,
   onSaved,
 }: {
   initialPayment?: PaymentRow | null;
   canConfirmArrived: boolean;
   onCancel: () => void;
+  onConflict: (paymentId: string) => Promise<void>;
   onSaved: (payment?: PaymentRow | null) => void;
 }) {
-  const [form, setForm] = useState<QuickPaymentForm>(() => paymentFormFromRow(initialPayment));
+  const [editingSnapshot] = useState<PaymentRow | null>(() => initialPayment ? { ...initialPayment } : null);
+  const [form, setForm] = useState<QuickPaymentForm>(() => paymentFormFromRow(editingSnapshot));
   const [orders, setOrders] = useState<PaymentOrderOption[]>([]);
   const [exchangeMeta, setExchangeMeta] = useState("");
   const [saving, setSaving] = useState(false);
@@ -246,9 +249,9 @@ export function QuickCreatePaymentPanel({
     setSaving(true);
     setMessage("");
     try {
-      const isEdit = Boolean(initialPayment?.id);
+      const isEdit = Boolean(editingSnapshot?.id);
       const result = await apiJson<{ success?: boolean; message?: string; payment?: PaymentRow; data?: { payment?: PaymentRow } }>(
-        isEdit ? `/api/payments/${encodeURIComponent(initialPayment?.id || "")}` : "/api/payments",
+        isEdit ? `/api/payments/${encodeURIComponent(editingSnapshot?.id || "")}` : "/api/payments",
         {
           method: isEdit ? "PATCH" : "POST",
           body: JSON.stringify({
@@ -264,6 +267,7 @@ export function QuickCreatePaymentPanel({
             status: form.status,
             bankReference: normalizedForm.bankReference.trim(),
             remark: normalizedForm.remark.trim(),
+            ...(isEdit ? { expectedUpdatedAt: editingSnapshot?.updatedAt || undefined } : {}),
           }),
         },
       );
@@ -273,19 +277,23 @@ export function QuickCreatePaymentPanel({
       setExchangeMeta("");
       onSaved(result.payment || result.data?.payment || null);
     } catch (saveError) {
+      if (saveError instanceof ApiRequestError && saveError.status === 409 && editingSnapshot?.id) {
+        await onConflict(editingSnapshot.id);
+        return;
+      }
       setMessage(saveError instanceof Error ? saveError.message : "收款保存失败");
     } finally {
       setSaving(false);
     }
   }
 
-  const initialOrder: PaymentOrderOption | null = initialPayment?.orderId ? {
-    id: initialPayment.orderId,
-    orderNo: initialPayment.orderNo,
-    customerName: initialPayment.customerName,
-    customerFullName: initialPayment.customerFullName,
-    customerShortName: initialPayment.customerShortName,
-    currency: initialPayment.currency,
+  const initialOrder: PaymentOrderOption | null = editingSnapshot?.orderId ? {
+    id: editingSnapshot.orderId,
+    orderNo: editingSnapshot.orderNo,
+    customerName: editingSnapshot.customerName,
+    customerFullName: editingSnapshot.customerFullName,
+    customerShortName: editingSnapshot.customerShortName,
+    currency: editingSnapshot.currency,
   } : null;
   const orderOptions = initialOrder && !orders.some((order) => order.id === initialOrder.id)
     ? [initialOrder, ...orders]
@@ -326,7 +334,7 @@ export function QuickCreatePaymentPanel({
     <form className={styles.quickCreatePanel} onSubmit={submitQuickPayment} noValidate>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>{initialPayment?.id ? "编辑收款" : "快速登记收款"}</strong>
+          <strong>{editingSnapshot?.id ? "编辑收款" : "快速登记收款"}</strong>
         </div>
       </div>
 
@@ -418,7 +426,7 @@ export function QuickCreatePaymentPanel({
       </div>
 
       <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : initialPayment?.id ? "更新收款" : "保存收款"}</button>
+        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : editingSnapshot?.id ? "更新收款" : "保存收款"}</button>
         <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
       </div>
     </form>

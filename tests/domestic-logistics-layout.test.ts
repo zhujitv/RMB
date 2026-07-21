@@ -209,7 +209,8 @@ test("export invoice remark is structured and hidden from logistics views", () =
 test("tax refund detail hydrates archived logistics transport items by bill of lading", () => {
   assert.match(taxRefundService, /hydrateTaxRefundOrderLogisticsInfo/);
   assert.match(taxRefundService, /taxRefundDetailBillOfLadingNumbers/);
-  assert.match(taxRefundService, /guardedPrismaFindMany<[\s\S]*prisma\.logisticsBill,\s*"logisticsBill"[\s\S]*where: \{ orderId: order\.id, deletedAt: null/);
+  assert.match(taxRefundService, /guardedPrismaFindMany<[\s\S]*client\.logisticsBill,\s*"logisticsBill"[\s\S]*where: \{ orderId: order\.id, deletedAt: null/);
+  assert.match(taxRefundService, /client: Prisma\.TransactionClient \| typeof prisma = prisma/);
   assert.match(taxRefundService, /\{ blNo: \{ in: billOfLadingNumbers \} \}/);
   assert.match(taxRefundService, /logisticsBills: \{ some: \{ deletedAt: null, status: \{ not: "voided" \}, billOfLadingNo: \{ in: billOfLadingNumbers \} \} \}/);
   assert.match(taxRefundService, /select: domesticLogisticsInfoSafeSelect\(\)/);

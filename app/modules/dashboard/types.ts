@@ -2,6 +2,7 @@ export type OverviewTotals = {
   receivable?: number;
   confirmed?: number;
   outstanding?: number;
+  exchangeDifference?: number;
   overdueOrders?: number;
   dueSoonOrders?: number;
   expectedProfit?: number;
@@ -10,6 +11,7 @@ export type OverviewTotals = {
   netCashFlow?: number;
   realizedGrossMargin?: number | null;
   commissionAmount?: number;
+  commissionSnapshotMissingOrders?: number;
   orderCount?: number;
 };
 

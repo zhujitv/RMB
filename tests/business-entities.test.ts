@@ -93,7 +93,7 @@ test("order APIs assign default business entity and protect transfers", () => {
   assert.match(service, /businessEntityWhereFromQuery/);
   assert.match(service, /transferOrderBusinessEntity/);
   assert.match(service, /writeAudit\(/);
-  assert.match(ordersService, /resolveBusinessEntityForOrderInput\(inputData, before\)/);
+  assert.match(ordersService, /resolveBusinessEntityForOrderInput\(inputData, current, tx\)/);
   assert.match(ordersService, /BUSINESS_ENTITY_TRANSFER_REQUIRED/);
   assert.match(ordersService, /businessEntityId: businessEntity\.id/);
   assert.match(ordersService, /businessEntityNameSnapshot: businessEntity\.name/);

@@ -40,6 +40,11 @@ export function includeOrderRelations() {
     businessEntity: true,
     salesperson: true,
     commissionSettledBy: true,
+    commissionSettlementRecords: {
+      where: { status: "ACTIVE", reversedAt: null },
+      orderBy: [{ settledAt: "desc" as const }, { createdAt: "desc" as const }],
+      take: 1,
+    },
     taxRefundArchivedBy: true,
     taxSubmittedBy: true,
     createdBy: true,
@@ -88,6 +93,17 @@ export function includeOrderRelations() {
       where: { deletedAt: null },
       select: domesticLogisticsInfoSafeSelect(),
       orderBy: [{ updatedAt: "desc" as const }],
+      take: 1,
+    },
+  });
+}
+
+export function includeOrderRelationsWithCommissionSettlement() {
+  return Prisma.validator<Prisma.ReceivableOrderInclude>()({
+    ...includeOrderRelations(),
+    commissionSettlementRecords: {
+      where: { status: "ACTIVE", reversedAt: null },
+      orderBy: [{ settledAt: "desc" as const }, { createdAt: "desc" as const }],
       take: 1,
     },
   });

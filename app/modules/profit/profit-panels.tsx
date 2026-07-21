@@ -90,18 +90,28 @@ export function ProfitMobileCard({
 export function ProfitDetailDrawer({
   row,
   settling,
+  reversing,
   canSettleCommission,
+  canReverseCommission,
   onSettle,
+  onReverse,
   onClose,
 }: {
   row: ProfitRow;
   settling: boolean;
+  reversing: boolean;
   canSettleCommission: boolean;
+  canReverseCommission: boolean;
   onSettle: () => void;
+  onReverse: () => void;
   onClose: () => void;
 }) {
   const summary = row.summary || {};
   const commissionCanSettle = canSettleCommission && Boolean(summary.commissionCanSettle);
+  const commissionSettled = Boolean(summary.commissionSnapshotMissing)
+    || summary.commissionStatus === "已结算"
+    || ["已结算", "SETTLED"].includes(String(row.commissionStatus || ""));
+  const commissionCanReverse = canReverseCommission && commissionSettled;
   return (
     <SideDetailDrawer
       ariaLabel="利润分析详情"
@@ -109,10 +119,19 @@ export function ProfitDetailDrawer({
       title={`${row.orderNo || "-"} · ${customerLegalName(row)}`}
       subtitle={`提单号：${row.blNo || "-"} · 业务员：${row.salespersonName || "-"}`}
       onClose={onClose}
-      actions={commissionCanSettle ? (
-        <button className={styles.primaryButtonCompact} type="button" disabled={settling} onClick={onSettle}>
-          {settling ? "结算中..." : "确认结算提成"}
-        </button>
+      actions={commissionCanSettle || commissionCanReverse ? (
+        <>
+          {commissionCanSettle ? (
+            <button className={styles.primaryButtonCompact} type="button" disabled={settling || reversing} onClick={onSettle}>
+              {settling ? "结算中..." : "确认结算提成"}
+            </button>
+          ) : null}
+          {commissionCanReverse ? (
+            <button className={styles.dangerButton} type="button" disabled={settling || reversing} onClick={onReverse}>
+              {reversing ? "撤销中..." : "撤销提成结算"}
+            </button>
+          ) : null}
+        </>
       ) : null}
     >
       <div className={styles.detailGrid}>
@@ -127,9 +146,9 @@ export function ProfitDetailDrawer({
         <DetailField label="净现金流" value={formatCny(summary.netCashFlowCny)} />
         <DetailField label="提成公式" value={summary.commissionFormulaLabel || summary.commissionFormulaDescription || "-"} />
         <DetailField label="提成前置缺失" value={(summary.taxLogisticsMissingLabels || []).join("、") || "-"} wide />
-        <DetailField label="提成基数" value={formatCny(summary.commissionBaseCny)} />
-        <DetailField label="业务员提成" value={formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)} />
-        <DetailField label="提成比例" value={`${Number(summary.commissionRate || 0).toFixed(2)}%`} />
+        <DetailField label="提成基数" value={summary.commissionSnapshotMissing ? "-" : formatCny(summary.commissionBaseCny)} />
+        <DetailField label="业务员提成" value={summary.commissionSnapshotMissing ? "-" : formatCny(summary.commissionAmountCny ?? summary.estimatedCommissionCny)} />
+        <DetailField label="提成比例" value={summary.commissionSnapshotMissing ? "-" : `${Number(summary.commissionRate || 0).toFixed(2)}%`} />
         <DetailField label="提成状态" value={summary.commissionStatus || row.commissionStatus || "-"} />
         <DetailField label="结算人" value={row.commissionSettledByName || "-"} />
         <DetailField label="结算时间" value={row.commissionSettledAt ? new Date(row.commissionSettledAt).toLocaleString("zh-CN") : "-"} />

@@ -49,6 +49,8 @@ import {
   type UnknownRecord,
 } from "./logistics-expense-workflow-core";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
+import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
+import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 
 export async function batchUpdateLogisticsExpenses(request: AuditRequestLike, actor: ActorContext, input: unknown = {}) {
   assertCanWriteLogisticsExpense(actor);
@@ -91,16 +93,29 @@ export async function batchUpdateLogisticsExpenses(request: AuditRequestLike, ac
       },
     });
   }
-  const savedRows: LogisticsExpenseRow[] = [];
-  for (const item of prepared) {
-    const billId = rowBillId(item.before);
-    const saved = await prisma.$transaction(async (tx) => {
+  const savedRows = await prisma.$transaction(async (tx) => {
+    const orderIds = [...new Set(prepared.map((item) => nonEmpty(item.before.orderId)).filter(Boolean))].sort();
+    const billIds = [...new Set(prepared.map((item) => rowBillId(item.before)).filter(Boolean))].sort();
+    for (const orderId of orderIds) {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        orderId,
+        "该订单已提交退税并归档，不能修改物流费用明细。",
+      );
+      await assertCommissionOrderWritableInTransaction(tx, orderId);
+    }
+    for (const billId of billIds) {
       await lockLogisticsBillForWorkflow(tx, billId);
+    }
+    const saved: LogisticsExpenseRow[] = [];
+    for (const item of prepared) {
+      const billId = rowBillId(item.before);
       const updated = await tx.logisticsExpense.updateMany({
         where: {
           id: item.before.id,
           billId,
           deletedAt: null,
+          updatedAt: item.before.updatedAt,
           bill: { is: { auditStatus: { in: ["草稿", "已驳回"] }, status: { not: "voided" } } },
         },
         data: item.data,
@@ -113,11 +128,11 @@ export async function batchUpdateLogisticsExpenses(request: AuditRequestLike, ac
         include: includeLogisticsExpenseRelations(),
       });
       if (!row) throw codedError("物流费用不存在或已删除。", 404, "LOGISTICS_EXPENSE_NOT_FOUND");
-      return row;
-    }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
-    savedRows.push(saved);
-    await runNonCriticalTask("物流费用批量修改日志写入", () => writeAudit(request, actor, "批量修改物流费用明细", "logistics_expenses", item.before.id, item.before, saved));
-  }
+      await writeAudit(request, actor, "批量修改物流费用明细", "logistics_expenses", item.before.id, item.before, row, tx);
+      saved.push(row);
+    }
+    return saved;
+  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
   for (const orderId of [...new Set(savedRows.map((row) => row.orderId).filter(Boolean))]) {
     scheduleTaxRefundCompletenessRefresh(orderId);
   }
@@ -161,14 +176,19 @@ export async function batchSaveLogisticsExpenses(request: AuditRequestLike, acto
   const order = baseExpense.order;
   const supplier = baseExpense.supplier;
   if (!order?.id || !supplier?.id) throw codedError("当前账单缺少订单或供应商信息，不能保存明细。", 400, "LOGISTICS_EXPENSE_BILL_CONTEXT_INVALID");
-  const bill = await ensureLogisticsExpenseBill(order, supplier, actor, {
-    auditStatus: billStatus || rowAuditStatus(baseExpense),
-    submittedAt: rowBillSubmittedAt(baseExpense),
-  });
-  const targetBillId = bill.id || billId;
-  const preparedCreates = await prepareLogisticsExpenseCreates(creates, baseExpense, order, supplier, actor, targetBillId);
+  const preparedCreates = await prepareLogisticsExpenseCreates(creates, baseExpense, order, supplier, actor, billId);
   const deletedIds = preparedDeletes.map((row) => row.id);
-  await persistLogisticsExpenseBatch(preparedUpdates, preparedCreates, deletedIds, targetBillId, actor);
+  const targetBillId = await persistLogisticsExpenseBatch(
+    preparedUpdates,
+    preparedCreates,
+    preparedDeletes,
+    billId,
+    order,
+    supplier,
+    billStatus || rowAuditStatus(baseExpense),
+    rowBillSubmittedAt(baseExpense),
+    actor,
+  );
   const savedBillRows = await loadLogisticsExpenseBillRowsForAction(targetBillId, actor);
   const serializedItems = savedBillRows.map(serializeLogisticsExpense);
   const serializedBill = savedBillRows.length ? serializeLogisticsExpenseBill(savedBillRows) : null;
@@ -266,19 +286,39 @@ async function prepareLogisticsExpenseCreates(
 async function persistLogisticsExpenseBatch(
   preparedUpdates: PreparedUpdate[],
   preparedCreates: PreparedCreate[],
-  deletedIds: string[],
-  targetBillId: string,
+  preparedDeletes: LogisticsExpenseRow[],
+  existingBillId: string,
+  order: NonNullable<LogisticsExpenseRow["order"]>,
+  supplier: NonNullable<LogisticsExpenseRow["supplier"]>,
+  auditStatus: string,
+  submittedAt: Date | string | null | undefined,
   actor: ActorContext,
 ) {
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      order.id,
+      "该订单已提交退税并归档，不能保存物流费用明细。",
+    );
+    await assertCommissionOrderWritableInTransaction(tx, order.id);
+    const ensuredBill = await ensureLogisticsExpenseBill(order, supplier, actor, {
+      auditStatus,
+      submittedAt,
+    }, tx);
+    const targetBillId = ensuredBill.id || existingBillId;
     await lockLogisticsBillForWorkflow(tx, targetBillId);
-    const bill = await tx.logisticsBill.findUnique({ where: { id: targetBillId } });
-    if (!bill || !["草稿", "已驳回"].includes(bill.auditStatus)) {
+    const currentBill = await tx.logisticsBill.findUnique({ where: { id: targetBillId } });
+    if (!currentBill || !["草稿", "已驳回"].includes(currentBill.auditStatus)) {
       throw codedError("账单状态已变化，明细保存已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_BATCH_SAVE_STATE_CHANGED");
     }
     for (const item of preparedUpdates) {
       const updated = await tx.logisticsExpense.updateMany({
-        where: { id: item.before.id, billId: targetBillId, deletedAt: null },
+        where: {
+          id: item.before.id,
+          billId: targetBillId,
+          deletedAt: null,
+          updatedAt: item.before.updatedAt,
+        },
         data: { ...item.data, billId: targetBillId },
       });
       if (updated.count !== 1) {
@@ -288,17 +328,17 @@ async function persistLogisticsExpenseBatch(
     if (preparedCreates.length) {
       await tx.logisticsExpense.createMany({ data: preparedCreates.map((item) => item.data) });
     }
-    if (deletedIds.length) {
+    if (preparedDeletes.length) {
       const deleted = await tx.logisticsExpense.updateMany({
         where: {
-          id: { in: deletedIds },
           billId: targetBillId,
           deletedAt: null,
           ...logisticsExpenseAccessWhere(actor),
+          OR: preparedDeletes.map((row) => ({ id: row.id, updatedAt: row.updatedAt })),
         },
         data: { deletedAt: new Date(), updatedById: actorId(actor) },
       });
-      if (deleted.count !== deletedIds.length) {
+      if (deleted.count !== preparedDeletes.length) {
         throw codedError("费用明细状态已变化，删除已取消，请刷新后重试。", 409, "LOGISTICS_EXPENSE_BATCH_DELETE_CHANGED");
       }
     }
@@ -309,6 +349,7 @@ async function persistLogisticsExpenseBatch(
         ? { invoiceStatus: "待开票", paymentStatus: "待开票", updatedById: actorId(actor) || null }
         : { deletedAt: new Date(), updatedById: actorId(actor) || null },
     });
+    return targetBillId;
   }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
 }
 
@@ -319,6 +360,12 @@ export async function deleteLogisticsExpense(request: AuditRequestLike, actor: A
   const block = logisticsExpenseDeleteBlock(before);
   if (block) throw codedError(block.message, 400, block.code);
   const mutation = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      before.orderId,
+      "该订单已提交退税并归档，不能删除物流费用明细。",
+    );
+    await assertCommissionOrderWritableInTransaction(tx, before.orderId);
     await lockLogisticsBillForWorkflow(tx, billId);
     const current = await tx.logisticsExpense.findFirst({
       where: { id, billId, deletedAt: null, ...logisticsExpenseAccessWhere(actor) },

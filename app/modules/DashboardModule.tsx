@@ -65,16 +65,25 @@ export function DashboardModule() {
   }
 
   const totals = overview?.totals || {};
+  const exchangeDifference = Number(totals.exchangeDifference || 0);
   const overdueAmount = useMemo(() => sumBy(overview?.overdueTop || [], (row) => Number(row.unpaid || 0)), [overview]);
   const metrics = [
     { label: "应收总额", value: formatCny(totals.receivable), note: `${Number(totals.orderCount || 0)} 个订单`, tone: styles.metricBlue },
     { label: "已收回款", value: formatCny(totals.confirmed), note: "只统计已到账收款", tone: styles.metricGreen },
-    { label: "未收余额", value: formatCny(totals.outstanding), note: "最终应收 - 已到账", tone: styles.metricOrange },
+    { label: "未收余额", value: formatCny(totals.outstanding), note: "按订单原币余额折算；与实收差异见汇兑", tone: styles.metricOrange },
+    { label: "汇兑差额", value: formatCny(exchangeDifference), note: "订单汇率与实际收款汇率差额；正数收益，负数损失", tone: exchangeDifference > 0 ? styles.metricGreen : exchangeDifference < 0 ? styles.metricRed : styles.metricBlue },
     { label: "逾期金额", value: formatCny(overdueAmount), note: `${Number(totals.overdueOrders || 0)} 个逾期订单`, tone: styles.metricRed },
     { label: "预计毛利", value: formatCny(totals.expectedProfit), note: "最终应收 - 已确认总成本", tone: Number(totals.expectedProfit || 0) >= 0 ? styles.metricGreen : styles.metricRed },
     { label: "预计毛利率", value: formatPercent(totals.expectedGrossMargin), note: "订单盈利能力", tone: styles.metricBlue },
     { label: "已实现毛利", value: formatCny(totals.realizedProfit), note: "收齐订单：最终应收 - 总成本", tone: Number(totals.realizedProfit || 0) >= 0 ? styles.metricGreen : styles.metricRed },
-    { label: "业务员提成", value: formatCny(totals.commissionAmount), note: "按当前提成口径统计", tone: styles.metricBlue },
+    {
+      label: "业务员提成",
+      value: formatCny(totals.commissionAmount),
+      note: Number(totals.commissionSnapshotMissingOrders || 0) > 0
+        ? `${Number(totals.commissionSnapshotMissingOrders)} 个历史结算缺少金额快照，未计入合计`
+        : "按当前提成口径统计",
+      tone: styles.metricBlue,
+    },
   ];
 
   const activeFilterText = [

@@ -59,6 +59,7 @@ export function orderToReceivable(order: BusinessReportRow) {
     finalReceivableAmountCny: moneyNumber(order.finalReceivableAmountCny),
     receivedAmount: moneyNumber(order.summary?.confirmedPaymentsAmount),
     receivedAmountCny: moneyNumber(order.summary?.confirmedPaymentsCny),
+    exchangeDifferenceCny: moneyNumber(order.summary?.exchangeDifferenceCny),
     outstandingAmount: moneyNumber(order.summary?.outstandingAmount),
     outstandingCny: moneyNumber(order.summary?.outstandingCny),
     dueDate: order.dueDate,
@@ -90,12 +91,18 @@ export function orderToProfit(order: BusinessReportRow) {
 export function orderToCommission(order: BusinessReportRow) {
   return {
     ...orderToReceivable(order),
-    commissionRate: `${Number(order.salespersonCommissionRate || order.commissionRate || 0).toFixed(2)}%`,
+    commissionRate: order.summary?.commissionSnapshotMissing
+      ? ""
+      : `${Number(order.summary?.commissionRate ?? order.salespersonCommissionRate ?? order.commissionRate ?? 0).toFixed(2)}%`,
     receivedAmountCny: moneyNumber(order.summary?.arrivedPaymentsCny),
     logisticsCostCny: moneyNumber(order.summary?.logisticsCostCny),
-    commissionBaseCny: moneyNumber(order.summary?.commissionBaseCny),
-    commissionAmountCny: moneyNumber(order.summary?.commissionAmountCny ?? order.summary?.estimatedCommissionCny),
-    commissionStatus: order.commissionStatus,
+    commissionBaseCny: order.summary?.commissionSnapshotMissing ? "" : moneyNumber(order.summary?.commissionBaseCny),
+    commissionAmountCny: order.summary?.commissionSnapshotMissing
+      ? ""
+      : moneyNumber(order.summary?.commissionAmountCny ?? order.summary?.estimatedCommissionCny),
+    commissionFormula: order.summary?.commissionFormulaLabel || order.summary?.commissionFormulaDescription || "",
+    commissionFormulaVersion: order.summary?.commissionFormulaVersion || "",
+    commissionStatus: order.summary?.commissionStatus || order.commissionStatus,
     commissionSettledAt: order.commissionSettledAt,
   };
 }

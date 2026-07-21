@@ -46,7 +46,7 @@ export function PaymentsModule({
     updateConfirmationInput,
   } = useConfirmationDialog();
   const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
-  async function loadPayments(nextPage = page, nextFilters = submittedFilters) {
+  async function loadPayments(nextPage = page, nextFilters = submittedFilters): Promise<PaymentRow[] | null> {
     const requestId = ++listRequestRef.current;
     setLoading(true);
     setError("");
@@ -63,17 +63,20 @@ export function PaymentsModule({
         if (text) params.set(key, text);
       });
       const result = await apiJson<PaymentsResponse>(`/api/payments?${params}`);
-      if (requestId !== listRequestRef.current) return;
+      if (requestId !== listRequestRef.current) return null;
       const data = result.data || {};
-      setPayments(Array.isArray(data.rows) ? data.rows : Array.isArray(result.payments) ? result.payments : []);
+      const nextRows = Array.isArray(data.rows) ? data.rows : Array.isArray(result.payments) ? result.payments : [];
+      setPayments(nextRows);
       setSummary(data.summary || result.summary || {});
       setTotal(Number(data.total ?? result.payments?.length ?? 0));
       setPage(Number(data.page || nextPage));
       setTotalPages(Math.max(1, Number(data.totalPages || 1)));
+      return nextRows;
     } catch (loadError) {
       if (requestId === listRequestRef.current) {
         setError(loadError instanceof Error ? loadError.message : "读取收款明细失败");
       }
+      return null;
     } finally {
       if (requestId === listRequestRef.current) setLoading(false);
     }
@@ -215,11 +218,24 @@ export function PaymentsModule({
 
       {canManagePayments && (createOpen || editPayment) ? (
         <QuickCreatePaymentPanel
+          key={editPayment?.id ? `edit:${editPayment.id}` : "create"}
           initialPayment={editPayment}
           canConfirmArrived={canManagePayments}
           onCancel={() => {
             setCreateOpen(false);
             setEditPayment(null);
+          }}
+          onConflict={async (paymentId) => {
+            const refreshedRows = await loadPayments(page, submittedFilters);
+            const latestPayment = refreshedRows?.find((payment) => payment.id === paymentId) || null;
+            setDetailPayment((current) => current?.id === paymentId
+              ? (latestPayment ? { ...current, ...latestPayment } : null)
+              : current);
+            setCreateOpen(false);
+            setEditPayment(null);
+            setError(refreshedRows
+              ? "该收款记录已被其他人更新，列表已刷新。请重新打开编辑并核对最新数据。"
+              : "该收款记录已被其他人更新，但自动刷新失败。请手动刷新后再编辑。");
           }}
           onSaved={(payment) => {
             if (payment?.id) {

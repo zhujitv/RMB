@@ -6,6 +6,7 @@ import { includeCostRelations } from "./cost-records-shared";
 import {
   FILE_ASSET_ROLES,
   FILE_ASSET_SOURCE_TABLES,
+  ORDER_COST_STATUS_VOID,
   assertRead,
   assertWrite,
   codedError,
@@ -32,6 +33,7 @@ import {
   type CostActorInput,
   type CostInput,
 } from "./cost-records-mutation-shared";
+import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 
 export async function updateProductSupplierCostPayment(request: AuditRequestLike, actor: CostActorInput, id: string, input: CostInput) {
   assertWrite(actor, "costs");
@@ -47,12 +49,38 @@ export async function updateProductSupplierCostPayment(request: AuditRequestLike
     paymentDate: paidAt,
     updatedById: currentActor.id,
   } as Prisma.OrderCostUncheckedUpdateInput;
-  const updated = await prisma.orderCost.update({
-    where: { id },
-    data,
-    include: includeCostRelations(),
+  const updated = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      before.orderId,
+      "该订单已提交退税并归档，不能修改成本付款状态。",
+    );
+    const changed = await tx.orderCost.updateMany({
+      where: {
+        id,
+        updatedAt: before.updatedAt,
+        deletedAt: null,
+        status: { not: ORDER_COST_STATUS_VOID },
+      },
+      data,
+    });
+    if (changed.count !== 1) {
+      throw codedError("成本付款状态已被其他操作修改，请刷新后重试。", 409, "COST_PAYMENT_CONFLICT");
+    }
+    const current = await tx.orderCost.findUnique({ where: { id }, include: includeCostRelations() });
+    if (!current) throw codedError("成本付款状态已发生变化，请刷新后重试。", 409, "COST_PAYMENT_CONFLICT");
+    await writeAudit(
+      request,
+      currentActor,
+      paid ? "标记产品供应商货款已付款" : "取消产品供应商货款付款",
+      "order_costs",
+      id,
+      before,
+      current,
+      tx,
+    );
+    return current;
   });
-  await runNonCriticalTask("成本付款信息操作日志写入", () => writeAudit(request, currentActor, paid ? "标记产品供应商货款已付款" : "取消产品供应商货款付款", "order_costs", id, before, updated));
   return safeSerializeCost(await attachBusinessDocumentsToCost(updated));
 }
 
@@ -75,8 +103,18 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
   let updated;
   try {
     updated = await prisma.$transaction(async (tx) => {
-      const saved = await tx.orderCost.update({
-        where: { id },
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        before.orderId,
+        "该订单已提交退税并归档，不能上传或替换成本付款凭证。",
+      );
+      const changed = await tx.orderCost.updateMany({
+        where: {
+          id,
+          updatedAt: before.updatedAt,
+          deletedAt: null,
+          status: { not: ORDER_COST_STATUS_VOID },
+        },
         data: {
           paymentVoucherUrl: null,
           paymentVoucherFileName: fileName,
@@ -86,29 +124,33 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
           paymentVoucherBucket: storedFile.bucket,
           updatedById: currentActor.id,
         } as Prisma.OrderCostUncheckedUpdateInput,
-        include: includeCostRelations(),
       });
+      if (changed.count !== 1) {
+        throw codedError("付款凭证已被其他操作替换，请刷新后重试。", 409, "PAYMENT_VOUCHER_REPLACE_CONFLICT");
+      }
+      const saved = await tx.orderCost.findUnique({ where: { id }, include: includeCostRelations() });
+      if (!saved) throw codedError("付款凭证状态已发生变化，请刷新后重试。", 409, "PAYMENT_VOUCHER_REPLACE_CONFLICT");
       await upsertFileAssetForPaymentVoucher(tx, saved);
+      await writeAudit(request, currentActor, "上传产品供应商货款付款凭证", "order_costs", id, before, {
+        costId: id,
+        operatorId: currentActor.id,
+        replacedAt: storedFile.uploadedAt,
+        previousFileId: previousStorageKey,
+        nextFileId: storedFile.storageKey,
+        previousFileName: before.paymentVoucherFileName || "",
+        fileName,
+        mimeType,
+        fileSize,
+      }, tx);
       return saved;
     });
   } catch (error: unknown) {
-    await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
+    await deleteManagedStoredFile(storedFile.storageKey);
     throw error;
   }
   if (previousStorageKey && previousStorageKey !== storedFile.storageKey) {
     await runNonCriticalTask("付款凭证旧文件删除", () => deleteManagedStoredFile(previousStorageKey));
   }
-  await runNonCriticalTask("成本付款凭证操作日志写入", () => writeAudit(request, currentActor, "上传产品供应商货款付款凭证", "order_costs", id, before, {
-    costId: id,
-    operatorId: currentActor.id,
-    replacedAt: new Date().toISOString(),
-    previousFileId: previousStorageKey,
-    nextFileId: storedFile.storageKey,
-    previousFileName: before.paymentVoucherFileName || "",
-    fileName,
-    mimeType,
-    fileSize,
-  }));
   return safeSerializeCost(await attachBusinessDocumentsToCost(updated));
 }
 

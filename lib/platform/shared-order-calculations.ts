@@ -5,7 +5,7 @@ import { taxDocumentCompleteness } from "./shared-tax-completeness";
 
 type NumericLike = number | string | { toString(): string };
 
-type PaymentLike = {
+export type PaymentLike = {
   status?: string | null;
   deletedAt?: Date | string | null;
   currency?: string | null;
@@ -30,6 +30,7 @@ type SalespersonLike = {
 };
 
 type OrderLike = {
+  currency?: string | null;
   salespersonUserId?: string | null;
   salesperson?: SalespersonLike | null;
   salespersonCommissionRate?: NumericLike | null;
@@ -82,7 +83,9 @@ export type OrderSummary = {
   depositRatio: number | null;
   pendingPaymentsCny: number;
   pendingPaymentsAmount: number;
+  arrivedBalanceAmount: number;
   arrivedBalanceCny: number;
+  arrivedOutstandingAmount: number;
   arrivedOutstandingCny: number;
   balanceCny: number;
   balanceAmount: number;
@@ -90,6 +93,8 @@ export type OrderSummary = {
   outstandingAmount: number;
   overpaidCny: number;
   overpaidAmount: number;
+  exchangeDifferenceCny: number;
+  hasArrivedPaymentCurrencyMismatch: boolean;
   isOverpaid: boolean;
   isUnderpaid: boolean;
   totalCostCny: number;
@@ -110,6 +115,7 @@ export type OrderSummary = {
   commissionFormulaDescription: string;
   commissionFormulaSource: string;
   commissionFormulaDeductions: unknown;
+  commissionFormulaFloorAtZero: boolean;
   commissionBaseCny: number;
   estimatedCommissionBaseCny: number;
   estimatedCommissionCny: number;
@@ -136,6 +142,15 @@ type ReminderResult = {
 
 export function confirmedPayment(payment: PaymentLike) {
   return payment.status === "已到账" && !payment.deletedAt;
+}
+
+export function hasArrivedPaymentCurrencyMismatch(order: OrderLike) {
+  const orderCurrency = nonEmpty(order.currency).toUpperCase() || "CNY";
+  return (order.payments || []).some((payment) => {
+    if (!confirmedPayment(payment)) return false;
+    const paymentCurrency = nonEmpty(payment.currency).toUpperCase();
+    return Boolean(paymentCurrency) && paymentCurrency !== orderCurrency;
+  });
 }
 
 export function validCost(cost: CostLike) {
@@ -174,6 +189,78 @@ export function roundMoney(value: unknown) {
   return Math.round(num(value) * 100) / 100;
 }
 
+export function paymentAmountForOrderCurrency(
+  payment: PaymentLike,
+  orderCurrencyInput: unknown,
+  orderExchangeRateInput: unknown,
+) {
+  const orderCurrency = String(orderCurrencyInput || "CNY").toUpperCase();
+  const paymentCurrency = String(payment.currency || orderCurrency).toUpperCase();
+  const paymentAmount = Number(payment.amount || 0);
+  if (paymentCurrency === orderCurrency) return paymentAmount;
+  const orderExchangeRate = Number(orderExchangeRateInput) || 1;
+  return Number(payment.amountCny || 0) / orderExchangeRate;
+}
+
+export function deriveOrderCollectionBalance({
+  receivableAmount,
+  receivedAmount,
+  receivedAmountCny,
+  orderExchangeRate,
+}: {
+  receivableAmount: unknown;
+  receivedAmount: unknown;
+  receivedAmountCny: unknown;
+  orderExchangeRate: unknown;
+}) {
+  const normalizedReceivableAmount = roundMoney(receivableAmount);
+  const normalizedReceivedAmount = roundMoney(receivedAmount);
+  const exchangeRate = Number(orderExchangeRate) > 0 ? Number(orderExchangeRate) : 1;
+  const balanceAmount = roundMoney(normalizedReceivableAmount - normalizedReceivedAmount);
+  const outstandingAmount = Math.max(balanceAmount, 0);
+  const overpaidAmount = Math.max(-balanceAmount, 0);
+  const balanceCny = roundMoney(balanceAmount * exchangeRate);
+  const outstandingCny = roundMoney(outstandingAmount * exchangeRate);
+  const overpaidCny = roundMoney(overpaidAmount * exchangeRate);
+  const exchangeDifferenceCny = roundMoney(
+    Number(receivedAmountCny || 0) - roundMoney(normalizedReceivedAmount * exchangeRate),
+  );
+  return {
+    receivedAmount: normalizedReceivedAmount,
+    balanceAmount,
+    outstandingAmount,
+    overpaidAmount,
+    balanceCny,
+    outstandingCny,
+    overpaidCny,
+    exchangeDifferenceCny,
+  };
+}
+
+export function deriveOrderCollectionStatus({
+  currentStatus,
+  actualShipmentAmount,
+  receivedAmount,
+  outstandingAmount,
+  overpaidAmount,
+}: {
+  currentStatus?: string | null;
+  actualShipmentAmount?: unknown;
+  receivedAmount: unknown;
+  outstandingAmount: unknown;
+  overpaidAmount: unknown;
+}) {
+  const status = String(currentStatus || "");
+  if (["草稿", "已关闭", "已取消"].includes(status)) return status;
+  if (roundMoney(overpaidAmount) > 0) return "多收款";
+  if (roundMoney(outstandingAmount) <= 0) return "已收齐";
+  if (roundMoney(receivedAmount) > 0) return "部分收款";
+  if (["部分收款", "已收齐", "多收款"].includes(status)) {
+    return actualShipmentAmount == null ? "已确认" : "已发货";
+  }
+  return status;
+}
+
 export function hasRealSalesperson(order: OrderLike) {
   if (!order.salespersonUserId || !order.salesperson) return false;
   const name = nonEmpty(order.salesperson.name);
@@ -187,7 +274,8 @@ export function derivedCommissionStatus(order: OrderLike, summary: OrderSummary)
   if (["已结算", "SETTLED"].includes(order.commissionStatus || "")) return "已结算";
   if (summary.commissionRate <= 0) return "不可结算：提成比例未设置";
   if (!summary.realSalespersonSet) return "不可结算：未分配真实业务员";
-  if (summary.arrivedOutstandingCny > 0 || !["已收齐", "多收款"].includes(order.status || "")) return "不可结算：订单未收齐";
+  if (summary.hasArrivedPaymentCurrencyMismatch) return "不可结算：收款币种异常";
+  if (["草稿", "已关闭", "已取消"].includes(order.status || "") || summary.arrivedOutstandingAmount > 0) return "不可结算：订单未收齐";
   if (!summary.taxLogisticsCostsComplete) return "不可结算：物流费用未完整";
   if (!summary.allCostsConfirmed) return "不可结算：成本未全部确认";
   if (!summary.logisticsCostConfirmed) return "不可结算：物流成本未确认";
@@ -230,37 +318,32 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
   const receivableCny = finalCny;
   const receivableAmount = finalAmount;
   const exchangeRate = Number(order.exchangeRate) || 1;
-  const orderCurrency = String((order as { currency?: string | null }).currency || "CNY").toUpperCase();
-  const paymentAmountForOrderCurrency = (payment: PaymentLike) => {
-    const paymentCurrency = String(payment.currency || orderCurrency).toUpperCase();
-    const paymentAmount = Number(payment.amount || 0);
-    if (paymentCurrency === orderCurrency) return paymentAmount;
-    return Number(payment.amountCny || 0) / exchangeRate;
-  };
+  const orderCurrency = String(order.currency || "CNY").toUpperCase();
+  const hasArrivedPaymentCurrencyMismatchValue = hasArrivedPaymentCurrencyMismatch(order);
   const confirmedPaymentsCny = (order.payments || [])
     .filter(confirmedPayment)
     .reduce((sum, payment) => sum + Number(payment.amountCny), 0);
   const confirmedPaymentsAmount = (order.payments || [])
     .filter(confirmedPayment)
-    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment), 0);
+    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment, orderCurrency, exchangeRate), 0);
   const arrivedPaymentsCny = (order.payments || [])
     .filter((payment) => payment.status === "已到账" && !payment.deletedAt)
     .reduce((sum, payment) => sum + Number(payment.amountCny), 0);
   const arrivedPaymentsAmount = (order.payments || [])
     .filter((payment) => payment.status === "已到账" && !payment.deletedAt)
-    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment), 0);
+    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment, orderCurrency, exchangeRate), 0);
   const receivedDepositCny = (order.payments || [])
     .filter((payment) => payment.paymentType === "预付款" && payment.status === "已到账" && !payment.deletedAt)
     .reduce((sum, payment) => sum + Number(payment.amountCny), 0);
   const receivedDepositAmount = (order.payments || [])
     .filter((payment) => payment.paymentType === "预付款" && payment.status === "已到账" && !payment.deletedAt)
-    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment), 0);
+    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment, orderCurrency, exchangeRate), 0);
   const pendingPaymentsCny = (order.payments || [])
     .filter((payment) => payment.status === "待确认" && !payment.deletedAt)
     .reduce((sum, payment) => sum + Number(payment.amountCny), 0);
   const pendingPaymentsAmount = (order.payments || [])
     .filter((payment) => payment.status === "待确认" && !payment.deletedAt)
-    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment), 0);
+    .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment, orderCurrency, exchangeRate), 0);
   const totalCostCny = (order.costs || [])
     .filter(validCost)
     .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
@@ -275,22 +358,38 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
   const taxCompleteness = taxDocumentCompleteness(order);
   const taxLogisticsMissing = (taxCompleteness.logistics?.missing || []) as TaxLogisticsMissingItem[];
   const taxLogisticsCostsComplete = taxLogisticsMissing.length === 0;
-  const arrivedBalanceCny = receivableCny - arrivedPaymentsCny;
-  const arrivedOutstandingCny = Math.max(arrivedBalanceCny, 0);
-  const balanceCny = receivableCny - confirmedPaymentsCny;
-  const outstandingCny = Math.max(balanceCny, 0);
-  const overpaidCny = Math.max(-balanceCny, 0);
-  const balanceAmount = receivableAmount - (confirmedPaymentsCny / exchangeRate);
-  const outstandingAmount = Math.max(balanceAmount, 0);
-  const overpaidAmount = Math.max(-balanceAmount, 0);
+  const arrivedCollection = deriveOrderCollectionBalance({
+    receivableAmount,
+    receivedAmount: arrivedPaymentsAmount,
+    receivedAmountCny: arrivedPaymentsCny,
+    orderExchangeRate: exchangeRate,
+  });
+  const confirmedCollection = deriveOrderCollectionBalance({
+    receivableAmount,
+    receivedAmount: confirmedPaymentsAmount,
+    receivedAmountCny: confirmedPaymentsCny,
+    orderExchangeRate: exchangeRate,
+  });
+  const arrivedBalanceAmount = arrivedCollection.balanceAmount;
+  const arrivedBalanceCny = arrivedCollection.balanceCny;
+  const arrivedOutstandingAmount = arrivedCollection.outstandingAmount;
+  const arrivedOutstandingCny = arrivedCollection.outstandingCny;
+  const balanceCny = confirmedCollection.balanceCny;
+  const balanceAmount = confirmedCollection.balanceAmount;
+  const outstandingCny = confirmedCollection.outstandingCny;
+  const outstandingAmount = confirmedCollection.outstandingAmount;
+  const overpaidCny = confirmedCollection.overpaidCny;
+  const overpaidAmount = confirmedCollection.overpaidAmount;
+  const exchangeDifferenceCny = confirmedCollection.exchangeDifferenceCny;
   const depositRatio = order.depositRatio == null ? null : Number(order.depositRatio);
-  const requiredDepositAmount = depositRatio == null ? 0 : Math.round(receivableCny * depositRatio * 100) / 100;
-  const depositGapCny = Math.max(requiredDepositAmount - receivedDepositCny, 0);
-  const depositOverpaidCny = Math.max(receivedDepositCny - requiredDepositAmount, 0);
+  const requiredDepositOriginalAmount = depositRatio == null ? 0 : roundMoney(receivableAmount * depositRatio);
+  const requiredDepositAmount = roundMoney(requiredDepositOriginalAmount * exchangeRate);
+  const depositGapCny = roundMoney(Math.max(requiredDepositOriginalAmount - receivedDepositAmount, 0) * exchangeRate);
+  const depositOverpaidCny = roundMoney(Math.max(receivedDepositAmount - requiredDepositOriginalAmount, 0) * exchangeRate);
   const expectedTaxRefundIncomeCny = 0;
   const expectedGrossProfit = receivableCny - confirmedTotalCostCny + expectedTaxRefundIncomeCny;
   const expectedGrossMargin = receivableCny > 0 ? expectedGrossProfit / receivableCny : null;
-  const revenueRecognized = receivableCny > 0 && arrivedPaymentsCny >= receivableCny;
+  const revenueRecognized = receivableAmount > 0 && arrivedOutstandingAmount <= 0;
   const realizedGrossProfit = revenueRecognized ? expectedGrossProfit : null;
   const realizedGrossMargin = realizedGrossProfit != null && receivableCny > 0 ? realizedGrossProfit / receivableCny : null;
   const netCashFlowCny = arrivedPaymentsCny - paidConfirmedCostCny;
@@ -341,7 +440,9 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     depositRatio,
     pendingPaymentsCny,
     pendingPaymentsAmount,
+    arrivedBalanceAmount,
     arrivedBalanceCny,
+    arrivedOutstandingAmount,
     arrivedOutstandingCny,
     balanceCny,
     balanceAmount,
@@ -349,8 +450,10 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     outstandingAmount,
     overpaidCny,
     overpaidAmount,
-    isOverpaid: overpaidCny > 0,
-    isUnderpaid: outstandingCny > 0,
+    exchangeDifferenceCny,
+    hasArrivedPaymentCurrencyMismatch: hasArrivedPaymentCurrencyMismatchValue,
+    isOverpaid: overpaidAmount > 0,
+    isUnderpaid: outstandingAmount > 0,
     totalCostCny,
     confirmedTotalCostCny,
     paidConfirmedCostCny,
@@ -369,6 +472,7 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     commissionFormulaDescription: commissionFormula.description,
     commissionFormulaSource: commissionFormula.source,
     commissionFormulaDeductions: commissionFormula.deductions,
+    commissionFormulaFloorAtZero: commissionFormula.floorAtZero,
     commissionBaseCny: estimatedCommissionBaseCny,
     estimatedCommissionBaseCny,
     estimatedCommissionCny,

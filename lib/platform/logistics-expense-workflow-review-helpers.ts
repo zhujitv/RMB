@@ -16,6 +16,7 @@ import {
   errorMessage,
   groupLogisticsExpenseRowsByBillId,
   loadLogisticsExpenseBillRowsForAction,
+  lockLogisticsBillForWorkflow,
   reloadLogisticsExpenseRowsForBillIds,
   rowBillId,
   rowBillStatus,
@@ -30,6 +31,8 @@ import {
 import { isVoidedLogisticsBill } from "./logistics-bill-state-machine";
 import { assertNoSettledLogisticsCostConflict } from "./logistics-expense-cost-safety";
 import { createLogisticsInvoiceApprovalOutboxIntents } from "./logistics-invoice-notification-outbox";
+import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
+import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 
 export async function loadLogisticsExpenseReviewBills(identifiers: string[] = [], actor: ActorContext) {
   const results: ReviewResult[] = [];
@@ -91,11 +94,28 @@ export async function approveLogisticsExpenseBillsInTransaction(
   now = new Date(),
 ) {
   assertWorkflowActor(actor);
-  const ids = [...new Set(billIds.map(nonEmpty).filter(Boolean))];
+  const ids = [...new Set(billIds.map(nonEmpty).filter(Boolean))].sort();
   if (!ids.length) return;
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SET LOCAL lock_timeout = '5s'`);
     await tx.$executeRaw(Prisma.sql`SET LOCAL statement_timeout = '12s'`);
+    const orderRows = await tx.logisticsExpense.findMany({
+      where: { billId: { in: ids }, deletedAt: null },
+      select: { orderId: true },
+      distinct: ["orderId"],
+    });
+    const orderIds = [...new Set(orderRows.map((row) => nonEmpty(row.orderId)).filter(Boolean))].sort();
+    for (const orderId of orderIds) {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        orderId,
+        "该订单已提交退税并归档，不能审核物流费用。",
+      );
+      await assertCommissionOrderWritableInTransaction(tx, orderId);
+    }
+    for (const billId of ids) {
+      await lockLogisticsBillForWorkflow(tx, billId);
+    }
     const billUpdate = await tx.logisticsBill.updateMany({
       where: {
         id: { in: ids },
@@ -142,7 +162,10 @@ export async function approveLogisticsExpenseBillsInTransaction(
     for (const [billId, billRows] of rowsByBillId) {
       await assertLogisticsBillRowsMatchHeader(tx, billId, billRows);
     }
-    const costLinks = await syncApprovedLogisticsExpenseCosts(tx, rows, actor);
+    const costLinks = await syncApprovedLogisticsExpenseCosts(tx, rows, actor, {
+      orderLocksAlreadyHeld: true,
+      expectedOrderIds: orderIds,
+    });
     await syncApprovedLogisticsBillWorkflowStates(tx, rows, actor);
     const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents(tx, rows, actorId(actor), now);
     if (outboxIntents.length !== ids.length) {
@@ -179,6 +202,16 @@ export async function approveLogisticsExpenseBillRowsInTransaction(
     await tx.$executeRaw(Prisma.sql`SET LOCAL lock_timeout = '5s'`);
     await tx.$executeRaw(Prisma.sql`SET LOCAL statement_timeout = '12s'`);
     if (rows[0]?.billId) {
+      const orderIds = [...new Set(rows.map((row) => nonEmpty(row.orderId)).filter(Boolean))].sort();
+      for (const orderId of orderIds) {
+        await assertBusinessOrderWritableInTransaction(
+          tx,
+          orderId,
+          "该订单已提交退税并归档，不能审核物流费用。",
+        );
+        await assertCommissionOrderWritableInTransaction(tx, orderId);
+      }
+      await lockLogisticsBillForWorkflow(tx, billId);
       const billUpdate = await tx.logisticsBill.updateMany({
         where: {
           id: billId,
@@ -218,7 +251,10 @@ export async function approveLogisticsExpenseBillRowsInTransaction(
         throw codedError("物流费用账单明细不完整，审核已取消，请刷新后重试。", 409, "LOGISTICS_BILL_ROWS_INCOMPLETE");
       }
       await assertLogisticsBillRowsMatchHeader(tx, billId, savedRows);
-      const costLinks = await syncApprovedLogisticsExpenseCosts(tx, savedRows, actor);
+      const costLinks = await syncApprovedLogisticsExpenseCosts(tx, savedRows, actor, {
+        orderLocksAlreadyHeld: true,
+        expectedOrderIds: orderIds,
+      });
       await syncApprovedLogisticsBillWorkflowStates(tx, savedRows, actor);
       const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents(tx, savedRows, actorId(actor), now);
       if (outboxIntents.length !== 1) {
@@ -289,19 +325,45 @@ export async function updateLogisticsExpenseCostIds(tx: Prisma.TransactionClient
 }
 
 export async function syncApprovedLogisticsExpenseCosts(
-  tx: Prisma.TransactionClient | typeof prisma,
+  tx: Prisma.TransactionClient,
   rows: LogisticsExpenseRow[] = [],
   actor: ActorContext,
-  options: { settledCostMode?: "reject" | "preserve-required" } = {},
+  options: {
+    settledCostMode?: "reject" | "preserve-required" | "preserve-existing";
+    allowCommissionSettled?: boolean;
+    orderLocksAlreadyHeld?: boolean;
+    expectedOrderIds?: string[];
+  } = {},
 ) {
   if (!rows.length) throw codedError("物流费用账单缺少费用明细，不能同步成本。", 409, "LOGISTICS_COST_SYNC_ROWS_EMPTY");
+  const orderIds = [...new Set(rows.map((row) => nonEmpty(row.orderId)).filter(Boolean))].sort();
+  if (options.orderLocksAlreadyHeld) {
+    const expectedOrderIds = [...new Set((options.expectedOrderIds || []).map(nonEmpty).filter(Boolean))].sort();
+    if (orderIds.join("\n") !== expectedOrderIds.join("\n")) {
+      throw codedError("物流费用关联订单已变化，成本同步已取消，请刷新后重试。", 409, "LOGISTICS_COST_ORDER_SCOPE_CHANGED");
+    }
+  } else {
+    for (const orderId of orderIds) {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        orderId,
+        "该订单已提交退税并归档，不能同步物流费用成本。",
+      );
+      if (!options.allowCommissionSettled) {
+        await assertCommissionOrderWritableInTransaction(tx, orderId);
+      }
+    }
+  }
   const settledCostMode = options.settledCostMode || "reject";
   if (settledCostMode === "reject") {
     await assertNoSettledLogisticsCostConflict(tx, rows);
   }
   const links: CostLink[] = [];
   for (const row of rows) {
-    const cost = await createOrUpdateCostFromLogisticsExpense(tx, row, actor, { settledCostMode });
+    const cost = await createOrUpdateCostFromLogisticsExpense(tx, row, actor, {
+      settledCostMode,
+      commissionLockAlreadyHeld: true,
+    });
     links.push({ expenseId: row.id, costId: cost.id, invoiceDocumentId: row.invoiceDocumentId || null });
   }
   await updateLogisticsExpenseCostIds(tx, links);

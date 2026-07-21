@@ -41,6 +41,12 @@ const sharedAuth = readSharedAuthSource();
 const sharedUsers = readSharedUsersSource();
 const workspaceShell = readWorkspaceShellSource();
 
+test("E2E permission: own-cost scope cannot recover whole-order settlement snapshots", () => {
+  assert.match(orderAccess, /if \(effectivePermissions\(actor\)\.dataScope !== "OWN_COST"/);
+  assert.match(orderAccess, /payments: \[\]/);
+  assert.match(orderAccess, /commissionSettlementRecords: \[\]/);
+});
+
 test("E2E permission: salesperson data stays scoped to own customers across orders payments costs reports and tax refund", () => {
   const salesperson = rolePermissionSnapshot("业务员");
   assert.equal(salesperson.dataScope, "OWN");
@@ -68,8 +74,9 @@ test("E2E permission: salesperson data stays scoped to own customers across orde
   assert.match(orderAccess, /salespersonUserId: null[\s\S]*customer:\s*\{\s*is:\s*\{\s*salespersonUserId: currentActorId/);
   assert.match(orderAccess, /if \(scope === "OWN"\) return orderOwnedBySalesperson\(order, actorId\(actor\)\)/);
   assert.match(ordersService, /orderAccessWhere\(actor\)/);
-  assert.match(ordersService, /assertCustomerScope\(actor, requireText\(inputData\.customerId, "客户"\)\)/);
-  assert.match(ordersService, /resolveSalespersonUserId\(inputData, actor, customer, before\)/);
+  assert.match(ordersService, /const customerId = requireText\(inputData\.customerId, "客户"\)/);
+  assert.match(ordersService, /assertCustomerScope\(actor, customerId, tx\)/);
+  assert.match(ordersService, /resolveSalespersonUserId\(inputData, actor, transactionCustomer, current, tx\)/);
   assert.match(paymentsService, /assertRead\(actor, "payments"\)/);
   assert.match(paymentsService, /const accessWhere = orderAccessWhere\(actor\)/);
   assert.match(taxRefundService, /orderAccessWhere\(actor\)/);

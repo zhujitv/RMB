@@ -1,4 +1,5 @@
-const LOGISTICS_FEE_COST_SOURCE_TYPE = "LOGISTICS_FEE";
+import { LOGISTICS_GENERATED_COST_SOURCE_TYPES } from "./logistics-generated-cost-source-types.ts";
+
 const ORDER_COST_STATUS_VOID = "VOID";
 const CLOSURE_LEGACY_COST_TYPE_LABELS: Record<string, string> = {
   国内物流费: "拖车费",
@@ -163,7 +164,8 @@ export function analyzeTaxRefundLogisticsClosure(rows: TaxRefundLogisticsClosure
     if (!activeCostExists) {
       reasons.push("成本管理中未生成对应成本");
     } else if (cost) {
-      const linkMatches = cost.sourceType === LOGISTICS_FEE_COST_SOURCE_TYPE && cost.sourceId === row.id;
+      const linkMatches = LOGISTICS_GENERATED_COST_SOURCE_TYPES.includes(String(cost.sourceType || ""))
+        && cost.sourceId === row.id;
       if (!linkMatches) reasons.push("成本来源关联异常");
       const fieldsMatch = cost.orderId === row.orderId
         && cost.supplierId === row.supplierId

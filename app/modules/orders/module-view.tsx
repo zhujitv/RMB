@@ -40,6 +40,7 @@ type OrdersModuleViewProps = {
   onRefresh: () => void;
   onToggleCreate: () => void;
   onRepairSalespeople: () => void;
+  onOrderConflictRefreshed: (order: OrderRow) => void;
   onOrderSaved: (order?: OrderRow | null) => void;
   onOrderEditCancel: () => void;
   onPage: (page: number) => void;
@@ -111,6 +112,7 @@ export function OrdersModuleView({
             canManageOrderAssignments={canManageOrderAssignments}
             onOpenExchangeSettings={actions.onOpenExchangeSettings}
             onCancel={actions.onOrderEditCancel}
+            onConflictRefreshed={actions.onOrderConflictRefreshed}
             onSaved={(order) => actions.onOrderSaved(order)}
           />
         </div>

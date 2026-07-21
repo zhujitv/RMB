@@ -9,6 +9,8 @@ import {
   ORDER_COST_STATUS_VOID,
   permissionError,
 } from "./shared";
+import { assertCommissionNotSettled } from "./commission-settlement-lock";
+import { assertBusinessNotArchived } from "./business-archive";
 
 type ActorLike = {
   id?: string | null;
@@ -92,6 +94,7 @@ export function scopeOrderForActor<T extends OrderLike | null | undefined>(order
   return {
     ...order,
     payments: [],
+    commissionSettlementRecords: [],
     costs: (order.costs || []).filter((cost) => !cost.deletedAt && cost.status !== ORDER_COST_STATUS_VOID && cost.createdById === currentActorId),
     documents: (order.documents || []).filter((document) => (
       document.relatedModule === "SUPPLIER"
@@ -112,8 +115,12 @@ export function canAccessOrder(actor: ActorLike, order: OrderLike | null | undef
   return false;
 }
 
-export function validateDuplicateOrder(orderNo: string, id: string | null = null) {
-  return prisma.receivableOrder.findFirst({
+export function validateDuplicateOrder(
+  orderNo: string,
+  id: string | null = null,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+) {
+  return client.receivableOrder.findFirst({
     where: {
       orderNo: { equals: orderNo, mode: "insensitive" },
       deletedAt: null,
@@ -151,6 +158,8 @@ export async function assertCostWritableOrder(
   if (!order) {
     throw codedError("请选择有效应收订单", 404, "ORDER_NOT_FOUND");
   }
+  assertBusinessNotArchived(order, "该订单已提交退税并归档，不能新增或修改成本。");
+  assertCommissionNotSettled(order);
   if (["已关闭", "已取消"].includes(order.status) && actorRole(actor) !== "管理员") {
     throw codedError("已关闭或已取消订单不能继续新增收款或成本", 400, "ORDER_CLOSED");
   }

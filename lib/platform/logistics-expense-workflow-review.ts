@@ -36,6 +36,7 @@ import {
   markLogisticsExpenseReviewNotificationResults,
 } from "./logistics-expense-workflow-review-helpers";
 import { processLogisticsInvoiceNotificationOutbox } from "./logistics-invoice-notification-outbox";
+import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 
 function logisticsExpenseRowsAfterCommittedApproval(
   rows: LogisticsExpenseRow[] = [],
@@ -141,9 +142,15 @@ export async function reviewLogisticsExpense(
   const rows = await loadLogisticsExpenseBillRowsForAction(id, actor);
   if (!rows.length) throw codedError("未找到可重新打开的物流费用账单。", 404, "LOGISTICS_EXPENSE_BILL_NOT_FOUND");
   const billId = rowBillId(rows[0]);
+  const orderId = nonEmpty(rows[0]?.orderId);
   const reviewRemark = optional(input.reviewRemark || input.remark);
   if (rows[0]?.billId) {
     await prisma.$transaction(async (tx) => {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        orderId,
+        "该订单已提交退税并归档，不能重新打开物流费用账单。",
+      );
       const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT "id"
         FROM "logistics_bills"
@@ -212,8 +219,14 @@ export async function rejectLogisticsExpenseBill(request: AuditRequestLike, acto
   }
   const now = new Date();
   const billId = rowBillId(rows[0]);
+  const orderId = nonEmpty(rows[0]?.orderId);
   if (rows[0]?.billId) {
     await prisma.$transaction(async (tx) => {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        orderId,
+        "该订单已提交退税并归档，不能驳回物流费用账单。",
+      );
       const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT "id"
         FROM "logistics_bills"

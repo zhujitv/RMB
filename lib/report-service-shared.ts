@@ -228,7 +228,7 @@ export function moneyNumber(value: unknown) {
 
 const columnSets = {
   receivables: [
-    ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["salespersonName", "业务员"], ["currency", "币种"], ["exchangeRate", "汇率"], ["finalReceivableAmount", "原币应收金额"], ["finalReceivableAmountCny", "折人民币应收金额"], ["receivedAmount", "已收原币金额"], ["receivedAmountCny", "已收折人民币"], ["outstandingAmount", "未收原币金额"], ["outstandingCny", "未收折人民币"], ["dueDate", "到期日"], ["status", "订单状态"], ["domesticTransportType", "运输方式"], ["truckPlateNo", "车牌号"], ["trailerPlateNo", "挂车车牌"], ["departurePlace", "起运地"], ["destinationPlace", "到达地"], ["departureDate", "起运日期"], ["cargoDescription", "运输货物名称"], ["expressTrackingNo", "快递单号"], ["domesticSubmitterRole", "录入来源"], ["domesticSubmittedBy", "录入人"], ["domesticSubmittedAt", "录入时间"],
+    ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["salespersonName", "业务员"], ["currency", "币种"], ["exchangeRate", "汇率"], ["finalReceivableAmount", "原币应收金额"], ["finalReceivableAmountCny", "折人民币应收金额"], ["receivedAmount", "已收原币金额"], ["receivedAmountCny", "已收折人民币"], ["outstandingAmount", "未收原币金额"], ["outstandingCny", "未收折人民币"], ["dueDate", "到期日"], ["status", "订单状态"], ["domesticTransportType", "运输方式"], ["truckPlateNo", "车牌号"], ["trailerPlateNo", "挂车车牌"], ["departurePlace", "起运地"], ["destinationPlace", "到达地"], ["departureDate", "起运日期"], ["cargoDescription", "运输货物名称"], ["expressTrackingNo", "快递单号"], ["domesticSubmitterRole", "录入来源"], ["domesticSubmittedBy", "录入人"], ["domesticSubmittedAt", "录入时间"], ["exchangeDifferenceCny", "汇兑差额（收益正/损失负）"],
   ],
   payments: [
     ["orderNo", "订单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["paymentDate", "收款日期"], ["paymentType", "收款类型"], ["currency", "币种"], ["amount", "原币收款金额"], ["exchangeRate", "汇率"], ["amountCny", "折人民币金额"], ["status", "收款状态"], ["bankReference", "银行流水号"],
@@ -237,10 +237,10 @@ const columnSets = {
     ["orderNo", "订单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["costType", "成本类型"], ["supplierName", "供应商"], ["supplierType", "供应商类型"], ["currency", "币种"], ["amount", "原币成本金额"], ["exchangeRate", "汇率"], ["amountCny", "折人民币金额"], ["paymentStatus", "付款状态"], ["invoiceStatus", "发票状态"],
   ],
   profits: [
-    ["orderNo", "订单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["salespersonName", "业务员"], ["receivableCny", "最终应收人民币"], ["receivedAmountCny", "已到账金额"], ["outstandingCny", "未收人民币"], ["totalCostCny", "总成本"], ["expectedGrossProfit", "预计毛利"], ["expectedGrossMargin", "预计毛利率"], ["realizedGrossProfit", "已实现毛利"], ["realizedGrossMargin", "已实现毛利率"], ["netCashFlowCny", "净现金流"], ["status", "订单状态"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
+    ["orderNo", "订单号"], ["customerName", "客户简称"], ["businessEntityName", "业务主体"], ["salespersonName", "业务员"], ["receivableCny", "最终应收人民币"], ["receivedAmountCny", "已到账金额"], ["outstandingCny", "未收人民币"], ["totalCostCny", "总成本"], ["expectedGrossProfit", "预计毛利"], ["expectedGrossMargin", "预计毛利率"], ["realizedGrossProfit", "已实现毛利"], ["realizedGrossMargin", "已实现毛利率"], ["netCashFlowCny", "净现金流"], ["status", "订单状态"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"], ["exchangeDifferenceCny", "汇兑差额（收益正/损失负）"],
   ],
   commissions: [
-    ["orderNo", "订单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["commissionRate", "提成比例"], ["receivedAmountCny", "已到账收款"], ["logisticsCostCny", "物流成本"], ["commissionBaseCny", "提成基数"], ["commissionAmountCny", "提成金额"], ["commissionStatus", "提成状态"], ["commissionSettledAt", "结算时间"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
+    ["orderNo", "订单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["commissionRate", "提成比例"], ["receivedAmountCny", "已到账收款"], ["logisticsCostCny", "物流成本"], ["commissionBaseCny", "提成基数"], ["commissionAmountCny", "提成金额"], ["commissionFormula", "结算公式"], ["commissionFormulaVersion", "公式快照版本"], ["commissionStatus", "提成状态"], ["commissionSettledAt", "结算时间"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],
   ],
   overdue: [
     ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户简称"], ["salespersonName", "业务员"], ["dueDate", "到期日"], ["outstandingCny", "未收人民币"], ["reminderStatus", "逾期状态"], ["overdueDays", "逾期天数"], ["destinationPlace", "到达地"], ["cargoDescription", "运输货物名称"],

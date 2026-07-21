@@ -86,6 +86,7 @@ model User {
   rejectedOcrTasks                       OcrTask[]                      @relation("OcrTaskRejectedBy")
   commissionSettlements                  ReceivableOrder[]              @relation("CommissionSettlements")
   commissionSettlementRecords            CommissionSettlement[]         @relation("CommissionSettlementSettledBy")
+  commissionSettlementReversals          CommissionSettlement[]         @relation("CommissionSettlementReversedBy")
   salespersonCommissionSettlementRecords CommissionSettlement[]         @relation("CommissionSettlementSalesperson")
   archivedTaxRefundOrders                ReceivableOrder[]              @relation("TaxRefundArchivedBy")
   submittedTaxRefundOrders               ReceivableOrder[]              @relation("TaxRefundSubmittedBy")
@@ -576,27 +577,42 @@ model ShipsgoTrackingContainer {
 }
 
 model CommissionSettlement {
-  id                  String   @id @default(cuid())
-  orderId             String   @map("order_id")
-  salespersonUserId   String?  @map("salesperson_user_id")
-  commissionRate      Decimal  @map("commission_rate") @db.Decimal(8, 2)
-  paidAmountCny       Decimal  @map("paid_amount_cny") @db.Decimal(18, 2)
-  logisticsCostCny    Decimal  @map("logistics_cost_cny") @db.Decimal(18, 2)
-  commissionBaseCny   Decimal  @map("commission_base_cny") @db.Decimal(18, 2)
-  commissionAmountCny Decimal  @map("commission_amount_cny") @db.Decimal(18, 2)
-  settledById         String   @map("settled_by")
-  settledAt           DateTime @default(now()) @map("settled_at")
-  remark              String?
-  createdAt           DateTime @default(now()) @map("created_at")
+  id                           String    @id @default(cuid())
+  orderId                      String    @map("order_id")
+  salespersonUserId            String?   @map("salesperson_user_id")
+  commissionRate               Decimal   @map("commission_rate") @db.Decimal(8, 2)
+  paidAmountCny                Decimal   @map("paid_amount_cny") @db.Decimal(18, 2)
+  logisticsCostCny             Decimal   @map("logistics_cost_cny") @db.Decimal(18, 2)
+  commissionBaseCny            Decimal   @map("commission_base_cny") @db.Decimal(18, 2)
+  commissionAmountCny          Decimal   @map("commission_amount_cny") @db.Decimal(18, 2)
+  commissionFormulaMode        String?   @map("commission_formula_mode")
+  commissionFormulaLabel       String?   @map("commission_formula_label")
+  commissionFormulaDescription String?   @map("commission_formula_description") @db.Text
+  commissionFormulaSource      String?   @map("commission_formula_source")
+  commissionFormulaDeductions  Json?     @map("commission_formula_deductions")
+  commissionFormulaFloorAtZero Boolean?  @map("commission_formula_floor_at_zero")
+  commissionFormulaVersion     String    @default("v1") @map("commission_formula_version")
+  settledById                  String    @map("settled_by")
+  settledAt                    DateTime  @default(now()) @map("settled_at")
+  status                       String    @default("ACTIVE")
+  reversedAt                   DateTime? @map("reversed_at")
+  reversedById                 String?   @map("reversed_by")
+  reversalReason               String?   @map("reversal_reason") @db.Text
+  remark                       String?
+  createdAt                    DateTime  @default(now()) @map("created_at")
 
   order       ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   salesperson User?           @relation("CommissionSettlementSalesperson", fields: [salespersonUserId], references: [id])
   settledBy   User            @relation("CommissionSettlementSettledBy", fields: [settledById], references: [id])
+  reversedBy  User?           @relation("CommissionSettlementReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
 
   @@index([orderId])
+  @@index([orderId, status, settledAt])
   @@index([salespersonUserId])
   @@index([settledById])
+  @@index([reversedById])
   @@index([settledAt])
+  @@index([reversedAt])
   @@map("commission_settlements")
 }
 

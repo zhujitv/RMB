@@ -57,8 +57,10 @@ export async function assertDomesticLogisticsSupplier(supplierId: string) {
   return supplier;
 }
 
-export async function defaultOrderLogisticsSupplier() {
-  return prisma.supplier.findFirst({
+type OrderLogisticsSupplierClient = Prisma.TransactionClient | typeof prisma;
+
+export async function defaultOrderLogisticsSupplier(client: OrderLogisticsSupplierClient = prisma) {
+  return client.supplier.findFirst({
     where: {
       deletedAt: null,
       status: "启用",
@@ -73,7 +75,7 @@ export async function syncOrderLogisticsSuppliers(
   orderId: string,
   supplierIds: unknown[] = [],
   actor: ActorLike = null,
-  options: { allowEmpty?: boolean } = {},
+  options: { allowEmpty?: boolean; client?: Prisma.TransactionClient } = {},
 ) {
   const { getExchangeRateSettings } = await import("./shared-exchange");
   const { normalizedStringArray } = await import("./shared-serialization");
@@ -83,7 +85,7 @@ export async function syncOrderLogisticsSuppliers(
     if (ids.length) {
       ids = [ids[0]];
     } else if (!options.allowEmpty) {
-      const defaultSupplier = await defaultOrderLogisticsSupplier();
+      const defaultSupplier = await defaultOrderLogisticsSupplier(options.client || prisma);
       ids = defaultSupplier ? [defaultSupplier.id] : [];
       if (!ids.length) {
         throw codedError("请先在供应商资料中设置默认物流供应商。", 400, "DEFAULT_LOGISTICS_SUPPLIER_REQUIRED");
@@ -91,7 +93,7 @@ export async function syncOrderLogisticsSuppliers(
     }
   }
   if (ids.length) {
-    const suppliers = await prisma.supplier.findMany({
+    const suppliers = await (options.client || prisma).supplier.findMany({
       where: { id: { in: ids }, deletedAt: null, status: "启用" },
       select: { id: true, supplierType: true },
       take: ids.length,
@@ -100,16 +102,23 @@ export async function syncOrderLogisticsSuppliers(
     const invalid = suppliers.find((supplier) => !DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType));
     if (invalid) throw codedError("订单物流供应商只能选择物流、报关、海运或港杂费用供应商。", 400, "LOGISTICS_SUPPLIER_TYPE_INVALID");
   }
-  await prisma.$transaction([
-    prisma.orderLogisticsSupplier.deleteMany({
+  const syncRelations = async (client: OrderLogisticsSupplierClient) => {
+    await client.orderLogisticsSupplier.deleteMany({
       where: { orderId, ...(ids.length ? { supplierId: { notIn: ids } } : {}) },
-    }),
-    ...ids.map((supplierId) => prisma.orderLogisticsSupplier.upsert({
-      where: { orderId_supplierId: { orderId, supplierId } },
-      update: { assignedById: actor?.id || null, assignedAt: new Date() },
-      create: { orderId, supplierId, assignedById: actor?.id || null },
-    })),
-  ]);
+    });
+    for (const supplierId of ids) {
+      await client.orderLogisticsSupplier.upsert({
+        where: { orderId_supplierId: { orderId, supplierId } },
+        update: { assignedById: actor?.id || null, assignedAt: new Date() },
+        create: { orderId, supplierId, assignedById: actor?.id || null },
+      });
+    }
+  };
+  if (options.client) {
+    await syncRelations(options.client);
+  } else {
+    await prisma.$transaction(syncRelations);
+  }
 }
 
 export function isInternalLogisticsOperator(actor: ActorLike) {
@@ -157,8 +166,12 @@ export function customerAccessWhere(actor: ActorLike): Prisma.CustomerWhereInput
   return { id: "__no_customer_access__" };
 }
 
-export async function assertCustomerScope(actor: ActorLike, customerId: string) {
-  const customer = await prisma.customer.findFirst({
+export async function assertCustomerScope(
+  actor: ActorLike,
+  customerId: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+) {
+  const customer = await client.customer.findFirst({
     where: { id: customerId, deletedAt: null },
     include: { salesperson: true },
   });
@@ -176,6 +189,7 @@ export async function resolveSalespersonUserId(
   actor: ActorLike,
   customer: CustomerLike,
   before: { salespersonUserId?: string | null } | null = null,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
   if (actor?.role === "业务员") return actorId(actor);
   const isAdmin = actorRole(actor) === "管理员";
@@ -186,7 +200,7 @@ export async function resolveSalespersonUserId(
   }
   if (requestedId) {
     if (!isAdmin) return before?.salespersonUserId || customer?.salespersonUserId || actorId(actor);
-    const user = await prisma.user.findFirst({ where: { id: requestedId, isActive: true } });
+    const user = await client.user.findFirst({ where: { id: requestedId, isActive: true, deletedAt: null } });
     if (!user) {
       throw codedError("请选择有效业务员", 400, "SALESPERSON_REQUIRED");
     }

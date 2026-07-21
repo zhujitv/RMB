@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiJson } from "../../api";
 import { customerDisplayName } from "../../utils";
 import type { CustomerAutocompleteOption } from "../../CustomerAutocomplete";
@@ -14,6 +14,7 @@ import {
   type SalespersonOption,
   type SupplierOption,
 } from "./model";
+import { loadLatestOrderAfterConflict } from "./order-conflict-refresh";
 import { derivedDueDate, installmentTotal, orderFormFromRow } from "./utils";
 
 type BusinessEntitiesResponse = {
@@ -47,6 +48,7 @@ export type UseQuickOrderPanelControllerParams = {
   initialOrder?: OrderRow | null;
   canManageOrderAssignments?: boolean;
   onOpenExchangeSettings?: () => void;
+  onConflictRefreshed: (order: OrderRow) => void;
   onSaved: (order?: OrderRow | null) => void;
 };
 
@@ -54,6 +56,7 @@ export function useQuickOrderPanelController({
   initialOrder,
   canManageOrderAssignments = false,
   onOpenExchangeSettings,
+  onConflictRefreshed,
   onSaved,
 }: UseQuickOrderPanelControllerParams) {
   const [form, setForm] = useState<QuickOrderForm>(() => orderFormFromRow(initialOrder));
@@ -78,20 +81,27 @@ export function useQuickOrderPanelController({
     businessEntities.find((entity) => entity.isDefault) || businessEntities[0] || null
   ), [businessEntities]);
 
-  useEffect(() => {
-    setForm(orderFormFromRow(initialOrder));
-    setMessage("");
+  const loadOrderSnapshot = useCallback((order?: OrderRow | null) => {
+    setForm(orderFormFromRow(order));
     setExchangeCacheMissing(false);
-    if (initialOrder?.currency) {
-      const hasExchangeMeta = Boolean(initialOrder.exchangeRate && initialOrder.exchangeRateDate && initialOrder.exchangeRateSource && initialOrder.exchangeRateType);
-      setExchangeMeta(initialOrder.currency === "CNY"
+    if (order?.currency) {
+      const hasExchangeMeta = Boolean(order.exchangeRate && order.exchangeRateDate && order.exchangeRateSource && order.exchangeRateType);
+      setExchangeMeta(order.currency === "CNY"
         ? "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000"
         : hasExchangeMeta
-          ? `来源：${initialOrder.exchangeRateSource} ｜ 类型：${initialOrder.exchangeRateType} ｜ 更新时间：${initialOrder.exchangeRateDate}`
+          ? `来源：${order.exchangeRateSource} ｜ 类型：${order.exchangeRateType} ｜ 更新时间：${order.exchangeRateDate}`
           : "当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。");
     } else {
       setExchangeMeta("");
     }
+  }, []);
+
+  useEffect(() => {
+    loadOrderSnapshot(initialOrder);
+  }, [initialOrder, initialOrder?.updatedAt, loadOrderSnapshot]);
+
+  useEffect(() => {
+    setMessage("");
   }, [initialOrder?.id]);
 
   useEffect(() => {
@@ -228,6 +238,11 @@ export function useQuickOrderPanelController({
       : [initialCustomer, ...customers];
   }, [customers, initialCustomer]);
   const customer = customerOptions.find((option) => option.id === form.customerId);
+  const currencyLockedByPayments = Boolean(initialOrder?.id && (
+    initialOrder.hasCurrencyLockPayments === true
+    || Number(initialOrder.summary?.arrivedPaymentsAmount || 0) > 0
+    || Number(initialOrder.summary?.pendingPaymentsAmount || 0) > 0
+  ));
   const historicalDateNotice = hasHistoricalBusinessDate(form)
     ? "当前为历史日期，请确认是否为补录订单。"
     : "";
@@ -237,19 +252,23 @@ export function useQuickOrderPanelController({
     setForm((current) => ({
       ...current,
       customerId: customerOption.id,
-      currency: customerOption.defaultCurrency || current.currency,
-      exchangeRate: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRate,
-      exchangeRateDate: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateDate,
-      exchangeRateSource: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateSource,
-      exchangeRateType: customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateType,
+      currency: currencyLockedByPayments ? current.currency : (customerOption.defaultCurrency || current.currency),
+      exchangeRate: !currencyLockedByPayments && customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRate,
+      exchangeRateDate: !currencyLockedByPayments && customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateDate,
+      exchangeRateSource: !currencyLockedByPayments && customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateSource,
+      exchangeRateType: !currencyLockedByPayments && customerOption.defaultCurrency && customerOption.defaultCurrency !== current.currency ? "" : current.exchangeRateType,
       paymentTermType: customerOption.defaultPaymentTermType || current.paymentTermType,
       tradeTerm: customerOption.defaultTradeTerm || current.tradeTerm,
       salespersonUserId: canManageOrderAssignments && !initialOrder?.id ? (customerOption.salespersonUserId || current.salespersonUserId) : current.salespersonUserId,
     }));
-    if (customerOption.defaultCurrency) await resolveExchangeRate(customerOption.defaultCurrency);
+    if (!currencyLockedByPayments && customerOption.defaultCurrency) await resolveExchangeRate(customerOption.defaultCurrency);
   }
 
   async function handleCurrencyChange(currency: string) {
+    if (currencyLockedByPayments) {
+      setMessage("订单已有待确认或已到账收款，币种已锁定；如需更正请先处理收款记录。");
+      return;
+    }
     const normalized = currency.toUpperCase();
     setForm((current) => ({ ...current, currency: normalized, exchangeRate: "", exchangeRateDate: "", exchangeRateSource: "", exchangeRateType: "" }));
     await resolveExchangeRate(normalized);
@@ -300,7 +319,9 @@ export function useQuickOrderPanelController({
     setSaving(true);
     setMessage("");
     try {
+      const isEdit = Boolean(initialOrder?.id);
       const payload = {
+        ...(isEdit ? { expectedUpdatedAt: normalizedForm.expectedUpdatedAt || initialOrder?.updatedAt || undefined } : {}),
         customerId: normalizedForm.customerId,
         orderNo: normalizedForm.orderNo.trim(),
         blNo: normalizedForm.blNo.trim(),
@@ -330,7 +351,6 @@ export function useQuickOrderPanelController({
         logisticsSupplierIds,
         remark: normalizedForm.remark.trim(),
       };
-      const isEdit = Boolean(initialOrder?.id);
       const result = await apiJson<{ success?: boolean; message?: string; order?: OrderRow; data?: OrderRow }>(
         isEdit ? `/api/orders/${encodeURIComponent(initialOrder?.id || "")}` : "/api/orders",
         { method: isEdit ? "PATCH" : "POST", body: JSON.stringify(payload) },
@@ -340,6 +360,25 @@ export function useQuickOrderPanelController({
       setExchangeMeta("");
       onSaved(result.order || result.data || null);
     } catch (saveError) {
+      const orderId = initialOrder?.id || "";
+      try {
+        const latestOrder = await loadLatestOrderAfterConflict(
+          saveError,
+          orderId,
+          (path) => apiJson<{ order?: OrderRow; data?: OrderRow }>(path),
+        );
+        if (latestOrder) {
+          loadOrderSnapshot(latestOrder);
+          onConflictRefreshed(latestOrder);
+          setMessage("订单已被其他操作更新，系统已载入服务器最新数据并替换本次未保存内容。请重新核对后再保存。");
+          return;
+        }
+      } catch (refreshError) {
+        const conflictMessage = saveError instanceof Error ? saveError.message : "订单保存发生冲突";
+        const refreshMessage = refreshError instanceof Error ? refreshError.message : "读取最新订单失败";
+        setMessage(`${conflictMessage}；自动读取最新订单失败：${refreshMessage}。请取消编辑后重新打开订单。`);
+        return;
+      }
       setMessage(saveError instanceof Error ? saveError.message : "订单保存失败");
     } finally {
       setSaving(false);
@@ -354,6 +393,7 @@ export function useQuickOrderPanelController({
     logisticsSuppliers,
     defaultLogisticsSupplier,
     isExwOrder: isExwTradeTerm(form.tradeTerm),
+    currencyLockedByPayments,
     exchangeMeta,
     exchangeCacheMissing,
     refreshingExchangeRate,

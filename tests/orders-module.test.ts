@@ -6,6 +6,10 @@ import {
   readOrdersServiceSource,
   readSharedOrderSerializationSource,
 } from "./source-helpers.ts";
+import {
+  isRefreshableOrderConflict,
+  loadLatestOrderAfterConflict,
+} from "../app/modules/orders/order-conflict-refresh.ts";
 
 const ordersModule = readOrdersModuleSource();
 const ordersService = readOrdersServiceSource();
@@ -19,6 +23,11 @@ const mastersAccess = readFileSync("lib/platform/masters-access.ts", "utf8");
 const quickOrderFields = readFileSync("app/modules/orders/quick-order-fields.tsx", "utf8");
 const quickOrderController = readFileSync("app/modules/orders/quick-order-panel-controller.ts", "utf8");
 const quickOrderPanel = readFileSync("app/modules/orders/quick-order-panel.tsx", "utf8");
+const orderConflictRefresh = readFileSync("app/modules/orders/order-conflict-refresh.ts", "utf8");
+const orderEditActions = readFileSync("app/modules/orders/use-order-edit-actions.ts", "utf8");
+const ordersModuleController = readFileSync("app/modules/OrdersModule.tsx", "utf8");
+const orderModel = readFileSync("app/modules/orders/model.ts", "utf8");
+const orderUtils = readFileSync("app/modules/orders/utils.ts", "utf8");
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
 const orderModuleView = readFileSync("app/modules/orders/module-view.tsx", "utf8");
 const orderTable = readFileSync("app/modules/orders/table.tsx", "utf8");
@@ -101,7 +110,7 @@ test("paginated orders use a DTO that does not expose unloaded detail relations"
   assert.match(orderSerialization, /export type SerializedOrderListRowDto = ReturnType<typeof serializeOrderListRow>/);
 
   const listSerializerStart = orderSerialization.indexOf("export function serializeOrderListRow");
-  const listSerializerEnd = orderSerialization.indexOf("export function serializeOrder(orderInput", listSerializerStart);
+  const listSerializerEnd = orderSerialization.indexOf("export function serializeOrder(", listSerializerStart);
   const listSerializer = orderSerialization.slice(listSerializerStart, listSerializerEnd);
   assert.match(listSerializer, /summary: serializeOrderListSummary\(summary\)/);
   assert.doesNotMatch(listSerializer, /documentCompleteness/);
@@ -147,6 +156,107 @@ test("orders save path normalizes complex input fields", () => {
   assert.match(ordersService, /normalizeReminderDaysInput\(inputData\.reminderDays \?\? 7\)/);
   assert.match(ordersService, /optionalLimitedText\(inputData\.remark, "备注", MAX_ORDER_REMARK_LENGTH\)/);
   assert.match(ordersService, /normalizeOrderLogisticsSupplierIds\(inputData\)/);
+});
+
+test("order amount writes serialize payment-based status synchronization and retry conflicts", () => {
+  const transactionRunner = ordersService.match(/const ORDER_WRITE_TRANSACTION_MAX_ATTEMPTS[\s\S]*?export async function saveOrder/);
+  assert.ok(transactionRunner, "order transaction runner should exist");
+  assert.match(transactionRunner[0], /ORDER_WRITE_TRANSACTION_MAX_ATTEMPTS = 3/);
+  assert.match(transactionRunner[0], /=== "P2034"/);
+  assert.match(transactionRunner[0], /attempt <= ORDER_WRITE_TRANSACTION_MAX_ATTEMPTS/);
+  assert.match(transactionRunner[0], /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(transactionRunner[0], /attempt === ORDER_WRITE_TRANSACTION_MAX_ATTEMPTS/);
+  assert.match(transactionRunner[0], /codedError\("订单刚刚被其他操作更新，请刷新后重试。", 409, "ORDER_UPDATE_CONFLICT"\)/);
+
+  const saveStart = ordersService.indexOf("export async function saveOrder");
+  const saveEnd = ordersService.indexOf("\nasync function assertNoUnfinishedOrderDocuments", saveStart);
+  const saveBlock = ordersService.slice(saveStart, saveEnd);
+  assert.match(saveBlock, /runOrderWriteTransaction\(async \(tx\) => \{/);
+  assert.match(saveBlock, /await tx\.receivableOrder\.findFirst\(\{ where: \{ id, deletedAt: null \}, include: includeOrderRelations\(\) \}\)/);
+  assert.match(saveBlock, /assertCurrentOrderWritable\(current, id, actor, expectedUpdatedAt\)/);
+  assert.match(saveBlock, /assertCustomerScope\(actor, customerId, tx\)/);
+  assert.match(saveBlock, /validateDuplicateOrder\(orderNo, id, tx\)/);
+  assert.match(saveBlock, /resolveSalespersonUserId\(inputData, actor, transactionCustomer, current, tx\)/);
+  assert.match(saveBlock, /resolveBusinessEntityForOrderInput\(inputData, current, tx\)/);
+  assert.match(saveBlock, /tx\.receivableOrder\.updateMany\(\{[\s\S]*?where: \{ id, deletedAt: null, updatedAt: current\.updatedAt \}/);
+  assert.match(saveBlock, /updated\.count !== 1[\s\S]*?ORDER_UPDATE_CONFLICT/);
+  assert.match(saveBlock, /await tx\.receivableOrder\.create\(\{ data: writeData, include: includeOrderRelations\(\) \}\)/);
+  assert.match(saveBlock, /const syncedOrder = await syncOrderStatusInTransaction\(tx, saved\)/);
+  assert.match(saveBlock, /maybeSyncOrderLogisticsSuppliersInTransaction\(tx, syncedOrder, inputData, actor\)/);
+  assert.match(saveBlock, /await writeAudit\([\s\S]*?current,[\s\S]*?orderWithSuppliers,[\s\S]*?tx,/);
+  assert.match(saveBlock, /refreshTaxRefundCompleteness\(order\.id\)\.catch/);
+
+  assert.match(saveBlock, /expectedOrderUpdatedAt\(inputData, before\)/);
+  assert.match(saveBlock, /inputData\.expectedUpdatedAt \|\| inputData\.updatedAt/);
+  assert.match(saveBlock, /current\.updatedAt\.getTime\(\) !== expectedUpdatedAt\.getTime\(\)/);
+  assert.match(saveBlock, /ORDER_CURRENCY_LOCKED_BY_PAYMENTS/);
+  assert.match(saveBlock, /normalizedCurrency\(current\.currency\) !== currency && hasCurrencyLockPayments\(current\.payments\)/);
+  assert.match(ordersService, /ORDER_CURRENCY_LOCK_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
+  assert.match(saveBlock, /ORDER_CURRENCY_LOCK_PAYMENT_STATUSES\.includes\(String\(payment\.status \|\| ""\)\)/);
+  assert.match(saveBlock, /withServerControlledCollectionStatus\(transactionData, current\)/);
+  assert.match(saveBlock, /ORDER_COLLECTION_STATUSES\.includes\(requestedStatus\)/);
+
+  const statusSyncStart = ordersService.indexOf("async function syncOrderStatusInTransaction");
+  const statusSyncEnd = ordersService.indexOf("\nexport async function deleteOrder", statusSyncStart);
+  const statusSyncBlock = ordersService.slice(statusSyncStart, statusSyncEnd);
+  assert.match(statusSyncBlock, /summarizeOrder\(order\)/);
+  assert.match(statusSyncBlock, /summary\.hasArrivedPaymentCurrencyMismatch/);
+  assert.match(statusSyncBlock, /deriveOrderCollectionStatus\(\{/);
+  assert.match(statusSyncBlock, /return tx\.receivableOrder\.update\(/);
+
+  const publicSyncStart = ordersService.indexOf("export async function syncOrderStatus");
+  const publicSyncBlock = ordersService.slice(publicSyncStart);
+  assert.match(publicSyncBlock, /return runOrderWriteTransaction\(async \(tx\) => \{/);
+  assert.match(publicSyncBlock, /tx\.receivableOrder\.findUnique/);
+  assert.match(publicSyncBlock, /syncOrderStatusInTransaction\(tx, order\)/);
+  assert.equal((ordersService.match(/runOrderWriteTransaction\(async \(tx\) => \{/g) || []).length, 3);
+});
+
+test("order edit form sends a version token and locks currency only for active payments", () => {
+  assert.match(orderModel, /updatedAt\?: string/);
+  assert.match(orderModel, /hasCurrencyLockPayments\?: boolean/);
+  assert.match(orderModel, /expectedUpdatedAt: string/);
+  assert.match(orderModel, /pendingPaymentsAmount\?: number/);
+  assert.match(orderUtils, /expectedUpdatedAt: order\.updatedAt \|\| ""/);
+  assert.match(orderSerialization, /hasCurrencyLockPayments: hasCurrencyLockPayments\(order\.payments\)/);
+  assert.match(orderSerialization, /\["待确认", "已到账"\]\.includes\(String\(row\.status \|\| ""\)\)/);
+  assert.match(quickOrderController, /const currencyLockedByPayments = Boolean\(initialOrder\?\.id/);
+  assert.match(quickOrderController, /expectedUpdatedAt: normalizedForm\.expectedUpdatedAt \|\| initialOrder\?\.updatedAt \|\| undefined/);
+  assert.match(quickOrderController, /if \(!currencyLockedByPayments && customerOption\.defaultCurrency\) await resolveExchangeRate/);
+  assert.match(quickOrderController, /if \(currencyLockedByPayments\) \{[\s\S]*?币种已锁定/);
+  assert.match(quickOrderPanel, /disabled=\{controller\.currencyLockedByPayments\}/);
+  assert.match(quickOrderPanel, /已有待确认或已到账收款，币种已锁定/);
+});
+
+test("order edit conflict reloads the latest server row before retrying", async () => {
+  const requestedPaths: string[] = [];
+  const latestOrder = {
+    id: "order/id 1",
+    orderNo: "LATEST-ORDER",
+    updatedAt: "2026-07-21T09:00:00.000Z",
+    currency: "USD",
+    hasCurrencyLockPayments: true,
+  };
+  const result = await loadLatestOrderAfterConflict(
+    { status: 409, code: "HTTP_409", message: "订单刚刚被其他操作更新，请刷新后重试。" },
+    latestOrder.id,
+    async (path) => {
+      requestedPaths.push(path);
+      return { order: latestOrder };
+    },
+  );
+
+  assert.deepEqual(result, latestOrder);
+  assert.deepEqual(requestedPaths, ["/api/orders/order%2Fid%201"]);
+  assert.equal(isRefreshableOrderConflict({ status: 409, message: "订单号已存在，不能重复提交" }), false);
+  assert.match(orderConflictRefresh, /result\.order \|\| result\.data/);
+  assert.match(quickOrderController, /loadLatestOrderAfterConflict\([\s\S]*?onConflictRefreshed\(latestOrder\)/);
+  assert.match(quickOrderController, /if \(latestOrder\) \{[\s\S]*?loadOrderSnapshot\(latestOrder\);[\s\S]*?onConflictRefreshed\(latestOrder\)/);
+  assert.match(quickOrderController, /\[initialOrder, initialOrder\?\.updatedAt, loadOrderSnapshot\]/);
+  assert.match(quickOrderController, /系统已载入服务器最新数据并替换本次未保存内容/);
+  assert.match(orderEditActions, /function handleOrderConflictRefreshed\(order: OrderRow\)[\s\S]*?mergeOrderRow\(order, \{ shouldShow \}\)/);
+  assert.match(orderEditActions, /setEditOrder\(\(current\) => current\?\.id === order\.id \? \{ \.\.\.current, \.\.\.order \} : current\)/);
+  assert.match(ordersModuleController, /onOrderConflictRefreshed=\{handleOrderConflictRefreshed\}/);
 });
 
 test("receivable order UI does not expose commission rate editing or display", () => {
@@ -197,11 +307,12 @@ test("order logistics supplier default is only a per-order fallback", () => {
   assert.match(quickOrderFields, /物流供应商（选填）/);
   assert.match(quickOrderFields, /EXW 条款下可不指定物流供应商/);
   assert.match(quickOrderFields, /本订单单独切换；不会修改系统默认供应商/);
-  assert.match(mastersAccess, /options: \{ allowEmpty\?: boolean \} = \{\}/);
+  assert.match(mastersAccess, /options: \{ allowEmpty\?: boolean; client\?: Prisma\.TransactionClient \} = \{\}/);
   assert.match(mastersAccess, /else if \(!options\.allowEmpty\)/);
   assert.doesNotMatch(mastersAccess, /ids = \[defaultSupplier\.id\];/);
   assert.match(ordersService, /function isExwOrderInput/);
-  assert.match(ordersService, /syncOrderLogisticsSuppliers\(order\.id, logisticsSupplierIds, actor, \{ allowEmpty \}\)/);
+  assert.match(ordersService, /syncOrderLogisticsSuppliers\(order\.id, logisticsSupplierIds, actor, \{ allowEmpty, client: tx \}\)/);
+  assert.match(mastersAccess, /if \(options\.client\) \{[\s\S]*?await syncRelations\(options\.client\)/);
   assert.match(ordersService, /if \(!hasInput && !logisticsSettings\.allowMultipleOrderLogisticsSuppliers\)/);
   assert.match(ordersService, /if \(existingCount > 0\) return order/);
 });

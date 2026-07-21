@@ -8,6 +8,8 @@ import {
 } from "./shared-base-utils";
 import { assertRead, assertWrite, canRead, permissionError } from "./shared-access";
 import { writeAudit } from "./shared-audit";
+import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
+import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 
 export const DEFAULT_BUSINESS_ENTITY_ID = "default-business-entity";
 export const DEFAULT_BUSINESS_ENTITY_NAME = "浙江莱诺建材有限公司";
@@ -222,8 +224,8 @@ export async function updateBusinessEntitySetting(
   return serializeBusinessEntity(after);
 }
 
-export async function getDefaultBusinessEntity() {
-  const existing = await prisma.businessEntity.findFirst({
+export async function getDefaultBusinessEntity(client: Prisma.TransactionClient | typeof prisma = prisma) {
+  const existing = await client.businessEntity.findFirst({
     where: {
       deletedAt: null,
       isDefault: true,
@@ -232,7 +234,7 @@ export async function getDefaultBusinessEntity() {
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
   if (existing) return existing;
-  return prisma.businessEntity.upsert({
+  return client.businessEntity.upsert({
     where: { name: DEFAULT_BUSINESS_ENTITY_NAME },
     create: {
       id: DEFAULT_BUSINESS_ENTITY_ID,
@@ -249,7 +251,11 @@ export async function getDefaultBusinessEntity() {
   });
 }
 
-export async function resolveBusinessEntityForOrderInput(input: BusinessEntityInput, before: BusinessEntityOrderLike | null = null) {
+export async function resolveBusinessEntityForOrderInput(
+  input: BusinessEntityInput,
+  before: BusinessEntityOrderLike | null = null,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+) {
   const hasBusinessEntityInput = inputHasOwn(input, "businessEntityId") || inputHasOwn(input, "businessEntity");
   if (!hasBusinessEntityInput && before?.businessEntityId) {
     const beforeEntity = businessEntityFieldsFromOrder(before);
@@ -260,13 +266,13 @@ export async function resolveBusinessEntityForOrderInput(input: BusinessEntityIn
   }
   const requestedId = nonEmpty(input.businessEntityId || (input.businessEntity as BusinessEntityLike | null | undefined)?.id);
   const entity = requestedId
-    ? await prisma.businessEntity.findFirst({
+    ? await client.businessEntity.findFirst({
       where: {
         id: requestedId,
         ...activeBusinessEntityWhere(),
       },
     })
-    : await getDefaultBusinessEntity();
+    : await getDefaultBusinessEntity(client);
   if (!entity) {
     throw codedError("请选择有效业务主体", 400, "BUSINESS_ENTITY_INVALID");
   }
@@ -288,57 +294,57 @@ export async function transferOrderBusinessEntity(
   }
   const targetEntityId = requireText(input.businessEntityId, "业务主体");
   const reason = requireText(input.reason || input.transferReason, "转移原因");
-  const [before, targetEntity] = await Promise.all([
-    prisma.receivableOrder.findFirst({
+  const result = await prisma.$transaction(async (tx) => {
+    await assertBusinessOrderWritableInTransaction(
+      tx,
+      orderId,
+      "该订单已提交退税并归档，转移业务主体前请先取消归档。",
+    );
+    await assertCommissionOrderWritableInTransaction(tx, orderId);
+    const before = await tx.receivableOrder.findFirst({
       where: { id: orderId, deletedAt: null },
       include: { businessEntity: true },
-    }),
-    prisma.businessEntity.findFirst({
+    });
+    const targetEntity = await tx.businessEntity.findFirst({
       where: {
         id: targetEntityId,
         ...activeBusinessEntityWhere(),
       },
-    }),
-  ]);
-  if (!before) throw codedError("应收订单不存在或已删除", 404, "ORDER_NOT_FOUND");
-  if (!targetEntity) throw codedError("请选择有效业务主体", 400, "BUSINESS_ENTITY_INVALID");
-  if (before.businessEntityId === targetEntity.id) {
-    return {
-      changed: false,
-      order: {
-        id: before.id,
-        ...businessEntityFieldsFromOrder(before),
+    });
+    if (!before) throw codedError("应收订单不存在或已删除", 404, "ORDER_NOT_FOUND");
+    if (!targetEntity) throw codedError("请选择有效业务主体", 400, "BUSINESS_ENTITY_INVALID");
+    if (before.businessEntityId === targetEntity.id) return { before, after: before, changed: false };
+    const after = await tx.receivableOrder.update({
+      where: { id: orderId },
+      data: {
+        businessEntityId: targetEntity.id,
+        businessEntityNameSnapshot: targetEntity.name,
+        updatedById: actor?.id || null,
       },
-    };
-  }
-  const after = await prisma.receivableOrder.update({
-    where: { id: orderId },
-    data: {
-      businessEntityId: targetEntity.id,
-      businessEntityNameSnapshot: targetEntity.name,
-      updatedById: actor?.id || null,
-    },
-    include: { businessEntity: true },
+      include: { businessEntity: true },
+    });
+    await writeAudit(
+      request,
+      actor,
+      "转移订单业务主体",
+      "receivable_orders",
+      orderId,
+      before,
+      {
+        ...after,
+        transferReason: reason,
+        previousBusinessEntityName: before.businessEntityNameSnapshot || before.businessEntity?.name || "",
+        nextBusinessEntityName: targetEntity.name,
+      },
+      tx,
+    );
+    return { before, after, changed: true };
   });
-  writeAudit(
-    request,
-    actor,
-    "转移订单业务主体",
-    "receivable_orders",
-    orderId,
-    before,
-    {
-      ...after,
-      transferReason: reason,
-      previousBusinessEntityName: before.businessEntityNameSnapshot || before.businessEntity?.name || "",
-      nextBusinessEntityName: targetEntity.name,
-    },
-  ).catch((error) => logServerError("业务主体转移日志写入失败", error, { orderId }));
   return {
-    changed: true,
+    changed: result.changed,
     order: {
-      id: after.id,
-      ...businessEntityFieldsFromOrder(after),
+      id: result.after.id,
+      ...businessEntityFieldsFromOrder(result.after),
     },
   };
 }

@@ -20,18 +20,21 @@ export function QuickCreateOrderPanel({
   canManageOrderAssignments = false,
   onOpenExchangeSettings,
   onCancel,
+  onConflictRefreshed,
   onSaved,
 }: {
   initialOrder?: OrderRow | null;
   canManageOrderAssignments?: boolean;
   onOpenExchangeSettings?: () => void;
   onCancel: () => void;
+  onConflictRefreshed: (order: OrderRow) => void;
   onSaved: (order?: OrderRow | null) => void;
 }) {
   const controller = useQuickOrderPanelController({
     initialOrder,
     canManageOrderAssignments,
     onOpenExchangeSettings,
+    onConflictRefreshed,
     onSaved,
   });
 
@@ -98,10 +101,17 @@ export function QuickCreateOrderPanel({
         ) : null}
         <label>
           币种
-          <select value={controller.form.currency} onChange={(event) => void controller.handleCurrencyChange(event.target.value)}>
+          <select
+            value={controller.form.currency}
+            onChange={(event) => void controller.handleCurrencyChange(event.target.value)}
+            disabled={controller.currencyLockedByPayments}
+          >
             <option value="">请选择币种</option>
             {CURRENCIES.filter(Boolean).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
           </select>
+          {controller.currencyLockedByPayments ? (
+            <small className={styles.mutedText}>已有待确认或已到账收款，币种已锁定；如需更正请先处理收款记录。</small>
+          ) : null}
         </label>
         <label className={styles.exchangeRateField}>
           汇率

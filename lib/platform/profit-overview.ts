@@ -7,7 +7,7 @@ import {
   customerFullName,
   customerShortName,
   getCommissionFormulaSettings,
-  includeOrderRelations,
+  includeOrderRelationsWithCommissionSettlement,
   isPlainRecord,
   nonEmpty,
   normalizedCostType,
@@ -15,6 +15,7 @@ import {
   pageResult,
   requireAdminGlobal,
   summarizeOrder,
+  summarizeOrderWithCommissionSnapshot,
   type CostDto,
 } from "./shared";
 import { listCosts } from "./cost-records";
@@ -39,7 +40,7 @@ type ActorLike = ({
 } & Record<string, unknown>) | null | undefined;
 type QueryLike = URLSearchParams;
 type CommissionFormulaSettings = Awaited<ReturnType<typeof getCommissionFormulaSettings>>;
-type ProfitOrder = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelations> }>;
+type ProfitOrder = Prisma.ReceivableOrderGetPayload<{ include: ReturnType<typeof includeOrderRelationsWithCommissionSettlement> }>;
 type ProfitCost = ProfitOrder["costs"][number];
 type CostListRow = CostDto;
 type ProfitListFilters = {
@@ -57,6 +58,7 @@ type OverviewGroup = {
   count: number;
   receivable: number;
   paid: number;
+  collectionBasisPaid: number;
   unpaid: number;
   expectedProfit: number;
   commissionMonth: number;
@@ -82,7 +84,7 @@ export async function getProfitAnalysis(query: QueryLike, actor: ActorLike): Pro
   const [orders, commissionFormulaSettings] = await Promise.all([
     prisma.receivableOrder.findMany({
       where,
-      include: includeOrderRelations(),
+      include: includeOrderRelationsWithCommissionSettlement(),
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       take: PROFIT_ANALYSIS_UNPAGINATED_SCAN_LIMIT,
     }),
@@ -128,9 +130,52 @@ function profitFilterWhere(filters: ProfitListFilters, actor: ActorLike): Prisma
   };
 }
 
+export function serializeProfitAnalysisSummary(
+  summary: ReturnType<typeof summarizeOrder> | ReturnType<typeof summarizeOrderWithCommissionSnapshot>,
+  costGroups: Record<string, number> = {},
+) {
+  return {
+    receivableCny: summary.receivableCny,
+    arrivedPaymentsCny: summary.arrivedPaymentsCny,
+    outstandingCny: summary.outstandingCny,
+    confirmedTotalCostCny: summary.confirmedTotalCostCny,
+    totalCostCny: summary.totalCostCny,
+    logisticsCostCny: summary.logisticsCostCny,
+    expectedTaxRefundIncomeCny: summary.expectedTaxRefundIncomeCny,
+    commissionBaseCny: summary.commissionBaseCny,
+    commissionFormulaMode: summary.commissionFormulaMode,
+    commissionFormulaLabel: summary.commissionFormulaLabel,
+    commissionFormulaDescription: summary.commissionFormulaDescription,
+    commissionFormulaFloorAtZero: summary.commissionFormulaFloorAtZero,
+    commissionFormulaVersion: "commissionFormulaVersion" in summary
+      ? String(summary.commissionFormulaVersion || "")
+      : "",
+    commissionSnapshotMissing: "commissionSnapshotMissing" in summary
+      ? Boolean(summary.commissionSnapshotMissing)
+      : false,
+    currentCommissionEstimate: "currentCommissionEstimate" in summary
+      ? summary.currentCommissionEstimate
+      : undefined,
+    taxLogisticsCostsComplete: summary.taxLogisticsCostsComplete,
+    taxLogisticsMissingLabels: summary.taxLogisticsMissingLabels,
+    expectedGrossProfit: summary.expectedGrossProfit,
+    expectedGrossMargin: summary.expectedGrossMargin,
+    realizedGrossProfit: summary.realizedGrossProfit,
+    realizedGrossMargin: summary.realizedGrossMargin,
+    netCashFlowCny: summary.netCashFlowCny,
+    exchangeDifferenceCny: summary.exchangeDifferenceCny,
+    commissionAmountCny: summary.commissionAmountCny,
+    estimatedCommissionCny: summary.estimatedCommissionCny,
+    commissionRate: summary.commissionRate,
+    commissionCanSettle: summary.commissionCanSettle,
+    commissionStatus: summary.commissionStatus,
+    costGroups,
+  };
+}
+
 function serializeProfitAnalysisOrder(order: ProfitOrder, actor: ActorLike, commissionFormulaSettings: CommissionFormulaSettings) {
   const scoped = scopeOrderForActor(order, actor);
-  const summary = summarizeOrder(scoped, commissionFormulaSettings);
+  const summary = summarizeOrderWithCommissionSnapshot(scoped, commissionFormulaSettings);
   const fullCustomerName = customerFullName(scoped.customer, scoped.customerNameSnapshot);
   const shortCustomerName = customerShortName(scoped.customer);
   const costGroups = (scoped.costs || [])
@@ -154,31 +199,7 @@ function serializeProfitAnalysisOrder(order: ProfitOrder, actor: ActorLike, comm
     commissionStatus: summary.commissionStatus,
     commissionSettledByName: scoped.commissionSettledBy?.name || "",
     commissionSettledAt: scoped.commissionSettledAt || null,
-    summary: {
-      receivableCny: summary.receivableCny,
-      arrivedPaymentsCny: summary.arrivedPaymentsCny,
-      confirmedTotalCostCny: summary.confirmedTotalCostCny,
-      totalCostCny: summary.totalCostCny,
-      logisticsCostCny: summary.logisticsCostCny,
-      expectedTaxRefundIncomeCny: summary.expectedTaxRefundIncomeCny,
-      commissionBaseCny: summary.commissionBaseCny,
-      commissionFormulaMode: summary.commissionFormulaMode,
-      commissionFormulaLabel: summary.commissionFormulaLabel,
-      commissionFormulaDescription: summary.commissionFormulaDescription,
-      taxLogisticsCostsComplete: summary.taxLogisticsCostsComplete,
-      taxLogisticsMissingLabels: summary.taxLogisticsMissingLabels,
-      expectedGrossProfit: summary.expectedGrossProfit,
-      expectedGrossMargin: summary.expectedGrossMargin,
-      realizedGrossProfit: summary.realizedGrossProfit,
-      realizedGrossMargin: summary.realizedGrossMargin,
-      netCashFlowCny: summary.netCashFlowCny,
-      commissionAmountCny: summary.commissionAmountCny,
-      estimatedCommissionCny: summary.estimatedCommissionCny,
-      commissionRate: summary.commissionRate,
-      commissionCanSettle: summary.commissionCanSettle,
-      commissionStatus: summary.commissionStatus,
-      costGroups,
-    },
+    summary: serializeProfitAnalysisSummary(summary, costGroups),
   };
 }
 
@@ -192,7 +213,7 @@ export async function listProfitAnalysisPage(query: QueryLike, actor: ActorLike)
     prisma.receivableOrder.count({ where }),
     prisma.receivableOrder.findMany({
       where,
-      include: includeOrderRelations(),
+      include: includeOrderRelationsWithCommissionSettlement(),
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -218,9 +239,11 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
   requireAdminGlobal(actor, "无权限访问经营总览");
   const trendQuery = new URLSearchParams(query);
   trendQuery.delete("month");
+  const canReadOrders = canRead(actor, "orders");
+  const commissionFormulaSettings = canReadOrders ? await getCommissionFormulaSettings() : undefined;
   const [orders, trendOrders, payments, costs] = await Promise.all([
-    canRead(actor, "orders") ? listOrders(query, actor) : [],
-    canRead(actor, "orders") ? listOrders(trendQuery, actor) : [],
+    canReadOrders ? listOrders(query, actor, { commissionFormulaSettings }) : [],
+    canReadOrders ? listOrders(trendQuery, actor, { commissionFormulaSettings }) : [],
     canRead(actor, "payments") ? listPayments(query, actor) : [],
     canRead(actor, "costs") ? listCosts(query, actor) : [],
   ]) as [OrderListRow[], OrderListRow[], PaymentListRow[], CostListRow[]];
@@ -229,6 +252,7 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
     acc.confirmed += order.summary.confirmedPaymentsCny;
     acc.pending += order.summary.pendingPaymentsCny;
     acc.outstanding += order.summary.outstandingCny;
+    acc.exchangeDifference += order.summary.exchangeDifferenceCny;
     acc.requiredDepositAmount += order.summary.requiredDepositAmount;
     acc.receivedDeposit += order.summary.receivedDepositCny;
     acc.depositGap += order.summary.depositGapCny;
@@ -241,7 +265,11 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
       acc.realizedProfit += order.summary.realizedGrossProfit;
       acc.realizedReceivable += order.summary.receivableCny;
     }
-    acc.commissionAmount += Number(order.summary?.commissionAmountCny ?? order.summary?.estimatedCommissionCny ?? 0);
+    if (!order.summary?.commissionSnapshotMissing) {
+      acc.commissionAmount += Number(order.summary?.commissionAmountCny ?? order.summary?.estimatedCommissionCny ?? 0);
+    } else {
+      acc.commissionSnapshotMissingOrders += 1;
+    }
     if (order.summary.reminderStatus === "已逾期") acc.overdueOrders += 1;
     if (order.summary.reminderStatus === "即将到期") acc.dueSoonOrders += 1;
     return acc;
@@ -250,6 +278,7 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
     confirmed: 0,
     pending: 0,
     outstanding: 0,
+    exchangeDifference: 0,
     requiredDepositAmount: 0,
     receivedDeposit: 0,
     depositGap: 0,
@@ -261,6 +290,7 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
     realizedReceivable: 0,
     netCashFlow: 0,
     commissionAmount: 0,
+    commissionSnapshotMissingOrders: 0,
     overdueOrders: 0,
     dueSoonOrders: 0,
     expectedGrossMargin: null as number | null,
@@ -299,7 +329,10 @@ export async function getOverview(query: QueryLike, actor: ActorLike) {
   }, {} as Record<string, AmountGroup>)).sort((a, b) => b.amount - a.amount);
   const salespersonGroups = groupOverviewRows(overviewRows, (row) => row.salespersonName || "未分配");
   const salespersonCollections = salespersonGroups
-    .map((group) => ({ ...group, collectionRate: group.receivable > 0 ? group.paid / group.receivable : null }))
+    .map((group) => ({
+      ...group,
+      collectionRate: group.receivable > 0 ? group.collectionBasisPaid / group.receivable : null,
+    }))
     .sort((a, b) => b.paid - a.paid || b.receivable - a.receivable)
     .slice(0, 10);
   const commissionRank = salespersonGroups
@@ -346,11 +379,30 @@ function lastOverviewMonthKeys(count = 12) {
   });
 }
 
-function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null = null) {
-  const summary = order.summary || {};
+type OverviewCollectionSummary = Partial<Pick<OrderListRow["summary"],
+  | "receivableCny"
+  | "arrivedPaymentsCny"
+  | "confirmedPaymentsCny"
+  | "arrivedBalanceCny"
+  | "arrivedOutstandingCny"
+  | "outstandingCny"
+  | "exchangeDifferenceCny"
+>>;
+
+export function overviewCollectionMetrics(summary: OverviewCollectionSummary) {
   const receivable = Number(summary.receivableCny || 0);
   const paid = Number(summary.arrivedPaymentsCny ?? summary.confirmedPaymentsCny ?? 0);
-  const unpaid = Math.max(receivable - paid, 0);
+  const unpaid = Number(summary.arrivedOutstandingCny ?? summary.outstandingCny ?? Math.max(receivable - paid, 0));
+  const collectionBasisPaid = summary.arrivedBalanceCny == null
+    ? paid
+    : Math.max(receivable - Number(summary.arrivedBalanceCny), 0);
+  const exchangeDifference = Number(summary.exchangeDifferenceCny || 0);
+  return { receivable, paid, unpaid, collectionBasisPaid, exchangeDifference };
+}
+
+export function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null = null) {
+  const summary = order.summary || {};
+  const { receivable, paid, unpaid, collectionBasisPaid, exchangeDifference } = overviewCollectionMetrics(summary);
   const cost = Number(summary.confirmedTotalCostCny ?? summary.totalCostCny ?? 0);
   const expectedGrossProfit = Number(summary.expectedGrossProfit ?? (receivable - cost));
   const expectedGrossMargin = summary.expectedGrossMargin == null
@@ -366,8 +418,12 @@ function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null
   const createdYear = createdMonth.slice(0, 4);
   const estimatedCommission = Number(summary.estimatedCommissionCny || 0);
   const settleableCommission = Number(summary.settleableCommissionCny ?? summary.commissionAmountCny ?? 0);
-  const settledCommission = order.commissionStatus === "已结算" ? settleableCommission : 0;
-  const pendingCommission = order.commissionStatus === "已结算" ? 0 : estimatedCommission;
+  const commissionSnapshotMissing = Boolean(summary.commissionSnapshotMissing);
+  const commissionSettled = commissionSnapshotMissing
+    || ["已结算", "SETTLED"].includes(String(summary.commissionStatus || ""))
+    || ["已结算", "SETTLED"].includes(String(order.commissionStatus || ""));
+  const settledCommission = commissionSettled && !commissionSnapshotMissing ? settleableCommission : 0;
+  const pendingCommission = commissionSettled ? 0 : estimatedCommission;
   return {
     id: order.id,
     orderNo: order.orderNo,
@@ -381,17 +437,20 @@ function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null
     status: order.status || "",
     receivable,
     paid,
+    collectionBasisPaid,
     unpaid,
+    exchangeDifference,
     cost,
     expectedGrossProfit,
     expectedGrossMargin,
     realizedGrossProfit,
     netCashFlowCny: Number(summary.netCashFlowCny || 0),
     remainingDays,
-    commissionMonth: createdMonth === month ? (order.commissionStatus === "已结算" ? settledCommission : estimatedCommission) : 0,
-    commissionYear: createdYear === year ? (order.commissionStatus === "已结算" ? settledCommission : estimatedCommission) : 0,
+    commissionMonth: createdMonth === month ? (commissionSettled ? settledCommission : estimatedCommission) : 0,
+    commissionYear: createdYear === year ? (commissionSettled ? settledCommission : estimatedCommission) : 0,
     commissionPending: pendingCommission,
     commissionSettled: settledCommission,
+    commissionSnapshotMissing,
   };
 }
 
@@ -417,6 +476,7 @@ function groupOverviewRows(rows: OverviewMetric[], labelFn: (row: OverviewMetric
       count: 0,
       receivable: 0,
       paid: 0,
+      collectionBasisPaid: 0,
       unpaid: 0,
       expectedProfit: 0,
       commissionMonth: 0,
@@ -428,6 +488,7 @@ function groupOverviewRows(rows: OverviewMetric[], labelFn: (row: OverviewMetric
     group.count += 1;
     group.receivable += row.receivable;
     group.paid += row.paid;
+    group.collectionBasisPaid += row.collectionBasisPaid;
     group.unpaid += row.unpaid;
     group.expectedProfit += row.expectedGrossProfit;
     group.commissionMonth += row.commissionMonth;
