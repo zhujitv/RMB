@@ -1,4 +1,4 @@
-import type { Prisma } from "../generated/prisma/client.js";
+import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 
 export const SENSITIVE_AUDIT_KEY_PATTERN = /(password|passwordHash|token|secret|accessKey|apiKey|appCode|clientId|mapKey|authorization|cookie|session|storageKey|r2Key|r2Bucket|fileUrl|avatarUrl|originalName|originalFilename)/i;
@@ -59,13 +59,20 @@ export function requestIp(request: AuditRequestLike) {
     || null;
 }
 
-export function sanitizeAuditData(value: unknown, depth = 0): unknown {
-  if (value == null) return value;
+type AuditJsonValue = string | number | boolean | null | AuditJsonValue[] | { [key: string]: AuditJsonValue };
+
+export function sanitizeAuditData(value: unknown, depth = 0): AuditJsonValue {
   if (depth > 6) return "[TRUNCATED]";
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map((item) => sanitizeAuditData(item, depth + 1));
-  if ("toJSON" in value && typeof value.toJSON === "function" && value.constructor?.name === "Decimal") return value.toJSON();
+  if (value === null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : `[NON_FINITE_NUMBER:${String(value)}]`;
+  if (typeof value === "bigint") return `[BIGINT:${value.toString()}]`;
+  if (typeof value === "undefined") return "[UNDEFINED]";
+  if (typeof value === "function") return "[FUNCTION]";
+  if (typeof value === "symbol") return "[SYMBOL]";
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? "[INVALID_DATE]" : value.toISOString();
+  if (Prisma.Decimal.isDecimal(value)) return value.toJSON();
+  if (Array.isArray(value)) return Array.from(value, (item) => sanitizeAuditData(item, depth + 1));
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [
     key,
     SENSITIVE_AUDIT_KEY_PATTERN.test(key) ? "[REDACTED]" : sanitizeAuditData(item, depth + 1),
