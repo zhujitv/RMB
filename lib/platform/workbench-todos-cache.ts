@@ -16,10 +16,15 @@ export function workbenchTodosCache() {
 }
 
 export function workbenchTodosCacheKey(actor: ActorLike) {
+  const updatedAt = actor?.updatedAt instanceof Date
+    ? actor.updatedAt.toISOString()
+    : String(actor?.updatedAt || "");
   return [
     actor?.id || "",
     actor?.role || "",
     actor?.supplierId || "",
+    updatedAt,
+    JSON.stringify(actor?.customPermissions ?? null),
   ].join(":");
 }
 

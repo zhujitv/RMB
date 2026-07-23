@@ -7,12 +7,15 @@ import {
   codedError,
   findActiveFileAssetBySource,
   isCustomsDeclarationDocumentType,
+  invalidatePersistedTaxRefundCompleteness,
+  logServerError,
   managedFileMetadata,
   managedPreviewableMimeType,
   mergeFileAssetMetadata,
   permissionError,
   resolveStandardFilenameForPersistedDocument,
   runNonCriticalTask,
+  refreshTaxRefundCompleteness,
   scheduleTaxRefundCompletenessRefresh,
   serializeOrderDocument,
   softDeleteFileAssetBySource,
@@ -30,6 +33,7 @@ import {
   type AuditRequestLike,
   type DocumentLike,
 } from "./order-documents-types";
+import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
 export async function deleteOrderDocument(request: AuditRequestLike, actor: ActorLike, id: string) {
   assertWrite(actor, "documents");
@@ -56,8 +60,25 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
       String(before.documentType),
       deletedAt,
     );
+    if (before.documentType === "EXPORT_INVOICE") {
+      await invalidatePersistedTaxRefundCompleteness(tx, before.orderId);
+    }
     return updated;
   });
+  if (before.documentType === "EXPORT_INVOICE") {
+    try {
+      await runNonCriticalTask("出口发票删除后退税完整度重算", async () => {
+        const refreshed = await refreshTaxRefundCompleteness(before.orderId);
+        if (!refreshed) throw new Error("出口发票已删除，但退税完整度重算未完成，将在下次读取时重试");
+        return refreshed;
+      }, { context: { orderId: before.orderId, documentId: before.id } }).catch((error) => {
+        logServerError("出口发票删除后退税完整度重算任务异常", error, { orderId: before.orderId, documentId: before.id });
+        return null;
+      });
+    } finally {
+      invalidateWorkbenchTodosCache();
+    }
+  }
   if (isCustomsDeclarationDocumentType(before.documentType)) {
     await prisma.receivableOrder.update({
       where: { id: before.orderId },
@@ -77,7 +98,7 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
     fileName: standardFilenameForDocument(before),
     clearedCustomsRecognition: isCustomsDeclarationDocumentType(before.documentType),
   }));
-  scheduleTaxRefundCompletenessRefresh(before.orderId);
+  if (before.documentType !== "EXPORT_INVOICE") scheduleTaxRefundCompletenessRefresh(before.orderId);
   return serializeOrderDocument(document);
 }
 

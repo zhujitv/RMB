@@ -170,12 +170,17 @@ export function needsTaxRefundCompletenessRefresh(order: TaxOrderLike = {}) {
   const customs = asRecord(cached.customs);
   const domesticLogistics = asRecord(cached.domesticLogistics);
   if (!cached || typeof cached !== "object" || Array.isArray(cached)) return true;
+  if (typeof cached.complete !== "boolean") return true;
+  if (!Array.isArray(cached.missingTypes) || !Array.isArray(cached.missingLabels)) return true;
+  if (!Number.isFinite(Number(cached.total)) || Number(cached.total) <= 0 || !Number.isFinite(Number(cached.completed))) return true;
   if (Number(supplier.total || 0) < SUPPLIER_DOCUMENT_TYPES.length) return true;
   if (typeof supplier.missingFactoryCost === "undefined") return true;
   if (!Object.keys(factory).length) return true;
   if (!Object.keys(logistics).length || !Array.isArray(logistics.missing)) return true;
   if (logistics.ruleVersion !== TAX_REFUND_LOGISTICS_RULE_VERSION) return true;
   if (Number(exportSection.total || 0) < TAX_EXPORT_DOCUMENT_TYPES.length) return true;
+  if (!Number.isFinite(Number(exportSection.completed))) return true;
+  if (!Array.isArray(exportSection.missingTypes)) return true;
   if (!Object.keys(customs).length || Number(customs.total || 0) !== DOMESTIC_LOGISTICS_DOCUMENT_TYPES.length) return true;
   if (!Object.keys(domesticLogistics).length || Number(domesticLogistics.total || 0) !== 1) return true;
   const cachedLogisticsRequirements = Array.isArray(logistics.requirements) ? logistics.requirements as Array<Record<string, unknown>> : [];

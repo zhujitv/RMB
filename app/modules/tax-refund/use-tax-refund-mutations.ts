@@ -4,6 +4,7 @@ import type { User } from "../../types";
 import { downloadBlob, uploadFormDataWithProgress, validatePdfUploadFile } from "../../utils";
 import { normalizedMissingLabels, taxTargetKeyFromMissingLabel, uploadScopeKey, zipFileNameFromResponse } from "./helpers";
 import type { TaxDocument, TaxRefundDetail, TaxRefundMode, TaxRefundRow, UploadDocumentResponse, UploadScope } from "./model";
+import { refreshTaxRefundAfterDocumentMutation } from "./post-document-mutation-refresh";
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
@@ -29,6 +30,7 @@ type TaxRefundMutationsContext = {
   page: number;
   submittedKeyword: string;
   requestConfirmation: ConfirmationRequest;
+  onRefreshTodos?: () => void | Promise<void>;
   onOpenDomesticLogistics?: (keyword: string) => void;
   setCancelingArchiveId: Setter<string>;
   setDeletingDocumentId: Setter<string>;
@@ -61,6 +63,7 @@ export function useTaxRefundMutations(context: TaxRefundMutationsContext) {
     page,
     submittedKeyword,
     requestConfirmation,
+    onRefreshTodos,
     onOpenDomesticLogistics,
     setCancelingArchiveId,
     setDeletingDocumentId,
@@ -82,6 +85,21 @@ export function useTaxRefundMutations(context: TaxRefundMutationsContext) {
     patchRowsForOrder,
     patchUploadedDocument,
   } = context;
+
+  function refreshAfterSuccessfulDocumentMutation(orderId: string, documentType: string) {
+    void refreshTaxRefundAfterDocumentMutation({
+      refreshDetail: detailOrderId === orderId ? () => fetchDetail(orderId) : undefined,
+      refreshWorkbench: documentType === "EXPORT_INVOICE" ? onRefreshTodos : undefined,
+      onFailure: ({ target, error }) => {
+        console.error("tax_refund_post_document_mutation_refresh_failed", {
+          orderId,
+          documentType,
+          refreshTarget: target,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
+  }
 
 async function downloadPackage(row: TaxRefundRow) {
     setPackageDownloadingId(row.id);
@@ -296,7 +314,7 @@ async function uploadDocument(orderId: string, documentType: string, file: File 
         patchCustomsPdfTextParse(orderId, uploadedDocument?.customsPdfTextParse);
       }
       setNotice(isCustomsDeclaration ? customsUploadNotice(uploadedDocument?.customsPdfTextParse) : "上传成功");
-      if (detailOrderId === orderId) void fetchDetail(orderId);
+      refreshAfterSuccessfulDocumentMutation(orderId, documentType);
     } catch (uploadError) {
       setDetailError(uploadError instanceof Error ? uploadError.message : "文件上传失败");
     } finally {
@@ -366,7 +384,7 @@ async function deleteDocument(orderId: string, document: TaxDocument) {
           declarationDate: "",
         });
       }
-      if (detailOrderId === orderId) void fetchDetail(orderId);
+      refreshAfterSuccessfulDocumentMutation(orderId, document.documentType || "");
       setNotice(result.message || "已删除文件");
     } catch (deleteError) {
       setDetailError(deleteError instanceof Error ? deleteError.message : "删除失败，请重试");

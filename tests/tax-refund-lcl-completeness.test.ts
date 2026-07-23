@@ -193,8 +193,12 @@ test("tax refund completeness cache refresh is deduped batched and non-blocking 
   assert.match(taxSync, /computeAndPersistTaxRefundCompleteness\(latestOrder, attempt \+ 1\)/);
   assert.match(taxRefundService, /refreshTaxRefundCompletenessForOrder\(orderWithLogistics\)/);
   assert.doesNotMatch(taxRefundService, /Promise\.all\(staleCompletenessOrderIds\.map/);
-  assert.match(orderDocuments, /scheduleTaxRefundCompletenessRefresh\(order\.id\)/);
-  assert.match(orderDocuments, /scheduleTaxRefundCompletenessRefresh\(before\.orderId\)/);
+  assert.match(orderDocuments, /documentType === "EXPORT_INVOICE"[\s\S]*invalidatePersistedTaxRefundCompleteness\(tx, order\.id\)/);
+  assert.match(orderDocuments, /before\.documentType === "EXPORT_INVOICE"[\s\S]*invalidatePersistedTaxRefundCompleteness\(tx, before\.orderId\)/);
+  assert.match(orderDocuments, /documentType !== "EXPORT_INVOICE"[\s\S]*scheduleTaxRefundCompletenessRefresh\(order\.id\)/);
+  assert.match(orderDocuments, /before\.documentType !== "EXPORT_INVOICE"[\s\S]*scheduleTaxRefundCompletenessRefresh\(before\.orderId\)/);
+  assert.match(orderDocuments, /runNonCriticalTask\("出口发票上传后退税完整度重算"[\s\S]*refreshTaxRefundCompleteness\(order\.id\)/);
+  assert.match(orderDocuments, /runNonCriticalTask\("出口发票删除后退税完整度重算"[\s\S]*refreshTaxRefundCompleteness\(before\.orderId\)/);
   assert.match(costMutations, /scheduleTaxRefundCompletenessRefresh\(cost\.orderId\)/);
   assert.match(domesticLogisticsApi, /scheduleTaxRefundCompletenessRefresh\(order\.id\)/);
   assert.match(logisticsExpenseMutations, /scheduleTaxRefundCompletenessRefresh\(orderId\)/);

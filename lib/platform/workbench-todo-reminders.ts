@@ -1,7 +1,8 @@
 import { prisma } from "../prisma";
+import { buildWorkbenchDeepLink } from "./workbench-deep-link";
 import { startOfChinaDay } from "./workbench-todo-rules";
-import { planWorkbenchTodoReminderTargets } from "./workbench-todo-policy";
-import { listWorkbenchTodos, type WorkbenchTodo } from "./workbench-todos";
+import { isFinanceOnlyWorkbenchTodoType, planWorkbenchTodoReminderTargets } from "./workbench-todo-policy";
+import { listWorkbenchTodosForReminders, type WorkbenchTodo } from "./workbench-todos";
 import { NOTIFICATION_TEMPLATE_TYPES, sendNotificationEmail } from "./notification-engine";
 import { nonEmpty } from "./shared";
 
@@ -33,16 +34,17 @@ export type WorkbenchTodoReminderResult = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OVERDUE_REMINDER_DAYS = 5;
-const MULTI_OWNER_REMINDER_TODO_TYPES = new Set(["TAX_REFUND_READY_NOT_ARCHIVED"]);
+const MULTI_OWNER_REMINDER_TODO_TYPES = new Set([
+  "TAX_EXPORT_INVOICE_MISSING",
+  "TAX_REFUND_READY_NOT_ARCHIVED",
+]);
 
 function appBaseUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "https://www.nextwood.net").replace(/\/+$/, "");
 }
 
 function todoHref(todo: WorkbenchTodo) {
-  const href = todo.action?.href || "/";
-  if (/^https?:\/\//i.test(href)) return href;
-  return `${appBaseUrl()}${href.startsWith("/") ? href : `/${href}`}`;
+  return buildWorkbenchDeepLink(appBaseUrl(), todo.action?.href) || `${appBaseUrl()}/`;
 }
 
 function overdueDaysForTodo(todo: WorkbenchTodo, today: Date) {
@@ -103,7 +105,7 @@ function reminderOwnerUserIds(todo: WorkbenchTodo) {
 export async function sendOverdueWorkbenchTodoReminders(actor: ActorLike, now = new Date()): Promise<WorkbenchTodoReminderResult> {
   const today = startOfChinaDay(now);
   const reminderDate = today;
-  const { todos } = await listWorkbenchTodos(actor);
+  const { todos } = await listWorkbenchTodosForReminders(actor);
   const overdueTodoOwners = todos
     .filter((todo) => todo.status === "ACTIVE")
     .map((todo) => ({ todo, overdueDays: overdueDaysForTodo(todo, today) }))
@@ -151,9 +153,12 @@ export async function sendOverdueWorkbenchTodoReminders(actor: ActorLike, now = 
     logs: [],
   };
   const adminFallbackTodoIds = new Set(adminFallbackTodoOwners.map(({ todo }) => todo.id));
-  const policySkippedMessage = (todo: WorkbenchTodo) => adminFallbackTodoIds.has(todo.id)
-    ? "财务只接收退税归档逾期提醒，已转交管理员处理"
-    : "财务只接收退税归档逾期提醒，未找到可接收的管理员账号";
+  const policySkippedMessage = (todo: WorkbenchTodo) => {
+    if (isFinanceOnlyWorkbenchTodoType(todo.type)) return "该待办仅通知财务，已跳过非财务接收人";
+    return adminFallbackTodoIds.has(todo.id)
+      ? "财务只接收退税归档及出口发票待上传逾期提醒，已转交管理员处理"
+      : "财务只接收退税归档及出口发票待上传逾期提醒，未找到可接收的管理员账号";
+  };
   for (const { todo, overdueDays, ownerUserId: rawOwnerUserId } of policySkippedTodoOwners) {
     const ownerUserId = nonEmpty(rawOwnerUserId);
     if (!ownerUserId) continue;
@@ -244,6 +249,7 @@ export async function sendOverdueWorkbenchTodoReminders(actor: ActorLike, now = 
         relatedEntityId: todo.id,
         relatedOrderId: todo.orderId || "",
         context: { todoType: todo.type, ownerUserId },
+        ignoreTemplateCc: isFinanceOnlyWorkbenchTodoType(todo.type),
       });
       if (delivery.skipped || delivery.sent !== true) {
         const message = delivery.error || "Work Center 逾期待办提醒模板已停用";

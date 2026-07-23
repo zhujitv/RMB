@@ -1,7 +1,8 @@
 import { prisma } from "../prisma";
-import type { Prisma } from "../generated/prisma/client.js";
+import { Prisma } from "../generated/prisma/client.js";
 import { includeOrderRelations } from "./shared-order-relations";
 import {
+  cachedTaxRefundCompleteness,
   sanitizeTaxRefundCompletenessText,
   taxDocumentCompleteness,
   taxRefundStatusFromCompleteness,
@@ -59,6 +60,25 @@ const runDedupedTaxRefundCompletenessRefresh = createTrailingRefreshCoordinator<
 
 function normalizedOrderId(orderId: string | null | undefined) {
   return String(orderId || "").trim();
+}
+
+export async function invalidatePersistedTaxRefundCompleteness(
+  tx: Prisma.TransactionClient,
+  orderId: string | null | undefined,
+) {
+  const id = normalizedOrderId(orderId);
+  if (!id) throw new Error("退税完整度缓存失效缺少订单ID");
+  const updated = await tx.$executeRaw(Prisma.sql`
+    UPDATE "receivable_orders"
+    SET
+      "tax_refund_completeness" = NULL,
+      "tax_refund_completeness_updated_at" = NULL,
+      "tax_refund_overall_completeness" = NULL,
+      "tax_refund_completeness_issues_summary" = NULL
+    WHERE "id" = ${id}
+      AND "deleted_at" IS NULL
+  `);
+  if (updated !== 1) throw new Error("退税完整度缓存失效失败：订单不存在或已删除");
 }
 
 async function loadTaxRefundCompletenessOrder(orderId: string) {
@@ -167,6 +187,38 @@ export async function refreshTaxRefundCompletenessBatch(
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()));
   return results;
+}
+
+export async function refreshTaxRefundCompletenessBatchWithSnapshots(
+  orderIds: Array<string | null | undefined>,
+  options: { concurrency?: number } = {},
+) {
+  const completenessById = await refreshTaxRefundCompletenessBatch(orderIds, options);
+  const refreshedIds = [...completenessById.entries()]
+    .filter(([, completeness]) => Boolean(completeness))
+    .map(([orderId]) => orderId);
+  const snapshots = new Map<string, {
+    completeness: ReturnType<typeof cachedTaxRefundCompleteness>;
+    completenessUpdatedAt: Date;
+  }>();
+  if (!refreshedIds.length) return snapshots;
+  const versions = await prisma.receivableOrder.findMany({
+    where: {
+      id: { in: refreshedIds },
+      deletedAt: null,
+      taxRefundCompletenessUpdatedAt: { not: null },
+    },
+    select: { id: true, taxRefundCompleteness: true, taxRefundCompletenessUpdatedAt: true },
+    take: refreshedIds.length,
+  });
+  for (const row of versions) {
+    if (!row.taxRefundCompleteness || !row.taxRefundCompletenessUpdatedAt) continue;
+    snapshots.set(row.id, {
+      completeness: cachedTaxRefundCompleteness(row),
+      completenessUpdatedAt: row.taxRefundCompletenessUpdatedAt,
+    });
+  }
+  return snapshots;
 }
 
 export function scheduleTaxRefundCompletenessRefresh(orderId: string | null | undefined, label = "退税资料完整度刷新") {

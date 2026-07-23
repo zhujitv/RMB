@@ -19,6 +19,7 @@ export type TaxRefundModuleProps = {
   initialKeyword?: string;
   initialAction?: string;
   initialOpenToken?: number;
+  onRefreshTodos?: () => void | Promise<void>;
   onOpenDomesticLogistics?: (keyword: string) => void;
   onOpenSupplierDocuments?: (keyword: string) => void;
 };
@@ -29,6 +30,7 @@ export function useTaxRefundController({
   initialKeyword = "",
   initialAction = "",
   initialOpenToken = 0,
+  onRefreshTodos,
   onOpenDomesticLogistics,
 }: TaxRefundModuleProps) {
   const state = useTaxRefundState();
@@ -198,6 +200,7 @@ export function useTaxRefundController({
     page: state.page,
     submittedKeyword: state.submittedKeyword,
     requestConfirmation: state.requestConfirmation,
+    onRefreshTodos,
     onOpenDomesticLogistics,
     setCancelingArchiveId: state.setCancelingArchiveId,
     setDeletingDocumentId: state.setDeletingDocumentId,

@@ -12,8 +12,15 @@ import type {
   SupplierDocumentTask,
   SupplierUploadResponse,
 } from "./types";
+import type { SupplierDocumentListView } from "./supplier-document-list-request-policy";
+import { isSupplierDocumentRequestTerminalStatus } from "../../../lib/platform/supplier-document-request-ranking";
 
 type RequestConfirmation = (options: ConfirmationDialogState) => Promise<ConfirmationResult>;
+
+type SupplierDocumentLoadRowsOptions = {
+  silent?: boolean;
+  expectedView?: SupplierDocumentListView;
+};
 
 type SupplierDocumentRequestActionOptions = {
   isAdmin: boolean;
@@ -23,7 +30,7 @@ type SupplierDocumentRequestActionOptions = {
   total: number;
   submittedKeyword: string;
   requestConfirmation: RequestConfirmation;
-  loadRows: (page: number, pageSize: number, keyword: string, options?: { silent?: boolean }) => Promise<SupplierDocumentTask[]>;
+  loadRows: (page: number, pageSize: number, keyword: string, options?: SupplierDocumentLoadRowsOptions) => Promise<SupplierDocumentTask[]>;
   loadTaskDetail: (taskId: string, options?: { silent?: boolean; force?: boolean }) => Promise<SupplierDocumentTask | null>;
   loadStats: (keyword?: string, options?: { silent?: boolean }) => Promise<void>;
   onRefreshTodos?: () => void | Promise<void>;
@@ -91,6 +98,10 @@ export function useSupplierDocumentRequestActions({
     };
   }
 
+  function currentListView(): SupplierDocumentListView {
+    return { page, pageSize, keyword: submittedKeyword };
+  }
+
   function mergeRequestRow(request: SupplierDocumentTask | null | undefined) {
     if (!request?.id) return false;
     const shouldShow = requestMatchesSubmittedKeyword(request);
@@ -135,6 +146,10 @@ export function useSupplierDocumentRequestActions({
         return next;
       });
       setNotice(data.message || "上传成功");
+      void loadRows(page, pageSize, submittedKeyword, {
+        silent: true,
+        expectedView: currentListView(),
+      });
       void loadStats(submittedKeyword, { silent: true });
       void loadTaskDetail(task.id, { silent: true, force: true });
     } catch (uploadError) {
@@ -178,11 +193,16 @@ export function useSupplierDocumentRequestActions({
       setRows((current) => current.filter((row) => row.id !== task.id));
       setExpandedTaskId((current) => (current === task.id ? "" : current));
       setTotal((current) => Math.max(0, current - 1));
-      if (task.status !== "已完成") setPendingCount((current) => Math.max(0, current - 1));
+      if (!isSupplierDocumentRequestTerminalStatus(task.status)) {
+        setPendingCount((current) => Math.max(0, current - 1));
+      }
       setNotice("资料回传任务已删除");
       const nextTotal = Math.max(0, total - 1);
       const nextPage = Math.min(page, Math.max(1, Math.ceil(nextTotal / Math.max(pageSize, 1))));
-      void loadRows(nextPage, pageSize, submittedKeyword, { silent: true });
+      void loadRows(nextPage, pageSize, submittedKeyword, {
+        silent: true,
+        expectedView: currentListView(),
+      });
       void loadStats(submittedKeyword, { silent: true });
       void onRefreshTodos?.();
     } catch (deleteError) {
@@ -234,7 +254,7 @@ export function useSupplierDocumentRequestActions({
       setTotal((current) => current + 1);
       if (page !== 1) setPage(1);
     }
-    void loadRows(1, pageSize, submittedKeyword, { silent: true });
+    void loadRows(1, pageSize, submittedKeyword);
     void loadStats(submittedKeyword, { silent: true });
     if (createdId) setExpandedTaskId(createdId);
     if (createdId) void loadTaskDetail(createdId, { silent: true, force: true });

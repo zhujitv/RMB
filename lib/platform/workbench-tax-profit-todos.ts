@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import type { Prisma } from "../generated/prisma/client.js";
-import { orderAccessWhere } from "./order-access";
+import { canAccessOrder, orderAccessWhere } from "./order-access";
 import { canRead } from "./shared-access";
 import {
   ACTIVE_TAX_REFUND_STATUSES,
@@ -14,7 +14,7 @@ import {
   nonEmpty,
   needsTaxRefundCompletenessRefresh,
   cachedTaxRefundCompleteness,
-  refreshTaxRefundCompletenessBatch,
+  refreshTaxRefundCompletenessBatchWithSnapshots,
   summarizeOrder,
   taxRefundStatusFromCompleteness,
   validCost,
@@ -41,6 +41,7 @@ import {
   logisticsBillAccessWhere,
   logisticsOwnerForOrder,
   orderHref,
+  ownerFromUsers,
   paidCostWhere,
   productSupplierPaymentCostWhere,
   roleOwner,
@@ -58,6 +59,7 @@ import {
   type WorkbenchTodo,
   type WorkbenchTodoContext,
 } from "./workbench-todos-core";
+import { forEachTaxRefundTodoPage, isOnlyExportInvoiceMissing } from "./workbench-tax-refund-todo-policy";
 import {
   customsDeclarationUploaded,
   doneSupplierDocumentRequests,
@@ -96,78 +98,110 @@ function normalizedMissingLabels(value: unknown) {
 export async function listTaxRefundTodos(context: WorkbenchTodoContext) {
   const actor = context.actor;
   if (!canRead(actor, "taxRefund") || !(isAdmin(actor) || isSalesperson(actor) || isFinance(actor))) return [];
-  const rows = await prisma.receivableOrder.findMany({
-    where: {
-      deletedAt: null,
-      taxArchived: false,
-      taxRefundStatus: { in: ACTIVE_TAX_REFUND_STATUSES },
-      documents: {
-        some: {
-          deletedAt: null,
-          documentType: "CUSTOMS_ENTRY_FORM",
-          uploadStatus: "SUCCESS",
-          relatedModule: { not: "SUPPLIER" },
-        },
-      },
-      AND: [orderAccessWhere(actor)],
-    },
-    include: {
-      customer: true,
-      salesperson: { select: { id: true, name: true, email: true, role: true } },
-      documents: {
-        where: { deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
-        select: { documentType: true, uploadStatus: true, relatedModule: true, deletedAt: true },
-        take: 5,
-      },
-    },
-    orderBy: [{ updatedAt: "desc" }],
-    take: TODO_LIMIT_PER_SOURCE,
-  });
-  const refreshedById = await refreshTaxRefundCompletenessBatch(
-    rows.filter(needsTaxRefundCompletenessRefresh).map((order) => order.id),
-  );
   const todos: WorkbenchTodo[] = [];
   const owner = roleOwner(context, "FINANCE");
-  for (const order of rows) {
-    const workflowOrder = order as WorkbenchWorkflowOrder;
-    if (!customsDeclarationUploaded(workflowOrder)) continue;
-    const completeness = refreshedById.get(order.id) || cachedTaxRefundCompleteness(order);
-    const total = Number(completeness.total || 0);
-    const completed = Number(completeness.completed || 0);
-    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-    const orderWithCompleteness = refreshedById.has(order.id)
-      ? { ...order, taxRefundCompleteness: completeness }
-      : order;
-    const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
-    if (total > 0 && completed < total) {
-      todos.push(todoForOrder({
-        type: "TAX_REFUND_INCOMPLETE",
-        title: `退税资料完整度不足 100%（${percent}%）`,
-        module: "退税资料",
-        order: orderWithCompleteness,
-        context,
-        href: orderHref("/tax-refund", order),
-        owner,
-        updatedAt: order.updatedAt,
-      }));
-      todos.push(...missingTaxRefundTodos(context, orderWithCompleteness, normalizedMissingLabels(completeness.missingLabels)));
-    } else if (total > 0 && status !== "SUBMITTED" && !order.taxSubmittedAt && !order.taxRefundArchivedAt) {
-      todos.push(todoForOrder({
-        type: "TAX_REFUND_READY_NOT_ARCHIVED",
-        title: "已满足退税条件但未归档",
-        module: "退税资料",
-        order: orderWithCompleteness,
-        context,
-        dueAt: order.taxRefundCompletenessUpdatedAt || order.updatedAt,
-        href: orderHref("/tax-refund", order, {
-          status: "READY",
-          action: "submitTaxArchive",
-        }),
-        owner: taxRefundArchiveOwner(context, orderWithCompleteness),
-        updatedAt: order.updatedAt,
-      }));
-    }
-  }
+  await forEachTaxRefundTodoPage(
+    (cursorId, pageSize) => prisma.receivableOrder.findMany({
+      where: {
+        deletedAt: null,
+        taxArchived: false,
+        taxRefundStatus: { in: ACTIVE_TAX_REFUND_STATUSES },
+        documents: {
+          some: {
+            deletedAt: null,
+            documentType: "CUSTOMS_ENTRY_FORM",
+            uploadStatus: "SUCCESS",
+            relatedModule: { not: "SUPPLIER" },
+          },
+        },
+        AND: [orderAccessWhere(actor)],
+      },
+      include: {
+        customer: true,
+        salesperson: { select: { id: true, name: true, email: true, role: true } },
+        documents: {
+          where: { deletedAt: null, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS" },
+          select: { documentType: true, uploadStatus: true, relatedModule: true, deletedAt: true },
+          take: 5,
+        },
+      },
+      orderBy: { id: "asc" },
+      take: pageSize,
+      ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+    }),
+    async (rows) => {
+      const refreshRequiredOrderIds = rows.filter(needsTaxRefundCompletenessRefresh).map((order) => order.id);
+      const refreshRequiredOrderIdSet = new Set(refreshRequiredOrderIds);
+      const refreshedById = await refreshTaxRefundCompletenessBatchWithSnapshots(refreshRequiredOrderIds);
+      for (const order of rows) {
+        const workflowOrder = order as WorkbenchWorkflowOrder;
+        if (!customsDeclarationUploaded(workflowOrder)) continue;
+        const refreshed = refreshedById.get(order.id);
+        if (refreshRequiredOrderIdSet.has(order.id) && !refreshed) continue;
+        const completeness = refreshed?.completeness || cachedTaxRefundCompleteness(order);
+        const total = Number(completeness.total || 0);
+        const completed = Number(completeness.completed || 0);
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const orderWithCompleteness = refreshed
+          ? {
+              ...order,
+              taxRefundCompleteness: completeness,
+              taxRefundCompletenessUpdatedAt: refreshed.completenessUpdatedAt,
+            }
+          : order;
+        const status = taxRefundStatusFromCompleteness(order.taxRefundStatus, completeness);
+        if (total > 0 && completed < total) {
+          if (isOnlyExportInvoiceMissing(completeness)) {
+            const exportInvoiceOwner = ownerFromUsers(
+              context.taxRefundExportInvoiceFinanceUsers.filter((user) => canAccessOrder(user, orderWithCompleteness)),
+              "财务",
+              "FINANCE",
+            );
+            todos.push(todoForOrder({
+              type: "TAX_EXPORT_INVOICE_MISSING",
+              title: "出口发票待上传",
+              module: "退税资料",
+              order: orderWithCompleteness,
+              context,
+              dueAt: orderWithCompleteness.taxRefundCompletenessUpdatedAt || orderWithCompleteness.updatedAt,
+              href: orderHref("/tax-refund", orderWithCompleteness),
+              owner: exportInvoiceOwner,
+              updatedAt: orderWithCompleteness.updatedAt,
+              visibility: "OWNER_ONLY",
+            }));
+            continue;
+          }
+          todos.push(todoForOrder({
+            type: "TAX_REFUND_INCOMPLETE",
+            title: `退税资料完整度不足 100%（${percent}%）`,
+            module: "退税资料",
+            order: orderWithCompleteness,
+            context,
+            href: orderHref("/tax-refund", orderWithCompleteness),
+            owner,
+            updatedAt: orderWithCompleteness.updatedAt,
+          }));
+          todos.push(...missingTaxRefundTodos(context, orderWithCompleteness, normalizedMissingLabels(completeness.missingLabels)));
+        } else if (total > 0 && status !== "SUBMITTED" && !order.taxSubmittedAt && !order.taxRefundArchivedAt) {
+          todos.push(todoForOrder({
+            type: "TAX_REFUND_READY_NOT_ARCHIVED",
+            title: "已满足退税条件但未归档",
+            module: "退税资料",
+            order: orderWithCompleteness,
+            context,
+            dueAt: orderWithCompleteness.taxRefundCompletenessUpdatedAt || orderWithCompleteness.updatedAt,
+            href: orderHref("/tax-refund", orderWithCompleteness, {
+              status: "READY",
+              action: "submitTaxArchive",
+            }),
+            owner: taxRefundArchiveOwner(context, orderWithCompleteness),
+            updatedAt: orderWithCompleteness.updatedAt,
+          }));
+        }
+      }
+    },
+    TODO_LIMIT_PER_SOURCE,
+  );
   return todos;
 }
 

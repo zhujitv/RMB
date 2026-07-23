@@ -11,7 +11,18 @@ import type {
   SupplierDocumentsStatsResponse,
 } from "./supplier-documents/types";
 import { useSupplierDocumentRequestActions } from "./supplier-documents/use-supplier-document-request-actions";
+import {
+  canApplySupplierDocumentListResponse,
+  canStartSupplierDocumentListRequest,
+  supplierDocumentListView,
+  type SupplierDocumentListView,
+} from "./supplier-documents/supplier-document-list-request-policy";
 import type { User } from "../types";
+
+type SupplierDocumentLoadRowsOptions = {
+  silent?: boolean;
+  expectedView?: SupplierDocumentListView;
+};
 
 export function SupplierDocumentsModule({
   currentUser,
@@ -46,8 +57,9 @@ export function SupplierDocumentsModule({
   const [deletingTaskId, setDeletingTaskId] = useState("");
   const [resendingTaskId, setResendingTaskId] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const loadRowsDataRequestRef = useRef(0);
   const loadRowsVisibleRequestRef = useRef(0);
+  const loadRowsSilentRequestRef = useRef(0);
+  const loadRowsViewRef = useRef<SupplierDocumentListView>(supplierDocumentListView(1, 10, ""));
   const loadStatsRequestRef = useRef(0);
   const loadDetailRequestRef = useRef<Record<string, number>>({});
   const {
@@ -99,12 +111,29 @@ export function SupplierDocumentsModule({
     };
   }
 
-  async function loadRows(nextPage = page, nextPageSize = pageSize, nextKeyword = "", options: { silent?: boolean } = {}) {
-    const dataRequestId = ++loadRowsDataRequestRef.current;
-    const visibleRequestId = options.silent
-      ? loadRowsVisibleRequestRef.current
+  async function loadRows(
+    nextPage = page,
+    nextPageSize = pageSize,
+    nextKeyword = "",
+    options: SupplierDocumentLoadRowsOptions = {},
+  ) {
+    const requestedView = supplierDocumentListView(nextPage, nextPageSize, nextKeyword);
+    const expectedView = options.expectedView
+      ? supplierDocumentListView(options.expectedView.page, options.expectedView.pageSize, options.expectedView.keyword)
+      : null;
+    if (!canStartSupplierDocumentListRequest({
+      silent: Boolean(options.silent),
+      currentView: loadRowsViewRef.current,
+      requestedView,
+      expectedView,
+    })) return [];
+
+    const visibleRequestIdAtStart = loadRowsVisibleRequestRef.current;
+    const requestId = options.silent
+      ? ++loadRowsSilentRequestRef.current
       : ++loadRowsVisibleRequestRef.current;
     if (!options.silent) {
+      loadRowsViewRef.current = requestedView;
       setLoading(true);
       setError("");
       setLoadError("");
@@ -114,7 +143,17 @@ export function SupplierDocumentsModule({
       const params = new URLSearchParams({ page: String(nextPage), pageSize: String(nextPageSize) });
       if (nextKeyword.trim()) params.set("keyword", nextKeyword.trim());
       const data = await apiJson<SupplierDocumentsResponse>(`/api/supplier-document-requests?${params.toString()}`);
-      if (dataRequestId !== loadRowsDataRequestRef.current) return [];
+      if (!canApplySupplierDocumentListResponse({
+        silent: Boolean(options.silent),
+        requestId,
+        latestVisibleRequestId: loadRowsVisibleRequestRef.current,
+        latestSilentRequestId: loadRowsSilentRequestRef.current,
+        visibleRequestIdAtStart,
+        currentView: loadRowsViewRef.current,
+        requestedView,
+        expectedView,
+      })) return [];
+      if (options.silent) loadRowsViewRef.current = requestedView;
       const nextRows = data.requests || [];
       setRows((current) => nextRows.map((row) => mergeListRowWithCachedDetail(row, current.find((item) => item.id === row.id))));
       const pagination = data.pagination || {};
@@ -125,13 +164,13 @@ export function SupplierDocumentsModule({
       return nextRows;
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "读取资料回传任务失败";
-      if (!options.silent && visibleRequestId === loadRowsVisibleRequestRef.current) {
+      if (!options.silent && requestId === loadRowsVisibleRequestRef.current) {
         setError(message);
         setLoadError(message);
       }
       return [];
     } finally {
-      if (!options.silent && visibleRequestId === loadRowsVisibleRequestRef.current) setLoading(false);
+      if (!options.silent && requestId === loadRowsVisibleRequestRef.current) setLoading(false);
     }
   }
 

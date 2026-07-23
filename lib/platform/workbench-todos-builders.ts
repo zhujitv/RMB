@@ -25,13 +25,18 @@ export function todoForOrder(input: {
   ownerName?: string;
   createdAt?: Date | string | null;
   updatedAt?: Date | string | null;
+  visibility?: "DEFAULT" | "OWNER_ONLY";
 }): WorkbenchTodo {
   const dueAt = iso(endOfChinaDay(input.dueAt || null));
   const owner = input.owner || {
     ...salespersonOwner(input.order),
     ownerName: input.ownerName || orderOwnerName(input.order),
   };
-  const visibleToUserIds = input.context ? visibleUserIds(input.context, input.order, owner) : uniqueIds(owner.ownerUserIds || []);
+  const visibleToUserIds = input.visibility === "OWNER_ONLY"
+    ? uniqueIds(owner.ownerUserIds || [owner.ownerUserId])
+    : input.context
+      ? visibleUserIds(input.context, input.order, owner)
+      : uniqueIds(owner.ownerUserIds || []);
   const actorUserId = input.context?.actorUserId || "";
   const ownerUserIds = uniqueIds(owner.ownerUserIds || [owner.ownerUserId]);
   const activationRule = todoActivationRuleForType(input.type);

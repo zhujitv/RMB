@@ -10,6 +10,11 @@ import type { SettingsTabKey } from "./modules/settings/types";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { WorkspaceModuleContent } from "./WorkspaceModuleContent";
 import {
+  parseWorkbenchInternalHref,
+  readWorkbenchDeepLink,
+  removeWorkbenchDeepLink,
+} from "../lib/platform/workbench-deep-link";
+import {
   ALWAYS_ALLOWED_MENUS,
   normalizeWorkspaceMenuKey,
 } from "./workspace-auth-helpers";
@@ -72,39 +77,53 @@ export function WorkspaceShell() {
   }, [activeMenu, allowedMenuKeys, auth.status]);
 
   useEffect(() => {
+    if (auth.status !== "ready") return;
+    const deepLink = readWorkbenchDeepLink(window.location.href);
+    if (!deepLink.present) return;
+    if (deepLink.target) {
+      openWorkbenchHref(`${deepLink.target.pathname}${deepLink.target.search}`);
+    }
+    window.history.replaceState(
+      window.history.state,
+      "",
+      removeWorkbenchDeepLink(window.location.href),
+    );
+  }, [auth.status]);
+
+  useEffect(() => {
     document.title = activeCompanyProfile?.systemName?.trim() || "NEXTWOOD 供应链协同平台";
   }, [activeCompanyProfile?.systemName]);
 
-  function openWorkbenchTodo(todo: WorkbenchTodo) {
-    const href = todo.action?.href || "";
-    const parsed = new URL(href || "/", "https://workspace.local");
+  function openWorkbenchHref(href: string, fallbackOrderNo = "") {
+    const parsed = parseWorkbenchInternalHref(href);
+    if (!parsed) return false;
     const path = parsed.pathname.replace(/^\/+/, "");
-    const keyword = parsed.searchParams.get("keyword") || todo.orderNo || "";
+    const keyword = parsed.searchParams.get("keyword") || fallbackOrderNo;
     const token = Date.now();
     if (path === "orders") {
       setOrdersFocus({ keyword, token });
       setActiveMenu("orders");
-      return;
+      return true;
     }
     if (path === "payments") {
       setPaymentsFocus({ keyword, token });
       setActiveMenu("payments");
-      return;
+      return true;
     }
     if (path === "costs") {
       setCostsFocus({ keyword, token });
       setActiveMenu("costs");
-      return;
+      return true;
     }
     if (path === "profit") {
       setProfitFocus({ keyword, token });
       setActiveMenu("profit");
-      return;
+      return true;
     }
     if (path === "domestic-logistics") {
       setDomesticLogisticsFocus({ keyword, token });
       setActiveMenu("domesticLogistics");
-      return;
+      return true;
     }
     if (path === "customer-communication") {
       setCustomerCommunicationFocus({
@@ -113,12 +132,12 @@ export function WorkspaceShell() {
         token,
       });
       setActiveMenu("customerCommunication");
-      return;
+      return true;
     }
     if (path === "ocean-control-tower") {
       setOceanControlTowerFocus({ keyword, token });
       setActiveMenu("oceanControlTower");
-      return;
+      return true;
     }
     if (path === "logistics-fees") {
       setLogisticsFeesFocus({
@@ -127,7 +146,7 @@ export function WorkspaceShell() {
         token,
       });
       setActiveMenu("logisticsFees");
-      return;
+      return true;
     }
     if (path === "supplier-documents") {
       setSupplierDocumentsFocus({
@@ -136,12 +155,18 @@ export function WorkspaceShell() {
         token,
       });
       setActiveMenu("supplierDocuments");
-      return;
+      return true;
     }
     if (path === "tax-refund") {
       setTaxRefundFocus({ keyword, action: parsed.searchParams.get("action") || "", token });
       setActiveMenu("taxRefund");
+      return true;
     }
+    return false;
+  }
+
+  function openWorkbenchTodo(todo: WorkbenchTodo) {
+    openWorkbenchHref(todo.action?.href || "", todo.orderNo || "");
   }
 
   if (auth.status === "loading") return <LoadingPanel message={auth.message} />;

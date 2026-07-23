@@ -36,6 +36,7 @@ export type ActorLike = {
   role?: string | null;
   supplierId?: string | null;
   customPermissions?: unknown;
+  updatedAt?: Date | string | null;
 } | null | undefined;
 
 export type TodoOrder = {
@@ -101,6 +102,7 @@ export type WorkbenchTodoContext = {
   users: TodoUser[];
   adminUserIds: string[];
   financeUsers: TodoUser[];
+  taxRefundExportInvoiceFinanceUsers: TodoUser[];
   taxRefundArchiveFinanceUsers: TodoUser[];
   taxRefundArchiveConfiguredOwnerUsers: TodoUser[];
   taxRefundArchiveCompanyOwnerUsersByKey: Map<string, TodoUser[]>;

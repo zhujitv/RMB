@@ -43,7 +43,10 @@ const ALL_WORKBENCH_SOURCE_TYPES = [
   "oceanTracking",
 ];
 
-async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResult> {
+async function buildWorkbenchTodos(
+  actor: ActorLike,
+  options: { includeFinanceOnlyTodos?: boolean } = {},
+): Promise<WorkbenchTodosResult> {
   const context = await createWorkbenchTodoContext(actor);
   if (isFinanceWorkbenchActor(actor)) {
     const [taxRefundTodos, completedTodos] = await Promise.all([
@@ -51,9 +54,9 @@ async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResu
       completedTodayTodos(context),
     ]);
     const generatedTodos = uniqueTodos([...taxRefundTodos]);
-    const todos = scopeWorkbenchTodosForActor(actor, generatedTodos.filter(canActivateTodo))
+    const todos = scopeWorkbenchTodosForActor(actor, generatedTodos.filter(canActivateTodo), options)
       .sort(sortWorkbenchTodos);
-    const visibleCompletedTodos = scopeWorkbenchTodosForActor(actor, completedTodos);
+    const visibleCompletedTodos = scopeWorkbenchTodosForActor(actor, completedTodos, options);
     return {
       todos,
       completedTodos: visibleCompletedTodos,
@@ -97,9 +100,9 @@ async function buildWorkbenchTodos(actor: ActorLike): Promise<WorkbenchTodosResu
     ...profitTodos,
     ...oceanTrackingTodos,
   ]);
-  const todos = scopeWorkbenchTodosForActor(actor, generatedTodos.filter(canActivateTodo))
+  const todos = scopeWorkbenchTodosForActor(actor, generatedTodos.filter(canActivateTodo), options)
     .sort(sortWorkbenchTodos);
-  const visibleCompletedTodos = scopeWorkbenchTodosForActor(actor, completedTodos);
+  const visibleCompletedTodos = scopeWorkbenchTodosForActor(actor, completedTodos, options);
   return {
     todos,
     completedTodos: visibleCompletedTodos,
@@ -123,4 +126,8 @@ export async function listWorkbenchTodos(actor: ActorLike, options: { bypassCach
     });
   }
   return value;
+}
+
+export async function listWorkbenchTodosForReminders(actor: ActorLike) {
+  return buildWorkbenchTodos(actor, { includeFinanceOnlyTodos: true });
 }

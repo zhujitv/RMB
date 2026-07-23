@@ -1,9 +1,21 @@
 import { prisma } from "../prisma";
-import { canWrite } from "./shared-access";
-import { COMPANY_PROFILE_SETTING_KEY, getExchangeRateSettings, nonEmpty } from "./shared";
+import { canRead, canWrite } from "./shared-access";
+import { COMPANY_PROFILE_SETTING_KEY, effectivePermissions, getExchangeRateSettings, nonEmpty } from "./shared";
 import type { ActorLike, TodoUser, WorkbenchTodoContext } from "./workbench-todos-types";
 import { WORKBENCH_TAX_REFUND_FINANCE_OWNER_SETTING_KEYS, paymentVoucherReminderStartDateFromSettings } from "./workbench-todos-types";
 import { actorId, taxRefundArchiveCompanyOwnerEntriesFromSetting, taxRefundArchiveOwnerIdsFromSetting, taxRefundArchiveOwnerUsersFromIds, systemCompanyKeysFromProfile } from "./workbench-todos-owners";
+
+export function isTaxRefundExportInvoiceFinanceUser(user: TodoUser) {
+  const permissions = effectivePermissions(user);
+  const dataScope = permissions.dataScope;
+  return user.role === "财务"
+    && permissions.menus.includes("taxRefund")
+    && ["ALL", "OWN"].includes(dataScope)
+    && canRead(user, "orders")
+    && canRead(user, "taxRefund")
+    && canRead(user, "documents")
+    && canWrite(user, "documents");
+}
 
 export async function createWorkbenchTodoContext(actor: ActorLike): Promise<WorkbenchTodoContext> {
   const [users, taxRefundFinanceOwnerSettings, exchangeRateSettings] = await Promise.all([
@@ -39,6 +51,7 @@ export async function createWorkbenchTodoContext(actor: ActorLike): Promise<Work
     usersBySupplierId.set(supplierId, rows);
   }
   const taxRefundArchiveFinanceUsers = users.filter((user) => user.role === "财务" && canWrite(user, "taxRefund"));
+  const taxRefundExportInvoiceFinanceUsers = users.filter(isTaxRefundExportInvoiceFinanceUser);
   const taxRefundOwnerSettings = taxRefundFinanceOwnerSettings
     .filter((setting) => setting.key !== COMPANY_PROFILE_SETTING_KEY);
   const companyProfileSetting = taxRefundFinanceOwnerSettings
@@ -65,6 +78,7 @@ export async function createWorkbenchTodoContext(actor: ActorLike): Promise<Work
     users,
     adminUserIds: users.filter((user) => user.role === "管理员").map((user) => user.id),
     financeUsers: users.filter((user) => user.role === "财务"),
+    taxRefundExportInvoiceFinanceUsers,
     taxRefundArchiveFinanceUsers,
     taxRefundArchiveConfiguredOwnerUsers,
     taxRefundArchiveCompanyOwnerUsersByKey,

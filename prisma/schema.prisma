@@ -764,6 +764,8 @@ model SupplierDocumentRequest {
   @@index([deletedAt])
   @@index([deletedAt, status, dueDate], map: "supplier_document_requests_status_due_idx")
   @@index([deletedAt, supplierId, status], map: "supplier_document_requests_supplier_status_idx")
+  @@index([deletedAt, createdAt(sort: Desc), id(sort: Desc)], map: "supplier_document_requests_rank_created_id_idx")
+  @@index([deletedAt, supplierId, createdAt(sort: Desc), id(sort: Desc)], map: "supplier_document_requests_supplier_rank_created_id_idx")
   @@map("supplier_document_requests")
 }
 

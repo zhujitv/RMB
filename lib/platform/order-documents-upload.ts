@@ -23,12 +23,14 @@ import {
   deleteManagedStoredFile,
   FILE_ASSET_SOURCE_TABLES,
   readManagedUploadFile,
+  refreshTaxRefundCompleteness,
   runNonCriticalTask,
   sanitizeForLog,
   serializeCustomsRecognition,
   serializeOrderDocument,
   softDeleteFileAssetBySource,
   scheduleTaxRefundCompletenessRefresh,
+  invalidatePersistedTaxRefundCompleteness,
   syncCostInvoiceStatus,
   uploadManagedFileToStorage,
   upsertFileAssetForOrderDocument,
@@ -42,6 +44,7 @@ import {
   type AuditRequestLike,
   type OrderDocumentUploadParams,
 } from "./order-documents-types";
+import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
 export async function uploadOrderDocument(request: AuditRequestLike, actor: ActorLike, { orderId, documentType, file, costId = "", supplierId = "", uploadSource = "" }: OrderDocumentUploadParams) {
   assertWrite(actor, "documents");
@@ -135,12 +138,29 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
         }
         replacedCustomsDocumentCount = replaced.count || 0;
       }
+      if (documentType === "EXPORT_INVOICE") {
+        await invalidatePersistedTaxRefundCompleteness(tx, order.id);
+      }
       return created;
     });
   } catch (error: unknown) {
     await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
     const message = error instanceof Error ? error.message : "未知错误";
     throw codedError(`数据库写入失败：${message}`, 500, "DATABASE_WRITE_FAILED");
+  }
+  if (documentType === "EXPORT_INVOICE") {
+    try {
+      await runNonCriticalTask("出口发票上传后退税完整度重算", async () => {
+        const refreshed = await refreshTaxRefundCompleteness(order.id);
+        if (!refreshed) throw new Error("出口发票已上传，但退税完整度重算未完成，将在下次读取时重试");
+        return refreshed;
+      }, { context: { orderId: order.id, documentId: document.id } }).catch((error) => {
+        logServerError("出口发票上传后退税完整度重算任务异常", error, { orderId: order.id, documentId: document.id });
+        return null;
+      });
+    } finally {
+      invalidateWorkbenchTodosCache();
+    }
   }
   await runNonCriticalTask("成本发票状态同步", () => syncCostInvoiceStatus(document.costId));
   const normalizedUploadSource = normalizeUploadSource(uploadSource, relatedModule);
@@ -166,7 +186,7 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   if (["COMMERCIAL_INVOICE", "PACKING_LIST", "CUSTOMS_ENTRY_FORM"].includes(documentType)) {
     await tryAutoShippingDocumentsNotification(request, actor, order.id);
   }
-  scheduleTaxRefundCompletenessRefresh(order.id);
+  if (documentType !== "EXPORT_INVOICE") scheduleTaxRefundCompletenessRefresh(order.id);
   const serializedDocument = serializeOrderDocument(document) as ReturnType<typeof serializeOrderDocument> & {
     customsPdfTextParse?: CustomsDeclarationPdfTextParseResult;
   };

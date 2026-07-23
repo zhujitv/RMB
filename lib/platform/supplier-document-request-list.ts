@@ -4,6 +4,10 @@ import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object
 import { NOTIFICATION_TEMPLATE_TYPES, renderNotificationTemplate, sendNotificationEmail } from "./notification-engine";
 import { safeRefreshSupplierDocumentRequestCompletion } from "./supplier-document-request-completion";
 import {
+  SUPPLIER_DOCUMENT_REQUEST_TERMINAL_STATUSES,
+  supplierDocumentRequestRankingPagePlan,
+} from "./supplier-document-request-ranking";
+import {
   DEFAULT_COMPANY_PROFILE_SETTINGS,
   FACTORY_SUPPLIER_COST_TYPES,
   ORDER_COST_STATUS_VOID,
@@ -128,13 +132,21 @@ function serializeSupplierDocumentRequestListItem(
   };
 }
 
-async function supplierDocumentRequestUploadedCounts(rows: SupplierDocumentRequestListRow[]) {
+type SupplierDocumentRequestListReadClient = Pick<
+  Prisma.TransactionClient,
+  "supplierDocumentRequest" | "orderDocument"
+>;
+
+async function supplierDocumentRequestUploadedCounts(
+  rows: SupplierDocumentRequestListRow[],
+  db: SupplierDocumentRequestListReadClient = prisma,
+) {
   const requestIds = rows.map((row) => row.id).filter(Boolean);
   if (!requestIds.length) return new Map<string, number>();
   const requiredTypesByRequestId = new Map(
     rows.map((row) => [row.id, new Set(requiredDocumentTypes(row.requiredDocumentTypes).map((type) => normalizeSupplierReturnDocumentType(type)))])
   );
-  const uploadedGroups = await prisma.orderDocument.groupBy({
+  const uploadedGroups = await db.orderDocument.groupBy({
     by: ["factoryDocumentRequestId", "documentType"],
     where: {
       factoryDocumentRequestId: { in: requestIds },
@@ -156,39 +168,86 @@ async function supplierDocumentRequestUploadedCounts(rows: SupplierDocumentReque
   return new Map([...uploadedTypesByRequestId.entries()].map(([requestId, uploadedTypes]) => [requestId, uploadedTypes.size]));
 }
 
+function supplierDocumentRequestRankingBucketWhere(
+  where: Prisma.SupplierDocumentRequestWhereInput,
+  actionable: boolean,
+): Prisma.SupplierDocumentRequestWhereInput {
+  const terminalStatuses = [...SUPPLIER_DOCUMENT_REQUEST_TERMINAL_STATUSES];
+  return {
+    AND: [
+      where,
+      actionable
+        ? { status: { notIn: terminalStatuses } }
+        : { status: { in: terminalStatuses } },
+    ],
+  };
+}
+
+async function loadSupplierDocumentRequestPageSegment(
+  db: SupplierDocumentRequestListReadClient,
+  where: Prisma.SupplierDocumentRequestWhereInput,
+  skip: number,
+  take: number,
+): Promise<SupplierDocumentRequestListRow[]> {
+  if (take <= 0) return [];
+  return db.supplierDocumentRequest.findMany({
+    where,
+    select: supplierDocumentRequestListSelect(),
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip,
+    take,
+  });
+}
+
 export async function listSupplierDocumentRequests(query: QueryLike, actor: ActorLike) {
   assertRead(actor, "supplierDocuments");
   const { page, pageSize } = pageParams(query, 10, 50);
   const where = supplierDocumentRequestListWhere(query, actor);
-  const [total, rows] = await Promise.all([
-    prisma.supplierDocumentRequest.count({ where }),
-    prisma.supplierDocumentRequest.findMany({
-      where,
-      select: supplierDocumentRequestListSelect(),
-      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]);
-  const uploadedCounts = await supplierDocumentRequestUploadedCounts(rows);
-  return {
-    ...pageResult(rows.map((row) => serializeSupplierDocumentRequestListItem(row, actor, uploadedCounts.get(row.id) || 0)), total, page, pageSize),
-  };
+  const actionableWhere = supplierDocumentRequestRankingBucketWhere(where, true);
+  const terminalWhere = supplierDocumentRequestRankingBucketWhere(where, false);
+  return prisma.$transaction(async (tx) => {
+    // The bucket boundary must be calculated and read from one snapshot. A request can
+    // move from actionable to terminal while another supplier finishes an upload.
+    const total = await tx.supplierDocumentRequest.count({ where });
+    const actionableCount = await tx.supplierDocumentRequest.count({ where: actionableWhere });
+    const pagePlan = supplierDocumentRequestRankingPagePlan(page, pageSize, actionableCount);
+    const actionableRows = await loadSupplierDocumentRequestPageSegment(
+      tx,
+      actionableWhere,
+      pagePlan.actionable.skip,
+      pagePlan.actionable.take,
+    );
+    const terminalRows = await loadSupplierDocumentRequestPageSegment(
+      tx,
+      terminalWhere,
+      pagePlan.terminal.skip,
+      pagePlan.terminal.take,
+    );
+    const rows = [...actionableRows, ...terminalRows];
+    const uploadedCounts = await supplierDocumentRequestUploadedCounts(rows, tx);
+    return {
+      ...pageResult(rows.map((row) => serializeSupplierDocumentRequestListItem(row, actor, uploadedCounts.get(row.id) || 0)), total, page, pageSize),
+    };
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+    maxWait: 10_000,
+    timeout: 30_000,
+  });
 }
 
 export async function getSupplierDocumentRequestStats(query: QueryLike, actor: ActorLike) {
   assertRead(actor, "supplierDocuments");
   const where = supplierDocumentRequestListWhere(query, actor);
-  const [totalCount, pendingCount] = await Promise.all([
-    prisma.supplierDocumentRequest.count({ where }),
-    prisma.supplierDocumentRequest.count({
-      where: {
-        ...where,
-        status: { not: "已完成" },
-      },
-    }),
-  ]);
-  return { totalCount, pendingCount };
+  const actionableWhere = supplierDocumentRequestRankingBucketWhere(where, true);
+  return prisma.$transaction(async (tx) => {
+    const totalCount = await tx.supplierDocumentRequest.count({ where });
+    const pendingCount = await tx.supplierDocumentRequest.count({ where: actionableWhere });
+    return { totalCount, pendingCount };
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+    maxWait: 10_000,
+    timeout: 15_000,
+  });
 }
 
 export async function getSupplierDocumentRequestDetail(id: string, actor: ActorLike) {

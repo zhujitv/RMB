@@ -46,6 +46,11 @@ test("supplier document request schema links supplier uploads to tax refund docu
   const costUniqueMigration = readFileSync("prisma/migrations/20260705110000_supplier_document_request_cost_unique/migration.sql", "utf8");
   assert.match(costUniqueMigration, /supplier_document_requests_active_cost_unique/);
   assert.match(costUniqueMigration, /WHERE "cost_id" IS NOT NULL[\s\S]*"deleted_at" IS NULL[\s\S]*"status" <> 'DELETED'/);
+  const rankingIndexMigration = readFileSync("prisma/migrations/20260723180000_supplier_document_request_ranking_indexes/migration.sql", "utf8");
+  assert.match(rankingIndexMigration, /supplier_document_requests_rank_created_id_idx/);
+  assert.match(rankingIndexMigration, /"deleted_at", "created_at" DESC, "id" DESC/);
+  assert.match(rankingIndexMigration, /supplier_document_requests_supplier_rank_created_id_idx/);
+  assert.match(rankingIndexMigration, /"deleted_at", "supplier_id", "created_at" DESC, "id" DESC/);
 });
 
 test("supplier document workflow uses existing factory tax document types", () => {
@@ -257,22 +262,34 @@ test("admin can soft delete supplier document requests from the foreground list"
   assert.match(supplierModule, /method: "DELETE"/);
   assert.match(supplierModule, /const nextTotal = Math\.max\(0, total - 1\)/);
   assert.match(supplierModule, /setRows\(\(current\) => current\.filter\(\(row\) => row\.id !== task\.id\)\)/);
-  assert.match(supplierModule, /void loadRows\(nextPage, pageSize, submittedKeyword, \{ silent: true \}\)/);
+  assert.match(supplierModule, /void loadRows\(nextPage, pageSize, submittedKeyword, \{[\s\S]*silent: true,[\s\S]*expectedView: currentListView\(\),[\s\S]*\}\)/);
+  assert.match(supplierModule, /!isSupplierDocumentRequestTerminalStatus\(task\.status\)/);
   assert.match(supplierModule, /void onRefreshTodos\?\.\(\)/);
 });
 
 test("supplier document request list uses server-side pagination", () => {
   const supplierRequestListRoute = readFileSync("app/api/supplier-document-requests/route.ts", "utf8");
   assert.match(service, /const \{ page, pageSize \} = pageParams\(query, 10, 50\)/);
-  assert.match(service, /prisma\.supplierDocumentRequest\.count\(\{ where \}\)/);
-  assert.match(service, /skip: \(page - 1\) \* pageSize/);
-  assert.match(service, /take: pageSize/);
+  assert.match(service, /prisma\.\$transaction\(async \(tx\) =>/);
+  assert.match(service, /tx\.supplierDocumentRequest\.count\(\{ where \}\)/);
+  assert.match(service, /supplierDocumentRequestRankingBucketWhere\(where, true\)/);
+  assert.match(service, /supplierDocumentRequestRankingBucketWhere\(where, false\)/);
+  assert.match(service, /status: \{ notIn: terminalStatuses \}/);
+  assert.match(service, /status: \{ in: terminalStatuses \}/);
+  assert.match(service, /supplierDocumentRequestRankingPagePlan\(page, pageSize, actionableCount\)/);
+  assert.match(service, /const rows = \[\.\.\.actionableRows, \.\.\.terminalRows\]/);
+  assert.match(service, /orderBy: \[\{ createdAt: "desc" \}, \{ id: "desc" \}\]/);
+  assert.match(service, /tx\.supplierDocumentRequest\.count\(\{ where: actionableWhere \}\)/);
+  assert.match(service, /loadSupplierDocumentRequestPageSegment\([\s\S]*tx,[\s\S]*actionableWhere/);
+  assert.match(service, /loadSupplierDocumentRequestPageSegment\([\s\S]*tx,[\s\S]*terminalWhere/);
+  assert.match(service, /supplierDocumentRequestUploadedCounts\(rows, tx\)/);
+  assert.match(service, /isolationLevel: Prisma\.TransactionIsolationLevel\.RepeatableRead/);
   assert.match(service, /select: supplierDocumentRequestListSelect\(\)/);
   assert.match(service, /purchaseOrderNo: true/);
   assert.match(service, /purchaseOrderNo: row\.purchaseOrderNo \|\| ""/);
   assert.match(service, /purchaseOrderNo: \{ contains: keyword, mode: "insensitive" \}/);
   assert.match(service, /purchaseOrderNo: order\.orderNo \|\| order\.id/);
-  assert.match(service, /supplierDocumentRequestUploadedCounts\(rows\)/);
+  assert.match(service, /supplierDocumentRequestUploadedCounts\(rows, tx\)/);
   assert.match(service, /serializeSupplierDocumentRequestListItem\(row, actor, uploadedCounts\.get\(row\.id\) \|\| 0\)/);
   assert.doesNotMatch(service, /rowsWithOcr/);
   assert.doesNotMatch(service, /take: 100/);
@@ -291,7 +308,13 @@ test("supplier document request list uses server-side pagination", () => {
   assert.doesNotMatch(supplierModule, /setStatsTotalCount\(0\)/);
   assert.match(supplierModule, /statsError \? "加载失败" : statsLoading \? "加载中\.\.\." : statsTotalCount/);
   assert.match(supplierModule, /total=\{total\}/);
-  assert.match(supplierModule, /async function loadRows\(nextPage = page, nextPageSize = pageSize, nextKeyword = "", options: \{ silent\?: boolean \} = \{\}\)/);
+  assert.match(supplierModule, /options: SupplierDocumentLoadRowsOptions = \{\}/);
+  assert.match(supplierModule, /const loadRowsSilentRequestRef = useRef\(0\)/);
+  assert.match(supplierModule, /const loadRowsViewRef = useRef<SupplierDocumentListView>/);
+  assert.doesNotMatch(supplierModule, /loadRowsDataRequestRef/);
+  assert.match(supplierModule, /canStartSupplierDocumentListRequest/);
+  assert.match(supplierModule, /canApplySupplierDocumentListResponse/);
+  assert.match(supplierModule, /visibleRequestIdAtStart/);
   assert.match(supplierModule, /if \(!options\.silent\) \{[\s\S]*setLoading\(true\);[\s\S]*setError\(""\);[\s\S]*setLoadError\(""\);[\s\S]*\}/);
   assert.match(supplierModule, /const \[submittedKeyword, setSubmittedKeyword\] = useState\(""\)/);
   assert.match(supplierModule, /setSubmittedKeyword\(nextKeyword\)/);
@@ -304,6 +327,7 @@ test("supplier document request list uses server-side pagination", () => {
   assert.match(requestMatcherSnippet, /currentUser(?:\.role|Role) === "产品供应商" \? "" : request\.supplierName/);
   assert.doesNotMatch(requestMatcherSnippet, /factoryCostText|requiredDocumentLabels|requiredDocumentTypes|templateFileName|request\.status|request\.message/);
   assert.match(supplierModule, /const shouldShowCreatedRequest = result\.request\?\.id \? mergeRequestRow\(result\.request\) : false/);
+  assert.match(supplierModule, /void loadRows\(page, pageSize, submittedKeyword, \{[\s\S]*silent: true,[\s\S]*expectedView: currentListView\(\),[\s\S]*\}\)/);
   assert.doesNotMatch(supplierModule, /rows\.slice\(start, start \+ pageSize\)/);
 });
 

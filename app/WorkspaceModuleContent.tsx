@@ -171,6 +171,7 @@ export function WorkspaceModuleContent({
         initialKeyword={taxRefundFocus.keyword}
         initialAction={taxRefundFocus.action}
         initialOpenToken={taxRefundFocus.token}
+        onRefreshTodos={() => loadWorkbenchTodos({ refresh: true })}
         onOpenDomesticLogistics={(keyword) => {
           setDomesticLogisticsFocus({ keyword, token: Date.now() });
           setActiveMenu("domesticLogistics");

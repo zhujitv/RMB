@@ -187,6 +187,11 @@ export const WORKBENCH_TODO_ACTIVATION_RULES: Record<string, WorkbenchTodoActiva
     prerequisiteStage: "CUSTOMS_DOCUMENT_UPLOADED",
     activationCondition: "customs declaration document exists AND tax refund record is active AND completeness < 100",
   },
+  TAX_EXPORT_INVOICE_MISSING: {
+    flowStage: "TAX_REFUND_READY",
+    prerequisiteStage: "CUSTOMS_DOCUMENT_UPLOADED",
+    activationCondition: "tax refund record is active AND export invoice is the only missing document",
+  },
   TAX_TRUCKING_INVOICE_MISSING: {
     flowStage: "TAX_REFUND_READY",
     prerequisiteStage: "LOGISTICS_COST_AUDITED",

@@ -106,19 +106,23 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /FINANCE_WORKBENCH_REMINDER_TODO_TYPES = new Set\(\[/);
   assert.match(workbenchSource, /"TAX_REFUND_READY_NOT_ARCHIVED"/);
   assert.match(workbenchSource, /"TAX_REFUND_ARCHIVED"/);
+  assert.match(workbenchSource, /"TAX_EXPORT_INVOICE_MISSING"/);
   assert.match(workbenchSource, /function isFinanceWorkbenchActor/);
   assert.match(workbenchSource, /function scopeWorkbenchTodosForActor/);
-  assert.match(workbenchSource, /if \(!isFinanceWorkbenchActor\(actor\)\) return todos/);
+  assert.match(workbenchSource, /function isFinanceOnlyWorkbenchTodoType/);
+  assert.match(workbenchSource, /includeFinanceOnlyTodos/);
   assert.match(workbenchSource, /if \(isFinanceWorkbenchActor\(actor\)\) \{/);
   assert.match(workbenchSource, /sourceTypes: \["taxRefund"\]/);
   assert.match(workbenchSource, /const taxRefundArchivedBatch = taxRefundArchivedTodosBatch\(context, today, tomorrow\)/);
   assert.match(workbenchSource, /if \(isFinanceWorkbenchActor\(actor\)\) \{[\s\S]*taxRefundArchivedBatch \? \[taxRefundArchivedBatch\] : \[\]/);
-  assert.match(workbenchSource, /scopeWorkbenchTodosForActor\(actor, generatedTodos\.filter\(canActivateTodo\)\)/);
+  assert.match(workbenchSource, /scopeWorkbenchTodosForActor\(actor, generatedTodos\.filter\(canActivateTodo\), options\)/);
+  assert.match(workbenchSource, /listWorkbenchTodosForReminders/);
   assert.match(workbenchSource, /flowStage: activationRule\.flowStage/);
   assert.match(workbenchSource, /prerequisiteStage: activationRule\.prerequisiteStage \|\| null/);
   assert.match(workbenchSource, /activationCondition: activationRule\.activationCondition/);
   assert.match(workbenchSource, /status: input\.status \|\| "ACTIVE"/);
   assert.match(workbenchRules.WORKBENCH_TODO_ACTIVATION_RULES.LOGISTICS_INVOICE_UPLOAD.activationCondition, /invoiceStatus is waiting for upload/);
+  assert.match(workbenchRules.WORKBENCH_TODO_ACTIVATION_RULES.TAX_EXPORT_INVOICE_MISSING.activationCondition, /export invoice is the only missing document/);
   assert.equal(workbenchRules.canActivateTodo({ status: "ACTIVE" }), true);
   assert.equal(workbenchRules.canActivateTodo({ status: "BLOCKED" }), false);
   assert.equal(workbenchRules.canActivateTodo({ status: "DRAFT" }), false);
@@ -194,6 +198,9 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /documents: \{[\s\S]*some: \{[\s\S]*documentType: "CUSTOMS_ENTRY_FORM"[\s\S]*uploadStatus: "SUCCESS"/);
   assert.match(workbenchSource, /customsDeclarationUploaded\(workflowOrder\)/);
   assert.doesNotMatch(missingTaxRefundTodosSource, /TAX_CUSTOMS_DECLARATION_MISSING/);
+  assert.match(workbenchSource, /isOnlyExportInvoiceMissing\(completeness\)/);
+  assert.match(workbenchSource, /taxRefundExportInvoiceFinanceUsers\.filter\(\(user\) => canAccessOrder\(user, orderWithCompleteness\)\)/);
+  assert.match(workbenchSource, /type: "TAX_EXPORT_INVOICE_MISSING"[\s\S]*title: "出口发票待上传"[\s\S]*dueAt: orderWithCompleteness\.taxRefundCompletenessUpdatedAt \|\| orderWithCompleteness\.updatedAt[\s\S]*visibility: "OWNER_ONLY"/);
   assert.match(workbenchSource, /supplierDocumentBlockedOrderIds\.has\(order\.id\)/);
   assert.match(workbenchSource, /supplierDocumentBlockedOrderIds\.has\(order\.id\) \|\| !doneSupplierDocumentRequests\(workflowOrder\)/);
   assert.match(workbenchSource, /summary\.commissionCanSettle && taxFinalized/);
@@ -210,21 +217,37 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /sourceTypes:[\s\S]*"payments"[\s\S]*"factoryPayments"[\s\S]*"profit"[\s\S]*"oceanTracking"/);
 });
 
-test("finance workbench policy only allows tax archive reminders", () => {
+test("finance workbench policy isolates the export invoice todo", () => {
+  const exportInvoiceTodo = { type: "TAX_EXPORT_INVOICE_MISSING", ownerUserIds: ["finance-1"] };
   const taxArchiveTodo = { type: "TAX_REFUND_READY_NOT_ARCHIVED" };
   const taxArchiveDoneTodo = { type: "TAX_REFUND_ARCHIVED" };
   const logisticsPaymentTodo = { type: "LOGISTICS_PAYMENT_REGISTER" };
-  const financeActor = { role: "财务" };
+  const financeActor = { id: "finance-1", role: "财务" };
+  const financeWithoutAccess = { id: "finance-denied", role: "财务" };
   const adminActor = { role: "管理员" };
 
   assert.deepEqual(
-    workbenchTodoPolicy.scopeWorkbenchTodosForActor(financeActor, [taxArchiveTodo, taxArchiveDoneTodo, logisticsPaymentTodo]),
-    [taxArchiveTodo, taxArchiveDoneTodo],
+    workbenchTodoPolicy.scopeWorkbenchTodosForActor(financeActor, [exportInvoiceTodo, taxArchiveTodo, taxArchiveDoneTodo, logisticsPaymentTodo]),
+    [exportInvoiceTodo, taxArchiveTodo, taxArchiveDoneTodo],
   );
   assert.deepEqual(
-    workbenchTodoPolicy.scopeWorkbenchTodosForActor(adminActor, [taxArchiveTodo, logisticsPaymentTodo]),
+    workbenchTodoPolicy.scopeWorkbenchTodosForActor(financeWithoutAccess, [exportInvoiceTodo, taxArchiveTodo]),
+    [taxArchiveTodo],
+  );
+  assert.deepEqual(
+    workbenchTodoPolicy.scopeWorkbenchTodosForActor(adminActor, [exportInvoiceTodo, taxArchiveTodo, logisticsPaymentTodo]),
     [taxArchiveTodo, logisticsPaymentTodo],
   );
+  assert.deepEqual(
+    workbenchTodoPolicy.scopeWorkbenchTodosForActor(
+      adminActor,
+      [exportInvoiceTodo, taxArchiveTodo],
+      { includeFinanceOnlyTodos: true },
+    ),
+    [exportInvoiceTodo, taxArchiveTodo],
+  );
+  assert.equal(workbenchTodoPolicy.canReceiveWorkbenchTodoReminder({ role: "财务" }, exportInvoiceTodo), true);
+  assert.equal(workbenchTodoPolicy.canReceiveWorkbenchTodoReminder({ role: "管理员" }, exportInvoiceTodo), false);
   assert.equal(workbenchTodoPolicy.canReceiveWorkbenchTodoReminder({ role: "财务" }, taxArchiveTodo), true);
   assert.equal(workbenchTodoPolicy.canReceiveWorkbenchTodoReminder({ role: "财务" }, taxArchiveDoneTodo), false);
   assert.equal(workbenchTodoPolicy.canReceiveWorkbenchTodoReminder({ role: "财务" }, logisticsPaymentTodo), false);
@@ -232,22 +255,27 @@ test("finance workbench policy only allows tax archive reminders", () => {
 });
 
 test("finance-blocked overdue reminders are reassigned to admins", () => {
+  const exportInvoiceTodo = { id: "todo-export-invoice", type: "TAX_EXPORT_INVOICE_MISSING" };
   const taxArchiveTodo = { id: "todo-tax", type: "TAX_REFUND_READY_NOT_ARCHIVED" };
   const logisticsPaymentTodo = { id: "todo-logistics-pay", type: "LOGISTICS_PAYMENT_REGISTER" };
   const owners = [
     { id: "finance-1", role: "财务", email: "finance@example.com" },
+    { id: "finance-2", role: "财务", email: "finance-2@example.com" },
     { id: "admin-1", role: "管理员", email: "admin@example.com" },
     { id: "admin-2", role: "管理员", email: "" },
   ];
 
   const plan = workbenchTodoPolicy.planWorkbenchTodoReminderTargets([
+    { todo: exportInvoiceTodo, overdueDays: 8, ownerUserId: "finance-1" },
+    { todo: exportInvoiceTodo, overdueDays: 8, ownerUserId: "finance-2" },
+    { todo: exportInvoiceTodo, overdueDays: 8, ownerUserId: "admin-1" },
     { todo: taxArchiveTodo, overdueDays: 6, ownerUserId: "finance-1" },
     { todo: logisticsPaymentTodo, overdueDays: 7, ownerUserId: "finance-1" },
   ], owners);
 
   assert.deepEqual(
     plan.policySkippedTodoOwners.map((item) => `${item.todo.id}:${item.ownerUserId}`),
-    ["todo-logistics-pay:finance-1"],
+    ["todo-export-invoice:admin-1", "todo-logistics-pay:finance-1"],
   );
   assert.deepEqual(
     plan.adminFallbackTodoOwners.map((item) => `${item.todo.id}:${item.ownerUserId}`),
@@ -255,7 +283,7 @@ test("finance-blocked overdue reminders are reassigned to admins", () => {
   );
   assert.deepEqual(
     plan.eligibleTodoOwners.map((item) => `${item.todo.id}:${item.ownerUserId}`),
-    ["todo-tax:finance-1", "todo-logistics-pay:admin-1", "todo-logistics-pay:admin-2"],
+    ["todo-export-invoice:finance-1", "todo-export-invoice:finance-2", "todo-tax:finance-1", "todo-logistics-pay:admin-1", "todo-logistics-pay:admin-2"],
   );
 
   const noAdminPlan = workbenchTodoPolicy.planWorkbenchTodoReminderTargets([
@@ -291,7 +319,7 @@ test("workbench todos distinguish ownership from visibility", () => {
   assert.match(workbenchSource, /owner: taxRefundArchiveOwner\(context, orderWithCompleteness\)/);
   assert.match(workbenchSource, /owner: taxRefundArchiveOwner\(context, order\)/);
   assert.match(workbenchSource, /type: "TAX_REFUND_READY_NOT_ARCHIVED"[\s\S]*title: "已满足退税条件但未归档"[\s\S]*module: "退税资料"/);
-  assert.match(workbenchSource, /dueAt: order\.taxRefundCompletenessUpdatedAt \|\| order\.updatedAt/);
+  assert.match(workbenchSource, /dueAt: orderWithCompleteness\.taxRefundCompletenessUpdatedAt \|\| orderWithCompleteness\.updatedAt/);
   assert.match(workbenchSource, /status: "READY"[\s\S]*action: "submitTaxArchive"/);
   assert.match(workbenchSource, /isMine: Boolean\(actorUserId && \(owner\.ownerUserId === actorUserId \|\| \(owner\.ownerUserIds \|\| \[\]\)\.includes\(actorUserId\)\)\)/);
 });
@@ -301,10 +329,10 @@ test("workbench overdue reminder cron sends one email per owner per day", () => 
   assert.match(schema, /@@unique\(\[todoId, ownerUserId, reminderDate\]/);
   assert.match(overdueRoute, /assertCronSecret\(request\)/);
   assert.match(overdueRoute, /sendOverdueWorkbenchTodoReminders\(actor\)/);
-  assert.match(reminderSource, /listWorkbenchTodos\(actor\)/);
+  assert.match(reminderSource, /listWorkbenchTodosForReminders\(actor\)/);
   assert.match(reminderSource, /todo\.status === "ACTIVE"/);
   assert.match(reminderSource, /overdueDays > OVERDUE_REMINDER_DAYS/);
-  assert.match(reminderSource, /MULTI_OWNER_REMINDER_TODO_TYPES = new Set\(\["TAX_REFUND_READY_NOT_ARCHIVED"\]\)/);
+  assert.match(reminderSource, /MULTI_OWNER_REMINDER_TODO_TYPES = new Set\(\[[\s\S]*"TAX_EXPORT_INVOICE_MISSING"[\s\S]*"TAX_REFUND_READY_NOT_ARCHIVED"/);
   assert.match(reminderSource, /function reminderOwnerUserIds\(todo: WorkbenchTodo\)/);
   assert.match(reminderSource, /reminderOwnerUserIds\(todo\)\.map\(\(ownerUserId\) => \(\{ todo, overdueDays, ownerUserId \}\)\)/);
   assert.match(reminderSource, /const \[ownerUsers, adminUsers\] = await Promise\.all/);
@@ -319,16 +347,19 @@ test("workbench overdue reminder cron sends one email per owner per day", () => 
   assert.match(workbenchSource, /const directEligibleTodoOwners = overdueTodoOwners\.filter/);
   assert.match(workbenchSource, /const policySkippedTodoOwners = overdueTodoOwners\.filter/);
   assert.match(workbenchSource, /const adminFallbackTodoOwners = uniqueReminderCandidates/);
+  assert.match(workbenchSource, /filter\(\(\{ todo \}\) => !isFinanceOnlyWorkbenchTodoType\(todo\.type\)\)/);
   assert.match(reminderSource, /policySkipped: policySkippedTodoOwners\.length/);
   assert.match(reminderSource, /adminFallback: adminFallbackTodoOwners\.length/);
   assert.match(reminderSource, /skipped: 0/);
   assert.match(workbenchSource, /canReceiveWorkbenchTodoReminder\(owner, todo\)/);
   assert.match(reminderSource, /const adminFallbackTodoIds = new Set/);
-  assert.match(reminderSource, /财务只接收退税归档逾期提醒，已转交管理员处理/);
-  assert.match(reminderSource, /财务只接收退税归档逾期提醒，未找到可接收的管理员账号/);
+  assert.match(reminderSource, /财务只接收退税归档及出口发票待上传逾期提醒，已转交管理员处理/);
+  assert.match(reminderSource, /财务只接收退税归档及出口发票待上传逾期提醒，未找到可接收的管理员账号/);
+  assert.match(reminderSource, /该待办仅通知财务，已跳过非财务接收人/);
   assert.match(reminderSource, /const errorMessage = policySkippedMessage\(todo\)/);
   assert.match(reminderSource, /todoId_ownerUserId_reminderDate/);
   assert.match(reminderSource, /sendNotificationEmail/);
+  assert.match(reminderSource, /ignoreTemplateCc: isFinanceOnlyWorkbenchTodoType\(todo\.type\)/);
   assert.match(reminderSource, /WORKBENCH_TODO_OVERDUE/);
   assert.match(reminderSource, /emailStatus: "SKIPPED"/);
   assert.match(notificationEngineSource, /【NEXTWOOD ERP】待办事项已逾期超过 5 天/);

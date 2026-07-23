@@ -13,12 +13,18 @@ export type ReminderCandidate<T extends Pick<WorkbenchTodo, "id" | "type"> = Wor
 };
 
 const FINANCE_WORKBENCH_DISPLAY_TODO_TYPES = new Set([
+  "TAX_EXPORT_INVOICE_MISSING",
   "TAX_REFUND_READY_NOT_ARCHIVED",
   "TAX_REFUND_ARCHIVED",
 ]);
 
 const FINANCE_WORKBENCH_REMINDER_TODO_TYPES = new Set([
+  "TAX_EXPORT_INVOICE_MISSING",
   "TAX_REFUND_READY_NOT_ARCHIVED",
+]);
+
+const FINANCE_ONLY_WORKBENCH_TODO_TYPES = new Set([
+  "TAX_EXPORT_INVOICE_MISSING",
 ]);
 
 function roleText(value: unknown) {
@@ -37,12 +43,28 @@ export function isFinanceWorkbenchReminderTodoType(type: unknown) {
   return FINANCE_WORKBENCH_REMINDER_TODO_TYPES.has(roleText(type));
 }
 
-export function scopeWorkbenchTodosForActor<T extends { type?: string | null }>(actor: ActorLike, todos: T[]) {
-  if (!isFinanceWorkbenchActor(actor)) return todos;
-  return todos.filter((todo) => isFinanceWorkbenchDisplayTodoType(todo.type));
+export function isFinanceOnlyWorkbenchTodoType(type: unknown) {
+  return FINANCE_ONLY_WORKBENCH_TODO_TYPES.has(roleText(type));
+}
+
+export function scopeWorkbenchTodosForActor<T extends { type?: string | null; ownerUserIds?: string[] | null }>(
+  actor: ActorLike,
+  todos: T[],
+  options: { includeFinanceOnlyTodos?: boolean } = {},
+) {
+  if (isFinanceWorkbenchActor(actor)) {
+    const actorUserId = roleText(actor?.id);
+    return todos.filter((todo) => (
+      isFinanceWorkbenchDisplayTodoType(todo.type)
+      && (!isFinanceOnlyWorkbenchTodoType(todo.type) || Boolean(actorUserId && todo.ownerUserIds?.includes(actorUserId)))
+    ));
+  }
+  if (options.includeFinanceOnlyTodos) return todos;
+  return todos.filter((todo) => !isFinanceOnlyWorkbenchTodoType(todo.type));
 }
 
 export function canReceiveWorkbenchTodoReminder(recipient: Pick<TodoUser, "role"> | null | undefined, todo: Pick<WorkbenchTodo, "type">) {
+  if (isFinanceOnlyWorkbenchTodoType(todo.type)) return roleText(recipient?.role) === "财务";
   if (roleText(recipient?.role) !== "财务") return true;
   return isFinanceWorkbenchReminderTodoType(todo.type);
 }
@@ -73,9 +95,11 @@ export function planWorkbenchTodoReminderTargets<T extends Pick<WorkbenchTodo, "
     const owner = ownerById.get(roleText(ownerUserId));
     return !canReceiveWorkbenchTodoReminder(owner, todo);
   });
-  const adminFallbackTodoOwners = uniqueReminderCandidates(policySkippedTodoOwners.flatMap(({ todo, overdueDays }) => (
-    adminOwners.map((owner) => ({ todo, overdueDays, ownerUserId: owner.id }))
-  )));
+  const adminFallbackTodoOwners = uniqueReminderCandidates(policySkippedTodoOwners
+    .filter(({ todo }) => !isFinanceOnlyWorkbenchTodoType(todo.type))
+    .flatMap(({ todo, overdueDays }) => (
+      adminOwners.map((owner) => ({ todo, overdueDays, ownerUserId: owner.id }))
+    )));
   return {
     ownerById,
     policySkippedTodoOwners,
