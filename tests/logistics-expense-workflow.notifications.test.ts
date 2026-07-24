@@ -104,7 +104,8 @@ test("approved logistics expenses notify supplier contacts without coupling emai
 	assert.match(reviewLogisticsExpenseBillsFunctionSource, /options\.deferSideEffects\(async \(\) => \{[\s\S]*await processDurableSideEffects\(\);[\s\S]*\}\)/);
 	assert.doesNotMatch(reviewLogisticsExpenseBillsFunctionSource, /notifyLogisticsSupplierInvoiceBills|scheduleLogisticsExpenseReviewSideEffects/);
 	assert.match(reviewLogisticsExpenseBillsSource, /createLogisticsInvoiceApprovalOutboxIntents\(tx, rows, actorId\(actor\), now\)/);
-	assert.match(reviewLogisticsExpenseBillsSource, /await writeAudit\(request, actor, "审核通过物流费用账单"[\s\S]*notificationOutboxId:[\s\S]*\}, tx\)/);
+	assert.match(reviewLogisticsExpenseBillsSource, /const auditEntries: LogisticsExpenseApprovalAuditEntry\[\][\s\S]*notificationOutboxId:/);
+	assert.match(reviewLogisticsExpenseBillsFunctionSource, /approvalAuditEntries\.push\(\.\.\.\(approval\?\.auditEntries \|\| \[\]\)\)[\s\S]*runNonCriticalTask\([\s\S]*"物流费用审核日志写入"[\s\S]*writeAudit\(request, actor, "审核通过物流费用账单"/);
 	assert.match(logisticsInvoiceNotificationOutboxSource, /LOGISTICS_INVOICE_APPROVAL_OUTBOX_PREFIX = "logistics-invoice-approval:"/);
 	assert.match(logisticsInvoiceNotificationOutboxSource, /return `\$\{LOGISTICS_INVOICE_APPROVAL_OUTBOX_PREFIX\}\$\{nonEmpty\(billId\)\}:\$\{approvedAtIso\}`/);
 	assert.match(logisticsInvoiceNotificationOutboxSource, /tx\.notificationOutbox\.createMany\(\{ data: intents, skipDuplicates: true \}\)/);

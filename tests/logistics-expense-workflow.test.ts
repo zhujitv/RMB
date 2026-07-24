@@ -196,13 +196,11 @@ test("logistics review pushes costs and notifies invoice upload after approval",
   assert.match(reviewLogisticsExpenseBillsSource, /const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents\(tx, rows, actorId\(actor\), now\)/);
   assert.match(reviewLogisticsExpenseBillsSource, /rows\.length !== expectedRowCount[\s\S]*rowsByBillId\.size !== ids\.length[\s\S]*LOGISTICS_BILL_ROWS_INCOMPLETE/);
   assert.match(reviewLogisticsExpenseBillsSource, /outboxIntents\.length !== ids\.length[\s\S]*LOGISTICS_INVOICE_OUTBOX_INCOMPLETE/);
-  assert.match(
-    reviewLogisticsExpenseBillsSource,
-    /await writeAudit\(request, actor, "审核通过物流费用账单"[\s\S]*notificationOutboxId:[\s\S]*\}, tx\)/,
-  );
+  assert.match(reviewLogisticsExpenseBillsSource, /const auditEntries: LogisticsExpenseApprovalAuditEntry\[\][\s\S]*notificationOutboxId:/);
+  assert.match(reviewLogisticsExpenseBillsFunctionSource, /approvalAuditEntries\.push\(\.\.\.\(approval\?\.auditEntries \|\| \[\]\)\)[\s\S]*"物流费用审核日志写入"[\s\S]*writeAudit\(request, actor, "审核通过物流费用账单"/);
   assert.match(
     approveLogisticsExpenseBillRowsSource,
-    /const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents\(tx, savedRows, actorId\(actor\), now\)[\s\S]*await writeAudit\(request, actor, "审核通过物流费用账单"[\s\S]*notificationOutboxId: outboxIntents\[0\]\?\.id[\s\S]*\}, tx\)[\s\S]*return \{ outboxIntents, costLinks \}/,
+    /const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents\(tx, savedRows, actorId\(actor\), now\)[\s\S]*const auditEntries: LogisticsExpenseApprovalAuditEntry\[\][\s\S]*notificationOutboxId: outboxIntents\[0\]\?\.id[\s\S]*return \{ outboxIntents, costLinks, auditEntries \}/,
   );
   assert.match(reviewLogisticsExpenseBillsFunctionSource, /notificationOutboxKeys\.push\(\.\.\.outboxIntents\.map/);
   assert.match(reviewLogisticsExpenseBillsFunctionSource, /processLogisticsInvoiceNotificationOutbox/);

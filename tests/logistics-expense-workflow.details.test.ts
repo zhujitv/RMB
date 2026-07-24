@@ -343,7 +343,8 @@ test("logistics paid button is locked by bill state machine", () => {
   assert.match(reverseLogisticsExpensePaymentSource, /bill: serializeLogisticsExpenseBill\(savedRows\)/);
   assert.match(reverseLogisticsExpensePaymentSource, /const serializedExpenses = savedRows\.map\(serializeLogisticsExpense\)/);
   assert.match(reverseLogisticsExpensePaymentSource, /expenses: serializedExpenses/);
-  assert.match(updateLogisticsExpensePaymentStatusSource, /const finalRows = Array\.isArray\(reloadedRows\)[\s\S]*bill: serializeLogisticsExpenseBill\(finalRows\)/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /void runNonCriticalTask\("物流付款状态日志写入"[\s\S]*const serializedExpenses = savedRows\.map\(serializeLogisticsExpense\)[\s\S]*bill: serializeLogisticsExpenseBill\(savedRows\)/);
+  assert.doesNotMatch(updateLogisticsExpensePaymentStatusSource, /物流付款提交后重新读取账单/);
   assert.match(updateLogisticsExpensePaymentStatusSource, /expenses: serializedExpenses/);
   assert.match(backend, /costConfirmedAt: existing\.costConfirmedAt \|\| confirmedAt/);
   assert.match(logisticsFeesShared, /text\.includes\("部分"\)[\s\S]*text\.includes\("已付款"\)/);
