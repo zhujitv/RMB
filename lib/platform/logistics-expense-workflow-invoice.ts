@@ -824,17 +824,11 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
     }
     return rows;
   }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
-  await runNonCriticalTask("物流付款状态日志写入", () => writeAudit(request, actor, "更新物流费用付款状态", "logistics_bills", billId, billRows.map(serializeLogisticsExpense), savedRows.map(serializeLogisticsExpense)));
+  void runNonCriticalTask("物流付款状态日志写入", () => writeAudit(request, actor, "更新物流费用付款状态", "logistics_bills", billId, billRows.map(serializeLogisticsExpense), savedRows.map(serializeLogisticsExpense)), { context: { billId } });
   invalidateWorkbenchTodosCache();
-  const reloadedRows = await runNonCriticalTask(
-    "物流付款提交后重新读取账单",
-    () => loadLogisticsExpenseBillRowsForAction(billId, actor),
-    { context: { billId } },
-  );
-  const finalRows = Array.isArray(reloadedRows) && reloadedRows.length ? reloadedRows : savedRows;
-  const serializedExpenses = finalRows.map(serializeLogisticsExpense);
+  const serializedExpenses = savedRows.map(serializeLogisticsExpense);
   return {
-    bill: serializeLogisticsExpenseBill(finalRows),
+    bill: serializeLogisticsExpenseBill(savedRows),
     expenses: serializedExpenses,
     expense: serializedExpenses.find((row) => row.id === before.id) || serializedExpenses[0] || null,
   };

@@ -44,14 +44,23 @@ export async function refreshLogisticsBillWorkflowStatus(rows: LogisticsExpenseR
 }
 
 export async function lockLogisticsBillForWorkflow(tx: Prisma.TransactionClient, billId: string) {
-  const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT "id"
-    FROM "logistics_bills"
-    WHERE "id" = ${billId}
-      AND "deleted_at" IS NULL
-      AND "status" <> 'voided'
-    FOR UPDATE
-  `);
+  let locked: Array<{ id: string }>;
+  try {
+    locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
+      FROM "logistics_bills"
+      WHERE "id" = ${billId}
+        AND "deleted_at" IS NULL
+        AND "status" <> 'voided'
+      FOR UPDATE NOWAIT
+    `);
+  } catch (error: unknown) {
+    const message = String((error as { message?: string })?.message || "");
+    if (/55P03|could not obtain lock|lock not available/i.test(message)) {
+      throw codedError("该物流费用账单正在由其他人处理，请稍后刷新再试。", 409, "LOGISTICS_BILL_OPERATION_IN_PROGRESS");
+    }
+    throw error;
+  }
   if (locked.length !== 1) {
     throw codedError("物流费用账单状态已变化，请刷新后重试。", 409, "LOGISTICS_BILL_WORKFLOW_LOCK_FAILED");
   }

@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
-import { codedError, nonEmpty, writeAudit } from "./shared";
+import { codedError, nonEmpty } from "./shared";
 import {
   aggregateLogisticsExpenseInvoiceStatus,
   aggregateLogisticsExpenseStatus,
@@ -86,8 +86,14 @@ export function collectLogisticsExpenseReviewBill(rows: LogisticsExpenseRow[] = 
   bills.push({ billId, rows });
 }
 
+export type LogisticsExpenseApprovalAuditEntry = {
+  billId: string;
+  before: { auditStatus: string };
+  after: Record<string, unknown>;
+};
+
 export async function approveLogisticsExpenseBillsInTransaction(
-  request: AuditRequestLike,
+  _request: AuditRequestLike,
   billIds: string[] = [],
   actor: ActorContext,
   reviewRemark: string | null | undefined,
@@ -171,24 +177,23 @@ export async function approveLogisticsExpenseBillsInTransaction(
     if (outboxIntents.length !== ids.length) {
       throw codedError("物流开票通知任务未完整入队，审核已取消。", 409, "LOGISTICS_INVOICE_OUTBOX_INCOMPLETE");
     }
+    const auditEntries: LogisticsExpenseApprovalAuditEntry[] = [];
     for (const [billId, billRows] of rowsByBillId) {
-      await writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", billId, {
-        auditStatus: "待审核",
-      }, {
+      auditEntries.push({ billId, before: { auditStatus: "待审核" }, after: {
         auditStatus: "审核通过",
         invoiceStatus: aggregateLogisticsExpenseInvoiceStatus(billRows),
         paymentStatus: "待开票",
         reviewedAt: now,
         reviewRemark: reviewRemark || "",
         notificationOutboxId: outboxIntents.find((item) => item.idempotencyKey.includes(`:${billId}:`))?.id || "",
-      }, tx);
+      } });
     }
-    return { outboxIntents, costLinks };
+    return { outboxIntents, costLinks, auditEntries };
   }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
 }
 
 export async function approveLogisticsExpenseBillRowsInTransaction(
-  request: AuditRequestLike,
+  _request: AuditRequestLike,
   rows: LogisticsExpenseRow[] = [],
   actor: ActorContext,
   reviewRemark: string | null | undefined,
@@ -260,17 +265,15 @@ export async function approveLogisticsExpenseBillRowsInTransaction(
       if (outboxIntents.length !== 1) {
         throw codedError("物流开票通知任务未完整入队，审核已取消。", 409, "LOGISTICS_INVOICE_OUTBOX_INCOMPLETE");
       }
-      await writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", billId, {
-        auditStatus: "待审核",
-      }, {
+      const auditEntries: LogisticsExpenseApprovalAuditEntry[] = [{ billId, before: { auditStatus: "待审核" }, after: {
         auditStatus: "审核通过",
         invoiceStatus: aggregateLogisticsExpenseInvoiceStatus(savedRows),
         paymentStatus: "待开票",
         reviewedAt: now,
         reviewRemark: reviewRemark || "",
         notificationOutboxId: outboxIntents[0]?.id || "",
-      }, tx);
-      return { outboxIntents, costLinks };
+      } }];
+      return { outboxIntents, costLinks, auditEntries };
     }
     throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
   }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);

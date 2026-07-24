@@ -34,6 +34,7 @@ import {
   logisticsExpenseReviewSafeErrorMessage,
   logisticsExpenseReviewSummaryMessage,
   markLogisticsExpenseReviewNotificationResults,
+  type LogisticsExpenseApprovalAuditEntry,
 } from "./logistics-expense-workflow-review-helpers";
 import { processLogisticsInvoiceNotificationOutbox } from "./logistics-invoice-notification-outbox";
 import { assertBusinessOrderWritableInTransaction } from "./business-archive";
@@ -298,6 +299,7 @@ export async function reviewLogisticsExpenseBills(
   const legacyBills = bills.filter((bill) => !directBills.some((item) => item.billId === bill.billId));
   let finalRows: LogisticsExpenseRow[] = [];
   const notificationOutboxKeys: string[] = [];
+  const approvalAuditEntries: LogisticsExpenseApprovalAuditEntry[] = [];
   const costIdByExpenseId = new Map<string, string>();
   if (directBills.length) {
     const billIds = directBills.map((bill) => bill.billId);
@@ -307,6 +309,7 @@ export async function reviewLogisticsExpenseBills(
       const outboxIntents = approval?.outboxIntents || [];
       notificationOutboxKeys.push(...outboxIntents.map((item) => item.idempotencyKey).filter(Boolean));
       for (const link of approval?.costLinks || []) costIdByExpenseId.set(link.expenseId, link.costId);
+      approvalAuditEntries.push(...(approval?.auditEntries || []));
       committed = true;
     } catch (error: unknown) {
       const safeMessage = logisticsExpenseReviewSafeErrorMessage(error);
@@ -344,6 +347,7 @@ export async function reviewLogisticsExpenseBills(
       const outboxIntents = approval?.outboxIntents || [];
       notificationOutboxKeys.push(...outboxIntents.map((item) => item.idempotencyKey).filter(Boolean));
       for (const link of approval?.costLinks || []) costIdByExpenseId.set(link.expenseId, link.costId);
+      approvalAuditEntries.push(...(approval?.auditEntries || []));
       committed = true;
     } catch (error: unknown) {
       const safeMessage = logisticsExpenseReviewSafeErrorMessage(error);
@@ -390,6 +394,18 @@ export async function reviewLogisticsExpenseBills(
   const orderIds = [...new Set(approvedRows.map((row) => row.orderId).filter(Boolean))];
   const processDurableSideEffects = async () => {
     let notificationResult: Awaited<ReturnType<typeof processLogisticsInvoiceNotificationOutbox>> | null = null;
+    try {
+      await Promise.all(approvalAuditEntries.map((entry) => runNonCriticalTask(
+        "物流费用审核日志写入",
+        () => writeAudit(request, actor, "审核通过物流费用账单", "logistics_bills", entry.billId, entry.before, entry.after),
+        { context: { billId: entry.billId } },
+      )));
+    } catch (error: unknown) {
+      logServerError("物流费用审核后台任务执行失败", error, {
+        task: "audit-log",
+        billIds: approvedBillIds,
+      });
+    }
     try {
       notificationResult = await processLogisticsInvoiceNotificationOutbox({
         idempotencyKeys: notificationOutboxKeys,
