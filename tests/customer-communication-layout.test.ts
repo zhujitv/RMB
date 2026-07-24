@@ -14,6 +14,7 @@ function cssBlock(source: string, selector: string) {
 const globalsCss = readFileSync("app/globals.css", "utf8");
 const shellCss = readCssModuleGraphSource("app/styles/workspace-shell/shell-account.module.css");
 const responsiveCss = readCssModuleGraphSource("app/styles/workspace-shell/responsive-typography.module.css");
+const workspaceTabsCss = readFileSync("app/styles/workspace-shell/workspace-tabs.module.css", "utf8");
 const tableCss = readCssModuleGraphSource("app/styles/workspace-shell/manual-table.module.css");
 const customerCommunicationService = readCustomerCommunicationServiceSource();
 const shippingDocumentsService = readShippingDocumentsSource();
@@ -52,8 +53,11 @@ test("workspace layout uses fixed chrome with main content scrolling", () => {
   assert.match(mainColumnBlock, /overflow:\s*hidden;/);
 
   const contentBlock = cssBlock(shellCss, ".content");
-  assert.match(contentBlock, /overflow-y:\s*auto;/);
-  assert.match(contentBlock, /overflow-x:\s*hidden;/);
+  assert.match(contentBlock, /overflow:\s*hidden;/);
+
+  const workspaceTabPanelBlock = cssBlock(workspaceTabsCss, ".workspaceTabPanel");
+  assert.match(workspaceTabPanelBlock, /overflow-y:\s*auto;/);
+  assert.match(workspaceTabPanelBlock, /overflow-x:\s*hidden;/);
 
   const mobileShellBlock = responsiveCss.match(/@media \(max-width: 860px\) \{[\s\S]*?\.appShell\s*\{([\s\S]*?)\n  \}/)?.[1] || "";
   assert.match(mobileShellBlock, /height:\s*100vh;/);

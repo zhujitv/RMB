@@ -1,13 +1,15 @@
 import { DismissibleLayer } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
 import { CustomerEditPanel, SupplierEditPanel } from "./customer-supplier-panels";
-import { emptySupplierForm, filtersForTab, supplierFormFromRow } from "./helpers";
+import { customerFormFromRow, emptyCustomerForm, emptySupplierForm, filtersForTab, supplierFormFromRow } from "./helpers";
 import { SettingsTable } from "./settings-table";
 import type { SupplierForm, SupplierRow, UserRow } from "./types";
 import { UserEditPanel } from "./user-edit-panel";
 import type { useSettingsController } from "./use-settings-controller";
 
-type SettingsController = ReturnType<typeof useSettingsController>;
+type SettingsController = ReturnType<typeof useSettingsController> & {
+  confirmDiscardCurrentSettings: () => boolean;
+};
 
 export function SettingsEntityEditors({ settings }: { settings: SettingsController }) {
   const {
@@ -34,6 +36,7 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
     saveSupplierForm,
     saveUserForm,
     closeSupplierPanel,
+    confirmDiscardCurrentSettings,
     deleteRecord,
     userEditPanelRef,
   } = settings;
@@ -43,6 +46,11 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
     : null;
   const supplierFormBaseline = savedSupplierForm ? supplierFormFromRow(savedSupplierForm) : emptySupplierForm();
   const supplierFormDirty = supplierForm ? !isSameSupplierForm(supplierForm, supplierFormBaseline) : false;
+  const savedCustomerForm = customerForm?.id
+    ? settings.customers.find((customer) => customer.id === customerForm.id)
+    : null;
+  const customerFormBaseline = savedCustomerForm ? customerFormFromRow(savedCustomerForm) : emptyCustomerForm();
+  const customerFormDirty = customerForm ? JSON.stringify(customerForm) !== JSON.stringify(customerFormBaseline) : false;
 
   return (
     <>
@@ -56,6 +64,7 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
             setCustomerMessage("");
           }}
           dismissible={!customerSaving}
+          dismissConfirmMessage={customerFormDirty ? "表单已有修改，确认放弃修改吗？" : ""}
         >
           {({ requestClose }) => (
             <>
@@ -137,6 +146,7 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
             onChange={setUserForm}
             onSubmit={saveUserForm}
             onCancel={() => {
+              if (!confirmDiscardCurrentSettings()) return;
               setUserForm(null);
               setSelectedUserId("");
               setUserMessage("");
@@ -178,6 +188,7 @@ export function SettingsTableContent({ settings }: { settings: SettingsControlle
     forceDeleteRejectedUser,
     loadTab,
     forceDeletingRejectedUserId,
+    confirmDiscardCurrentSettings,
   } = settings;
 
   return (
@@ -197,10 +208,17 @@ export function SettingsTableContent({ settings }: { settings: SettingsControlle
           setDetailRow(row);
         }}
         onCloseDetail={() => setDetailRow(null)}
-        onEditCustomer={startEditCustomer}
-        onEditUser={startEditUser}
+        onEditCustomer={(customer) => {
+          if (confirmDiscardCurrentSettings()) startEditCustomer(customer);
+        }}
+        onEditUser={(user) => {
+          if (confirmDiscardCurrentSettings()) startEditUser(user);
+        }}
         onDeleteCustomer={(customer) => void deleteRecord("customer", customer.id)}
-        onForceDeleteRejectedUser={(user: UserRow) => void forceDeleteRejectedUser(user)}
+        onForceDeleteRejectedUser={(user: UserRow) => {
+          if (!confirmDiscardCurrentSettings()) return;
+          void forceDeleteRejectedUser(user);
+        }}
         forceDeletingRejectedUserId={forceDeletingRejectedUserId}
         canForceDeleteRejectedUsers={canForceDeleteRejectedUsers}
         onPage={(nextPage) => loadTab(activeTab, nextPage, filtersForTab(filters, activeTab))}

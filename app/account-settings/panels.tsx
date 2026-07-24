@@ -111,12 +111,14 @@ export function SecurityPanel({
   user,
   busy,
   strength,
+  currentPassword,
   newPassword,
   confirmPassword,
   securityForm,
   passwordPolicyMessage,
   confirmPasswordMessage,
   onSubmit,
+  onCurrentPasswordChange,
   onNewPasswordChange,
   onConfirmPasswordChange,
   onSecurityChange,
@@ -125,12 +127,14 @@ export function SecurityPanel({
   user: User;
   busy: boolean;
   strength: PasswordStrengthView;
+  currentPassword: string;
   newPassword: string;
   confirmPassword: string;
   securityForm: SecurityFormState;
   passwordPolicyMessage: string;
   confirmPasswordMessage: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onCurrentPasswordChange: (value: string) => void;
   onNewPasswordChange: (value: string) => void;
   onConfirmPasswordChange: (value: string) => void;
   onSecurityChange: (value: boolean) => void;
@@ -143,7 +147,14 @@ export function SecurityPanel({
       <form className={styles.accountSecurityGrid} onSubmit={onSubmit}>
         <label>
           <span>当前密码</span>
-          <input name="currentPassword" type="password" autoComplete="current-password" required />
+          <input
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(event) => onCurrentPasswordChange(event.target.value)}
+            required
+          />
         </label>
         <label>
           <span>新密码</span>

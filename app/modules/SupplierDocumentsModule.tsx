@@ -18,6 +18,7 @@ import {
   type SupplierDocumentListView,
 } from "./supplier-documents/supplier-document-list-request-policy";
 import type { User } from "../types";
+import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 
 type SupplierDocumentLoadRowsOptions = {
   silent?: boolean;
@@ -57,6 +58,7 @@ export function SupplierDocumentsModule({
   const [deletingTaskId, setDeletingTaskId] = useState("");
   const [resendingTaskId, setResendingTaskId] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  useWorkspaceTabBusy(Boolean(uploadingKey || deletingTaskId || resendingTaskId));
   const loadRowsVisibleRequestRef = useRef(0);
   const loadRowsSilentRequestRef = useRef(0);
   const loadRowsViewRef = useRef<SupplierDocumentListView>(supplierDocumentListView(1, 10, ""));
@@ -294,6 +296,26 @@ export function SupplierDocumentsModule({
       if (focused?.id) openTask(focused.id);
     });
   }, [initialOpenToken]);
+
+  const expandedTask = rows.find((row) => row.id === expandedTaskId);
+  useWorkspaceTabPresentation({
+    title: createDialogOpen
+      ? "供应商资料 · 新建任务"
+      : expandedTaskId
+        ? `供应商资料 · ${expandedTask?.purchaseOrderNo || expandedTask?.orderNo || expandedTask?.supplierName || "任务详情"}`
+        : "供应商资料",
+    view: createDialogOpen ? "edit" : expandedTaskId ? "detail" : "list",
+    contextKey: createDialogOpen
+      ? "supplier-documents:create"
+      : expandedTaskId
+        ? `supplier-documents:${expandedTaskId}`
+        : "list:supplier-documents",
+    ensureListTab: Boolean(createDialogOpen || expandedTaskId),
+  });
+  useWorkspaceTabReactivation(() => {
+    void loadRows(page, pageSize, submittedKeyword);
+    void loadStats(submittedKeyword);
+  });
 
   return (
     <SupplierDocumentsModuleView

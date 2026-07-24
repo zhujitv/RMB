@@ -149,15 +149,9 @@ export function useSettingsControllerActions(context: SettingsControllerActionsC
 function selectTab(tab: SettingsTabKey) {
     setActiveTab(tab);
     setDetailRow(null);
-    setCustomerForm(null);
     setCustomerMessage("");
-    setBusinessEntityForm(null);
     setBusinessEntityMessage("");
-    setSupplierForm(null);
-    setSupplierPanelMode("view");
     setSupplierMessage("");
-    setUserForm(null);
-    setSelectedUserId("");
     setUserMessage("");
     setCompanyProfileMessage("");
     setExchangeMessage("");
@@ -250,9 +244,8 @@ async function forceDeleteRejectedUser(user: UserRow) {
         { method: "DELETE" },
       );
       await loadTab(activeTab, activePagination.page || 1, filtersForTab(filters, activeTab));
-      setUserForm(null);
-      setSelectedUserId("");
-      setUserMessage("");
+      setUserForm((current) => current?.id === user.id ? null : current);
+      setSelectedUserId((current) => current === user.id ? "" : current);
       setError(result.message || "拒绝用户已删除");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "强制删除拒绝用户失败");

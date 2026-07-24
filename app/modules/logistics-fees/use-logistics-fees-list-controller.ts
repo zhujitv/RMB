@@ -13,6 +13,7 @@ import {
   logisticsExpenseShipmentBillIds,
   sortLogisticsExpenseBillsForDisplay,
 } from "./shared";
+import { useWorkspaceTabActive, useWorkspaceTabReactivation } from "../../workspace/workspace-tab-context";
 
 type UseLogisticsFeesListControllerParams = {
   initialStatus: string;
@@ -37,6 +38,7 @@ export function useLogisticsFeesListController({
   setError,
   setNotice,
 }: UseLogisticsFeesListControllerParams) {
+  const workspaceTabActive = useWorkspaceTabActive();
   const [rows, setRows] = useState<LogisticsExpense[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -119,7 +121,7 @@ export function useLogisticsFeesListController({
   }, [refreshToken]);
 
   useEffect(() => {
-    if (loading) return;
+    if (!workspaceTabActive || loading) return;
     const hasProcessingInvoice = rows.some((row) =>
       (row.invoiceGroups || []).some((group) =>
         ["识别中", "已上传待识别"].includes(String(group.validationStatus || "")),
@@ -130,7 +132,12 @@ export function useLogisticsFeesListController({
       void loadExpenses(page, submittedKeyword, status, costType, billStatus, businessScope, { silent: true });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [rows, page, submittedKeyword, status, costType, billStatus, businessScope, loading]);
+  }, [rows, page, submittedKeyword, status, costType, billStatus, businessScope, loading, workspaceTabActive]);
+
+  useWorkspaceTabReactivation(() => {
+    void loadExpenses(page, submittedKeyword, status, costType, billStatus, businessScope);
+    void loadStatement(statementMonth);
+  });
 
   useEffect(() => {
     if (!focusToken) return;

@@ -369,15 +369,15 @@ test("workbench overdue reminder cron sends one email per owner per day", () => 
 test("workbench home and topbar consume unified todo DTO without opening new windows", () => {
   assert.match(workspaceShell, /apiJson<Partial<WorkbenchTodosState>>\(options\.refresh \? "\/api\/workbench\/todos\?refresh=1" : "\/api\/workbench\/todos"/);
   assert.match(workspaceShell, /completedTodos: Array\.isArray\(result\.completedTodos\) \? result\.completedTodos : \[\]/);
-  assert.match(workspaceShell, /function openWorkbenchTodo\(todo: WorkbenchTodo\)/);
-  assert.match(workspaceShell, /setActiveMenu\("logisticsFees"\)/);
-  assert.match(workspaceShell, /setActiveMenu\("profit"\)/);
-  assert.match(workspaceShell, /setActiveMenu\("oceanControlTower"\)/);
-  assert.match(workspaceShell, /setActiveMenu\("supplierDocuments"\)/);
+  assert.match(workspaceShell, /const openWorkbenchTodo = useCallback\(\(todo: WorkbenchTodo\)/);
+  assert.match(workspaceShell, /openWorkspaceMenu\("logisticsFees"/);
+  assert.match(workspaceShell, /openWorkspaceMenu\("profit"/);
+  assert.match(workspaceShell, /openWorkspaceMenu\("oceanControlTower"/);
+  assert.match(workspaceShell, /openWorkspaceMenu\("supplierDocuments"/);
   assert.match(workspaceShell, /path === "ocean-control-tower"/);
-  assert.match(workspaceShell, /setTaxRefundFocus\(\{ keyword, action: parsed\.searchParams\.get\("action"\) \|\| "", token \}\)/);
-  assert.match(workspaceShell, /initialAction=\{taxRefundFocus\.action\}/);
-  assert.match(workspaceShell, /setTaxRefundFocus\(\{ keyword: value, action: "", token: Date\.now\(\) \}\)/);
+  assert.match(workspaceShell, /openWorkspaceMenu\("taxRefund", \{[\s\S]*keyword,[\s\S]*action: parsed\.searchParams\.get\("action"\) \|\| ""/);
+  assert.match(workspaceShell, /initialAction=\{focus\.action\}/);
+  assert.match(workspaceShell, /onOpenRecord=\{\(targetMenu, keyword\) => openWorkspaceMenu\(targetMenu, \{ keyword: keyword\.trim\(\) \}\)\}/);
   assert.match(taxRefundModule, /initialAction = ""/);
   assert.match(taxRefundModule, /initialAction === "submitTaxArchive" \? "READY" : statusFilter/);
   assert.match(taxRefundModule, /if \(initialAction === "submitTaxArchive"\) setStatusFilter\("READY"\)/);

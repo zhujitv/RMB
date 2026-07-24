@@ -53,6 +53,8 @@ type DomesticLogisticsModuleViewProps = {
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
   shipsgoBusyKey: string;
+  controlTowerSyncingId: string;
+  archiving: boolean;
   confirmation: ConfirmationDialogState | null;
   setNotice: Dispatch<SetStateAction<string>>;
   setKeyword: Dispatch<SetStateAction<string>>;
@@ -60,6 +62,8 @@ type DomesticLogisticsModuleViewProps = {
   setExpandedId: Dispatch<SetStateAction<string>>;
   setEditingOrderId: Dispatch<SetStateAction<string>>;
   setActiveLogisticsView: Dispatch<SetStateAction<"list" | "controlTower">>;
+  setControlTowerSyncingId: Dispatch<SetStateAction<string>>;
+  confirmDiscardEdit: () => boolean;
   loadRows: (nextKeyword?: string, nextBusinessScope?: string, nextPage?: number) => Promise<DomesticLogisticsRow[]>;
   submitSearch: () => void;
   resetSearch: () => void;
@@ -120,6 +124,8 @@ export function DomesticLogisticsModuleView({
   uploadProgressByKey,
   deletingDocumentId,
   shipsgoBusyKey,
+  controlTowerSyncingId,
+  archiving,
   confirmation,
   setNotice,
   setKeyword,
@@ -127,6 +133,8 @@ export function DomesticLogisticsModuleView({
   setExpandedId,
   setEditingOrderId,
   setActiveLogisticsView,
+  setControlTowerSyncingId,
+  confirmDiscardEdit,
   loadRows,
   submitSearch,
   resetSearch,
@@ -161,6 +169,8 @@ return (
           type="button"
           disabled={loading}
           onClick={() => {
+            if (editingOrderId && !confirmDiscardEdit()) return;
+            if (editingOrderId) setEditingOrderId("");
             setNotice("");
             void loadRows();
           }}
@@ -175,6 +185,8 @@ return (
           type="button"
           role="tab"
           aria-selected={activeLogisticsView === "list"}
+          disabled={Boolean(controlTowerSyncingId)}
+          title={controlTowerSyncingId ? "运输状态正在同步，请完成后再切换视图" : undefined}
           onClick={() => setActiveLogisticsView("list")}
         >
           物流列表
@@ -185,7 +197,11 @@ return (
             type="button"
             role="tab"
             aria-selected={activeLogisticsView === "controlTower"}
-            onClick={() => setActiveLogisticsView("controlTower")}
+            onClick={() => {
+              if (editingOrderId && !confirmDiscardEdit()) return;
+              setEditingOrderId("");
+              setActiveLogisticsView("controlTower");
+            }}
           >
             运输监控
           </button>
@@ -199,6 +215,8 @@ return (
           initialKeyword={initialKeyword}
           initialOpenToken={initialOpenToken}
           initialFullScreen={initialControlTowerFullscreen}
+          syncingId={controlTowerSyncingId}
+          onSyncingChange={setControlTowerSyncingId}
           onOpenOrder={openControlTowerOrder}
         />
       ) : (
@@ -221,12 +239,12 @@ return (
           <button
             className={styles.primaryButtonCompact}
             type="button"
-            disabled={loading || !selectedArchivableRows.length}
+            disabled={loading || archiving || !selectedArchivableRows.length}
             title={selectedArchivableRows.length ? `批量归档 ${selectedArchivableRows.length} 个审核通过且已上传发票订单` : ARCHIVE_BUTTON_DISABLED_TOOLTIP}
-            onClick={archiveSelectedOrders}
+            onClick={() => void archiveSelectedOrders()}
             data-rule={ARCHIVE_BUTTON_RULE.allow.join(",")}
           >
-            批量归档{selectedArchivableRows.length ? `（${selectedArchivableRows.length}）` : ""}
+            {archiving ? "归档中..." : `批量归档${selectedArchivableRows.length ? `（${selectedArchivableRows.length}）` : ""}`}
           </button>
         ) : null}
       </div>
@@ -280,25 +298,27 @@ return (
                 key={row.id}
                 row={row}
                 expanded={expandedId === row.id}
-                onToggle={() => setExpandedId((current) => {
-                  const next = current === row.id ? "" : row.id;
-                  if (!next) {
-                    setEditingOrderId("");
-                  }
-                  return next;
-                })}
+                onToggle={() => {
+                  const nextExpandedId = expandedId === row.id ? "" : row.id;
+                  if (editingOrderId && nextExpandedId !== editingOrderId && !confirmDiscardEdit()) return;
+                  setExpandedId(nextExpandedId);
+                  if (editingOrderId && nextExpandedId !== editingOrderId) setEditingOrderId("");
+                }}
                 editing={editingOrderId === row.id}
                 canEditDomesticLogistics={canEditDomesticLogistics}
                 canUploadCustomsDocuments={canUploadCustomsDocuments}
                 canDeleteCustomsDocuments={canDeleteCustomsDocuments}
                 onEdit={() => {
+                  const nextEditingOrderId = editingOrderId === row.id ? "" : row.id;
+                  if (editingOrderId && nextEditingOrderId !== editingOrderId && !confirmDiscardEdit()) return;
                   setExpandedId(row.id);
-                  setEditingOrderId((current) => current === row.id ? "" : row.id);
+                  setEditingOrderId(nextEditingOrderId);
                 }}
                 canCreateLogisticsExpense={canCreateLogisticsExpense}
                 currentUserRole={currentUserRole}
                 onOpenExpenseStatus={() => openLogisticsExpenseStatus(row)}
                 onOpenLogisticsFees={() => {
+                  if (editingOrderId && !confirmDiscardEdit()) return;
                   setExpandedId(row.id);
                   setEditingOrderId("");
                   onOpenLogisticsFees?.({
@@ -319,9 +339,16 @@ return (
                   setNotice("物流信息已保存");
                   setEditingOrderId("");
                 }}
-                onCancelEdit={() => setEditingOrderId("")}
+                onCancelEdit={() => {
+                  if (!confirmDiscardEdit()) return;
+                  setEditingOrderId("");
+                }}
                 canDeleteDomesticLogistics={canDeleteDomesticLogistics}
-                onDeleteDomesticLogistics={() => void deleteDomesticLogistics(row)}
+                onDeleteDomesticLogistics={() => {
+                  if (editingOrderId === row.id && !confirmDiscardEdit()) return;
+                  if (editingOrderId === row.id) setEditingOrderId("");
+                  void deleteDomesticLogistics(row);
+                }}
                 uploadingKey={uploadingKey}
                 uploadProgressByKey={uploadProgressByKey}
                 deletingDocumentId={deletingDocumentId}

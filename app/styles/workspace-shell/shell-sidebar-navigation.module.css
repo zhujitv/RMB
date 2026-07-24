@@ -34,12 +34,10 @@
 }
 
 .content {
-  padding: 28px;
+  padding: 0;
   min-width: 0;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
 }
 
 .welcomeCard,
@@ -64,7 +62,7 @@
 
 @media (min-width: 861px) and (max-width: 1535px) {
   .content {
-    padding: 20px;
+    padding: 0;
   }
 
   .welcomeCard,

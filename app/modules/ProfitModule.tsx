@@ -9,6 +9,7 @@ import type { User } from "../types";
 import styles from "../WorkspaceShell.module.css";
 import { ProfitDetailDrawer, ProfitMobileCard, ProfitRows } from "./profit/profit-panels";
 import { PAGE_SIZE, type ProfitResponse, type ProfitRow } from "./profit/shared";
+import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 
 export function ProfitModule({
   currentUser,
@@ -41,6 +42,7 @@ export function ProfitModule({
   } = useConfirmationDialog();
   const canSettleCommission = ["管理员", "财务"].includes(currentUser.role);
   const canReverseCommission = currentUser.role === "管理员";
+  useWorkspaceTabBusy(Boolean(settlingId || reversingId));
 
   async function loadRows(nextPage = page, nextKeyword = submittedKeyword) {
     const requestId = ++listRequestRef.current;
@@ -207,6 +209,16 @@ export function ProfitModule({
       setReversingId("");
     }
   }
+
+  useWorkspaceTabPresentation({
+    title: detailRow ? `利润 · ${detailRow.orderNo || detailRow.blNo || "详情"}` : "利润分析",
+    view: detailRow ? "detail" : "list",
+    contextKey: detailRow ? `detail:${detailRow.id}` : "list:profit",
+    ensureListTab: Boolean(detailRow),
+  });
+  useWorkspaceTabReactivation(() => {
+    void loadRows(page, submittedKeyword);
+  });
 
   return (
     <section className={styles.moduleCard}>

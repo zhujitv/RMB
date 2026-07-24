@@ -4,6 +4,7 @@ import test from "node:test";
 
 const shellFrameCss = readFileSync("app/styles/workspace-shell/shell-frame-layout.module.css", "utf8");
 const shellNavigationCss = readFileSync("app/styles/workspace-shell/shell-sidebar-navigation.module.css", "utf8");
+const workspaceTabsCss = readFileSync("app/styles/workspace-shell/workspace-tabs.module.css", "utf8");
 
 test("medium desktop mode reclaims width for 1920x1080 displays using OS scaling", () => {
   assert.match(
@@ -12,11 +13,16 @@ test("medium desktop mode reclaims width for 1920x1080 displays using OS scaling
   );
   assert.match(
     shellNavigationCss,
-    /@media \(min-width: 861px\) and \(max-width: 1535px\) \{[\s\S]*?\.content \{[\s\S]*?padding: 20px;[\s\S]*?\.welcomeCard,[\s\S]*?\.moduleCard \{[\s\S]*?padding: 20px;/,
+    /@media \(min-width: 861px\) and \(max-width: 1535px\) \{[\s\S]*?\.content \{[\s\S]*?padding: 0;[\s\S]*?\.welcomeCard,[\s\S]*?\.moduleCard \{[\s\S]*?padding: 20px;/,
+  );
+  assert.match(
+    workspaceTabsCss,
+    /@media \(min-width: 861px\) and \(max-width: 1535px\) \{[\s\S]*?\.workspaceTabPanel \{[\s\S]*?padding: 20px;/,
   );
 });
 
 test("medium desktop mode does not replace the existing mobile breakpoint", () => {
   assert.doesNotMatch(shellFrameCss, /@media \(max-width: 860px\)[\s\S]*?grid-template-columns: 220px/);
   assert.doesNotMatch(shellNavigationCss, /@media \(max-width: 860px\)[\s\S]*?padding: 20px/);
+  assert.doesNotMatch(workspaceTabsCss, /@media \(max-width: 860px\)[\s\S]*?\.workspaceTabPanel \{[\s\S]*?padding: 20px/);
 });

@@ -3,8 +3,10 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { apiJson } from "../../api";
+import { DismissibleLayer } from "../../components";
 import { SearchAutocomplete } from "../../SearchAutocomplete";
 import styles from "../../WorkspaceShell.module.css";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 import type { SupplierDocumentTask } from "./types";
 
 type FactoryCostCandidate = {
@@ -59,6 +61,15 @@ export function CreateSupplierDocumentRequestDialog({
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const formDirty = Boolean(
+    selectedCost
+    || dueDate
+    || message.trim()
+    || templateFile
+    || requiredTypes.join("|") !== DEFAULT_DOCUMENT_TYPES.join("|"),
+  );
+  useWorkspaceTabDirty(formDirty);
+  useWorkspaceTabBusy(saving);
 
   async function searchFactoryCosts(keyword: string) {
     const params = new URLSearchParams();
@@ -115,26 +126,22 @@ export function CreateSupplierDocumentRequestDialog({
   }
 
   return (
-    <div
-      className={styles.modalOverlay}
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) onClose();
-      }}
+    <DismissibleLayer
+      ariaLabel="发起资料回传通知"
+      overlayClassName={styles.modalOverlay}
+      surfaceClassName={`${styles.modalCard} ${styles.supplierDocumentRequestDialog}`}
+      onClose={onClose}
+      dismissible={!saving}
+      dismissConfirmMessage={formDirty ? "通知内容尚未保存，确定关闭吗？" : ""}
     >
-      <form
-        className={`${styles.modalCard} ${styles.supplierDocumentRequestDialog}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="supplier-document-request-title"
-        onSubmit={submitRequest}
-      >
+      {({ requestClose }) => (
+      <form className={styles.workspaceModalForm} aria-labelledby="supplier-document-request-title" onSubmit={submitRequest} inert={saving} aria-busy={saving}>
         <div className={styles.modalHeader}>
           <div>
             <h2 id="supplier-document-request-title">发起资料回传通知</h2>
             <p>先登记工厂供应商成本，再上传回传表格并邮件通知供应商。</p>
           </div>
-          <button className={styles.secondaryButton} type="button" onClick={onClose} disabled={saving}>关闭</button>
+          <button className={styles.secondaryButton} type="button" onClick={requestClose} disabled={saving}>关闭</button>
         </div>
 
         {error ? <div className={styles.inlineError}>{error}</div> : null}
@@ -217,13 +224,14 @@ export function CreateSupplierDocumentRequestDialog({
         </div>
 
         <div className={styles.modalFooter}>
-          <button className={styles.secondaryButton} type="button" onClick={onClose} disabled={saving}>取消</button>
+          <button className={styles.secondaryButton} type="button" onClick={requestClose} disabled={saving}>取消</button>
           <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>
             {saving ? "发送中..." : "发送通知"}
           </button>
         </div>
       </form>
-    </div>
+      )}
+    </DismissibleLayer>
   );
 }
 

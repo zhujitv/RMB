@@ -9,6 +9,7 @@ import { moneyText } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { CURRENCIES, PAYMENT_TYPES, type ExchangeRateResponse, type OrdersResponse, type PaymentOrderOption, type PaymentRow, type QuickPaymentForm } from "./types";
 import { orderLabel, paymentFormFromRow, paymentStatusOptions } from "./helpers";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
 type PaymentFieldErrors = Partial<Record<keyof QuickPaymentForm, string>>;
 const FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE = "该订单尚无历史收款，不能登记尾款，请选择预付款、分批款或全款。";
@@ -46,6 +47,8 @@ export function QuickCreatePaymentPanel({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<PaymentFieldErrors>({});
+  useWorkspaceTabBusy(saving);
+  useWorkspaceTabDirty(JSON.stringify(form) !== JSON.stringify(paymentFormFromRow(editingSnapshot)));
 
   async function searchOrders(keyword: string) {
     try {
@@ -331,7 +334,7 @@ export function QuickCreatePaymentPanel({
   const currencyLocked = Boolean(selectedOrder?.currency);
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={submitQuickPayment} noValidate>
+    <form className={styles.quickCreatePanel} onSubmit={submitQuickPayment} noValidate inert={saving} aria-busy={saving}>
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{editingSnapshot?.id ? "编辑收款" : "快速登记收款"}</strong>

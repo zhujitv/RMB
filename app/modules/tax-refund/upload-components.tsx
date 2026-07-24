@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../../api";
 import { PdfPreviewButton, fileDownloadUrl } from "../../components";
 import { FileUploadCard, TaxUploadItem } from "./upload-card";
@@ -8,6 +8,7 @@ import styles from "../../WorkspaceShell.module.css";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import { canDeleteTaxDocument, canUploadTaxDocument, documentMatchesFactoryCostSlot, factoryDocumentTargetKey, formatFactoryCostAmount, latestTaxDocument, logisticsDocumentTargetKey, logisticsInvoiceDocumentsForCost, logisticsInvoiceLabel, taxDocumentTargetKey, taxTargetDomId, uploadScopeKey } from "./helpers";
 import { TAX_CUSTOMS_UPLOAD_TYPES, TAX_FACTORY_UPLOAD_TYPES, type DocumentCompleteness, type TaxCost, type TaxDocument, type TaxRefundDetail, type UploadScope } from "./model";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
 export function CustomsRecognitionForm({
   detail,
@@ -23,17 +24,25 @@ export function CustomsRecognitionForm({
   const [saving, setSaving] = useState(false);
   const [rereading, setRereading] = useState(false);
   const [message, setMessage] = useState("");
+  const detailIdRef = useRef(detail.id);
   const declarationNoRead = Boolean(detail.customsDeclarationNo);
   const declarationDateRead = Boolean(detail.customsDeclarationDate);
   const hasUploadedCustomsDeclarationPdf = (detail.documents || []).some((document) => (
     document.documentType === "CUSTOMS_ENTRY_FORM" && document.uploadStatus === "SUCCESS"
   ));
+  const formDirty = customsDeclarationNo !== (detail.customsDeclarationNo || "")
+    || customsDeclarationDate !== (detail.customsDeclarationDate || "");
+  useWorkspaceTabDirty(formDirty);
+  useWorkspaceTabBusy(saving || rereading);
 
   useEffect(() => {
+    const detailChanged = detailIdRef.current !== detail.id;
+    detailIdRef.current = detail.id;
+    if (!detailChanged && formDirty) return;
     setCustomsDeclarationNo(detail.customsDeclarationNo || "");
     setCustomsDeclarationDate(detail.customsDeclarationDate || "");
     setMessage("");
-  }, [detail.id, detail.customsDeclarationNo, detail.customsDeclarationDate]);
+  }, [detail.id, detail.customsDeclarationNo, detail.customsDeclarationDate, formDirty]);
 
   async function saveCustomsRecognition() {
     setSaving(true);
@@ -58,6 +67,7 @@ export function CustomsRecognitionForm({
   }
 
   async function rereadCustomsDeclarationPdf() {
+    if (formDirty && !window.confirm("当前手工填写的报关单信息尚未保存，重新读取将覆盖这些内容。确定继续吗？")) return;
     setRereading(true);
     setMessage("");
     try {
@@ -99,7 +109,7 @@ export function CustomsRecognitionForm({
           <span>报关单号</span>
           <input
             value={customsDeclarationNo}
-            disabled={readOnly || saving}
+            disabled={readOnly || saving || rereading}
             onChange={(event) => setCustomsDeclarationNo(event.target.value)}
             placeholder="请输入报关单号"
           />
@@ -109,7 +119,7 @@ export function CustomsRecognitionForm({
           <input
             type="date"
             value={customsDeclarationDate}
-            disabled={readOnly || saving}
+            disabled={readOnly || saving || rereading}
             onChange={(event) => setCustomsDeclarationDate(event.target.value)}
           />
         </label>
@@ -122,7 +132,7 @@ export function CustomsRecognitionForm({
         {message ? <span>{message}</span> : <span>保存后将同步更新退税资料列表的申报日期。</span>}
         {readOnly ? null : (
           <div className={styles.inlineActionGroup}>
-            <button className={styles.primaryButtonCompact} type="button" disabled={saving} onClick={saveCustomsRecognition}>
+            <button className={styles.primaryButtonCompact} type="button" disabled={saving || rereading} onClick={saveCustomsRecognition}>
               {saving ? "保存中..." : "保存报关单信息"}
             </button>
             {hasUploadedCustomsDeclarationPdf ? (

@@ -13,6 +13,7 @@ import {
 } from "./model";
 import { LogisticsCurrencyAmountList } from "./shared";
 import { useLogisticsExpenseDrawerState } from "./use-logistics-expense-drawer-state";
+import { useWorkspaceTabBusy, useWorkspaceTabContext, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
 export function LogisticsExpenseRows({
   expense,
@@ -75,6 +76,9 @@ export function LogisticsExpenseRows({
     onValidationError,
     onSaveDetails,
   });
+  useWorkspaceTabDirty(drawer.hasPendingChanges);
+  useWorkspaceTabBusy(saving || Boolean(busyId || deletingId));
+  const workspaceTab = useWorkspaceTabContext();
   const supplierNames = expense.supplierNames?.length
     ? expense.supplierNames
     : [...new Set(drawer.items.map((item) => item.supplierName).filter((name): name is string => Boolean(name)))];
@@ -124,7 +128,13 @@ export function LogisticsExpenseRows({
       />
       <UiTabs
         value={drawer.activeTab}
-        onChange={drawer.setActiveTab}
+        onChange={(tab) => {
+          if (workspaceTab?.busy) {
+            window.alert("当前发票操作正在进行，请完成后再切换分段。");
+            return;
+          }
+          drawer.setActiveTab(tab);
+        }}
         tabs={[
           { key: "basic", label: "基础信息" },
           { key: "details", label: "费用明细" },
@@ -142,7 +152,7 @@ export function LogisticsExpenseRows({
         />
       ) : null}
       {drawer.activeTab === "details" ? (
-        <div className={styles.logisticsDrawerSection}>
+        <div className={styles.logisticsDrawerSection} inert={saving} aria-busy={saving}>
           <div className={styles.logisticsDrawerSectionHeader}>
             <div>
               <strong>费用明细</strong>

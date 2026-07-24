@@ -7,6 +7,7 @@ import { useLogisticsFeesListController } from "./logistics-fees/use-logistics-f
 import { useLogisticsFeesStatement } from "./logistics-fees/use-logistics-fees-statement";
 import { LogisticsFeesModuleView } from "./logistics-fees/module-view";
 import { logisticsExpenseShipmentBillIds } from "./logistics-fees/shared";
+import { useWorkspaceTabBusy, useWorkspaceTabDiscardGuard, useWorkspaceTabPresentation } from "../workspace/workspace-tab-context";
 
 export function LogisticsFeesModule({
   embedded = false,
@@ -146,6 +147,23 @@ export function LogisticsFeesModule({
     requestConfirmation,
     onRefreshTodos,
   });
+  useWorkspaceTabBusy(Boolean(busyId || deletingId || savingBillId));
+  const confirmDiscardLogisticsEdit = useWorkspaceTabDiscardGuard("当前物流费用内容尚未保存，确定放弃吗？");
+
+  useWorkspaceTabPresentation({
+    title: createOpen
+      ? "新增物流费用"
+      : activeExpense
+        ? `物流费用 · ${activeExpense.orderNo || activeExpense.blNo || "详情"}`
+        : title,
+    view: createOpen || activeExpense ? "edit" : "list",
+    contextKey: createOpen
+      ? "create:logistics-expense"
+      : activeExpense
+        ? `expense:${activeExpense.id}`
+        : "list:logistics-fees",
+    ensureListTab: Boolean(createOpen || activeExpense),
+  });
 
   return (
     <LogisticsFeesModuleView
@@ -186,6 +204,7 @@ export function LogisticsFeesModule({
       savingBillId={savingBillId}
       confirmation={confirmation}
       onToggleCreate={() => {
+        if ((createOpen || activeExpense) && !confirmDiscardLogisticsEdit()) return;
         setNotice("");
         setCreateOpen((open) => !open);
       }}
@@ -193,7 +212,10 @@ export function LogisticsFeesModule({
         setNotice("");
         void loadExpenses(page, submittedKeyword, status, costType, billStatus, businessScope);
       }}
-      onCancelCreate={() => setCreateOpen(false)}
+      onCancelCreate={() => {
+        if (!confirmDiscardLogisticsEdit()) return;
+        setCreateOpen(false);
+      }}
       onCreateSaved={(message) => {
         setCreateOpen(false);
         setExpandedId("");
@@ -223,6 +245,7 @@ export function LogisticsFeesModule({
         void loadExpenses(1, submittedKeyword, status, costType, nextBillStatus, businessScope);
       }}
       onBusinessScopeChange={(nextScope) => {
+        if ((createOpen || activeExpense) && !confirmDiscardLogisticsEdit()) return;
         setBusinessScope(nextScope);
         setCreateOpen(false);
         setExpandedId("");

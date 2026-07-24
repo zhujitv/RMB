@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiRequestError, apiJson } from "../api";
-import { PaginationBar } from "../components";
+import { DismissibleLayer, PaginationBar } from "../components";
 import { CustomerCommunicationDrawer } from "./customer-communication-drawer";
 import { formatDate, formatDateTime } from "../formatters";
 import styles from "../WorkspaceShell.module.css";
@@ -11,6 +11,7 @@ import type { PermissionSnapshot, User } from "../types";
 import type { CommunicationDetail, CommunicationDraft, CommunicationListResponse, CommunicationRow, MailForm } from "./customer-communication-types";
 import { canWritePermission } from "../utils";
 import { getBusinessEntityRowClass } from "./business-entity-row-style";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 
 const LANGUAGE_OPTIONS = [
   { value: "EN", label: "英文" },
@@ -63,6 +64,33 @@ export function CustomerCommunicationModule({
   const canManualMark = canSendByPermission && ["管理员", "业务员"].includes(currentUser.role);
   const activeMissingLabels = detail?.missingLabels || detail?.draft?.missingLabels || [];
   const canSend = Boolean(detail?.canSend && canSendByPermission && !activeMissingLabels.length);
+  const activeCommunicationRow = detail?.order || rows.find((row) => row.id === detailOrderId);
+  const baselineMailForm = formFromDraft(detail?.draft || null);
+  const mailFormDirty = Boolean(
+    detailOrderId
+    && mailForm
+    && JSON.stringify(mailForm) !== JSON.stringify(baselineMailForm),
+  );
+
+  useWorkspaceTabPresentation({
+    title: detailOrderId
+      ? `客户沟通 · ${activeCommunicationRow?.orderNo || "订单详情"}`
+      : manualMarkDialog
+        ? `标记发送 · ${manualMarkDialog.row.orderNo || "订单"}`
+        : "客户沟通",
+    view: detailOrderId || manualMarkDialog ? "edit" : "list",
+    contextKey: detailOrderId
+      ? `communication:${detailOrderId}`
+      : manualMarkDialog
+        ? `manual-mark:${manualMarkDialog.row.id}`
+        : "list:customer-communication",
+    ensureListTab: Boolean(detailOrderId || manualMarkDialog),
+  });
+  useWorkspaceTabDirty(mailFormDirty || Boolean(manualMarkDialog));
+  useWorkspaceTabBusy(sending || Boolean(manualMarkBusyId));
+  useWorkspaceTabReactivation(() => {
+    void loadRows(page, keyword);
+  });
 
   useEffect(() => {
     void loadRows(1, initialKeyword);
@@ -135,6 +163,11 @@ export function CustomerCommunicationModule({
 
   function updateLanguage(language: string) {
     if (!mailForm || !detail?.draft) return;
+    if (language === mailForm.emailLanguage) return;
+    const currentTemplate = templateFromDraft(detail.draft, mailForm.emailLanguage);
+    const hasManualContent = mailForm.emailSubject !== currentTemplate.emailSubject
+      || mailForm.emailBody !== currentTemplate.emailBody;
+    if (hasManualContent && !window.confirm("切换语言将替换当前邮件标题和正文，确定继续吗？")) return;
     setMailForm({ ...mailForm, ...templateFromDraft(detail.draft, language), emailLanguage: language });
   }
 
@@ -352,54 +385,63 @@ export function CustomerCommunicationModule({
       ) : null}
 
       {manualMarkDialog ? (
-        <div className={styles.modalOverlay} role="presentation">
-          <form className={styles.modalCard} onSubmit={submitManualMark}>
-            <div className={styles.modalHeader}>
-              <div>
-                <strong>手动标记已发送</strong>
-                <small>{manualMarkDialog.row.orderNo || "-"} · {manualMarkDialog.row.customerShortName || "-"}</small>
+        <DismissibleLayer
+          ariaLabel="手动标记已发送"
+          overlayClassName={styles.modalOverlay}
+          surfaceClassName={styles.modalCard}
+          onClose={() => setManualMarkDialog(null)}
+          dismissible={!manualMarkBusyId}
+          dismissConfirmMessage="当前标记内容尚未提交，确定关闭吗？"
+        >
+          {({ requestClose }) => (
+            <form className={styles.workspaceModalForm} onSubmit={submitManualMark} inert={Boolean(manualMarkBusyId)} aria-busy={Boolean(manualMarkBusyId)}>
+              <div className={styles.modalHeader}>
+                <div>
+                  <strong>手动标记已发送</strong>
+                  <small>{manualMarkDialog.row.orderNo || "-"} · {manualMarkDialog.row.customerShortName || "-"}</small>
+                </div>
+                <button className={styles.ghostButton} type="button" disabled={Boolean(manualMarkBusyId)} onClick={requestClose}>关闭</button>
               </div>
-              <button className={styles.ghostButton} type="button" disabled={Boolean(manualMarkBusyId)} onClick={() => setManualMarkDialog(null)}>关闭</button>
-            </div>
-            {manualMarkError ? <div className={styles.inlineError}>{manualMarkError}</div> : null}
-            <div className={styles.shippingDocsFormGrid}>
-              <label>
-                发送方式
-                <select
-                  value={manualMarkDialog.deliveryMethod}
-                  onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, deliveryMethod: event.target.value })}
-                  required
-                >
-                  {MANUAL_SEND_METHOD_OPTIONS.map((method) => <option key={method} value={method}>{method}</option>)}
-                </select>
-              </label>
-              <label>
-                发送时间
-                <input
-                  type="datetime-local"
-                  value={manualMarkDialog.sentAt}
-                  onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, sentAt: event.target.value })}
-                  required
-                />
-              </label>
-              <label className={styles.shippingDocsWideField}>
-                备注
-                <textarea
-                  value={manualMarkDialog.remark}
-                  onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, remark: event.target.value })}
-                  rows={4}
-                  placeholder="可填写微信、QQ、客户平台记录编号或人工邮件说明"
-                />
-              </label>
-            </div>
-            <div className={styles.modalFooter}>
-              <button className={styles.secondaryButton} type="button" disabled={Boolean(manualMarkBusyId)} onClick={() => setManualMarkDialog(null)}>取消</button>
-              <button className={styles.primaryButtonCompact} type="submit" disabled={Boolean(manualMarkBusyId)}>
-                {manualMarkBusyId ? "提交中..." : "确认标记"}
-              </button>
-            </div>
-          </form>
-        </div>
+              {manualMarkError ? <div className={styles.inlineError}>{manualMarkError}</div> : null}
+              <div className={styles.shippingDocsFormGrid}>
+                <label>
+                  发送方式
+                  <select
+                    value={manualMarkDialog.deliveryMethod}
+                    onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, deliveryMethod: event.target.value })}
+                    required
+                  >
+                    {MANUAL_SEND_METHOD_OPTIONS.map((method) => <option key={method} value={method}>{method}</option>)}
+                  </select>
+                </label>
+                <label>
+                  发送时间
+                  <input
+                    type="datetime-local"
+                    value={manualMarkDialog.sentAt}
+                    onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, sentAt: event.target.value })}
+                    required
+                  />
+                </label>
+                <label className={styles.shippingDocsWideField}>
+                  备注
+                  <textarea
+                    value={manualMarkDialog.remark}
+                    onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, remark: event.target.value })}
+                    rows={4}
+                    placeholder="可填写微信、QQ、客户平台记录编号或人工邮件说明"
+                  />
+                </label>
+              </div>
+              <div className={styles.modalFooter}>
+                <button className={styles.secondaryButton} type="button" disabled={Boolean(manualMarkBusyId)} onClick={requestClose}>取消</button>
+                <button className={styles.primaryButtonCompact} type="submit" disabled={Boolean(manualMarkBusyId)}>
+                  {manualMarkBusyId ? "提交中..." : "确认标记"}
+                </button>
+              </div>
+            </form>
+          )}
+        </DismissibleLayer>
       ) : null}
     </section>
   );

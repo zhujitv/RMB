@@ -1,5 +1,6 @@
 import { SideDetailDrawer } from "../../components";
 import { customerDisplayName } from "../../utils";
+import { useWorkspaceTabDiscardGuard } from "../../workspace/workspace-tab-context";
 import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import type { CostFormDrawerState, CostRow } from "./model";
 import { QuickCreateCostPanel } from "./quick-create-cost-panel";
@@ -20,6 +21,10 @@ export function CostFormDrawer({
   const cost = drawer.cost;
   const editMode = drawer.mode === "edit";
   const copyMode = drawer.mode === "copy";
+  const confirmDiscardCostEdit = useWorkspaceTabDiscardGuard("当前成本内容尚未保存，确定放弃吗？");
+  const requestCancel = () => {
+    if (confirmDiscardCostEdit()) onCancel();
+  };
   const supplierName = cost ? (cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-") : "-";
   const title = editMode
     ? `${cost?.orderNo || "-"} · ${customerDisplayName(cost || {})}`
@@ -44,7 +49,7 @@ export function CostFormDrawer({
         drawerMode
         initialCost={cost}
         canManageFactoryPayments={canManageFactoryPayments}
-        onCancel={onCancel}
+        onCancel={requestCancel}
         onSaved={onSaved}
       />
     </SideDetailDrawer>

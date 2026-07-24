@@ -4,6 +4,7 @@ import { customerLegalName } from "../../utils";
 import { taxRefundBillOfLadingText } from "./helpers";
 import { type TaxDocument, type TaxRefundDetail, type TaxRefundDetailTab, type TaxRefundRow, type UploadScope } from "./model";
 import { TaxRefundDetailPanel } from "./detail-panel";
+import { useWorkspaceTabBusy, useWorkspaceTabDiscardGuard } from "../../workspace/workspace-tab-context";
 
 export function TaxRefundDetailDrawer({
   row,
@@ -70,6 +71,9 @@ export function TaxRefundDetailDrawer({
   const displayBillOfLadingNo = taxRefundBillOfLadingText(detail || {}, row);
   const dismissLocked = packageDownloading || submittingTax || Boolean(uploadingKey);
   const dismissConfirmMessage = dismissLocked ? "当前内容尚未保存，确定关闭吗？" : "";
+  const drawerBusy = dismissLocked || cancelingArchive || refreshingCompleteness || Boolean(deletingDocumentId);
+  useWorkspaceTabBusy(drawerBusy);
+  const confirmDiscardTaxRefundDraft = useWorkspaceTabDiscardGuard("当前报关资料尚未保存，确定放弃吗？");
 
   return (
     <DismissibleLayer
@@ -90,11 +94,25 @@ export function TaxRefundDetailDrawer({
           </div>
           <div className={styles.taxRefundDrawerActions}>
             {readOnly ? (
-              <button className={styles.secondaryButton} type="button" disabled={cancelingArchive} onClick={onCancelArchive}>
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                disabled={drawerBusy}
+                onClick={() => {
+                  if (confirmDiscardTaxRefundDraft()) onCancelArchive();
+                }}
+              >
                 {cancelingArchive ? "处理中..." : "取消归档"}
               </button>
             ) : (
-              <button className={styles.primaryButtonCompact} type="button" disabled={submittingTax} onClick={onSubmitTaxRefund}>
+              <button
+                className={styles.primaryButtonCompact}
+                type="button"
+                disabled={drawerBusy}
+                onClick={() => {
+                  if (confirmDiscardTaxRefundDraft()) onSubmitTaxRefund();
+                }}
+              >
                 {submittingTax ? "提交中..." : "提交归档"}
               </button>
             )}
@@ -129,7 +147,9 @@ export function TaxRefundDetailDrawer({
             onOpenSupplierDocuments={onOpenSupplierDocuments}
             currentUserRole={currentUserRole}
             canWriteDocuments={canWriteDocuments}
-            onSelectTab={onSelectTab}
+            onSelectTab={(tab) => {
+              if (tab === activeTab || confirmDiscardTaxRefundDraft()) onSelectTab(tab);
+            }}
           />
         </div>
         </>

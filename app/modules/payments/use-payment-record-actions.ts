@@ -26,6 +26,7 @@ type PaymentActionControllerOptions = {
   setNotice: (message: string) => void;
   setDeletingId: (id: string) => void;
   setConfirmingId: (id: string) => void;
+  beforeMutation: () => boolean;
 };
 
 async function refreshPaymentAfterConflict(
@@ -61,6 +62,7 @@ export async function deletePaymentRecord(payment: PaymentRow, options: PaymentA
     variant: "danger",
   });
   if (!result.confirmed) return;
+  if (!options.beforeMutation()) return;
   options.setDeletingId(payment.id);
   options.setError("");
   options.setNotice("");
@@ -100,6 +102,7 @@ export async function confirmPaymentRecordArrived(payment: PaymentRow, options: 
     variant: "default",
   });
   if (!result.confirmed) return;
+  if (!options.beforeMutation()) return;
   options.setConfirmingId(payment.id);
   options.setError("");
   options.setNotice("");

@@ -228,7 +228,7 @@ test("order edit form sends a version token and locks currency only for active p
   assert.match(quickOrderPanel, /已有待确认或已到账收款，币种已锁定/);
 });
 
-test("order edit conflict reloads the latest server row before retrying", async () => {
+test("order edit conflict refreshes the list while preserving the attempted draft", async () => {
   const requestedPaths: string[] = [];
   const latestOrder = {
     id: "order/id 1",
@@ -251,11 +251,11 @@ test("order edit conflict reloads the latest server row before retrying", async 
   assert.equal(isRefreshableOrderConflict({ status: 409, message: "订单号已存在，不能重复提交" }), false);
   assert.match(orderConflictRefresh, /result\.order \|\| result\.data/);
   assert.match(quickOrderController, /loadLatestOrderAfterConflict\([\s\S]*?onConflictRefreshed\(latestOrder\)/);
-  assert.match(quickOrderController, /if \(latestOrder\) \{[\s\S]*?loadOrderSnapshot\(latestOrder\);[\s\S]*?onConflictRefreshed\(latestOrder\)/);
+  assert.doesNotMatch(quickOrderController, /if \(latestOrder\) \{\s*loadOrderSnapshot\(latestOrder\)/);
   assert.match(quickOrderController, /\[initialOrder, initialOrder\?\.updatedAt, loadOrderSnapshot\]/);
-  assert.match(quickOrderController, /系统已载入服务器最新数据并替换本次未保存内容/);
-  assert.match(orderEditActions, /function handleOrderConflictRefreshed\(order: OrderRow\)[\s\S]*?mergeOrderRow\(order, \{ shouldShow \}\)/);
-  assert.match(orderEditActions, /setEditOrder\(\(current\) => current\?\.id === order\.id \? \{ \.\.\.current, \.\.\.order \} : current\)/);
+  assert.match(quickOrderController, /本次未保存内容已保留/);
+  assert.match(orderEditActions, /function handleOrderConflictRefreshed\(order: OrderRow\)[\s\S]*?mergeOrderRow\(order, \{ shouldShow, preserveEditDraft: true \}\)/);
+  assert.match(orderEditActions, /if \(!options\.preserveEditDraft\) \{\s*setEditOrder/);
   assert.match(ordersModuleController, /onOrderConflictRefreshed=\{handleOrderConflictRefreshed\}/);
 });
 
@@ -327,7 +327,7 @@ test("order detail edit switches from drawer to edit form without silent failure
   assert.match(ordersModule, /onEdit=\{\(\) => (?:openEditOrder|actions\.onEditOrder)\(detailOrder, \{ returnToDetail: true \}\)\}/);
   assert.match(ordersModule, /function orderMatchesSubmittedFilters\(order: OrderRow\)/);
   assert.match(ordersModule, /order\.salespersonName/);
-  assert.match(ordersModule, /function mergeOrderRow\(order: OrderRow, options: \{ shouldShow\?: boolean \} = \{\}\)/);
+  assert.match(ordersModule, /function mergeOrderRow\(order: OrderRow, options: \{ shouldShow\?: boolean; preserveEditDraft\?: boolean \} = \{\}\)/);
   assert.match(ordersModule, /const shouldShow = orderMatchesSubmittedFilters\(order\)/);
   assert.match(ordersModule, /setDetailOrder\(order\?\.id \? \{ \.\.\.detailToRestore, \.\.\.order \} : detailToRestore\)/);
   assert.doesNotMatch(ordersModule, /nextRows\.find\(\(order\) => order\.id === savedOrder\.id\) \|\| detailToRestore/);

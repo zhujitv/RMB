@@ -7,6 +7,7 @@ import { customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
 import type { BusinessEntityOption, OrderRow } from "./model";
 import { logisticsSupplierText, paymentTermText, rateMeta } from "./utils";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
 export function OrderDetailDrawer({
   order,
@@ -14,6 +15,7 @@ export function OrderDetailDrawer({
   deleting,
   onEdit,
   onDelete,
+  onBeforeBusinessEntityTransfer,
   onBusinessEntityTransferred,
   onClose,
   canTransferBusinessEntity = false,
@@ -26,6 +28,7 @@ export function OrderDetailDrawer({
   deleting: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onBeforeBusinessEntityTransfer?: (orderId: string) => boolean;
   onBusinessEntityTransferred?: (order: Partial<OrderRow>) => void;
   onClose: () => void;
 }) {
@@ -34,6 +37,9 @@ export function OrderDetailDrawer({
   const [transferMessage, setTransferMessage] = useState("");
   const [transferring, setTransferring] = useState(false);
   const currentBusinessEntityId = order.businessEntityId || "";
+  const transferDirty = targetBusinessEntityId !== currentBusinessEntityId || Boolean(transferReason.trim());
+  useWorkspaceTabDirty(transferDirty);
+  useWorkspaceTabBusy(transferring);
   const exchangeDifferenceCny = Number(order.summary?.exchangeDifferenceCny || 0);
   const targetBusinessEntity = useMemo(() => (
     businessEntities.find((entity) => entity.id === targetBusinessEntityId) || null
@@ -54,6 +60,7 @@ export function OrderDetailDrawer({
       setTransferMessage("请填写转移原因");
       return;
     }
+    if (onBeforeBusinessEntityTransfer && !onBeforeBusinessEntityTransfer(order.id)) return;
     setTransferring(true);
     setTransferMessage("");
     try {
@@ -158,7 +165,7 @@ export function OrderDetailDrawer({
           <div className={styles.reportFilterGrid}>
             <label>
               目标业务主体
-              <select value={targetBusinessEntityId} onChange={(event) => setTargetBusinessEntityId(event.target.value)}>
+              <select value={targetBusinessEntityId} disabled={transferring} onChange={(event) => setTargetBusinessEntityId(event.target.value)}>
                 {businessEntities.map((entity) => (
                   <option key={entity.id} value={entity.id}>{entity.name}</option>
                 ))}
@@ -166,7 +173,7 @@ export function OrderDetailDrawer({
             </label>
             <label className={styles.autocompleteField}>
               转移原因
-              <input value={transferReason} onChange={(event) => setTransferReason(event.target.value)} placeholder="例如 抬头归属调整" />
+              <input value={transferReason} disabled={transferring} onChange={(event) => setTransferReason(event.target.value)} placeholder="例如 抬头归属调整" />
             </label>
           </div>
           {transferMessage ? <div className={transferMessage.includes("失败") || transferMessage.includes("请选择") || transferMessage.includes("填写") ? styles.inlineError : styles.infoStrip}>{transferMessage}</div> : null}

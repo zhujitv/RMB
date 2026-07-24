@@ -6,12 +6,20 @@ import { MENU_ITEMS } from "./menu";
 import type { AuthPayload, MenuItem, User, WorkbenchTodo, WorkbenchTodosState } from "./types";
 import { initials } from "./utils";
 import styles from "./WorkspaceShell.module.css";
+import { WorkspaceTabsBar } from "./workspace/WorkspaceTabsBar";
+import type { WorkspaceTab } from "./workspace/workspace-tabs";
 
 type WorkspaceLayoutProps = {
   payload: AuthPayload;
   menus: MenuItem[];
   activeMenu: string;
+  activeTabTitle: string;
+  tabs: WorkspaceTab[];
+  activeTabId: string;
   onSelectMenu: (key: string) => void;
+  onActivateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
+  onDuplicateActiveTab: () => void;
   onLogout: () => void;
   onPasswordChange: (user: User) => void;
   workbenchTodos: WorkbenchTodosState;
@@ -67,7 +75,13 @@ export function WorkspaceLayout({
   payload,
   menus,
   activeMenu,
+  activeTabTitle,
+  tabs,
+  activeTabId,
   onSelectMenu,
+  onActivateTab,
+  onCloseTab,
+  onDuplicateActiveTab,
   onLogout,
   onPasswordChange,
   workbenchTodos,
@@ -79,11 +93,12 @@ export function WorkspaceLayout({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const active = MENU_ITEMS.find((item) => item.key === activeMenu);
-  const topbarTitle = activeMenu === "welcome"
+  const menuTitle = activeMenu === "welcome"
     ? "工作台首页"
     : activeMenu === "account"
       ? "账户设置"
       : active?.label || "功能模块";
+  const topbarTitle = activeTabTitle || menuTitle;
   const avatarText = payload.user.avatarInitials?.trim() || initials(payload.user.name);
   const companyProfile = payload.companyProfile || {};
   const brandName = companyProfile.brandName?.trim() || "NEXTWOOD";
@@ -220,6 +235,13 @@ export function WorkspaceLayout({
             </div>
           </div>
         </header>
+        <WorkspaceTabsBar
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onActivate={onActivateTab}
+          onClose={onCloseTab}
+          onDuplicateActive={onDuplicateActiveTab}
+        />
         <main className={styles.content}>{children}</main>
       </div>
     </div>

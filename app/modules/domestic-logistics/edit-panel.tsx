@@ -6,11 +6,14 @@ import styles from "../../WorkspaceShell.module.css";
 import { customerLegalName } from "../../utils";
 import { CONTAINER_TYPE_OPTIONS, TRANSPORT_TYPES, emptyTransportItem, type DomesticLogisticsForm, type DomesticLogisticsInfo, type DomesticLogisticsRow, type TransportItem } from "./model";
 import { addTransportItemText, formFromRow, generateRemark, normalizeFormTransportItems, showContainerManagementFields, transportFieldLabels, transportItemsTitle, validateDomesticLogisticsForm } from "./helpers";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
 export function DomesticLogisticsEditPanel({ row, onSaved, onCancel }: { row: DomesticLogisticsRow; onSaved: (info?: DomesticLogisticsInfo | null) => void; onCancel: () => void }) {
   const [form, setForm] = useState<DomesticLogisticsForm>(() => formFromRow(row));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  useWorkspaceTabBusy(saving);
+  useWorkspaceTabDirty(JSON.stringify(form) !== JSON.stringify(formFromRow(row)));
 
   function setFormValue<K extends keyof DomesticLogisticsForm>(key: K, value: DomesticLogisticsForm[K]) {
     setForm((current) => {

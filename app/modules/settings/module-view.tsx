@@ -4,8 +4,12 @@ import { SettingsModuleTabContent } from "./module-tab-content";
 import { SettingsModuleToolbar } from "./module-toolbar";
 import type { useSettingsController } from "./use-settings-controller";
 import { SETTINGS_PAGE_DESCRIPTIONS, TABLE_SETTING_TABS } from "./settings-view-constants";
+import type { OcrValidationRulesDraft } from "./ocr-integration-settings-card";
 
-type SettingsController = ReturnType<typeof useSettingsController>;
+type SettingsController = ReturnType<typeof useSettingsController> & {
+  ocrValidationRulesDraft: OcrValidationRulesDraft;
+  confirmDiscardCurrentSettings: () => boolean;
+};
 
 export function SettingsModuleView(settings: SettingsController) {
   const {
@@ -17,6 +21,7 @@ export function SettingsModuleView(settings: SettingsController) {
     startCreateCustomer,
     startCreateSupplier,
     startCreateUser,
+    confirmDiscardCurrentSettings,
   } = settings;
   const activeTabLabel = SETTINGS_TABS.find((tab) => tab.key === activeTab)?.label || "系统设置";
   const isTableTab = TABLE_SETTING_TABS.has(activeTab);
@@ -58,10 +63,18 @@ export function SettingsModuleView(settings: SettingsController) {
               <SettingsHeaderActions
                 activeTab={activeTab}
                 loading={loading}
-                onCreateCustomer={startCreateCustomer}
-                onCreateSupplier={startCreateSupplier}
-                onCreateUser={startCreateUser}
-                onRefresh={refreshCurrent}
+                onCreateCustomer={() => {
+                  if (confirmDiscardCurrentSettings()) startCreateCustomer();
+                }}
+                onCreateSupplier={() => {
+                  if (confirmDiscardCurrentSettings()) startCreateSupplier();
+                }}
+                onCreateUser={() => {
+                  if (confirmDiscardCurrentSettings()) startCreateUser();
+                }}
+                onRefresh={() => {
+                  if (confirmDiscardCurrentSettings()) refreshCurrent();
+                }}
               />
             </div>
           </div>

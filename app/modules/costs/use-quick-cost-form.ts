@@ -23,6 +23,13 @@ import {
   isProductSupplierPaymentFormLocked,
 } from "./helpers";
 
+function quickCostDraftSignature(form: QuickCostForm, items: CostItemForm[]) {
+  return JSON.stringify({
+    form,
+    items: items.map(({ localId: _localId, ...item }) => item),
+  });
+}
+
 export function useQuickCostForm({
   initialCost,
   canManageFactoryPayments,
@@ -276,6 +283,10 @@ export function useQuickCostForm({
     copyMode,
     form,
     items,
+    dirty: quickCostDraftSignature(form, items) !== quickCostDraftSignature(
+      costFormFromRow(initialCost),
+      [costItemFromRow(initialCost)],
+    ),
     orderOptions,
     supplierOptions,
     selectedOrder,

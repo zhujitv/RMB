@@ -31,6 +31,29 @@ type UseLogisticsExpenseFormControllerParams = {
   currentUserSupplierId?: string;
 };
 
+function createInitialExpenseForm({
+  initialOrderId,
+  initialSuppliers,
+  isLockedSupplier,
+  currentUserSupplierId,
+}: {
+  initialOrderId: string;
+  initialSuppliers: SupplierOption[];
+  isLockedSupplier: boolean;
+  currentUserSupplierId: string;
+}): ExpenseForm {
+  return {
+    ...emptyExpenseForm,
+    orderId: initialOrderId,
+    supplierId: isLockedSupplier
+      ? currentUserSupplierId
+      : initialSuppliers.length === 1
+        ? initialSuppliers[0].id
+        : "",
+    items: [emptyExpenseItem()],
+  };
+}
+
 export function useLogisticsExpenseFormController({
   onSaved,
   initialOrder,
@@ -42,16 +65,13 @@ export function useLogisticsExpenseFormController({
   const initialSuppliers = normalizedInitialOrder?.logisticsSuppliers || [];
   const isLockedSupplier = currentUserRole === "物流供应商" && Boolean(currentUserSupplierId);
   const canSelectTemporarySupplier = !isLockedSupplier && ["管理员", "业务员"].includes(currentUserRole);
-  const [form, setForm] = useState<ExpenseForm>(() => ({
-    ...emptyExpenseForm,
-    orderId: initialOrderId,
-    supplierId: isLockedSupplier
-      ? currentUserSupplierId
-      : initialSuppliers.length === 1
-        ? initialSuppliers[0].id
-        : "",
-    items: [emptyExpenseItem()],
-  }));
+  const initialForm = createInitialExpenseForm({
+    initialOrderId,
+    initialSuppliers,
+    isLockedSupplier,
+    currentUserSupplierId,
+  });
+  const [form, setForm] = useState<ExpenseForm>(() => initialForm);
   const [orders, setOrders] = useState<ExpenseOrderOption[]>(() => normalizedInitialOrder ? [normalizedInitialOrder] : []);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>(() => initialSuppliers);
   const [saving, setSaving] = useState(false);
@@ -277,6 +297,7 @@ export function useLogisticsExpenseFormController({
 
   return {
     form,
+    dirty: JSON.stringify(form) !== JSON.stringify(initialForm),
     message,
     saving,
     selectedOrder,

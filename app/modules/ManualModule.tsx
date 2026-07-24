@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import styles from "../WorkspaceShell.module.css";
+import { useWorkspaceTabContext } from "../workspace/workspace-tab-context";
 import { UPLOAD_REPLACE_TEXT } from "../uploadTexts";
 
 type ManualSection = {
@@ -197,6 +198,7 @@ const SECTIONS: ManualSection[] = [
 ];
 
 export function ManualModule() {
+  const workspaceTab = useWorkspaceTabContext();
   const [query, setQuery] = useState("");
   const [openSections, setOpenSections] = useState<Set<string>>(() => (
     new Set(SECTIONS.filter((section) => section.defaultOpen).map((section) => section.id))
@@ -228,7 +230,10 @@ export function ManualModule() {
   function scrollToSection(id: string) {
     setOpenSections((current) => new Set(current).add(id));
     requestAnimationFrame(() => {
-      document.getElementById(`manual-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const targetId = `manual-${id}`;
+      const target = workspaceTab?.portalTarget?.parentElement?.querySelector<HTMLElement>(`#${CSS.escape(targetId)}`)
+        || document.getElementById(targetId);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 

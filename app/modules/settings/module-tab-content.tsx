@@ -18,8 +18,12 @@ import {
 import { SettingsHomeGrid } from "./settings-home-grid";
 import { SettingsTableContent } from "./module-edit-panels";
 import type { useSettingsController } from "./use-settings-controller";
+import type { OcrValidationRulesDraft } from "./ocr-integration-settings-card";
 
-type SettingsController = ReturnType<typeof useSettingsController>;
+type SettingsController = ReturnType<typeof useSettingsController> & {
+  ocrValidationRulesDraft: OcrValidationRulesDraft;
+  confirmDiscardCurrentSettings: () => boolean;
+};
 
 export function SettingsModuleTabContent({ settings }: { settings: SettingsController }) {
   const {
@@ -54,6 +58,8 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     notificationTemplateMessage,
     ocrIntegrationSaving,
     ocrIntegrationMessage,
+    ocrValidationRulesDraft,
+    confirmDiscardCurrentSettings,
     shipsgoIntegrationSaving,
     shipsgoIntegrationMessage,
     selectTab,
@@ -111,9 +117,15 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
         saving={businessEntitySaving}
         message={businessEntityMessage}
         onChange={setBusinessEntityForm}
-        onCreate={startCreateBusinessEntity}
-        onEdit={startEditBusinessEntity}
-        onCancel={cancelBusinessEntityEdit}
+        onCreate={() => {
+          if (confirmDiscardCurrentSettings()) startCreateBusinessEntity();
+        }}
+        onEdit={(entity) => {
+          if (confirmDiscardCurrentSettings()) startEditBusinessEntity(entity);
+        }}
+        onCancel={() => {
+          if (confirmDiscardCurrentSettings()) cancelBusinessEntityEdit();
+        }}
         onSubmit={saveBusinessEntityForm}
       />
     );
@@ -164,7 +176,9 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
         saving={notificationTemplateSaving}
         message={notificationTemplateMessage}
         onChange={setNotificationTemplateForm}
-        onSelectType={selectNotificationTemplate}
+        onSelectType={(templateType) => {
+          if (confirmDiscardCurrentSettings()) selectNotificationTemplate(templateType);
+        }}
         onReset={() => {
           setNotificationTemplateForm(notificationTemplateFormFromSettings(notificationTemplateSettings, selectedNotificationTemplateType));
           setNotificationTemplateMessage("");
@@ -187,6 +201,7 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
           setOcrIntegrationMessage("");
         }}
         onSubmit={saveOcrIntegrationSettings}
+        validationRulesDraft={ocrValidationRulesDraft}
       />
     );
   }

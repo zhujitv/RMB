@@ -12,6 +12,7 @@ import { PaymentSummaryCards } from "./payments/payment-summary-cards";
 import { QuickCreatePaymentPanel } from "./payments/quick-payment-panel";
 import { confirmPaymentRecordArrived, deletePaymentRecord } from "./payments/use-payment-record-actions";
 import { PAGE_SIZE, emptyPaymentFilters, type PaymentFilters, type PaymentRow, type PaymentSummary, type PaymentsResponse } from "./payments/types";
+import { useWorkspaceTabBusy, useWorkspaceTabContext, useWorkspaceTabDiscardGuard, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 
 export function PaymentsModule({
   currentUser,
@@ -46,6 +47,11 @@ export function PaymentsModule({
     updateConfirmationInput,
   } = useConfirmationDialog();
   const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
+  useWorkspaceTabBusy(Boolean(deletingId || confirmingId));
+  const workspaceTab = useWorkspaceTabContext();
+  const workspaceBusyRef = useRef(Boolean(workspaceTab?.busy));
+  workspaceBusyRef.current = Boolean(workspaceTab?.busy);
+  const confirmDiscardPaymentEdit = useWorkspaceTabDiscardGuard("当前收款内容尚未保存，确定放弃吗？");
   async function loadPayments(nextPage = page, nextFilters = submittedFilters): Promise<PaymentRow[] | null> {
     const requestId = ++listRequestRef.current;
     setLoading(true);
@@ -183,6 +189,44 @@ export function PaymentsModule({
     setEditPayment((current) => current?.id === payment.id ? { ...current, ...payment } : current);
   }
 
+  function confirmDiscardPaymentDraftBeforeMutation(paymentId: string) {
+    if (!ensurePaymentTabIdle()) return false;
+    if (!createOpen && editPayment?.id !== paymentId) return true;
+    if (!confirmDiscardPaymentEdit()) return false;
+    setCreateOpen(false);
+    setEditPayment(null);
+    return true;
+  }
+
+  function ensurePaymentTabIdle() {
+    if (!workspaceBusyRef.current) return true;
+    window.alert("当前收款操作正在进行，请完成后再继续。");
+    return false;
+  }
+
+  const workspacePayment = editPayment || detailPayment;
+  useWorkspaceTabPresentation({
+    title: editPayment
+      ? `编辑收款 · ${editPayment.orderNo || "未关联订单"}`
+      : createOpen
+        ? "登记收款"
+        : detailPayment
+          ? `收款 · ${detailPayment.orderNo || detailPayment.bankReference || "详情"}`
+          : "收款管理",
+    view: editPayment || createOpen ? "edit" : detailPayment ? "detail" : "list",
+    contextKey: editPayment
+      ? `edit:${editPayment.id}`
+      : createOpen
+        ? "create:payment"
+        : workspacePayment
+          ? `detail:${workspacePayment.id}`
+          : "list:payments",
+    ensureListTab: Boolean(editPayment || createOpen || detailPayment),
+  });
+  useWorkspaceTabReactivation(() => {
+    void loadPayments(page, submittedFilters);
+  });
+
   return (
     <section className={styles.moduleCard}>
       <div className={styles.moduleHeader}>
@@ -195,6 +239,7 @@ export function PaymentsModule({
               className={styles.primaryButtonCompact}
               type="button"
               onClick={() => {
+                if ((createOpen || editPayment) && !confirmDiscardPaymentEdit()) return;
                 setEditPayment(null);
                 setCreateOpen((current) => !current);
               }}
@@ -222,6 +267,7 @@ export function PaymentsModule({
           initialPayment={editPayment}
           canConfirmArrived={canManagePayments}
           onCancel={() => {
+            if (!confirmDiscardPaymentEdit()) return;
             setCreateOpen(false);
             setEditPayment(null);
           }}
@@ -231,11 +277,9 @@ export function PaymentsModule({
             setDetailPayment((current) => current?.id === paymentId
               ? (latestPayment ? { ...current, ...latestPayment } : null)
               : current);
-            setCreateOpen(false);
-            setEditPayment(null);
             setError(refreshedRows
-              ? "该收款记录已被其他人更新，列表已刷新。请重新打开编辑并核对最新数据。"
-              : "该收款记录已被其他人更新，但自动刷新失败。请手动刷新后再编辑。");
+              ? "该收款记录已被其他人更新，列表已刷新；本次未保存内容仍保留在编辑区。请先复制需要保留的内容，再取消编辑并重新打开核对。"
+              : "该收款记录已被其他人更新，自动刷新失败；本次未保存内容仍保留在编辑区。请先复制内容，再手动刷新后重新编辑。");
           }}
           onSaved={(payment) => {
             if (payment?.id) {
@@ -281,12 +325,30 @@ export function PaymentsModule({
           canManage={canManagePayments}
           deleting={deletingId === detailPayment.id}
           confirming={confirmingId === detailPayment.id}
+          busy={Boolean(workspaceTab?.busy)}
           onEdit={() => {
+            if (!ensurePaymentTabIdle()) return;
+            if (editPayment?.id === detailPayment.id) {
+              setCreateOpen(false);
+              setEditPayment(editPayment);
+              return;
+            }
+            const replacingDraft = Boolean(
+              (createOpen || editPayment)
+              && (createOpen || editPayment?.id !== detailPayment.id),
+            );
+            if (replacingDraft && !confirmDiscardPaymentEdit()) return;
             setCreateOpen(false);
             setEditPayment(detailPayment);
           }}
-          onDelete={() => void deletePaymentRecord(detailPayment, paymentActionOptions())}
-          onConfirmArrived={() => void confirmPaymentRecordArrived(detailPayment, paymentActionOptions())}
+          onDelete={() => {
+            if (!ensurePaymentTabIdle()) return;
+            void deletePaymentRecord(detailPayment, paymentActionOptions(detailPayment.id));
+          }}
+          onConfirmArrived={() => {
+            if (!ensurePaymentTabIdle()) return;
+            void confirmPaymentRecordArrived(detailPayment, paymentActionOptions(detailPayment.id));
+          }}
           onClose={() => setDetailPayment(null)}
         />
       ) : null}
@@ -301,7 +363,7 @@ export function PaymentsModule({
     </section>
   );
 
-  function paymentActionOptions() {
+  function paymentActionOptions(paymentId: string) {
     return {
       page,
       submittedFilters,
@@ -316,6 +378,7 @@ export function PaymentsModule({
       setNotice,
       setDeletingId,
       setConfirmingId,
+      beforeMutation: () => confirmDiscardPaymentDraftBeforeMutation(paymentId),
     };
   }
 }

@@ -61,7 +61,7 @@ test("quick payment registration validates required fields before submit", () =>
   assert.match(paymentsModule, /errors\.amount = "收款金额必须大于 0"/);
   assert.match(paymentsModule, /errors\.exchangeRate = "汇率不能为空"/);
   assert.match(paymentsModule, /errors\.exchangeRate = "汇率必须大于 0"/);
-  assert.match(paymentsModule, /<form className=\{styles\.quickCreatePanel\} onSubmit=\{submitQuickPayment\} noValidate>/);
+  assert.match(paymentsModule, /<form className=\{styles\.quickCreatePanel\} onSubmit=\{submitQuickPayment\} noValidate inert=\{saving\} aria-busy=\{saving\}>/);
   assert.match(paymentsModule, /\{fieldErrors\.paymentDate \? <small className=\{styles\.inlineError\}>\{fieldErrors\.paymentDate\}<\/small> : null\}/);
   assert.match(paymentsModule, /\{fieldErrors\.amount \? <small className=\{styles\.inlineError\}>\{fieldErrors\.amount\}<\/small> : null\}/);
   assert.match(paymentsModule, /setMessage\(errors\.paymentType \|\| "请完善收款信息"\)/);

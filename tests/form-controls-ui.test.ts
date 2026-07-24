@@ -305,8 +305,9 @@ test("native form controls are normalized by the workspace style layer", () => {
 test("customer edit panel uses the unified portal dialog instead of inline table rendering", () => {
   const customerDrawerSnippet = settingsModuleMain.match(/\{customerForm && activeTab === "customers"[\s\S]*?\) : null\}/)?.[0] || "";
   assert.match(components, /import \{ createPortal \} from "react-dom"/);
-  assert.match(components, /const \[portalTarget, setPortalTarget\] = useState<HTMLElement \| null>\(null\)/);
-  assert.match(components, /setPortalTarget\(document\.body\)/);
+  assert.match(components, /const \[defaultPortalTarget, setDefaultPortalTarget\] = useState<HTMLElement \| null>\(null\)/);
+  assert.match(components, /if \(!workspaceTab\) setDefaultPortalTarget\(document\.body\)/);
+  assert.match(components, /workspaceTab \? workspaceTab\.portalTarget : defaultPortalTarget/);
   assert.match(components, /document\.body\.style\.overflow = "hidden"/);
   assert.match(components, /document\.body\.style\.overflow = previousBodyOverflow/);
   assert.doesNotMatch(components, /document\.body\.style\.overflow = previousBodyOverflow \|\| "auto"/);

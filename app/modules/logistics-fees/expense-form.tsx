@@ -1,6 +1,7 @@
 import { LogisticsExpenseFormView } from "./expense-form-view";
 import type { ExpenseOrderOption } from "./model";
 import { useLogisticsExpenseFormController } from "./use-logistics-expense-form-controller";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
 export function LogisticsExpenseForm({
   onCancel,
@@ -21,6 +22,8 @@ export function LogisticsExpenseForm({
     currentUserRole,
     currentUserSupplierId,
   });
+  useWorkspaceTabDirty(controller.dirty);
+  useWorkspaceTabBusy(controller.saving);
 
   return (
     <LogisticsExpenseFormView

@@ -135,6 +135,7 @@ export function ControlTowerDetailPanel({
   canManage,
   features,
   syncing,
+  navigationDisabled,
   onSync,
   onOpenOrder,
   onToggleTimeline,
@@ -144,6 +145,7 @@ export function ControlTowerDetailPanel({
   canManage: boolean;
   features: ShipsgoFeatureFlags;
   syncing: boolean;
+  navigationDisabled: boolean;
   onSync: () => void;
   onOpenOrder: () => void;
   onToggleTimeline: () => void;
@@ -169,7 +171,7 @@ export function ControlTowerDetailPanel({
         ) : null}
         <button className={styles.secondaryButton} type="button" onClick={onToggleTimeline}>{timelineExpanded ? "收起运输节点" : "展开运输节点"}</button>
         <ShipsgoMapAction features={features} trackingId={row.id} mapUrl={row.mapUrl} />
-        <button className={styles.secondaryButton} type="button" onClick={onOpenOrder}>跳转物流详情</button>
+        <button className={styles.secondaryButton} type="button" disabled={navigationDisabled} onClick={onOpenOrder}>跳转物流详情</button>
       </div>
     </aside>
   );

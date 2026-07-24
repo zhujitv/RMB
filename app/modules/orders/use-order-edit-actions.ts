@@ -59,7 +59,7 @@ export function useOrderEditActions({
     });
   }
 
-  function mergeOrderRow(order: OrderRow, options: { shouldShow?: boolean } = {}) {
+  function mergeOrderRow(order: OrderRow, options: { shouldShow?: boolean; preserveEditDraft?: boolean } = {}) {
     const shouldShow = options.shouldShow ?? orderMatchesSubmittedFilters(order);
     setOrders((current) => {
       const exists = current.some((item) => item.id === order.id);
@@ -71,7 +71,9 @@ export function useOrderEditActions({
       return page === 1 && shouldShow ? [order, ...current].slice(0, PAGE_SIZE) : current;
     });
     setDetailOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
-    setEditOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
+    if (!options.preserveEditDraft) {
+      setEditOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
+    }
     setReturnDetailOrder((current) => current?.id === order.id ? { ...current, ...order } : current);
   }
 
@@ -117,10 +119,10 @@ export function useOrderEditActions({
   function handleOrderConflictRefreshed(order: OrderRow) {
     const existedInRows = orders.some((item) => item.id === order.id);
     const shouldShow = orderMatchesSubmittedFilters(order);
-    mergeOrderRow(order, { shouldShow });
+    mergeOrderRow(order, { shouldShow, preserveEditDraft: true });
     if (existedInRows && !shouldShow) setTotal((current) => Math.max(0, current - 1));
     if (!existedInRows && page === 1 && shouldShow) setTotal((current) => current + 1);
-    setNotice("订单已刷新为服务器最新数据，请在编辑区重新核对后再保存。");
+    setNotice("订单列表已刷新为服务器最新数据；编辑区保留本次未保存内容。");
   }
 
   function handleOrderEditCancel() {

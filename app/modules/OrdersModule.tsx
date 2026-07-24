@@ -15,6 +15,7 @@ import {
 } from "./orders/model";
 import { useOrderAdminActions } from "./orders/use-order-admin-actions";
 import { useOrderEditActions } from "./orders/use-order-edit-actions";
+import { useWorkspaceTabBusy, useWorkspaceTabContext, useWorkspaceTabDiscardGuard, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 
 type BusinessEntitiesResponse = {
   entities?: BusinessEntityOption[];
@@ -54,6 +55,7 @@ export function OrdersModule({
   const [returnDetailOrder, setReturnDetailOrder] = useState<OrderRow | null>(null);
   const [deletingId, setDeletingId] = useState("");
   const [repairingSalespeople, setRepairingSalespeople] = useState(false);
+  const [orderEditDirty, setOrderEditDirty] = useState(false);
   const editPanelRef = useRef<HTMLDivElement | null>(null);
   const listRequestRef = useRef(0);
   const {
@@ -65,6 +67,9 @@ export function OrdersModule({
   } = useConfirmationDialog();
   const canWriteOrders = canWritePermission(currentUser, permissions, "orders", ["管理员", "业务员"]);
   const canManageOrderAssignments = currentUser.role === "管理员";
+  useWorkspaceTabBusy(Boolean(deletingId) || repairingSalespeople);
+  const workspaceTab = useWorkspaceTabContext();
+  const confirmDiscardOrderEdit = useWorkspaceTabDiscardGuard("当前订单内容尚未保存，确定放弃吗？");
 
   async function loadOrders(nextPage = page, nextKeyword = submittedKeyword, nextOrderStatus = submittedOrderStatus, nextBusinessEntityId = submittedBusinessEntityId) {
     const requestId = ++listRequestRef.current;
@@ -193,6 +198,33 @@ export function OrdersModule({
     setNotice,
   });
 
+  function guardedOpenEditOrder(order: OrderRow | null, options: { returnToDetail?: boolean } = {}) {
+    if (editOrder?.id && editOrder.id === order?.id) {
+      openEditOrder(editOrder, options);
+      return;
+    }
+    const replacingDraft = Boolean(
+      (createOpen || editOrder)
+      && (createOpen || editOrder?.id !== order?.id),
+    );
+    if (replacingDraft && !confirmDiscardOrderEdit()) return;
+    openEditOrder(order, options);
+  }
+
+  function confirmBeforeBusinessEntityTransfer(orderId: string) {
+    if (workspaceTab?.busy) {
+      window.alert("当前订单操作正在进行，请完成后再转移业务主体。");
+      return false;
+    }
+    if (!orderEditDirty || editOrder?.id !== orderId) return true;
+    if (!window.confirm("当前订单编辑内容尚未保存。继续转移业务主体将放弃这些修改，确定继续吗？")) return false;
+    setCreateOpen(false);
+    setEditOrder(null);
+    setReturnDetailOrder(null);
+    setOrderEditDirty(false);
+    return true;
+  }
+
   const { deleteOrder, repairMissingSalespeople } = useOrderAdminActions({
     canWriteOrders,
     canManageOrderAssignments,
@@ -209,6 +241,29 @@ export function OrdersModule({
     setEditOrder,
     setCreateOpen,
     setRepairingSalespeople,
+  });
+
+  const workspaceOrder = editOrder || detailOrder;
+  useWorkspaceTabPresentation({
+    title: editOrder
+      ? `编辑订单 · ${editOrder.orderNo || "未编号"}`
+      : createOpen
+        ? "新建订单"
+        : detailOrder
+          ? `订单 · ${detailOrder.orderNo || "未编号"}`
+          : "应收订单",
+    view: editOrder || createOpen ? "edit" : detailOrder ? "detail" : "list",
+    contextKey: editOrder
+      ? `edit:${editOrder.id}`
+      : createOpen
+        ? "create:order"
+        : workspaceOrder
+          ? `detail:${workspaceOrder.id}`
+          : "list:orders",
+    ensureListTab: Boolean(editOrder || createOpen || detailOrder),
+  });
+  useWorkspaceTabReactivation(() => {
+    void loadOrders(page, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
   });
 
   return (
@@ -244,16 +299,27 @@ export function OrdersModule({
         setNotice("");
         void loadOrders(page, submittedKeyword, submittedOrderStatus, submittedBusinessEntityId);
       }}
-      onToggleCreate={toggleCreateOrder}
+      onToggleCreate={() => {
+        if ((createOpen || editOrder) && !confirmDiscardOrderEdit()) return;
+        toggleCreateOrder();
+      }}
       onRepairSalespeople={() => void repairMissingSalespeople()}
       onOrderConflictRefreshed={handleOrderConflictRefreshed}
+      onOrderEditDirtyChange={setOrderEditDirty}
       onOrderSaved={(order) => void handleOrderSaved(order)}
-      onOrderEditCancel={handleOrderEditCancel}
+      onOrderEditCancel={() => {
+        if (!confirmDiscardOrderEdit()) return;
+        handleOrderEditCancel();
+      }}
       onPage={gotoPage}
       onSetDetailOrder={setDetailOrder}
-      onEditOrder={openEditOrder}
-      onDeleteOrder={(order) => void deleteOrder(order)}
+      onEditOrder={guardedOpenEditOrder}
+      onDeleteOrder={(order) => {
+        if ((createOpen || editOrder) && !confirmDiscardOrderEdit()) return;
+        void deleteOrder(order);
+      }}
       onBusinessEntityTransferred={applyOrderPatch}
+      onBeforeBusinessEntityTransfer={confirmBeforeBusinessEntityTransfer}
       onOpenExchangeSettings={onOpenExchangeSettings}
       onCancelConfirmation={cancelConfirmation}
       onConfirmConfirmation={confirmConfirmation}

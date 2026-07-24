@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useEffect, type FormEvent } from "react";
 import { CustomerAutocomplete } from "../../CustomerAutocomplete";
 import styles from "../../WorkspaceShell.module.css";
 import {
@@ -14,6 +14,7 @@ import {
   PaymentInstallmentsEditor,
 } from "./quick-order-fields";
 import { useQuickOrderPanelController } from "./quick-order-panel-controller";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
 export function QuickCreateOrderPanel({
   initialOrder,
@@ -21,6 +22,7 @@ export function QuickCreateOrderPanel({
   onOpenExchangeSettings,
   onCancel,
   onConflictRefreshed,
+  onDirtyChange,
   onSaved,
 }: {
   initialOrder?: OrderRow | null;
@@ -28,6 +30,7 @@ export function QuickCreateOrderPanel({
   onOpenExchangeSettings?: () => void;
   onCancel: () => void;
   onConflictRefreshed: (order: OrderRow) => void;
+  onDirtyChange?: (dirty: boolean) => void;
   onSaved: (order?: OrderRow | null) => void;
 }) {
   const controller = useQuickOrderPanelController({
@@ -37,6 +40,12 @@ export function QuickCreateOrderPanel({
     onConflictRefreshed,
     onSaved,
   });
+  useWorkspaceTabBusy(controller.saving);
+  useWorkspaceTabDirty(controller.dirty);
+  useEffect(() => {
+    onDirtyChange?.(controller.dirty);
+    return () => onDirtyChange?.(false);
+  }, [controller.dirty, onDirtyChange]);
 
   function submitQuickOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,7 +53,7 @@ export function QuickCreateOrderPanel({
   }
 
   return (
-    <form className={styles.quickCreatePanel} onSubmit={submitQuickOrder}>
+    <form className={styles.quickCreatePanel} onSubmit={submitQuickOrder} inert={controller.saving} aria-busy={controller.saving}>
       <div className={styles.quickCreateHeader}>
         <div>
           <strong>{initialOrder?.id ? "编辑应收订单" : "新建应收订单"}</strong>

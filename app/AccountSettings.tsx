@@ -10,8 +10,9 @@ import { passwordStrength } from "./account-settings/helpers";
 import { LoginRecordsPanel, PreferencesPanel } from "./account-settings/activity-panels";
 import { ProfilePanel, SecurityPanel } from "./account-settings/panels";
 import { ACCOUNT_TABS, type AccountSettingsProps, type AccountTab, type LoginRecord, type LoginRecordsResponse, type PasswordResponse, type ProfileResponse } from "./account-settings/model";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "./workspace/workspace-tab-context";
 
-export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswordChanged }: AccountSettingsProps) {
+export function AccountSettings({ user, companyProfile, onProfileSaved, onBeforePasswordChange, onPasswordChanged }: AccountSettingsProps) {
   const [tab, setTab] = useState<AccountTab>("profile");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,6 +32,7 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
   });
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [loginRecords, setLoginRecords] = useState<LoginRecord[]>([]);
   const [loginRecordsState, setLoginRecordsState] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [loginRecordsMessage, setLoginRecordsMessage] = useState("");
@@ -67,6 +69,17 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
   const confirmPasswordMessage = useMemo(() => (
     confirmPassword && newPassword !== confirmPassword ? "两次输入的新密码不一致。" : ""
   ), [confirmPassword, newPassword]);
+  const profileDirty = profileForm.name !== (user.name || "")
+    || profileForm.englishName !== (user.englishName || "")
+    || profileForm.avatarInitials !== (user.avatarInitials || "")
+    || profileForm.avatarUrl !== (user.avatarUrl || "");
+  const securitySettingsDirty = securityForm.loginAlertEnabled !== (user.loginAlertEnabled !== false);
+  const securityDirty = securitySettingsDirty || Boolean(currentPassword || newPassword || confirmPassword);
+  const preferencesDirty = preferenceForm.defaultLanguage !== (user.defaultLanguage || "zh-CN")
+    || preferenceForm.defaultHome !== (user.defaultHome || "welcome")
+    || preferenceForm.pageSize !== String(user.pageSize || 20);
+  useWorkspaceTabDirty(profileDirty || securityDirty || preferencesDirty);
+  useWorkspaceTabBusy(busy);
 
   function accountPatchPayload(overrides: Partial<{
     name: string;
@@ -144,10 +157,8 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const currentPassword = String(form.get("currentPassword") || "");
-    const password = String(form.get("newPassword") || "");
-    const passwordConfirm = String(form.get("confirmPassword") || "");
+    const password = newPassword;
+    const passwordConfirm = confirmPassword;
     if (password !== passwordConfirm) {
       setMessage("两次输入的新密码不一致。");
       return;
@@ -156,6 +167,7 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
       setMessage(PASSWORD_POLICY_MESSAGE);
       return;
     }
+    if (!onBeforePasswordChange(profileDirty || securitySettingsDirty || preferencesDirty)) return;
     setBusy(true);
     setMessage("");
     try {
@@ -211,7 +223,7 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
   }
 
   return (
-    <section className={styles.accountSettingsPage}>
+    <section className={styles.accountSettingsPage} inert={busy} aria-busy={busy}>
       <div className={styles.accountSettingsHeader}>
         {profileForm.avatarUrl ? (
           <img className={styles.accountAvatarImage} src={profileForm.avatarUrl} alt="用户头像" />
@@ -230,6 +242,7 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
               key={item.key}
               className={tab === item.key ? styles.accountTabActive : ""}
               type="button"
+              disabled={busy}
               onClick={() => {
                 setTab(item.key);
                 setMessage("");
@@ -257,12 +270,14 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onPasswo
               user={user}
               busy={busy}
               strength={strength}
+              currentPassword={currentPassword}
               newPassword={newPassword}
               confirmPassword={confirmPassword}
               securityForm={securityForm}
               passwordPolicyMessage={passwordPolicyMessage}
               confirmPasswordMessage={confirmPasswordMessage}
               onSubmit={changePassword}
+              onCurrentPasswordChange={setCurrentPassword}
               onNewPasswordChange={setNewPassword}
               onConfirmPasswordChange={setConfirmPassword}
               onSecurityChange={(loginAlertEnabled) => setSecurityForm({ loginAlertEnabled })}

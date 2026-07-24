@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { PaginationBar, UiCheckbox } from "../components";
 import { canReadPermission, downloadBlob } from "../utils";
@@ -31,6 +31,7 @@ import {
   type SortDirection,
 } from "./reports/model";
 import { ReportRows } from "./reports/report-rows";
+import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 
 export function ReportsModule({
   currentUser,
@@ -65,10 +66,22 @@ export function ReportsModule({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [businessEntities, setBusinessEntities] = useState<BusinessEntityOption[]>([]);
+  const queryRequestRef = useRef(0);
 
   const visibleColumns = useMemo(() => columns.slice(0, 5), [columns]);
   const allPageSelected = rows.length > 0 && rows.every((row) => row.id && selectedIds.has(String(row.id)));
   const showDeclarationMonth = reportType === "tax-refunds";
+  const activeReportLabel = visibleReportTypes.find((type) => type.key === reportType)?.label || "业务报表";
+  useWorkspaceTabBusy(downloading);
+
+  useWorkspaceTabPresentation({
+    title: `报表 · ${activeReportLabel}`,
+    view: "report",
+    contextKey: `report:${reportType}`,
+  });
+  useWorkspaceTabReactivation(() => {
+    if (queried) void queryRows(page, submittedFilters, sortBy, sortDir);
+  });
 
   useEffect(() => {
     void loadBusinessEntities();
@@ -106,6 +119,7 @@ export function ReportsModule({
     nextSortBy = sortBy,
     nextSortDir = sortDir,
   ) {
+    const requestId = ++queryRequestRef.current;
     setLoading(true);
     setError("");
     setNotice("");
@@ -117,6 +131,7 @@ export function ReportsModule({
       if (nextSortBy) params.set("sortBy", nextSortBy);
       if (nextSortDir) params.set("sortDir", nextSortDir);
       const result = await apiJson<ReportResponse>(`/api/reports/${encodeURIComponent(reportType)}?${params}`);
+      if (requestId !== queryRequestRef.current) return;
       setColumns(Array.isArray(result.columns) ? result.columns : []);
       setRows(Array.isArray(result.rows) ? result.rows : []);
       setPage(Number(result.pagination?.page || nextPage));
@@ -126,9 +141,10 @@ export function ReportsModule({
       setExpandedId("");
       setNotice(`报表查询完成，共 ${Number(result.pagination?.total || 0)} 条`);
     } catch (loadError) {
+      if (requestId !== queryRequestRef.current) return;
       setError(loadError instanceof Error ? loadError.message : "查询报表失败");
     } finally {
-      setLoading(false);
+      if (requestId === queryRequestRef.current) setLoading(false);
     }
   }
 
@@ -148,6 +164,8 @@ export function ReportsModule({
   }
 
   function clearResults() {
+    queryRequestRef.current += 1;
+    setLoading(false);
     setColumns([]);
     setRows([]);
     setPage(1);

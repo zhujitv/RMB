@@ -96,7 +96,7 @@ export function CustomerCommunicationDrawer({
                 <section className={styles.documentGroupCard}>
                   <strong>邮件发送</strong>
                   {form ? (
-                    <form className={styles.shippingDocsForm} onKeyDown={preventEnterFormSubmit} onSubmit={onSubmit}>
+                    <form className={styles.shippingDocsForm} onKeyDown={preventEnterFormSubmit} onSubmit={onSubmit} inert={sending} aria-busy={sending}>
                       <div className={styles.shippingDocsFormGrid}>
                         <label>
                           邮件语言

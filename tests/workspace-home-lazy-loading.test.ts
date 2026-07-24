@@ -7,7 +7,9 @@ const workspaceShell = readWorkspaceShellSource();
 const apiClient = readFileSync("app/api.ts", "utf8");
 
 test("workspace home keeps business modules lazy-loaded behind menu selection", () => {
-  assert.match(workspaceShell, /const \[activeMenu, setActiveMenu\] = useState\("welcome"\)/);
+  assert.match(workspaceShell, /const workspaceTabs = useWorkspaceTabs\(\{ allowedMenuKeys \}\)/);
+  assert.match(workspaceShell, /createInitialWorkspaceTabsState/);
+  assert.match(workspaceShell, /WORKSPACE_HOME_TAB_ID = "workspace:welcome"/);
   assert.match(workspaceShell, /import dynamic from "next\/dynamic"/);
   for (const moduleName of [
     "OrdersModule",
@@ -24,7 +26,7 @@ test("workspace home keeps business modules lazy-loaded behind menu selection", 
     assert.doesNotMatch(workspaceShell, new RegExp(`import \\{ ${moduleName} \\} from "\\./modules/`));
     assert.match(workspaceShell, new RegExp(`const ${moduleName} = dynamic\\(\\(\\) => import\\("\\./modules/`));
   }
-  assert.match(workspaceShell, /activeMenu === "welcome"[\s\S]*<WelcomePanel/);
+  assert.match(workspaceShell, /if \(activeMenu === "welcome"\)[\s\S]*<WelcomePanel/);
   assert.match(workspaceShell, /if \(auth\.status === "guest"\) void loadPublicCompanyProfile\(\)/);
   assert.doesNotMatch(workspaceShell, /void loadPublicCompanyProfile\(\);\s*\}, \[\]\)/);
 });

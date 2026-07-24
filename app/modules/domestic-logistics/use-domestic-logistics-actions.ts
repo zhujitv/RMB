@@ -64,7 +64,7 @@ export function useDomesticLogisticsActions({
   async function archiveSelectedOrders() {
     if (!selectedArchivableRows.length) {
       setError(ARCHIVE_BUTTON_DISABLED_TOOLTIP);
-      return;
+      return false;
     }
     const confirmationResult = await requestConfirmation({
       title: "确认批量归档？",
@@ -78,7 +78,7 @@ export function useDomesticLogisticsActions({
       confirmLabel: "批量归档",
       cancelLabel: "取消",
     });
-    if (!confirmationResult.confirmed) return;
+    if (!confirmationResult.confirmed) return false;
     setError("");
     setNotice("");
     try {
@@ -102,8 +102,10 @@ export function useDomesticLogisticsActions({
       });
       setSelectedOrderIds((currentIds) => currentIds.filter((id) => !archivedIds.has(id)));
       setNotice(result.message || `已归档 ${result.archivedCount || 0} 个订单`);
+      return true;
     } catch (archiveError) {
       setError(archiveError instanceof Error ? archiveError.message : "批量归档失败");
+      return false;
     }
   }
 

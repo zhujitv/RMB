@@ -51,71 +51,58 @@ import type {
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
 } from "./types";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
-export function OcrIntegrationSettingsCard({
-  settings,
-  form,
-  loading,
-  saving,
-  message,
-  onChange,
-  onReset,
-  onSubmit,
-}: {
-  settings: OcrIntegrationSettings | null;
-  form: OcrIntegrationForm | null;
-  loading: boolean;
-  saving: boolean;
-  message: string;
-  onChange: (form: OcrIntegrationForm) => void;
-  onReset: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
+export type OcrValidationRulesDraft = {
+  validationRules: LogisticsInvoiceValidationRules | null;
+  rulesLoading: boolean;
+  rulesSaving: boolean;
+  rulesMessage: string;
+  updateRuleKeywords: (key: string, value: string) => void;
+  saveValidationRules: () => Promise<void>;
+};
+
+export function useOcrValidationRulesDraft(enabled: boolean): OcrValidationRulesDraft {
   const [validationRules, setValidationRules] = useState<LogisticsInvoiceValidationRules | null>(null);
+  const [savedValidationRules, setSavedValidationRules] = useState<LogisticsInvoiceValidationRules | null>(null);
+  const [rulesLoaded, setRulesLoaded] = useState(false);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rulesSaving, setRulesSaving] = useState(false);
   const [rulesMessage, setRulesMessage] = useState("");
 
   useEffect(() => {
+    if (!enabled || rulesLoaded) return;
     let alive = true;
     setRulesLoading(true);
     setRulesMessage("");
     apiJson<{ rules?: LogisticsInvoiceValidationRules }>("/api/settings/logistics-invoice-validation-rules")
       .then((result) => {
         if (!alive) return;
-        setValidationRules(result.rules || {});
+        const nextRules = result.rules || {};
+        setValidationRules(nextRules);
+        setSavedValidationRules(nextRules);
       })
       .catch((error) => {
         if (!alive) return;
         setRulesMessage(error instanceof Error ? error.message : "物流费用发票校验规则加载失败");
       })
       .finally(() => {
-        if (alive) setRulesLoading(false);
+        if (!alive) return;
+        setRulesLoading(false);
+        setRulesLoaded(true);
       });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [enabled, rulesLoaded]);
 
-  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
-  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载 OCR 设置</div>;
-  const currentForm = form || ocrIntegrationFormFromSettings(settings);
-  const hasCredential = Boolean(
-    currentForm.appCodeConfigured ||
-    currentForm.appCode ||
-    currentForm.accessKeyIdConfigured ||
-    currentForm.accessKeyId,
+  const validationRulesDirty = Boolean(
+    validationRules
+    && savedValidationRules
+    && JSON.stringify(validationRules) !== JSON.stringify(savedValidationRules),
   );
-  const statusTone = currentForm.enabled ? (hasCredential ? "success" : "warning") : "muted";
-  const statusLabel = currentForm.enabled ? (hasCredential ? "已启用" : "待填写密钥") : "已关闭";
-
-  function setField<K extends keyof OcrIntegrationForm>(key: K, value: OcrIntegrationForm[K]) {
-    onChange({ ...currentForm, [key]: value });
-  }
-
-  function toggleFeature(key: typeof OCR_FEATURE_OPTIONS[number]["key"]) {
-    setField(key, !currentForm[key]);
-  }
+  useWorkspaceTabDirty(validationRulesDirty);
+  useWorkspaceTabBusy(rulesSaving);
 
   function updateRuleKeywords(key: string, value: string) {
     setValidationRules((current) => {
@@ -147,13 +134,75 @@ export function OcrIntegrationSettingsCard({
         },
       );
       if (result.success !== true) throw new Error(result.message || "物流费用发票校验规则保存失败");
-      setValidationRules(result.rules || validationRules);
+      const savedRules = result.rules || validationRules;
+      setValidationRules(savedRules);
+      setSavedValidationRules(savedRules);
       setRulesMessage(result.message || "物流费用发票校验规则已保存");
     } catch (error) {
       setRulesMessage(error instanceof Error ? error.message : "物流费用发票校验规则保存失败");
     } finally {
       setRulesSaving(false);
     }
+  }
+
+  return {
+    validationRules,
+    rulesLoading,
+    rulesSaving,
+    rulesMessage,
+    updateRuleKeywords,
+    saveValidationRules,
+  };
+}
+
+export function OcrIntegrationSettingsCard({
+  settings,
+  form,
+  loading,
+  saving,
+  message,
+  onChange,
+  onReset,
+  onSubmit,
+  validationRulesDraft,
+}: {
+  settings: OcrIntegrationSettings | null;
+  form: OcrIntegrationForm | null;
+  loading: boolean;
+  saving: boolean;
+  message: string;
+  onChange: (form: OcrIntegrationForm) => void;
+  onReset: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  validationRulesDraft: OcrValidationRulesDraft;
+}) {
+  const {
+    validationRules,
+    rulesLoading,
+    rulesSaving,
+    rulesMessage,
+    updateRuleKeywords,
+    saveValidationRules,
+  } = validationRulesDraft;
+
+  if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
+  if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载 OCR 设置</div>;
+  const currentForm = form || ocrIntegrationFormFromSettings(settings);
+  const hasCredential = Boolean(
+    currentForm.appCodeConfigured ||
+    currentForm.appCode ||
+    currentForm.accessKeyIdConfigured ||
+    currentForm.accessKeyId,
+  );
+  const statusTone = currentForm.enabled ? (hasCredential ? "success" : "warning") : "muted";
+  const statusLabel = currentForm.enabled ? (hasCredential ? "已启用" : "待填写密钥") : "已关闭";
+
+  function setField<K extends keyof OcrIntegrationForm>(key: K, value: OcrIntegrationForm[K]) {
+    onChange({ ...currentForm, [key]: value });
+  }
+
+  function toggleFeature(key: typeof OCR_FEATURE_OPTIONS[number]["key"]) {
+    setField(key, !currentForm[key]);
   }
 
   return (

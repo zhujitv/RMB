@@ -17,6 +17,13 @@ import {
   type DomesticLogisticsRow,
   type ShipsgoFeatureFlags,
 } from "./domestic-logistics/model";
+import {
+  useWorkspaceTabBusy,
+  useWorkspaceTabContext,
+  useWorkspaceTabDiscardGuard,
+  useWorkspaceTabPresentation,
+  useWorkspaceTabReactivation,
+} from "../workspace/workspace-tab-context";
 
 export function DomesticLogisticsModule({
   currentUser,
@@ -54,6 +61,8 @@ export function DomesticLogisticsModule({
   const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
   const [deletingDocumentId, setDeletingDocumentId] = useState("");
   const [shipsgoBusyKey, setShipsgoBusyKey] = useState("");
+  const [controlTowerSyncingId, setControlTowerSyncingId] = useState("");
+  const [archiving, setArchiving] = useState(false);
   const listRequestRef = useRef(0);
   const {
     confirmation,
@@ -74,6 +83,9 @@ export function DomesticLogisticsModule({
     && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员", "业务员"]);
   const canDeleteShipsgoTracking = currentUser.role === "管理员"
     && canWritePermission(currentUser, permissions, "domesticLogistics", ["管理员"]);
+  useWorkspaceTabBusy(Boolean(uploadingKey || deletingDocumentId || shipsgoBusyKey || controlTowerSyncingId || archiving));
+  const workspaceTab = useWorkspaceTabContext();
+  const confirmDiscardLogisticsEdit = useWorkspaceTabDiscardGuard("当前物流信息尚未保存，确定放弃吗？");
 
   async function loadRows(nextKeyword = submittedKeyword, nextBusinessScope = businessScope, nextPage = page) {
     const requestId = ++listRequestRef.current;
@@ -143,6 +155,7 @@ export function DomesticLogisticsModule({
   useEffect(() => {
     const value = keyword.trim();
     if (value === submittedKeyword) return;
+    if (editingOrderId && workspaceTab?.dirty) return;
     const timer = window.setTimeout(() => {
       setSubmittedKeyword(value);
       setPage(1);
@@ -152,7 +165,7 @@ export function DomesticLogisticsModule({
       void loadRows(value, businessScope, 1);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [keyword, submittedKeyword, businessScope]);
+  }, [keyword, submittedKeyword, businessScope, editingOrderId, workspaceTab?.dirty]);
 
   const pageRows = rows;
   const selectedRows = useMemo(() => rows.filter((row) => selectedOrderIds.includes(row.id)), [rows, selectedOrderIds]);
@@ -163,6 +176,7 @@ export function DomesticLogisticsModule({
   const tableColSpan = canArchiveDomesticLogistics ? 9 : 8;
 
   function submitSearch() {
+    if (editingOrderId && !confirmDiscardLogisticsEdit()) return;
     const value = keyword.trim();
     setSubmittedKeyword(value);
     setPage(1);
@@ -174,6 +188,7 @@ export function DomesticLogisticsModule({
   }
 
   function resetSearch() {
+    if (editingOrderId && !confirmDiscardLogisticsEdit()) return;
     setKeyword("");
     setSubmittedKeyword("");
     setBusinessScope("current");
@@ -186,6 +201,7 @@ export function DomesticLogisticsModule({
   }
 
   function changeBusinessScope(nextBusinessScope: string) {
+    if (editingOrderId && !confirmDiscardLogisticsEdit()) return;
     setBusinessScope(nextBusinessScope);
     setPage(1);
     setExpandedId("");
@@ -196,6 +212,7 @@ export function DomesticLogisticsModule({
   }
 
   function gotoPage(nextPage: number) {
+    if (editingOrderId && !confirmDiscardLogisticsEdit()) return;
     setExpandedId("");
     setEditingOrderId("");
     setSelectedOrderIds([]);
@@ -205,6 +222,7 @@ export function DomesticLogisticsModule({
 
   function openLogisticsExpenseStatus(row: DomesticLogisticsRow) {
     if (isExwTradeTerm(row.tradeTerm)) return;
+    if (editingOrderId && !confirmDiscardLogisticsEdit()) return;
     const status = row.logisticsExpenseStatus || "未录入";
     setExpandedId(row.id);
     setEditingOrderId("");
@@ -281,6 +299,44 @@ export function DomesticLogisticsModule({
     requestConfirmation,
   });
 
+  const workspaceLogisticsRow = rows.find((row) => row.id === (editingOrderId || expandedId));
+  useWorkspaceTabPresentation({
+    title: activeLogisticsView === "controlTower"
+      ? "运输监控"
+      : workspaceLogisticsRow
+        ? `${editingOrderId ? "编辑物流" : "物流详情"} · ${workspaceLogisticsRow.orderNo || workspaceLogisticsRow.blNo || "未编号"}`
+        : "物流信息",
+    view: activeLogisticsView === "controlTower"
+      ? "list"
+      : editingOrderId
+        ? "edit"
+        : expandedId
+          ? "detail"
+          : "list",
+    contextKey: activeLogisticsView === "controlTower"
+      ? "list:ocean-control-tower"
+      : editingOrderId
+        ? `edit:${editingOrderId}`
+        : expandedId
+          ? `detail:${expandedId}`
+          : "list:domestic-logistics",
+    ensureListTab: activeLogisticsView !== "controlTower" && Boolean(editingOrderId || expandedId),
+  });
+  useWorkspaceTabReactivation(() => {
+    void loadRows(submittedKeyword, businessScope, page);
+  });
+
+  async function archiveSelectedOrdersSafely() {
+    if (editingOrderId && !confirmDiscardLogisticsEdit()) return;
+    setArchiving(true);
+    try {
+      const archived = await archiveSelectedOrders();
+      if (archived) setEditingOrderId("");
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   return (
     <DomesticLogisticsModuleView
       loading={loading}
@@ -319,6 +375,8 @@ export function DomesticLogisticsModule({
       uploadProgressByKey={uploadProgressByKey}
       deletingDocumentId={deletingDocumentId}
       shipsgoBusyKey={shipsgoBusyKey}
+      controlTowerSyncingId={controlTowerSyncingId}
+      archiving={archiving}
       confirmation={confirmation}
       setNotice={setNotice}
       setKeyword={setKeyword}
@@ -326,11 +384,13 @@ export function DomesticLogisticsModule({
       setExpandedId={setExpandedId}
       setEditingOrderId={setEditingOrderId}
       setActiveLogisticsView={setActiveLogisticsView}
+      setControlTowerSyncingId={setControlTowerSyncingId}
+      confirmDiscardEdit={confirmDiscardLogisticsEdit}
       loadRows={loadRows}
       submitSearch={submitSearch}
       resetSearch={resetSearch}
       changeBusinessScope={changeBusinessScope}
-      archiveSelectedOrders={archiveSelectedOrders}
+      archiveSelectedOrders={archiveSelectedOrdersSafely}
       togglePageArchivableOrders={togglePageArchivableOrders}
       toggleOrderSelection={toggleOrderSelection}
       openLogisticsExpenseStatus={openLogisticsExpenseStatus}

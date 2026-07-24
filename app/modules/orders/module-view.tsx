@@ -42,12 +42,14 @@ type OrdersModuleViewProps = {
   onRepairSalespeople: () => void;
   onOrderConflictRefreshed: (order: OrderRow) => void;
   onOrderSaved: (order?: OrderRow | null) => void;
+  onOrderEditDirtyChange: (dirty: boolean) => void;
   onOrderEditCancel: () => void;
   onPage: (page: number) => void;
   onSetDetailOrder: (order: OrderRow | null) => void;
   onEditOrder: (order: OrderRow | null, options?: { returnToDetail?: boolean }) => void;
   onDeleteOrder: (order: OrderRow) => void;
   onBusinessEntityTransferred: (orderId: string, patch: Partial<OrderRow>) => void;
+  onBeforeBusinessEntityTransfer: (orderId: string) => boolean;
   onOpenExchangeSettings?: () => void;
   onCancelConfirmation: () => void;
   onConfirmConfirmation: () => void;
@@ -113,6 +115,7 @@ export function OrdersModuleView({
             onOpenExchangeSettings={actions.onOpenExchangeSettings}
             onCancel={actions.onOrderEditCancel}
             onConflictRefreshed={actions.onOrderConflictRefreshed}
+            onDirtyChange={actions.onOrderEditDirtyChange}
             onSaved={(order) => actions.onOrderSaved(order)}
           />
         </div>
@@ -198,6 +201,7 @@ export function OrdersModuleView({
           deleting={deletingId === detailOrder.id}
           onEdit={() => actions.onEditOrder(detailOrder, { returnToDetail: true })}
           onDelete={() => actions.onDeleteOrder(detailOrder)}
+          onBeforeBusinessEntityTransfer={actions.onBeforeBusinessEntityTransfer}
           onBusinessEntityTransferred={(patch) => actions.onBusinessEntityTransferred(detailOrder.id, patch)}
           onClose={() => actions.onSetDetailOrder(null)}
         />

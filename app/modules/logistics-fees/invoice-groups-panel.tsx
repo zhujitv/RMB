@@ -25,6 +25,7 @@ import {
   logisticsExpenseBillAuditStatusFromRow,
   StatusPill,
 } from "./shared";
+import { useWorkspaceTabBusy } from "../../workspace/workspace-tab-context";
 
 export function LogisticsInvoiceGroupsPanel({
   expense,
@@ -48,6 +49,12 @@ export function LogisticsInvoiceGroupsPanel({
   const [confirmingInvoiceGroupKey, setConfirmingInvoiceGroupKey] = useState("");
   const [recognizingGroupKey, setRecognizingGroupKey] = useState("");
   const [groupMessage, setGroupMessage] = useState<Record<string, string>>({});
+  useWorkspaceTabBusy(Boolean(
+    deletingGroupKey
+    || confirmingValidationGroupKey
+    || confirmingInvoiceGroupKey
+    || recognizingGroupKey,
+  ));
   const visibleGroups = groups.filter(
     (group) =>
       (group.itemIds?.length || 0) > 0 ||
@@ -502,6 +509,7 @@ function InvoiceUploadForm({
   const [status, setStatus] = useState<
     "idle" | "uploading" | "success" | "failed"
   >("idle");
+  useWorkspaceTabBusy(uploading);
 
   async function uploadInvoice(file: File) {
     const validationError = validatePdfUploadFile(file);

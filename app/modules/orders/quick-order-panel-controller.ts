@@ -368,9 +368,8 @@ export function useQuickOrderPanelController({
           (path) => apiJson<{ order?: OrderRow; data?: OrderRow }>(path),
         );
         if (latestOrder) {
-          loadOrderSnapshot(latestOrder);
           onConflictRefreshed(latestOrder);
-          setMessage("订单已被其他操作更新，系统已载入服务器最新数据并替换本次未保存内容。请重新核对后再保存。");
+          setMessage("订单已被其他操作更新；本次未保存内容已保留。请先复制需要保留的内容，再取消编辑并重新打开订单核对最新数据。");
           return;
         }
       } catch (refreshError) {
@@ -387,6 +386,7 @@ export function useQuickOrderPanelController({
 
   return {
     form,
+    dirty: JSON.stringify(form) !== JSON.stringify(orderFormFromRow(initialOrder)),
     businessEntities,
     salespeople,
     allowMultipleLogisticsSuppliers,

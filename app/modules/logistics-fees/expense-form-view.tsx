@@ -69,6 +69,8 @@ export function LogisticsExpenseFormView({
       onSubmit={(event) => {
         event.preventDefault();
       }}
+      inert={saving}
+      aria-busy={saving}
     >
       <div className={styles.quickCreateHeader}>
         <div>

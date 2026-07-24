@@ -185,9 +185,12 @@
 @media (max-width: 720px) {
   .supplierDocumentTaskDetail {
     position: fixed;
-    inset: 0;
+    top: 120px;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 9998;
-    max-height: 100dvh;
+    max-height: calc(100dvh - 120px);
     border: 0;
     border-radius: 0;
     background: #f8fbff;

@@ -6,6 +6,7 @@ import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-typ
 import styles from "../../WorkspaceShell.module.css";
 import { COST_FILTER_TYPE_LABELS, COST_FILTER_TYPES, type CostDocument, type CostRow } from "./model";
 import { canDeleteCost, canVoidCost, costDocumentTypesForDrawer, costSupplierName, costUploadKey, dateTimeLocalToIso, dateTimeLocalValue, documentsForType, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, isVoidedCost, paymentVoucherUploadKey } from "./helpers";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty, useWorkspaceTabDiscardGuard } from "../../workspace/workspace-tab-context";
 
 export function CostDocumentsDrawer({
   cost,
@@ -62,7 +63,6 @@ export function CostDocumentsDrawer({
   const documentTypes = costDocumentTypesForDrawer(cost);
   const paymentVoucherKey = paymentVoucherUploadKey(cost);
   const paymentEnabled = isProductSupplierPaymentEnabled(cost);
-  const dismissConfirmMessage = uploadingKey || voucherUploadingKey ? "当前内容尚未保存，确定关闭吗？" : "";
   const logisticsGenerated = isLogisticsGeneratedCost(cost);
   const voided = isVoidedCost(cost);
   const canManageDocuments = canWriteDocuments && !logisticsGenerated && !voided;
@@ -76,6 +76,12 @@ export function CostDocumentsDrawer({
     : "";
   const [selectedCostType, setSelectedCostType] = useState(cost.costType || "");
   const [costTypeReason, setCostTypeReason] = useState("");
+  const costTypeDirty = selectedCostType !== (cost.costType || "") || Boolean(costTypeReason.trim());
+  const drawerBusy = Boolean(uploadingKey || voucherUploadingKey || costTypeSaving || paymentSavingId || deletingDocumentId);
+  const dismissConfirmMessage = costTypeDirty ? "当前内容尚未保存，确定关闭吗？" : "";
+  useWorkspaceTabDirty(costTypeDirty);
+  useWorkspaceTabBusy(drawerBusy);
+  const confirmDrawerTransition = useWorkspaceTabDiscardGuard("当前成本资料有未保存修改，确定放弃并继续吗？");
   const costTypeOptions = (cost.costType && !COST_FILTER_TYPES.includes(cost.costType)
     ? [cost.costType, ...COST_FILTER_TYPES]
     : COST_FILTER_TYPES
@@ -88,6 +94,11 @@ export function CostDocumentsDrawer({
 
   function submitCostTypeChange() {
     onUpdateCostType(cost, selectedCostType, costTypeReason);
+  }
+
+  function runGuardedTransition(action: () => void) {
+    if (!confirmDrawerTransition()) return;
+    action();
   }
 
   return (
@@ -111,13 +122,13 @@ export function CostDocumentsDrawer({
             {!logisticsGenerated ? (
               <>
                 {voided ? (
-                  <button className={styles.secondaryButton} type="button" onClick={onRestoreCost}>恢复作废</button>
+                  <button className={styles.secondaryButton} type="button" disabled={drawerBusy} onClick={() => runGuardedTransition(onRestoreCost)}>恢复作废</button>
                 ) : (
                   <>
-                    <button className={styles.secondaryButton} type="button" onClick={onEditCost}>编辑</button>
-                    <button className={styles.secondaryButton} type="button" onClick={onCopyCost}>复制</button>
-                    {voidAllowed ? <button className={styles.secondaryButton} type="button" onClick={onVoidCost}>作废</button> : null}
-                    {deleteAllowed ? <button className={styles.fileDangerButton} type="button" onClick={onDeleteCost}>删除</button> : null}
+                    <button className={styles.secondaryButton} type="button" disabled={drawerBusy} onClick={() => runGuardedTransition(onEditCost)}>编辑</button>
+                    <button className={styles.secondaryButton} type="button" disabled={drawerBusy} onClick={() => runGuardedTransition(onCopyCost)}>复制</button>
+                    {voidAllowed ? <button className={styles.secondaryButton} type="button" disabled={drawerBusy} onClick={() => runGuardedTransition(onVoidCost)}>作废</button> : null}
+                    {deleteAllowed ? <button className={styles.fileDangerButton} type="button" disabled={drawerBusy} onClick={() => runGuardedTransition(onDeleteCost)}>删除</button> : null}
                   </>
                 )}
               </>
@@ -243,6 +254,9 @@ export function ProductSupplierPaymentPanel({
   const paid = isProductSupplierPaid(cost);
   const [paidAtInput, setPaidAtInput] = useState(() => dateTimeLocalValue(cost.paidAt || cost.paymentDate || undefined));
   const voucherLabel = cost.paymentVoucherFileName ? "查看付款凭证" : paid ? "未上传水单" : "未上传";
+  const paymentDateDirty = paidAtInput !== dateTimeLocalValue(cost.paidAt || cost.paymentDate || undefined);
+  useWorkspaceTabDirty(paymentDateDirty);
+  useWorkspaceTabBusy(saving || voucherUploading);
 
   useEffect(() => {
     setPaidAtInput(dateTimeLocalValue(cost.paidAt || cost.paymentDate || undefined));

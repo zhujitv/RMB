@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { apiJson } from "../../api";
 import { formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
@@ -28,6 +28,7 @@ import {
   controlTowerStatusClass,
   controlTowerStatusText,
 } from "./control-tower-components";
+import { useWorkspaceTabActive } from "../../workspace/workspace-tab-context";
 
 export { ShipsgoMapAction } from "./control-tower-components";
 
@@ -37,6 +38,8 @@ export function ShipsgoControlTowerView({
   initialKeyword = "",
   initialOpenToken = 0,
   initialFullScreen = false,
+  syncingId,
+  onSyncingChange,
   onOpenOrder,
 }: {
   features: ShipsgoFeatureFlags;
@@ -44,6 +47,8 @@ export function ShipsgoControlTowerView({
   initialKeyword?: string;
   initialOpenToken?: number;
   initialFullScreen?: boolean;
+  syncingId: string;
+  onSyncingChange: (id: string) => void;
   onOpenOrder: (row: ShipsgoControlTowerRow) => void;
 }) {
   const [rows, setRows] = useState<ShipsgoControlTowerRow[]>([]);
@@ -56,8 +61,10 @@ export function ShipsgoControlTowerView({
   const [updatedAt, setUpdatedAt] = useState("");
   const [expandedId, setExpandedId] = useState("");
   const [selectedId, setSelectedId] = useState("");
-  const [syncingId, setSyncingId] = useState("");
   const [fullScreen, setFullScreen] = useState(initialFullScreen);
+  const loadRequestRef = useRef(0);
+  const submittedFiltersRef = useRef(submittedFilters);
+  const workspaceTabActive = useWorkspaceTabActive();
   const selectedRow = useMemo(() => rows.find((row) => row.id === selectedId) || null, [rows, selectedId]);
 
   function setFilterValue<K extends keyof ShipsgoControlTowerFilters>(key: K, value: ShipsgoControlTowerFilters[K]) {
@@ -66,16 +73,19 @@ export function ShipsgoControlTowerView({
   }
 
   async function loadControlTower(nextFilters = submittedFilters, quiet = false) {
+    const requestId = ++loadRequestRef.current;
     if (!quiet) setLoading(true);
     setError("");
     try {
       const params = controlTowerSearchParams(nextFilters);
       const result = await apiJson<ShipsgoControlTowerResponse>(`/api/shipsgo/ocean-trackings/control-tower?${params}`);
       if (result.success === false) throw new Error(result.message || "读取运输监控失败");
+      if (requestId !== loadRequestRef.current) return;
       setRows(Array.isArray(result.rows) ? result.rows : []);
       setStats(result.stats || EMPTY_SHIPSGO_CONTROL_TOWER_STATS);
       setUpdatedAt(result.updatedAt || new Date().toISOString());
     } catch (loadError) {
+      if (requestId !== loadRequestRef.current) return;
       const message = loadError instanceof Error ? loadError.message : "读取运输监控失败";
       console.error("读取运输监控失败", loadError);
       setError(message);
@@ -84,7 +94,7 @@ export function ShipsgoControlTowerView({
         setStats(EMPTY_SHIPSGO_CONTROL_TOWER_STATS);
       }
     } finally {
-      if (!quiet) setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }
 
@@ -99,6 +109,7 @@ export function ShipsgoControlTowerView({
     const nextFilters = { ...EMPTY_SHIPSGO_CONTROL_TOWER_FILTERS, orderNo: value };
     setFilters(nextFilters);
     setSubmittedFilters(nextFilters);
+    submittedFiltersRef.current = nextFilters;
     setExpandedId("");
     setSelectedId("");
     setNotice("");
@@ -106,24 +117,25 @@ export function ShipsgoControlTowerView({
   }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
-    if (!fullScreen) return undefined;
+    if (!workspaceTabActive || !fullScreen) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setFullScreen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullScreen]);
+  }, [fullScreen, workspaceTabActive]);
 
   useEffect(() => {
-    if (!fullScreen) return undefined;
+    if (!workspaceTabActive || !fullScreen) return undefined;
     const timer = window.setInterval(() => {
       void loadControlTower(submittedFilters, true);
     }, 5 * 60 * 1000);
     return () => window.clearInterval(timer);
-  }, [fullScreen, submittedFilters]);
+  }, [fullScreen, submittedFilters, workspaceTabActive]);
 
   function submitFilters() {
     setSubmittedFilters(filters);
+    submittedFiltersRef.current = filters;
     setExpandedId("");
     setSelectedId("");
     setNotice("");
@@ -133,6 +145,7 @@ export function ShipsgoControlTowerView({
   function resetFilters() {
     setFilters(EMPTY_SHIPSGO_CONTROL_TOWER_FILTERS);
     setSubmittedFilters(EMPTY_SHIPSGO_CONTROL_TOWER_FILTERS);
+    submittedFiltersRef.current = EMPTY_SHIPSGO_CONTROL_TOWER_FILTERS;
     setExpandedId("");
     setSelectedId("");
     setNotice("");
@@ -141,7 +154,7 @@ export function ShipsgoControlTowerView({
 
   async function syncTracking(row: ShipsgoControlTowerRow) {
     if (!features.manualSyncEnabled || !canManage) return;
-    setSyncingId(row.id);
+    onSyncingChange(row.id);
     setError("");
     setNotice("");
     try {
@@ -149,14 +162,14 @@ export function ShipsgoControlTowerView({
         method: "POST",
       });
       if (result.success === false) throw new Error(result.message || "同步海运跟踪失败");
-      await loadControlTower(submittedFilters, true);
+      await loadControlTower(submittedFiltersRef.current, true);
       setNotice(result.message || "海运状态已同步");
     } catch (syncError) {
       const message = syncError instanceof Error ? syncError.message : "同步海运跟踪失败";
       console.error("同步海运跟踪失败", syncError);
       setError(message);
     } finally {
-      setSyncingId("");
+      onSyncingChange("");
     }
   }
 
@@ -264,7 +277,8 @@ export function ShipsgoControlTowerView({
               row={selectedRow}
               canManage={canManage}
               features={features}
-              syncing={syncingId === selectedRow.id}
+              syncing={Boolean(syncingId)}
+              navigationDisabled={Boolean(syncingId)}
               onSync={() => void syncTracking(selectedRow)}
               onOpenOrder={() => onOpenOrder(selectedRow)}
               onToggleTimeline={() => toggleTimeline(selectedRow)}
@@ -321,15 +335,15 @@ export function ShipsgoControlTowerView({
                   <td>
                     <div className={styles.controlTowerRowActions}>
                       {features.manualSyncEnabled && canManage ? (
-                        <button className={styles.primaryButtonCompact} type="button" disabled={syncingId === row.id} onClick={() => void syncTracking(row)}>
-                          {syncingId === row.id ? "同步中..." : "同步最新状态"}
+                        <button className={styles.primaryButtonCompact} type="button" disabled={Boolean(syncingId)} onClick={() => void syncTracking(row)}>
+                          {syncingId === row.id ? "同步中..." : syncingId ? "其他同步进行中" : "同步最新状态"}
                         </button>
                       ) : null}
                       <button className={styles.secondaryButton} type="button" onClick={() => toggleTimeline(row)}>
                         {expandedId === row.id ? "收起节点" : "查看运输节点"}
                       </button>
                       <ShipsgoMapAction features={features} trackingId={row.id} mapUrl={row.mapUrl} />
-                      <button className={styles.secondaryButton} type="button" onClick={() => onOpenOrder(row)}>跳转物流详情</button>
+                      <button className={styles.secondaryButton} type="button" disabled={Boolean(syncingId)} onClick={() => onOpenOrder(row)}>跳转物流详情</button>
                     </div>
                   </td>
                 </tr>

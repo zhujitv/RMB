@@ -16,6 +16,7 @@ import {
   supplierLabel,
 } from "./helpers";
 import { useQuickCostForm } from "./use-quick-cost-form";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 
 export function QuickCreateCostPanel({
   initialCost,
@@ -35,12 +36,16 @@ export function QuickCreateCostPanel({
     canManageFactoryPayments,
     onSaved,
   });
+  useWorkspaceTabBusy(controller.saving);
+  useWorkspaceTabDirty(controller.dirty);
 
   return (
     <form
       className={`${styles.quickCreatePanel} ${drawerMode ? styles.quickCreatePanelInDrawer : ""}`}
       onKeyDown={preventEnterFormSubmit}
       onSubmit={controller.submitQuickCost}
+      inert={controller.saving}
+      aria-busy={controller.saving}
     >
       <div className={styles.quickCreateHeader}>
         <div>

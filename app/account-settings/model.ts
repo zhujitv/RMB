@@ -4,6 +4,7 @@ export type AccountSettingsProps = {
   user: User;
   companyProfile?: CompanyProfileSettings | null;
   onProfileSaved: (user: User) => void;
+  onBeforePasswordChange: (hasOtherUnsavedChanges?: boolean) => boolean;
   onPasswordChanged: (message: string) => void;
 };
 

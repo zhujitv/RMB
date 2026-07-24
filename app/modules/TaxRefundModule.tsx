@@ -4,9 +4,30 @@ import styles from "../WorkspaceShell.module.css";
 import { TaxRefundListPanel } from "./tax-refund/list-panel";
 import { TaxRefundOverlays } from "./tax-refund/overlays";
 import { type TaxRefundModuleProps, useTaxRefundController } from "./tax-refund/use-tax-refund-controller";
+import { useWorkspaceTabBusy, useWorkspaceTabPresentation } from "../workspace/workspace-tab-context";
 
 export function TaxRefundModule(props: TaxRefundModuleProps) {
   const taxRefund = useTaxRefundController(props);
+  useWorkspaceTabBusy(Boolean(
+    taxRefund.submittingTaxId
+    || taxRefund.cancelingArchiveId
+    || taxRefund.refreshingCompletenessId
+    || taxRefund.uploadingKey
+    || taxRefund.deletingDocumentId
+    || taxRefund.packageDownloadingId,
+  ));
+  useWorkspaceTabPresentation({
+    title: taxRefund.detailRow
+      ? `退税管理 · ${taxRefund.detailRow.orderNo || "订单详情"}`
+      : taxRefund.mode === "archive"
+        ? "退税管理 · 已归档"
+        : "退税管理",
+    view: taxRefund.detailRow ? "detail" : "list",
+    contextKey: taxRefund.detailRow
+      ? `tax-refund:${taxRefund.detailRow.id}`
+      : `list:tax-refund:${taxRefund.mode}`,
+    ensureListTab: Boolean(taxRefund.detailRow),
+  });
 
   return (
     <section className={`${styles.moduleCard} ${styles.logisticsTypographyScope}`}>

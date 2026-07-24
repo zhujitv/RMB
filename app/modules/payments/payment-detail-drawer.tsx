@@ -12,6 +12,7 @@ export function PaymentDetailDrawer({
   canManage,
   deleting,
   confirming,
+  busy,
   onEdit,
   onDelete,
   onConfirmArrived,
@@ -21,6 +22,7 @@ export function PaymentDetailDrawer({
   canManage: boolean;
   deleting: boolean;
   confirming: boolean;
+  busy: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onConfirmArrived: () => void;
@@ -36,12 +38,12 @@ export function PaymentDetailDrawer({
       actions={canManage ? (
         <>
           {payment.status === "待确认" ? (
-            <button className={styles.primaryButtonCompact} type="button" disabled={confirming} onClick={onConfirmArrived}>
+            <button className={styles.primaryButtonCompact} type="button" disabled={busy || confirming} onClick={onConfirmArrived}>
               {confirming ? "确认中..." : "确认到账"}
             </button>
           ) : null}
-          <button className={styles.primaryButtonCompact} type="button" onClick={onEdit}>编辑收款</button>
-          <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={onDelete}>
+          <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={onEdit}>编辑收款</button>
+          <button className={styles.secondaryButton} type="button" disabled={busy || deleting} onClick={onDelete}>
             {deleting ? "删除中..." : "删除收款"}
           </button>
         </>

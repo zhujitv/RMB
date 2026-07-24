@@ -12,6 +12,7 @@ import {
 } from "./model";
 import { createTaxRefundDetailActions } from "./use-tax-refund-detail-actions";
 import { useTaxRefundState } from "./use-tax-refund-state";
+import { useWorkspaceTabContext, useWorkspaceTabReactivation } from "../../workspace/workspace-tab-context";
 
 export type TaxRefundModuleProps = {
   currentUser: User;
@@ -34,6 +35,7 @@ export function useTaxRefundController({
   onOpenDomesticLogistics,
 }: TaxRefundModuleProps) {
   const state = useTaxRefundState();
+  const workspaceTab = useWorkspaceTabContext();
   const listRequestRef = useRef(0);
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "业务员", "财务"]);
   const canManageTaxRefund = canWritePermission(currentUser, permissions, "taxRefund", ["管理员", "财务"]);
@@ -139,7 +141,7 @@ export function useTaxRefundController({
     if (!state.detail || !state.pendingDetailTarget || state.detailLoading) return;
     const targetId = taxTargetDomId(state.pendingDetailTarget);
     const timer = window.setTimeout(() => {
-      const target = document.getElementById(targetId);
+      const target = workspaceTab?.portalTarget?.parentElement?.querySelector<HTMLElement>(`#${CSS.escape(targetId)}`);
       if (!target) {
         state.setPendingDetailTarget("");
         return;
@@ -150,7 +152,11 @@ export function useTaxRefundController({
       state.setPendingDetailTarget("");
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [state.detail, state.detailLoading, state.pendingDetailTarget]);
+  }, [state.detail, state.detailLoading, state.pendingDetailTarget, workspaceTab?.portalTarget]);
+
+  useWorkspaceTabReactivation(() => {
+    void loadRows(state.page, state.submittedKeyword, state.mode, state.declarationStartMonth, state.declarationEndMonth, state.statusFilter, state.businessEntityId);
+  });
 
   function switchMode(nextMode: TaxRefundMode) {
     state.setMode(nextMode);
