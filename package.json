@@ -35,8 +35,8 @@
     "@aws-sdk/client-s3": "^3.1069.0",
     "@aws-sdk/s3-request-presigner": "^3.1069.0",
     "@napi-rs/canvas": "^1.0.2",
-    "@prisma/adapter-pg": "7.8.0",
-    "@prisma/client": "7.8.0",
+    "@prisma/adapter-pg": "7.9.0",
+    "@prisma/client": "7.9.0",
     "bcryptjs": "3.0.3",
     "geoip-lite": "^2.0.3",
     "jszip": "3.10.1",
@@ -44,14 +44,14 @@
     "pdf2json": "^4.0.3",
     "pdfjs-dist": "^6.1.200",
     "pg": "^8.21.0",
-    "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "19.2.3",
-    "prisma": "7.8.0",
+    "prisma": "7.9.0",
     "typescript": "^6.0.3"
   },
   "overrides": {
