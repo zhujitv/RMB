@@ -2,23 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiJson } from "../api";
-import { PaginationBar, UiCheckbox } from "../components";
-import { canReadPermission, downloadBlob } from "../utils";
-import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
+import { canReadPermission } from "../utils";
+import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 import {
-  COST_TYPE_LABELS,
-  COST_TYPES,
   DEFAULT_REPORT_FILTERS,
-  EXPORT_ACTIONS,
-  ORDER_STATUSES,
   PAGE_SIZE,
-  PAYMENT_STATUSES,
   REPORT_READ_ROLES,
   REPORT_TYPES,
-  TAX_REFUND_STATUSES,
-  TAX_REFUND_STATUS_LABELS,
-  reportFileName,
   type BusinessEntitiesResponse,
   type BusinessEntityOption,
   type ExportFormat,
@@ -30,8 +21,10 @@ import {
   type ReportRow,
   type SortDirection,
 } from "./reports/model";
-import { ReportRows } from "./reports/report-rows";
-import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
+import { downloadReport } from "./reports/report-export";
+import { ReportFilterPanel } from "./reports/report-filter-panel";
+import { openReportRecord } from "./reports/report-navigation";
+import { ReportResultsPanel } from "./reports/report-results-panel";
 
 export function ReportsModule({
   currentUser,
@@ -223,34 +216,16 @@ export function ReportsModule({
     setError("");
     setNotice("");
     try {
-      const response = await fetch("/api/reports/export", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reportType,
-          filters: submittedFilters,
-          selectedIds: [...selectedIds],
-          exportScope: scope,
-          format,
-          page,
-          pageSize: PAGE_SIZE,
-          sortBy,
-          sortDir,
-        }),
+      await downloadReport({
+        reportType,
+        filters: submittedFilters,
+        selectedIds: [...selectedIds],
+        exportScope: scope,
+        format,
+        page,
+        sortBy,
+        sortDir,
       });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(
-          data && typeof data === "object" && "message" in data && typeof data.message === "string"
-            ? data.message
-            : data && typeof data === "object" && "error" in data && typeof data.error === "string"
-              ? data.error
-              : "下载报表失败",
-        );
-      }
-      const blob = await response.blob();
-      downloadBlob(blob, reportFileName(reportType, format));
       setNotice("报表已开始下载");
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : "下载报表失败");
@@ -260,186 +235,48 @@ export function ReportsModule({
   }
 
   function openRecord(row: ReportRow) {
-    const keyword = String(row.orderNo || row.customerShortName || row.customerName || row.id || "").trim();
-    if (!keyword || !onOpenRecord) return;
-    if (reportType === "payments") {
-      onOpenRecord("payments", keyword);
-      return;
-    }
-    if (reportType === "costs") {
-      onOpenRecord("costs", keyword);
-      return;
-    }
-    if (reportType === "tax-refunds") {
-      onOpenRecord("taxRefund", keyword);
-      return;
-    }
-    onOpenRecord("orders", keyword);
+    openReportRecord(reportType, row, onOpenRecord);
   }
 
   return (
-    <section className={styles.moduleCard}>
-      <div className={styles.moduleHeader}>
-        <div>
-          <h2>报表中心</h2>
-        </div>
-      </div>
-
-      <div className={styles.reportTabs}>
-        {visibleReportTypes.map((type) => (
-          <button
-            key={type.key}
-            className={type.key === reportType ? styles.reportTabActive : ""}
-            type="button"
-            onClick={() => setReportType(type.key)}
-          >
-            {type.label}
-          </button>
-        ))}
-      </div>
-
-      <div className={styles.reportFilterGrid}>
-        <label>日期从<input value={filters.dateFrom} type="date" onChange={(event) => updateFilter("dateFrom", event.target.value)} /></label>
-        <label>日期到<input value={filters.dateTo} type="date" onChange={(event) => updateFilter("dateTo", event.target.value)} /></label>
-        <label>客户名称<input value={filters.customerName} onChange={(event) => updateFilter("customerName", event.target.value)} placeholder="客户全称或简称" /></label>
-        <label>订单号<input value={filters.orderNo} onChange={(event) => updateFilter("orderNo", event.target.value)} /></label>
-        <label>提单号<input value={filters.blNo} onChange={(event) => updateFilter("blNo", event.target.value)} /></label>
-        <label>关键词<input value={filters.keyword} onChange={(event) => updateFilter("keyword", event.target.value)} placeholder="订单 / 客户 / 供应商 / 业务员" /></label>
-        <label>币种<input value={filters.currency} onChange={(event) => updateFilter("currency", event.target.value.toUpperCase())} placeholder="CNY / USD" /></label>
-        <label>业务员<input value={filters.salespersonName} onChange={(event) => updateFilter("salespersonName", event.target.value)} placeholder="业务员姓名" /></label>
-        <label>供应商<input value={filters.supplierName} onChange={(event) => updateFilter("supplierName", event.target.value)} placeholder="供应商名称" /></label>
-        <label>业务主体
-          <select value={filters.businessEntityId} onChange={(event) => updateFilter("businessEntityId", event.target.value)}>
-            <option value="">全部业务主体</option>
-            {businessEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.displayName || entity.shortName || entity.name}</option>)}
-          </select>
-        </label>
-        <label>订单状态
-          <select value={filters.orderStatus} onChange={(event) => updateFilter("orderStatus", event.target.value)}>
-            {ORDER_STATUSES.map((status) => <option key={status || "all"} value={status}>{status || "全部"}</option>)}
-          </select>
-        </label>
-        <label>收款状态
-          <select value={filters.paymentStatus} onChange={(event) => updateFilter("paymentStatus", event.target.value)}>
-            {PAYMENT_STATUSES.map((status) => <option key={status || "all"} value={status}>{status || "全部"}</option>)}
-          </select>
-        </label>
-        <label>成本类型
-          <select value={filters.costType} onChange={(event) => updateFilter("costType", event.target.value)}>
-            {COST_TYPES.map((costType) => <option key={costType || "all"} value={costType}>{COST_TYPE_LABELS[costType] || costType || "全部"}</option>)}
-          </select>
-        </label>
-        <label>退税状态
-          <select value={filters.taxRefundStatus} onChange={(event) => updateFilter("taxRefundStatus", event.target.value)}>
-            {TAX_REFUND_STATUSES.map((status) => <option key={status || "all"} value={status}>{status ? TAX_REFUND_STATUS_LABELS[status] || status : "全部"}</option>)}
-          </select>
-        </label>
-        {showDeclarationMonth ? (
-          <label>申报月份<input value={filters.declarationMonth} type="month" onChange={(event) => updateFilter("declarationMonth", event.target.value)} /></label>
-        ) : null}
-        <label>业务范围
-          <select value={filters.archiveScope} onChange={(event) => updateFilter("archiveScope", event.target.value)}>
-            <option value="current">当前业务</option>
-            <option value="archive">已归档业务</option>
-            <option value="all">全部业务</option>
-          </select>
-        </label>
-      </div>
-
-      <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>
-          {loading ? "查询中..." : "查询"}
-        </button>
-        <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
-      </div>
-
-      {queried ? (
-        <div className={styles.reportDownloadBar}>
-          <span>已查询 {total} 条，当前页 {rows.length} 条，已勾选 {selectedIds.size} 条</span>
-          <div>
-            {EXPORT_ACTIONS.map((action) => (
-              <button
-                key={`${action.scope}-${action.format}`}
-                className={styles.secondaryButton}
-                type="button"
-                disabled={downloading || (action.scope === "selected" && selectedIds.size === 0)}
-                onClick={() => exportRows(action.scope, action.format)}
-              >
-                {downloading ? "下载中..." : action.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {error ? <div className={styles.inlineError}>{error}</div> : null}
-      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
-
-      <div className={styles.tableWrap}>
-        <table className={styles.dataTable}>
-          <thead>
-            <tr>
-              <th>
-                <UiCheckbox
-                  label="全选当前页"
-                  variant="table"
-                  checked={allPageSelected}
-                  disabled={!rows.length}
-                  onChange={togglePageSelection}
-                />
-              </th>
-              {visibleColumns.map((column) => (
-                <th key={column.key} className={column.key === "businessEntityName" ? styles.businessEntityColumn : undefined}>
-                  <button className={styles.tableSortButton} type="button" onClick={() => toggleSort(column.key)}>
-                    {column.label}
-                    {sortBy === column.key ? (sortDir === "desc" ? " ↓" : " ↑") : ""}
-                  </button>
-                </th>
-              ))}
-              <th>详情</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={visibleColumns.length + 2}><div className={styles.emptyState}>数据加载中...</div></td>
-              </tr>
-            ) : queried ? (
-              rows.length ? rows.map((row) => (
-                <ReportRows
-                  key={String(row.id || JSON.stringify(row))}
-                  row={row}
-                  columns={columns}
-                  visibleColumns={visibleColumns}
-                  selected={Boolean(row.id && selectedIds.has(String(row.id)))}
-                  expanded={expandedId === String(row.id)}
-                  onToggle={() => setExpandedId((current) => current === String(row.id) ? "" : String(row.id))}
-                  onSelect={() => toggleRowSelection(row)}
-                  onOpenRecord={() => openRecord(row)}
-                />
-              )) : (
-                <tr>
-                  <td colSpan={visibleColumns.length + 2}><div className={styles.emptyState}>暂无匹配数据</div></td>
-                </tr>
-              )
-            ) : (
-              <tr>
-                <td colSpan={visibleColumns.length + 2 || 8}><div className={styles.emptyState}>请选择报表类型并点击查询。</div></td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {queried ? (
-        <PaginationBar
-          total={total}
-          page={page}
-          totalPages={totalPages}
-          loading={loading}
-          onPage={(nextPage) => queryRows(nextPage, submittedFilters, sortBy, sortDir)}
-        />
-      ) : null}
+    <section>
+      <ReportFilterPanel
+        reportType={reportType}
+        visibleReportTypes={visibleReportTypes}
+        filters={filters}
+        businessEntities={businessEntities}
+        showDeclarationMonth={showDeclarationMonth}
+        loading={loading}
+        onReportTypeChange={setReportType}
+        onFilterChange={updateFilter}
+        onSubmit={submitSearch}
+        onReset={resetSearch}
+      />
+      <ReportResultsPanel
+        columns={columns}
+        visibleColumns={visibleColumns}
+        rows={rows}
+        page={page}
+        total={total}
+        totalPages={totalPages}
+        queried={queried}
+        loading={loading}
+        downloading={downloading}
+        error={error}
+        notice={notice}
+        selectedIds={selectedIds}
+        expandedId={expandedId}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        allPageSelected={allPageSelected}
+        onExport={(scope, format) => void exportRows(scope, format)}
+        onTogglePageSelection={togglePageSelection}
+        onToggleRowSelection={toggleRowSelection}
+        onToggleExpanded={(row) => setExpandedId((current) => current === String(row.id) ? "" : String(row.id))}
+        onToggleSort={toggleSort}
+        onOpenRecord={openRecord}
+        onPage={(nextPage) => void queryRows(nextPage, submittedFilters, sortBy, sortDir)}
+      />
     </section>
   );
 }

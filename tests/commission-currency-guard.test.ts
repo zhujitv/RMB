@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createJiti } from "jiti";
+import { readTaxRefundsSource } from "./source-helpers.ts";
 
 process.env.DATABASE_URL ||= "postgresql://test:test@localhost:5432/test";
 
 const jiti = createJiti(import.meta.url);
 const { summarizeOrder } = jiti("../lib/platform/shared-order-calculations.ts") as typeof import("../lib/platform/shared-order-calculations.ts");
-const settlementSource = readFileSync("lib/platform/tax-refunds-actions.ts", "utf8");
+const settlementSource = readTaxRefundsSource();
 
 function commissionReadyOrder(paymentCurrency: string) {
   return {
@@ -64,9 +64,9 @@ test("commission settlement revalidates and audits inside one serializable trans
   assert.match(settlement[0], /COMMISSION_FORMULA_SETTING_KEY/);
   assert.match(settlement[0], /normalizeCommissionFormulaSettings/);
   assert.match(settlement[0], /tx\.receivableOrder\.findFirst/);
-  assert.match(settlement[0], /assertCommissionCanSettle\(before, commissionFormulaSettings\)/);
+  assert.match(settlement[0], /assertCommissionCanSettle\(\s*before,\s*commissionFormulaSettings,?\s*\)/);
   assert.match(settlement[0], /tx\.receivableOrder\.updateMany/);
-  assert.match(settlement[0], /await writeAudit\([\s\S]*?tx\)/);
+  assert.match(settlement[0], /await writeAudit\([\s\S]*?tx,?\s*\)/);
   assert.match(settlement[0], /COMMISSION_SETTLEMENT_TRANSACTION_OPTIONS/);
   assert.match(settlementSource, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
   assert.ok(

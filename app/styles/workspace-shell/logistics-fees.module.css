@@ -11,8 +11,8 @@
 .logisticsContainerInfoList { composes: logisticsContainerInfoList from "./logistics-bill-summary.module.css"; }
 .logisticsBillSummaryActions { composes: logisticsBillSummaryActions from "./logistics-bill-summary.module.css"; }
 .logisticsBillDetailFooter { composes: logisticsBillDetailFooter from "./logistics-bill-summary.module.css"; }
-.logisticsFeesBillListTable { composes: logisticsFeesBillListTable from "./tax-refund-list-columns.module.css"; }
-.logisticsBillRowActions { composes: logisticsBillRowActions from "./tax-refund-list-columns.module.css"; }
+.logisticsFeesBillListTable { composes: logisticsFeesBillListTable from "./logistics-bill-row-responsive.module.css"; }
+.logisticsBillRowActions { composes: logisticsBillRowActions from "./logistics-bill-row-responsive.module.css"; }
 .billSaveButton { composes: billSaveButton from "./logistics-bill-summary.module.css"; composes: billSaveButton from "./logistics-bill-actions.module.css"; }
 .billAddLineButton { composes: billAddLineButton from "./logistics-bill-summary.module.css"; composes: billAddLineButton from "./logistics-bill-actions.module.css"; }
 .billPayButton { composes: billPayButton from "./logistics-bill-summary.module.css"; composes: billPayButton from "./logistics-bill-actions.module.css"; }
@@ -20,32 +20,32 @@
 .billRejectButton { composes: billRejectButton from "./logistics-bill-summary.module.css"; composes: billRejectButton from "./logistics-bill-actions.module.css"; }
 .logisticsBillRejectNotice { composes: logisticsBillRejectNotice from "./logistics-bill-actions.module.css"; }
 .logisticsBillInvoiceNoticeError { composes: logisticsBillInvoiceNoticeError from "./logistics-bill-actions.module.css"; }
-.logisticsExpenseDrawer { composes: logisticsExpenseDrawer from "./logistics-bill-actions.module.css"; }
-.sideDrawerHeader { composes: sideDrawerHeader from "./logistics-bill-actions.module.css"; }
-.sideDrawerBody { composes: sideDrawerBody from "./logistics-bill-actions.module.css"; }
-.logisticsDrawerSection { composes: logisticsDrawerSection from "./logistics-bill-actions.module.css"; }
-.logisticsDrawerSectionHeader { composes: logisticsDrawerSectionHeader from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceGroupsPanel { composes: logisticsInvoiceGroupsPanel from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceGroupsHeader { composes: logisticsInvoiceGroupsHeader from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceGroupsGrid { composes: logisticsInvoiceGroupsGrid from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceGroupCard { composes: logisticsInvoiceGroupCard from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceGroupTitle { composes: logisticsInvoiceGroupTitle from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceGroupMeta { composes: logisticsInvoiceGroupMeta from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceGroupError { composes: logisticsInvoiceGroupError from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceValidationBox { composes: logisticsInvoiceValidationBox from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceValidationHead { composes: logisticsInvoiceValidationHead from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceValidationGrid { composes: logisticsInvoiceValidationGrid from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceValidationItem { composes: logisticsInvoiceValidationItem from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceValidationError { composes: logisticsInvoiceValidationError from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceValidationActions { composes: logisticsInvoiceValidationActions from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceOcrWaiting { composes: logisticsInvoiceOcrWaiting from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceOcrSpinner { composes: logisticsInvoiceOcrSpinner from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceOcrButtonLoading { composes: logisticsInvoiceOcrButtonLoading from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceFileList { composes: logisticsInvoiceFileList from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceFileRow { composes: logisticsInvoiceFileRow from "./logistics-bill-actions.module.css"; }
-.logisticsInvoiceFileName { composes: logisticsInvoiceFileName from "./logistics-bill-actions.module.css"; }
-.logisticsDetailTableWrap { composes: logisticsDetailTableWrap from "./logistics-bill-actions.module.css"; }
-.logisticsDetailTable { composes: logisticsDetailTable from "./logistics-bill-actions.module.css"; composes: logisticsDetailTable from "./logistics-invoice-groups.module.css"; }
+.logisticsExpenseDrawer { composes: logisticsExpenseDrawer from "./logistics-expense-drawer-groups.module.css"; }
+.sideDrawerHeader { composes: sideDrawerHeader from "./logistics-expense-drawer-groups.module.css"; }
+.sideDrawerBody { composes: sideDrawerBody from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsDrawerSection { composes: logisticsDrawerSection from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsDrawerSectionHeader { composes: logisticsDrawerSectionHeader from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsInvoiceGroupsPanel { composes: logisticsInvoiceGroupsPanel from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsInvoiceGroupsHeader { composes: logisticsInvoiceGroupsHeader from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsInvoiceGroupsGrid { composes: logisticsInvoiceGroupsGrid from "./logistics-expense-drawer-groups.module.css"; composes: logisticsInvoiceGroupsGrid from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceGroupCard { composes: logisticsInvoiceGroupCard from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsInvoiceGroupTitle { composes: logisticsInvoiceGroupTitle from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsInvoiceGroupMeta { composes: logisticsInvoiceGroupMeta from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsInvoiceGroupError { composes: logisticsInvoiceGroupError from "./logistics-expense-drawer-groups.module.css"; }
+.logisticsInvoiceValidationBox { composes: logisticsInvoiceValidationBox from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceValidationHead { composes: logisticsInvoiceValidationHead from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceValidationGrid { composes: logisticsInvoiceValidationGrid from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceValidationItem { composes: logisticsInvoiceValidationItem from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceValidationError { composes: logisticsInvoiceValidationError from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceValidationActions { composes: logisticsInvoiceValidationActions from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceOcrWaiting { composes: logisticsInvoiceOcrWaiting from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceOcrSpinner { composes: logisticsInvoiceOcrSpinner from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceOcrButtonLoading { composes: logisticsInvoiceOcrButtonLoading from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceFileList { composes: logisticsInvoiceFileList from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceFileRow { composes: logisticsInvoiceFileRow from "./logistics-invoice-validation.module.css"; }
+.logisticsInvoiceFileName { composes: logisticsInvoiceFileName from "./logistics-invoice-validation.module.css"; }
+.logisticsDetailTableWrap { composes: logisticsDetailTableWrap from "./logistics-bill-detail-table.module.css"; }
+.logisticsDetailTable { composes: logisticsDetailTable from "./logistics-bill-detail-table.module.css"; composes: logisticsDetailTable from "./logistics-invoice-groups.module.css"; }
 .numericCell { composes: numericCell from "./logistics-invoice-groups.module.css"; }
 .indexCell { composes: indexCell from "./logistics-invoice-groups.module.css"; }
 .remarkCell { composes: remarkCell from "./logistics-invoice-groups.module.css"; }

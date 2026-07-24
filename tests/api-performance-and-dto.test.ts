@@ -1,9 +1,10 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { readCostRecordsQueriesSource, readLogisticsExpenseAccessSource, readSettingsModuleSource, readSharedConstantsSource } from "./source-helpers.ts";
+import { readCostRecordsQueriesSource, readLogisticsExpenseAccessSource, readLogisticsExpenseQueriesSource, readSettingsModuleSource, readSharedConstantsSource } from "./source-helpers.ts";
 
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const migration = readFileSync(
   "prisma/migrations/20260701211500_api_performance_logs/migration.sql",
   "utf8",
@@ -25,10 +26,7 @@ const settingsHelpers = readSettingsModuleSource();
 const settingsController = readSettingsModuleSource();
 const costQueries = readCostRecordsQueriesSource();
 const logisticsSerialization = readLogisticsExpenseAccessSource();
-const logisticsQueries = readFileSync(
-  "lib/platform/logistics-expense-queries.ts",
-  "utf8",
-);
+const logisticsQueries = readLogisticsExpenseQueriesSource();
 
 test("api performance logs are persisted and exposed through settings", () => {
   assert.match(schema, /model ApiPerformanceLog/);

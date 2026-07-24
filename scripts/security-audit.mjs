@@ -60,7 +60,9 @@ if (!/Strict-Transport-Security/.test(securityHeaders) || !/includeSubDomains; p
   fail("HSTS header is not configured for production.");
 }
 
-const proxy = readFileSync("proxy.ts", "utf8");
+const proxy = ["proxy.ts", "proxy-rate-limit.ts"]
+  .map((file) => readFileSync(file, "utf8"))
+  .join("\n");
 for (const pattern of [
   /distributedRateLimitConfig/,
   /UPSTASH_REDIS_REST_URL/,

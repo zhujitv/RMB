@@ -1,11 +1,12 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readCssModuleGraphSource, readNotificationEngineSource, readSettingsModuleSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
+import { readCssModuleGraphSource, readNotificationEngineSource, readRepairTaxRelationsSource, readSettingsModuleSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const service = readSupplierDocumentRequestsSource();
-const uploadService = readFileSync("lib/platform/supplier-document-request-upload.ts", "utf8");
+const uploadService = service;
 const notificationEngine = readNotificationEngineSource();
 const supplierModule = readSupplierDocumentsModuleSource();
 const supplierCreateDialog = readFileSync("app/modules/supplier-documents/create-request-dialog.tsx", "utf8");
@@ -21,7 +22,7 @@ const settingsModule = readSettingsModuleSource();
 const menu = readFileSync("app/menu.ts", "utf8");
 const permissions = readFileSync("lib/platform/shared-permission-data.ts", "utf8");
 const repairSupplierReturnDocumentsScript = readFileSync("scripts/repair-supplier-return-documents.mjs", "utf8");
-const repairTaxRelationService = readFileSync("lib/platform/repair-tax-relations.ts", "utf8");
+const repairTaxRelationService = readRepairTaxRelationsSource();
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
 const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
 
@@ -90,7 +91,7 @@ test("product supplier callback email attaches only matching cost payment vouche
   assert.match(service, /return `汇款水单\.\$\{extension\}`/);
   assert.match(service, /function isPaidFactorySupplierCost/);
   assert.match(service, /paymentStatus === "已支付" \|\| cost\.paymentStatus === "部分支付"/);
-  assert.match(service, /async function selectedProductSupplierPaymentVoucherAttachment\(cost: FactorySupplierReturnCost\)/);
+  assert.match(service, /export async function selectedProductSupplierPaymentVoucherAttachment\(\s*cost: FactorySupplierReturnCost,?\s*\)/);
   assert.match(service, /if \(!isPaidFactorySupplierCost\(cost\)\) return null/);
   assert.match(service, /findActiveFileAssetBySource\(/);
   assert.match(service, /const storageKey = asset\?\.storageKey \|\| cost\.paymentVoucherStorageKey \|\| ""/);
@@ -290,7 +291,7 @@ test("supplier document request list uses server-side pagination", () => {
   assert.match(service, /purchaseOrderNo: \{ contains: keyword, mode: "insensitive" \}/);
   assert.match(service, /purchaseOrderNo: order\.orderNo \|\| order\.id/);
   assert.match(service, /supplierDocumentRequestUploadedCounts\(rows, tx\)/);
-  assert.match(service, /serializeSupplierDocumentRequestListItem\(row, actor, uploadedCounts\.get\(row\.id\) \|\| 0\)/);
+  assert.match(service, /serializeSupplierDocumentRequestListItem\(\s*row,\s*actor,\s*uploadedCounts\.get\(row\.id\) \|\| 0,?\s*\)/);
   assert.doesNotMatch(service, /rowsWithOcr/);
   assert.doesNotMatch(service, /take: 100/);
   assert.match(supplierRequestListRoute, /requests: result\.rows/);
@@ -308,9 +309,9 @@ test("supplier document request list uses server-side pagination", () => {
   assert.doesNotMatch(supplierModule, /setStatsTotalCount\(0\)/);
   assert.match(supplierModule, /statsError \? "加载失败" : statsLoading \? "加载中\.\.\." : statsTotalCount/);
   assert.match(supplierModule, /total=\{total\}/);
-  assert.match(supplierModule, /options: SupplierDocumentLoadRowsOptions = \{\}/);
-  assert.match(supplierModule, /const loadRowsSilentRequestRef = useRef\(0\)/);
-  assert.match(supplierModule, /const loadRowsViewRef = useRef<SupplierDocumentListView>/);
+  assert.match(supplierModule, /options: LoadRowsOptions = \{\}/);
+  assert.match(supplierModule, /const silentRequestRef = useRef\(0\)/);
+  assert.match(supplierModule, /const viewRef = useRef<SupplierDocumentListView>/);
   assert.doesNotMatch(supplierModule, /loadRowsDataRequestRef/);
   assert.match(supplierModule, /canStartSupplierDocumentListRequest/);
   assert.match(supplierModule, /canApplySupplierDocumentListResponse/);
@@ -414,7 +415,7 @@ test("supplier document backend normalizes legacy document type aliases before m
   assert.match(service, /function normalizeSupplierReturnDocumentType/);
   assert.match(service, /PURCHASE_CONTRACT/);
   assert.match(service, /VAT_INVOICE/);
-  assert.match(service, /requiredTypes\.includes\(normalizeSupplierReturnDocumentType\(document\.documentType\)/);
+  assert.match(service, /requiredTypes\.includes\(\s*normalizeSupplierReturnDocumentType\(document\.documentType\)(?: as OrderDocumentType)?,?\s*\)/);
   assert.match(service, /const documentType = normalizeSupplierReturnDocumentType\(nonEmpty\(input\.documentType\)\) as OrderDocumentType/);
 });
 

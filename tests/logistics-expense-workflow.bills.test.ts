@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   backend,
@@ -64,6 +65,11 @@ import {
   listLogisticsExpensesSource,
   logisticsSupplierStatementSource
 } from "./logistics-expense-workflow-context.ts";
+
+const logisticsFeeWorkflowColumnStyles = readFileSync(
+  "app/styles/workspace-shell/logistics-bill-row-responsive.module.css",
+  "utf8",
+);
 
 test("logistics invoice payment requires an active correctly scoped PDF and atomic bill transition", () => {
   assert.match(backend, /FOR UPDATE/);
@@ -132,21 +138,19 @@ test("logistics fee bill list keeps all workflow columns visible on medium deskt
   assert.match(logisticsFeesBillTable, /className=\{styles\.logisticsBillRowActions\}/);
   assert.match(logisticsFeesBillTable, /onVoidBill\(expense\)/);
   assert.match(
-    workspaceStyles,
+    logisticsFeeWorkflowColumnStyles,
     /@media \(min-width: 861px\) and \(max-width: 1691px\) \{[\s\S]*?\.logisticsCompactTable\.logisticsFeesBillListTable \{[\s\S]*?min-width: 900px;/,
   );
   assert.match(
-    workspaceStyles,
+    logisticsFeeWorkflowColumnStyles,
     /\.logisticsCompactTable\.logisticsFeesBillListTable col\.operationColumn,[\s\S]*?width: 108px;[\s\S]*?min-width: 108px;/,
   );
   assert.match(
-    workspaceStyles,
+    logisticsFeeWorkflowColumnStyles,
     /\.logisticsCompactTable\.logisticsFeesBillListTable \.logisticsBillRowActions \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
   );
-  const scopedStart = workspaceStyles.indexOf("/* Keep every logistics-fee workflow column visible");
-  const scopedEnd = workspaceStyles.indexOf(".logisticsCompactRowActive", scopedStart);
-  assert.ok(scopedStart >= 0 && scopedEnd > scopedStart);
-  assert.doesNotMatch(workspaceStyles.slice(scopedStart, scopedEnd), /display:\s*none/);
+  assert.match(logisticsFeeWorkflowColumnStyles, /\/\* Keep every logistics-fee workflow column visible/);
+  assert.doesNotMatch(logisticsFeeWorkflowColumnStyles, /display:\s*none/);
 });
 
 test("logistics expense list reads avoid transactions for count and pagination", () => {
@@ -565,9 +569,10 @@ test("logistics expense page supports single bill review and merged batch review
 });
 
 test("pending logistics expense bills can be rejected with supplier-facing reason", () => {
-  const rejectStart = backend.indexOf("export async function rejectLogisticsExpenseBill");
-  const rejectEnd = backend.indexOf("export async function reviewLogisticsExpenseBills", rejectStart);
-  const rejectBackendSource = backend.slice(rejectStart, rejectEnd);
+  const rejectBackendSource = readFileSync(
+    "lib/platform/logistics-expense-review-reject.ts",
+    "utf8",
+  );
   assert.match(backend, /export async function rejectLogisticsExpenseBill/);
   assert.match(backend, /loadLogisticsExpenseBillRowsForAction/);
   assert.match(backend, /驳回物流费用必须填写原因/);

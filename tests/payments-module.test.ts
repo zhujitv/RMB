@@ -1,3 +1,4 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -15,10 +16,10 @@ const ordersService = readOrdersServiceSource();
 const orderAccess = readFileSync("lib/platform/order-access.ts", "utf8");
 const sharedConstants = readSharedConstantsSource();
 const sharedSerialization = readSharedSerializationSource();
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const paymentRecordActions = readFileSync("app/modules/payments/use-payment-record-actions.ts", "utf8");
 const paymentDetailRoute = readFileSync("app/api/payments/[id]/route.ts", "utf8");
-const quickPaymentPanel = readFileSync("app/modules/payments/quick-payment-panel.tsx", "utf8");
+const quickPaymentPanel = paymentsModule;
 const paymentsModuleController = readFileSync("app/modules/PaymentsModule.tsx", "utf8");
 
 test("payments page keeps summary cards and avoids duplicate recent payment list", () => {
@@ -38,7 +39,7 @@ test("payments API returns paginated summary metrics", () => {
   assert.match(paymentsService, /pendingCurrencyTotals/);
   assert.match(paymentsService, /summarizeCurrencyTotals/);
   assert.match(paymentsService, /currentMonthCount/);
-  assert.match(paymentsService, /withPaymentWhere/);
+  assert.match(paymentsService, /function withWhere/);
 });
 
 test("payment registration keeps receipt currency aligned with the receivable order currency", () => {
@@ -56,19 +57,20 @@ test("quick payment registration validates required fields before submit", () =>
   assert.match(paymentsModule, /errors\.orderId = "请选择关联订单"/);
   assert.match(paymentsModule, /errors\.paymentDate = "请选择收款日期"/);
   assert.match(paymentsModule, /errors\.paymentType = "请选择收款类型"/);
-  assert.match(paymentsModule, /nextForm\.paymentType === "尾款"[\s\S]*orderReceivedCny\(selectedOrder\) <= 0[\s\S]*errors\.paymentType = FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE/);
+  assert.match(paymentsModule, /form\.paymentType === "尾款"[\s\S]*numericValue\(order\.receivedAmountCny, order\.summary\?\.confirmedPaymentsCny\) <= 0[\s\S]*errors\.paymentType = FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE/);
   assert.match(paymentsModule, /errors\.amount = "请输入收款金额"/);
   assert.match(paymentsModule, /errors\.amount = "收款金额必须大于 0"/);
   assert.match(paymentsModule, /errors\.exchangeRate = "汇率不能为空"/);
   assert.match(paymentsModule, /errors\.exchangeRate = "汇率必须大于 0"/);
-  assert.match(paymentsModule, /<form className=\{styles\.quickCreatePanel\} onSubmit=\{submitQuickPayment\} noValidate inert=\{saving\} aria-busy=\{saving\}>/);
+  assert.match(paymentsModule, /<form className=\{styles\.quickCreatePanel\} onSubmit=\{onSubmit\} noValidate inert=\{saving\} aria-busy=\{saving\}>/);
+  assert.match(paymentsModule, /<QuickPaymentFormView[\s\S]*onSubmit=\{submitQuickPayment\}/);
   assert.match(paymentsModule, /\{fieldErrors\.paymentDate \? <small className=\{styles\.inlineError\}>\{fieldErrors\.paymentDate\}<\/small> : null\}/);
   assert.match(paymentsModule, /\{fieldErrors\.amount \? <small className=\{styles\.inlineError\}>\{fieldErrors\.amount\}<\/small> : null\}/);
   assert.match(paymentsModule, /setMessage\(errors\.paymentType \|\| "请完善收款信息"\)/);
 });
 
 test("CNY payment saves with automatic exchange rate while foreign currency requires a positive rate", () => {
-  assert.match(paymentsModule, /normalizedCurrency === "CNY"[\s\S]*exchangeRate: "1\.0000"/);
+  assert.match(paymentsModule, /function normalizeQuickPaymentForm[\s\S]*currency !== "CNY"[\s\S]*exchangeRate: "1\.0000"/);
   assert.match(paymentsModule, /exchangeRateDate: form\.exchangeRateDate \|\| form\.paymentDate/);
   assert.match(paymentsService, /function assertPaymentExchangeInput/);
   assert.match(paymentsService, /if \(currency === "CNY"\) return/);
@@ -79,7 +81,7 @@ test("CNY payment saves with automatic exchange rate while foreign currency requ
 });
 
 test("payment save synchronizes order receipt status with a lightweight transaction query", () => {
-  const syncStatusBlock = paymentsService.match(/async function syncOrderStatusInPaymentTransaction[\s\S]*?\n}\n\ntype PaymentStatusSyncResult/);
+  const syncStatusBlock = paymentsService.match(/export async function syncOrderStatusInPaymentTransaction[\s\S]*?\n}\n\nexport type PaymentStatusSyncResult/);
   assert.ok(syncStatusBlock, "syncOrderStatusInPaymentTransaction block should exist");
   assert.match(syncStatusBlock[0], /select: \{\s*id: true,\s*status: true,/);
   assert.match(syncStatusBlock[0], /tx\.payment\.groupBy\(\{/);
@@ -88,9 +90,9 @@ test("payment save synchronizes order receipt status with a lightweight transact
   assert.match(syncStatusBlock[0], /deriveOrderCollectionBalance/);
   assert.match(syncStatusBlock[0], /deriveOrderCollectionStatus/);
   assert.match(syncStatusBlock[0], /select: \{ id: true, status: true \}/);
-  assert.match(syncStatusBlock[0], /arrivedPaymentGroups\.some\([\s\S]*PAYMENT_CURRENCY_MISMATCH_SYNC_REASON/);
+  assert.match(syncStatusBlock[0], /groups\.some\([\s\S]*CURRENCY_MISMATCH_REASON/);
   assert.ok(
-    syncStatusBlock[0].indexOf("PAYMENT_CURRENCY_MISMATCH_SYNC_REASON")
+    syncStatusBlock[0].indexOf("CURRENCY_MISMATCH_REASON")
       < syncStatusBlock[0].indexOf("deriveOrderCollectionBalance"),
     "historical currency mismatches must preserve the current status before recalculation",
   );
@@ -98,13 +100,13 @@ test("payment save synchronizes order receipt status with a lightweight transact
 });
 
 test("payment writes serialize same-order status synchronization and retry concurrency conflicts", () => {
-  const transactionRunner = paymentsService.match(/function isPaymentWriteSerializationConflict[\s\S]*?async function runPaymentWriteTransaction[\s\S]*?\n}\n\nasync function loadCurrentPaymentInTransaction/);
+  const transactionRunner = paymentsService.match(/export async function runPaymentWriteTransaction[\s\S]*?\n}\n\nexport async function loadCurrentPaymentInTransaction/);
   assert.ok(transactionRunner, "payment transaction runner should exist");
-  assert.match(transactionRunner[0], /=== "P2034"/);
-  assert.match(paymentsService, /PAYMENT_WRITE_TRANSACTION_MAX_ATTEMPTS = 3/);
-  assert.match(transactionRunner[0], /attempt <= PAYMENT_WRITE_TRANSACTION_MAX_ATTEMPTS/);
+  assert.match(transactionRunner[0], /!== "P2034"/);
+  assert.match(paymentsService, /MAX_ATTEMPTS = 3/);
+  assert.match(transactionRunner[0], /attempt <= MAX_ATTEMPTS/);
   assert.match(transactionRunner[0], /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
-  assert.match(transactionRunner[0], /attempt === PAYMENT_WRITE_TRANSACTION_MAX_ATTEMPTS/);
+  assert.match(transactionRunner[0], /attempt === MAX_ATTEMPTS/);
   assert.match(transactionRunner[0], /codedError\("收款记录刚刚被其他操作更新，请刷新后重试。", 409, "PAYMENT_UPDATE_CONFLICT"\)/);
   assert.equal((paymentsService.match(/runPaymentWriteTransaction\(async \(tx\) => \{/g) || []).length, 2);
 });
@@ -120,7 +122,7 @@ test("each payment retry reloads and revalidates the current payment and target 
   assert.match(transactionHelpers, /tx\.receivableOrder\.findFirst\(\{[\s\S]*where: \{ id: orderId, deletedAt: null \}/);
   assert.match(transactionHelpers, /canAccessOrder\(actor, order\)/);
   assert.match(transactionHelpers, /\["已关闭", "已取消"\]\.includes\(order\.status\)/);
-  assert.match(transactionHelpers, /tx\.payment\.updateMany\(\{[\s\S]*orderId: currentPayment\.orderId,[\s\S]*deletedAt: null,[\s\S]*updatedAt: currentPayment\.updatedAt/);
+  assert.match(transactionHelpers, /tx\.payment\.updateMany\(\{[\s\S]*orderId: current\.orderId,[\s\S]*deletedAt: null,[\s\S]*updatedAt: current\.updatedAt/);
   assert.match(transactionHelpers, /if \(update\.count !== 1\) throw paymentWriteSerializationConflict\(\)/);
 
   const saveBlock = paymentsService.slice(
@@ -145,13 +147,14 @@ test("each payment retry reloads and revalidates the current payment and target 
 });
 
 test("payment edits reject a stale form version instead of overwriting a concurrent update", () => {
-  assert.match(paymentsModule, /expectedUpdatedAt: editingSnapshot\?\.updatedAt \|\| undefined/);
+  assert.match(paymentsModule, /quickPaymentPayload\(normalizedForm, editingSnapshot\)/);
+  assert.match(paymentsModule, /expectedUpdatedAt: editing\.updatedAt \|\| undefined/);
   assert.match(paymentRecordActions, /expectedUpdatedAt: payment\.updatedAt \|\| undefined/);
   assert.match(paymentRecordActions, /confirmError instanceof ApiRequestError && confirmError\.status === 409/);
   assert.match(paymentRecordActions, /await options\.loadPayments\(options\.page, options\.submittedFilters\)/);
   assert.match(paymentsService, /function expectedPaymentUpdatedAt/);
   assert.match(paymentsService, /input\.expectedUpdatedAt \|\| input\.updatedAt/);
-  assert.match(paymentsService, /current\.updatedAt\.getTime\(\) !== expectedUpdatedAt\.getTime\(\)/);
+  assert.match(paymentsService, /current\.updatedAt\.getTime\(\) !== expected\.getTime\(\)/);
   assert.match(paymentsService, /PAYMENT_UPDATE_VERSION_INVALID/);
   assert.match(paymentsService, /PAYMENT_UPDATE_CONFLICT/);
 });
@@ -159,7 +162,8 @@ test("payment edits reject a stale form version instead of overwriting a concurr
 test("payment editor keeps its form and version on one opening snapshot and recovers conflicts safely", () => {
   assert.match(quickPaymentPanel, /const \[editingSnapshot\] = useState<PaymentRow \| null>\(\(\) => initialPayment \? \{ \.\.\.initialPayment \} : null\)/);
   assert.match(quickPaymentPanel, /paymentFormFromRow\(editingSnapshot\)/);
-  assert.match(quickPaymentPanel, /expectedUpdatedAt: editingSnapshot\?\.updatedAt \|\| undefined/);
+  assert.match(quickPaymentPanel, /quickPaymentPayload\(normalizedForm, editingSnapshot\)/);
+  assert.match(quickPaymentPanel, /expectedUpdatedAt: editing\.updatedAt \|\| undefined/);
   assert.doesNotMatch(quickPaymentPanel, /expectedUpdatedAt: initialPayment\?\.updatedAt/);
   assert.match(quickPaymentPanel, /saveError instanceof ApiRequestError && saveError\.status === 409 && editingSnapshot\?\.id/);
   assert.match(quickPaymentPanel, /await onConflict\(editingSnapshot\.id\)/);
@@ -236,16 +240,16 @@ test("payments list uses backend keyword fuzzy search and keeps detail-only expa
   assert.match(paymentsModule, /placeholder="搜索订单号 \/ 客户简称 \/ 客户全称 \/ 备注"/);
   assert.match(paymentsModule, /window\.setTimeout\(\(\) => \{/);
   assert.match(paymentsModule, /}, 300\)/);
-  assert.match(paymentsService, /const keyword = nonEmpty\(query\?\.get\("keyword"\)\)/);
-  assert.match(paymentsService, /bankReference: \{ contains: keyword/);
-  assert.match(paymentsService, /remark: \{ contains: keyword/);
-  assert.match(paymentsService, /paymentType: \{ contains: keyword/);
-  assert.match(paymentsService, /orderNo: \{ contains: keyword/);
-  assert.match(paymentsService, /customerNameSnapshot: \{ contains: keyword/);
-  assert.match(paymentsService, /shortName: \{ contains: keyword/);
-  assert.match(paymentsService, /name: \{ contains: keyword/);
-  assert.doesNotMatch(paymentsService, /receiptNo: \{ contains: keyword/);
-  assert.doesNotMatch(paymentsService, /voucherNo: \{ contains: keyword/);
+  assert.match(paymentsService, /keyword: nonEmpty\(query\.get\("keyword"\)\)/);
+  assert.match(paymentsService, /bankReference: \{ contains: filters\.keyword/);
+  assert.match(paymentsService, /remark: \{ contains: filters\.keyword/);
+  assert.match(paymentsService, /paymentType: \{ contains: filters\.keyword/);
+  assert.match(paymentsService, /orderNo: \{ contains: filters\.keyword/);
+  assert.match(paymentsService, /customerNameSnapshot: \{ contains: filters\.keyword/);
+  assert.match(paymentsService, /shortName: \{ contains: filters\.keyword/);
+  assert.match(paymentsService, /name: \{ contains: filters\.keyword/);
+  assert.doesNotMatch(paymentsService, /receiptNo: \{ contains: filters\.keyword/);
+  assert.doesNotMatch(paymentsService, /voucherNo: \{ contains: filters\.keyword/);
   assert.match(paymentsModule, /<DetailField label="订单号"/);
   assert.match(paymentsModule, /<DetailField label="创建时间"/);
   assert.match(paymentsModule, /<DetailField label="更新时间"/);
@@ -270,7 +274,7 @@ test("payments list exposes payment type filter and row display", () => {
   assert.match(paymentsModule, /(?:setFilter|onFilterChange)\("paymentType"/);
   assert.match(paymentsModule, /<th>收款类型<\/th>/);
   assert.match(paymentsModule, /<td>\{payment\.paymentType \|\| "-"\}<\/td>/);
-  assert.match(paymentsService, /paymentType: nonEmpty\(query\?\.get\("paymentType"\)\)/);
+  assert.match(paymentsService, /paymentType: nonEmpty\(query\.get\("paymentType"\)\)/);
   assert.match(paymentsService, /if \(filters\.paymentType\) clauses\.push\(\{ paymentType: filters\.paymentType \}\)/);
 });
 

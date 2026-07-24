@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { apiJson } from "../api";
+import { useRef, useState } from "react";
 import { ConfirmationDialog, useConfirmationDialog } from "../components";
-import styles from "../WorkspaceShell.module.css";
 import type { User } from "../types";
+import { useWorkspaceTabBusy, useWorkspaceTabContext, useWorkspaceTabDiscardGuard, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
+import styles from "../WorkspaceShell.module.css";
 import { PaymentDetailDrawer } from "./payments/payment-detail-drawer";
 import { PaymentFilterToolbar } from "./payments/payment-filter-toolbar";
 import { PaymentListTable } from "./payments/payment-list-table";
 import { PaymentSummaryCards } from "./payments/payment-summary-cards";
 import { QuickCreatePaymentPanel } from "./payments/quick-payment-panel";
 import { confirmPaymentRecordArrived, deletePaymentRecord } from "./payments/use-payment-record-actions";
-import { PAGE_SIZE, emptyPaymentFilters, type PaymentFilters, type PaymentRow, type PaymentSummary, type PaymentsResponse } from "./payments/types";
-import { useWorkspaceTabBusy, useWorkspaceTabContext, useWorkspaceTabDiscardGuard, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
+import { usePaymentsList } from "./payments/use-payments-list";
 
 export function PaymentsModule({
   currentUser,
@@ -23,22 +22,15 @@ export function PaymentsModule({
   initialKeyword?: string;
   initialOpenToken?: number;
 }) {
-  const [payments, setPayments] = useState<PaymentRow[]>([]);
-  const [summary, setSummary] = useState<PaymentSummary>({});
-  const [filters, setFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
-  const [submittedFilters, setSubmittedFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [detailPayment, setDetailPayment] = useState<PaymentRow | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editPayment, setEditPayment] = useState<PaymentRow | null>(null);
+  const {
+    payments, summary, filters, submittedFilters, page, total, totalPages,
+    detailPayment, setDetailPayment, loading, error, setError, notice, setNotice,
+    createOpen, setCreateOpen, editPayment, setEditPayment, setTotal, loadPayments,
+    setFilter, submitSearch, resetSearch, gotoPage, paymentMatchesSubmittedFilters,
+    mergePaymentRow,
+  } = usePaymentsList(initialKeyword, initialOpenToken);
   const [deletingId, setDeletingId] = useState("");
   const [confirmingId, setConfirmingId] = useState("");
-  const listRequestRef = useRef(0);
   const {
     confirmation,
     requestConfirmation,
@@ -52,143 +44,6 @@ export function PaymentsModule({
   const workspaceBusyRef = useRef(Boolean(workspaceTab?.busy));
   workspaceBusyRef.current = Boolean(workspaceTab?.busy);
   const confirmDiscardPaymentEdit = useWorkspaceTabDiscardGuard("当前收款内容尚未保存，确定放弃吗？");
-  async function loadPayments(nextPage = page, nextFilters = submittedFilters): Promise<PaymentRow[] | null> {
-    const requestId = ++listRequestRef.current;
-    setLoading(true);
-    setError("");
-    try {
-      const params = new URLSearchParams({
-        workspace: "1",
-        page: String(nextPage),
-        pageSize: String(PAGE_SIZE),
-      });
-      if (nextFilters.keyword.trim()) params.set("keyword", nextFilters.keyword.trim());
-      Object.entries(nextFilters).forEach(([key, value]) => {
-        if (key === "keyword") return;
-        const text = String(value || "").trim();
-        if (text) params.set(key, text);
-      });
-      const result = await apiJson<PaymentsResponse>(`/api/payments?${params}`);
-      if (requestId !== listRequestRef.current) return null;
-      const data = result.data || {};
-      const nextRows = Array.isArray(data.rows) ? data.rows : Array.isArray(result.payments) ? result.payments : [];
-      setPayments(nextRows);
-      setSummary(data.summary || result.summary || {});
-      setTotal(Number(data.total ?? result.payments?.length ?? 0));
-      setPage(Number(data.page || nextPage));
-      setTotalPages(Math.max(1, Number(data.totalPages || 1)));
-      return nextRows;
-    } catch (loadError) {
-      if (requestId === listRequestRef.current) {
-        setError(loadError instanceof Error ? loadError.message : "读取收款明细失败");
-      }
-      return null;
-    } finally {
-      if (requestId === listRequestRef.current) setLoading(false);
-    }
-  }
-  useEffect(() => {
-    void loadPayments(1, { ...emptyPaymentFilters });
-  }, []);
-
-  useEffect(() => {
-    const value = initialKeyword.trim();
-    if (!initialOpenToken || !value) return;
-    const nextFilters = { ...emptyPaymentFilters, keyword: value };
-    setFilters(nextFilters);
-    setSubmittedFilters(nextFilters);
-    setDetailPayment(null);
-    setNotice("");
-    void loadPayments(1, nextFilters);
-  }, [initialKeyword, initialOpenToken]);
-
-  useEffect(() => {
-    const value = filters.keyword.trim();
-    if (value === submittedFilters.keyword) return;
-    const timer = window.setTimeout(() => {
-      const nextFilters = {
-        ...filters,
-        keyword: value,
-        month: filters.month.trim(),
-        currency: filters.currency.trim(),
-        paymentType: filters.paymentType.trim(),
-        paymentStatus: filters.paymentStatus.trim(),
-      };
-      setSubmittedFilters(nextFilters);
-      setDetailPayment(null);
-      setNotice("");
-      void loadPayments(1, nextFilters);
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [filters.keyword, filters.month, filters.currency, filters.paymentType, filters.paymentStatus, submittedFilters.keyword]);
-
-  function setFilter<K extends keyof PaymentFilters>(key: K, value: PaymentFilters[K]) {
-    setFilters((current) => ({ ...current, [key]: value }));
-  }
-
-  function submitSearch() {
-    setDetailPayment(null);
-    setNotice("");
-    const nextFilters = Object.fromEntries(
-      Object.entries(filters).map(([key, value]) => [key, String(value || "").trim()]),
-    ) as PaymentFilters;
-    setSubmittedFilters(nextFilters);
-    void loadPayments(1, nextFilters);
-  }
-
-  function resetSearch() {
-    setFilters({ ...emptyPaymentFilters });
-    setSubmittedFilters({ ...emptyPaymentFilters });
-    setDetailPayment(null);
-    setNotice("");
-    void loadPayments(1, { ...emptyPaymentFilters });
-  }
-
-  function gotoPage(nextPage: number) {
-    setDetailPayment(null);
-    setNotice("");
-    void loadPayments(nextPage, submittedFilters);
-  }
-
-  function normalizedSearchText(value: unknown) {
-    return String(value || "").trim().toLowerCase();
-  }
-
-  function paymentMatchesSubmittedFilters(payment: PaymentRow) {
-    const keywordValue = normalizedSearchText(submittedFilters.keyword);
-    if (keywordValue) {
-      const haystack = [
-        payment.orderNo,
-        payment.customerName,
-        payment.customerFullName,
-        payment.customerShortName,
-        payment.bankReference,
-        payment.remark,
-      ].map(normalizedSearchText).join(" ");
-      if (!haystack.includes(keywordValue)) return false;
-    }
-    if (submittedFilters.month && !String(payment.paymentDate || "").startsWith(submittedFilters.month)) return false;
-    if (submittedFilters.currency && payment.currency !== submittedFilters.currency) return false;
-    if (submittedFilters.paymentType && payment.paymentType !== submittedFilters.paymentType) return false;
-    if (submittedFilters.paymentStatus && payment.status !== submittedFilters.paymentStatus) return false;
-    return true;
-  }
-
-  function mergePaymentRow(payment: PaymentRow, options: { shouldShow?: boolean } = {}) {
-    const shouldShow = options.shouldShow ?? paymentMatchesSubmittedFilters(payment);
-    setPayments((current) => {
-      const exists = current.some((item) => item.id === payment.id);
-      if (exists) {
-        return shouldShow
-          ? current.map((item) => item.id === payment.id ? { ...item, ...payment } : item)
-          : current.filter((item) => item.id !== payment.id);
-      }
-      return page === 1 && shouldShow ? [payment, ...current].slice(0, PAGE_SIZE) : current;
-    });
-    setDetailPayment((current) => current?.id === payment.id ? { ...current, ...payment } : current);
-    setEditPayment((current) => current?.id === payment.id ? { ...current, ...payment } : current);
-  }
-
   function confirmDiscardPaymentDraftBeforeMutation(paymentId: string) {
     if (!ensurePaymentTabIdle()) return false;
     if (!createOpen && editPayment?.id !== paymentId) return true;

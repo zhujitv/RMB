@@ -6,7 +6,7 @@
 .quickCreatePanel { composes: quickCreatePanel from "./settings-user-drawer.module.css"; }
 .userEditPanel { composes: userEditPanel from "./settings-user-drawer.module.css"; composes: userEditPanel from "./permission-tabs-actions.module.css"; }
 .userEditTitle { composes: userEditTitle from "./settings-user-drawer.module.css"; composes: userEditTitle from "./permission-tabs-actions.module.css"; }
-.userEditSection { composes: userEditSection from "./settings-user-drawer.module.css"; composes: userEditSection from "./permission-tabs-actions.module.css"; }
+.userEditSection { composes: userEditSection from "./settings-user-drawer.module.css"; composes: userEditSection from "./supplier-settings-modal.module.css"; composes: userEditSection from "./permission-tabs-actions.module.css"; }
 .userEditSectionHeader { composes: userEditSectionHeader from "./settings-user-drawer.module.css"; composes: userEditSectionHeader from "./permission-tabs-actions.module.css"; }
 .advancedPermissionHeader { composes: advancedPermissionHeader from "./settings-user-drawer.module.css"; composes: advancedPermissionHeader from "./permission-tabs-actions.module.css"; }
 .userEditBasicGrid { composes: userEditBasicGrid from "./settings-user-drawer.module.css"; composes: userEditBasicGrid from "./permission-tabs-actions.module.css"; }
@@ -22,8 +22,8 @@
 .permissionTabActive { composes: permissionTabActive from "./settings-user-drawer.module.css"; }
 .userEditActions { composes: userEditActions from "./settings-user-drawer.module.css"; }
 .quickCreatePanelInDrawer { composes: quickCreatePanelInDrawer from "./settings-user-drawer.module.css"; }
-.inlineEditPanel { composes: inlineEditPanel from "./settings-user-drawer.module.css"; }
-.quickCreateHeader { composes: quickCreateHeader from "./settings-user-drawer.module.css"; composes: quickCreateHeader from "./permission-card-controls.module.css"; }
+.inlineEditPanel { composes: inlineEditPanel from "./inline-quick-create.module.css"; }
+.quickCreateHeader { composes: quickCreateHeader from "./inline-quick-create.module.css"; composes: quickCreateHeader from "./permission-card-controls.module.css"; }
 .quickCreateMeta { composes: quickCreateMeta from "./permission-card-controls.module.css"; }
 .drawerFormActions { composes: drawerFormActions from "./permission-card-controls.module.css"; }
 .installmentPanel { composes: installmentPanel from "./permission-card-controls.module.css"; }

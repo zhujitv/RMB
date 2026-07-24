@@ -1,31 +1,11 @@
-import { type FormEvent, useEffect, useState } from "react";
-import { apiJson } from "../../api";
-import { PermissionSelectItem, UiSwitch } from "../../components";
+import type { FormEvent } from "react";
+import { PermissionSelectItem } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
-import type { CompanyProfileSettings } from "../../types";
-import { BooleanSelect } from "./common-controls";
 import {
-  COMMISSION_FORMULA_DEDUCTIONS,
-  COMMISSION_FORMULA_PRESETS,
-  COMMISSION_FORMULA_SOURCES,
-  EXCHANGE_RATE_SOURCES,
-  EXCHANGE_RATE_TYPES,
-  NOTIFICATION_RECIPIENT_EMAIL_OPTIONS,
-  OCR_FEATURE_OPTIONS,
-  SHIPSGO_FEATURE_OPTIONS,
+  OCR_FEATURE_OPTIONS
 } from "./constants";
 import {
-  businessEntityFormFromRow,
-  commissionFormulaFormFromSettings,
-  commissionFormulaPreview,
-  companyProfileFormFromSettings,
-  exchangeFormFromSettings,
-  notificationDeliveryLogs,
-  notificationTemplateFormFromSettings,
-  notificationTemplatePreview,
-  notificationTemplateRows,
-  ocrIntegrationFormFromSettings,
-  shipsgoIntegrationFormFromSettings,
+  ocrIntegrationFormFromSettings
 } from "./helpers";
 import {
   SecretField,
@@ -36,124 +16,13 @@ import {
   SettingsSwitch,
 } from "./settings-layout";
 import type {
-  BusinessEntityForm,
-  BusinessEntityRow,
-  CommissionFormulaForm,
-  CommissionFormulaSettings,
-  CompanyProfileForm,
-  ExchangeRateForm,
-  ExchangeRateSettings,
-  NotificationTemplateForm,
-  NotificationTemplateSettings,
   OcrIntegrationForm,
-  OcrIntegrationSettings,
-  LogisticsInvoiceValidationRules,
-  ShipsgoIntegrationForm,
-  ShipsgoIntegrationSettings,
+  OcrIntegrationSettings
 } from "./types";
-import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
+import type { OcrValidationRulesDraft } from "./use-ocr-validation-rules-draft";
 
-export type OcrValidationRulesDraft = {
-  validationRules: LogisticsInvoiceValidationRules | null;
-  rulesLoading: boolean;
-  rulesSaving: boolean;
-  rulesMessage: string;
-  updateRuleKeywords: (key: string, value: string) => void;
-  saveValidationRules: () => Promise<void>;
-};
-
-export function useOcrValidationRulesDraft(enabled: boolean): OcrValidationRulesDraft {
-  const [validationRules, setValidationRules] = useState<LogisticsInvoiceValidationRules | null>(null);
-  const [savedValidationRules, setSavedValidationRules] = useState<LogisticsInvoiceValidationRules | null>(null);
-  const [rulesLoaded, setRulesLoaded] = useState(false);
-  const [rulesLoading, setRulesLoading] = useState(false);
-  const [rulesSaving, setRulesSaving] = useState(false);
-  const [rulesMessage, setRulesMessage] = useState("");
-
-  useEffect(() => {
-    if (!enabled || rulesLoaded) return;
-    let alive = true;
-    setRulesLoading(true);
-    setRulesMessage("");
-    apiJson<{ rules?: LogisticsInvoiceValidationRules }>("/api/settings/logistics-invoice-validation-rules")
-      .then((result) => {
-        if (!alive) return;
-        const nextRules = result.rules || {};
-        setValidationRules(nextRules);
-        setSavedValidationRules(nextRules);
-      })
-      .catch((error) => {
-        if (!alive) return;
-        setRulesMessage(error instanceof Error ? error.message : "物流费用发票校验规则加载失败");
-      })
-      .finally(() => {
-        if (!alive) return;
-        setRulesLoading(false);
-        setRulesLoaded(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [enabled, rulesLoaded]);
-
-  const validationRulesDirty = Boolean(
-    validationRules
-    && savedValidationRules
-    && JSON.stringify(validationRules) !== JSON.stringify(savedValidationRules),
-  );
-  useWorkspaceTabDirty(validationRulesDirty);
-  useWorkspaceTabBusy(rulesSaving);
-
-  function updateRuleKeywords(key: string, value: string) {
-    setValidationRules((current) => {
-      const rules = current || {};
-      const existing = rules[key] || { label: key, keywords: [] };
-      return {
-        ...rules,
-        [key]: {
-          ...existing,
-          keywords: value
-            .split(/[\n,，;；]+/)
-            .map((item) => item.trim())
-            .filter(Boolean),
-        },
-      };
-    });
-  }
-
-  async function saveValidationRules() {
-    if (!validationRules) return;
-    setRulesSaving(true);
-    setRulesMessage("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string; rules?: LogisticsInvoiceValidationRules }>(
-        "/api/settings/logistics-invoice-validation-rules",
-        {
-          method: "PATCH",
-          body: JSON.stringify({ rules: validationRules }),
-        },
-      );
-      if (result.success !== true) throw new Error(result.message || "物流费用发票校验规则保存失败");
-      const savedRules = result.rules || validationRules;
-      setValidationRules(savedRules);
-      setSavedValidationRules(savedRules);
-      setRulesMessage(result.message || "物流费用发票校验规则已保存");
-    } catch (error) {
-      setRulesMessage(error instanceof Error ? error.message : "物流费用发票校验规则保存失败");
-    } finally {
-      setRulesSaving(false);
-    }
-  }
-
-  return {
-    validationRules,
-    rulesLoading,
-    rulesSaving,
-    rulesMessage,
-    updateRuleKeywords,
-    saveValidationRules,
-  };
-}
+export { useOcrValidationRulesDraft } from "./use-ocr-validation-rules-draft";
+export type { OcrValidationRulesDraft } from "./use-ocr-validation-rules-draft";
 
 export function OcrIntegrationSettingsCard({
   settings,

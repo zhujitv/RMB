@@ -243,7 +243,7 @@ test("factory tax refund documents are calculated per cost slot", () => {
   assert.match(completeness, /function factoryDocumentMatchesCost/);
   assert.match(completeness, /if \(document\.costId\) return document\.costId === cost\.id/);
   assert.match(completeness, /allowLegacySupplierFallback && document\.supplierId === cost\.supplierId/);
-  assert.match(completeness, /const supplierEntries: SupplierEntry\[\] = factoryCosts\.map/);
+  assert.match(completeness, /const supplierEntries(?:: SupplierEntry\[\])? = factoryCosts\.map/);
   assert.match(completeness, /costId: entry\.costId/);
   assert.match(completeness, /tax-refund-factory-document-match/);
   assert.doesNotMatch(completeness, /doc\.supplierId === entry\.supplierId \|\| entry\.costIds\.includes/);

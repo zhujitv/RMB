@@ -13,7 +13,8 @@ import {
   runNonCriticalTask,
 } from "./shared-constants";
 import { normalizedCustomPermissionInput } from "./shared-permission-data";
-import { hashPassword, revokeUserSessions } from "./shared-auth";
+import { hashPassword } from "./shared-auth-password";
+import { revokeUserSessions } from "./shared-auth-request";
 import { writeAudit } from "./shared-audit";
 import { assertPasswordPolicy } from "./shared-users-registration";
 import {

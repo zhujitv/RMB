@@ -296,34 +296,3 @@
 .settingsHomeArrow { composes: settingsHomeArrow from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsConfigForm { composes: settingsConfigForm from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsConfigCard { composes: settingsConfigCard from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
 .settingsCardHeader { composes: settingsCardHeader from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsSection { composes: settingsSection from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsSectionHeader { composes: settingsSectionHeader from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
 .settingsFieldGrid { composes: settingsFieldGrid from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; composes: settingsFieldGrid from "./styles/workspace-shell/workspace-settings-center.module.css"; } .settingsField { composes: settingsField from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsFieldLabel { composes: settingsFieldLabel from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
-.settingsSecretField { composes: settingsSecretField from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; composes: settingsSecretField from "./styles/workspace-shell/workspace-settings-center.module.css"; } .settingsSecretActions { composes: settingsSecretActions from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsStatusTag { composes: settingsStatusTag from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
-.settingsStatusSuccess { composes: settingsStatusSuccess from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsStatusWarning { composes: settingsStatusWarning from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; } .settingsStatusDanger { composes: settingsStatusDanger from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
-.settingsStatusMuted { composes: settingsStatusMuted from "./styles/workspace-shell/workspace-tax-review-tables.module.css"; }
-.workspaceTabsBar { composes: workspaceTabsBar from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabsScroller { composes: workspaceTabsScroller from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabItem { composes: workspaceTabItem from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabItemActive { composes: workspaceTabItemActive from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabButton { composes: workspaceTabButton from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabLabel { composes: workspaceTabLabel from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabHomeMark { composes: workspaceTabHomeMark from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabDirty { composes: workspaceTabDirty from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabBusy { composes: workspaceTabBusy from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabClose { composes: workspaceTabClose from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabDuplicate { composes: workspaceTabDuplicate from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabDuplicateIcon { composes: workspaceTabDuplicateIcon from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabDuplicateLabel { composes: workspaceTabDuplicateLabel from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabPanel { composes: workspaceTabPanel from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabPortalHost { composes: workspaceTabPortalHost from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabDialogLayer { composes: workspaceTabDialogLayer from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabDialogDrawerSurface { composes: workspaceTabDialogDrawerSurface from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceTabDialogModalSurface { composes: workspaceTabDialogModalSurface from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.workspaceModalForm { composes: workspaceModalForm from "./styles/workspace-shell/workspace-tabs.module.css"; }
-.supplierSettingsModalCard { composes: supplierSettingsModalCard from "./styles/workspace-shell/settings-user-drawer.module.css"; }
-.supplierSettingsModalHeader { composes: supplierSettingsModalHeader from "./styles/workspace-shell/settings-user-drawer.module.css"; }
-.supplierSettingsModalClose { composes: supplierSettingsModalClose from "./styles/workspace-shell/settings-user-drawer.module.css"; }
-.supplierSettingsModalForm { composes: supplierSettingsModalForm from "./styles/workspace-shell/settings-user-drawer.module.css"; }
-.supplierSettingsModalBody { composes: supplierSettingsModalBody from "./styles/workspace-shell/settings-user-drawer.module.css"; }
-.supplierSettingsModalFieldGrid { composes: supplierSettingsModalFieldGrid from "./styles/workspace-shell/settings-user-drawer.module.css"; }
-.supplierSettingsModalCostGrid { composes: supplierSettingsModalCostGrid from "./styles/workspace-shell/settings-user-drawer.module.css"; }
-.supplierSettingsModalFooter { composes: supplierSettingsModalFooter from "./styles/workspace-shell/settings-user-drawer.module.css"; }
-.supplierSettingsDeleteButton { composes: supplierSettingsDeleteButton from "./styles/workspace-shell/settings-user-drawer.module.css"; }

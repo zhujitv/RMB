@@ -1,4 +1,6 @@
-import type { NotificationTemplateForm, OcrIntegrationForm, SettingsTabKey, ShipsgoIntegrationForm } from "./types";
+import type { NotificationTemplateForm, OcrIntegrationForm, ShipsgoIntegrationForm } from "./types";
+
+export { SETTINGS_TABS } from "./settings-tab-options";
 
 export const PAGE_SIZE = 20;
 export const AUDIT_PAGE_SIZE = 50;
@@ -284,19 +286,4 @@ export const API_PERFORMANCE_WINDOW_OPTIONS = [
   { label: "最近 24 小时", value: "24" },
   { label: "最近 72 小时", value: "72" },
   { label: "最近 7 天", value: "168" },
-];
-export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
-  { key: "home", label: "设置中心" },
-  { key: "companyProfile", label: "公司资料" },
-  { key: "businessEntities", label: "业务主体" },
-  { key: "customers", label: "客户资料" },
-  { key: "suppliers", label: "供应商资料" },
-  { key: "users", label: "用户与权限" },
-  { key: "ocrIntegration", label: "OCR识别" },
-  { key: "shipsgoIntegration", label: "物流接口" },
-  { key: "notificationTemplates", label: "通知模板" },
-  { key: "exchangeRates", label: "汇率设置" },
-  { key: "commissionFormula", label: "提成公式" },
-  { key: "auditLogs", label: "系统日志" },
-  { key: "apiPerformance", label: "后台任务" },
 ];

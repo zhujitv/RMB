@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createJiti } from "jiti";
+import {
+  readAccountSettingsSource,
+  readCostsModuleSource,
+  readDomesticLogisticsModuleSource,
+  readLogisticsFeesModuleSource,
+  readOrdersModuleSource,
+  readPaymentsModuleSource,
+  readReportsModuleSource,
+  readSettingsModuleSource,
+  readTaxRefundModuleSource,
+  readWorkspaceShellSource,
+} from "./source-helpers.ts";
 
 const jiti = createJiti(import.meta.url);
 const workspaceTabs = await jiti.import("../app/workspace/workspace-tabs.ts") as typeof import("../app/workspace/workspace-tabs.ts");
@@ -193,7 +205,7 @@ test("dirty and busy state stay isolated to their owning tab while users switch 
 });
 
 test("workspace shell mounts every opened panel and scopes overlays to their owning tab", () => {
-  const shell = readFileSync("app/WorkspaceShell.tsx", "utf8");
+  const shell = readWorkspaceShellSource();
   const tabsBar = readFileSync("app/workspace/WorkspaceTabsBar.tsx", "utf8");
   const dismissibleLayer = readFileSync("app/components/dismissible-layer.tsx", "utf8");
   const workspaceTabContext = readFileSync("app/workspace/workspace-tab-context.tsx", "utf8");
@@ -219,10 +231,10 @@ test("workspace shell mounts every opened panel and scopes overlays to their own
 });
 
 test("editable settings, account, and supplier dialogs report exact dirty and busy state", () => {
-  const account = readFileSync("app/AccountSettings.tsx", "utf8");
-  const shell = readFileSync("app/WorkspaceShell.tsx", "utf8");
-  const settings = readFileSync("app/modules/SettingsModule.tsx", "utf8");
-  const ocrSettings = readFileSync("app/modules/settings/ocr-integration-settings-card.tsx", "utf8");
+  const account = readAccountSettingsSource();
+  const shell = readWorkspaceShellSource();
+  const settings = readSettingsModuleSource();
+  const ocrSettings = settings;
   const supplierDialog = readFileSync("app/modules/supplier-documents/create-request-dialog.tsx", "utf8");
 
   assert.match(account, /useWorkspaceTabDirty\(profileDirty \|\| securityDirty \|\| preferencesDirty\)/);
@@ -244,15 +256,15 @@ test("editable settings, account, and supplier dialogs report exact dirty and bu
 });
 
 test("common mutable workflows register exact dirty, busy, and discard guards", () => {
-  const orders = readFileSync("app/modules/OrdersModule.tsx", "utf8");
-  const payments = readFileSync("app/modules/PaymentsModule.tsx", "utf8");
-  const costs = readFileSync("app/modules/CostsModule.tsx", "utf8");
-  const costDocuments = readFileSync("app/modules/costs/documents-drawer.tsx", "utf8");
-  const domesticLogistics = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
-  const logisticsExpense = readFileSync("app/modules/logistics-fees/expense-form.tsx", "utf8");
-  const taxRefund = readFileSync("app/modules/TaxRefundModule.tsx", "utf8");
-  const taxRefundDetail = readFileSync("app/modules/tax-refund/detail-components.tsx", "utf8");
-  const reports = readFileSync("app/modules/ReportsModule.tsx", "utf8");
+  const orders = readOrdersModuleSource();
+  const payments = readPaymentsModuleSource();
+  const costs = readCostsModuleSource();
+  const costDocuments = costs;
+  const domesticLogistics = readDomesticLogisticsModuleSource();
+  const logisticsExpense = readLogisticsFeesModuleSource();
+  const taxRefund = readTaxRefundModuleSource();
+  const taxRefundDetail = taxRefund;
+  const reports = readReportsModuleSource();
   const workspaceTabStyles = readFileSync("app/styles/workspace-shell/workspace-tabs.module.css", "utf8");
 
   assert.match(orders, /guardedOpenEditOrder/);

@@ -5,7 +5,7 @@ import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../password-policy
 import { codedError, logServerError, requireText, requireValidEmail } from "./shared-base-utils";
 import { runNonCriticalTask } from "./shared-constants";
 import { writeAudit, writeAuthAudit } from "./shared-audit";
-import { hashPassword } from "./shared-auth";
+import { hashPassword } from "./shared-auth-password";
 import { NOTIFICATION_TEMPLATE_TYPES, sendNotificationEmail } from "./notification-engine";
 import { ensureDefaultUsers } from "./shared-users-bootstrap";
 import {

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createJiti } from "jiti";
+import { readLogisticsExpenseCostSource } from "./source-helpers.ts";
 
 process.env.DATABASE_URL ||= "postgresql://test:test@localhost:5432/test";
 
 const jiti = createJiti(import.meta.url);
-const mutationSource = readFileSync(new URL("../lib/platform/logistics-expense-access-mutations.ts", import.meta.url), "utf8");
+const mutationSource = readLogisticsExpenseCostSource();
 const {
   logisticsExpenseCostFingerprintMismatches,
 } = jiti("../lib/platform/logistics-expense-access-mutations.ts") as typeof import("../lib/platform/logistics-expense-access-mutations.ts");
@@ -58,7 +58,7 @@ test("logistics payment and reversal detect every material historical cost misma
 test("preserve payment modes reject fingerprint mismatches before returning an existing cost", () => {
   assert.match(
     mutationSource,
-    /settledCostMode === "preserve-existing" \|\| settledCostMode === "preserve-required"[\s\S]*assertLogisticsPaymentCostFingerprint\(existing, expense\)/,
+    /\(settledCostMode === "preserve-existing" \|\| settledCostMode === "preserve-required"\) && existing[\s\S]*assertLogisticsPaymentCostFingerprint\(existing, expense\)/,
   );
   assert.match(mutationSource, /409,[\s\S]*"LOGISTICS_PAYMENT_COST_FINGERPRINT_MISMATCH"/);
   assert.match(mutationSource, /请先修复历史关联，不能继续付款或冲销/);

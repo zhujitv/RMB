@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readTaxRefundModuleSource } from "./source-helpers.ts";
 
 test("report queries ignore stale responses after tab reactivation or filter changes", () => {
   const source = readFileSync("app/modules/ReportsModule.tsx", "utf8");
@@ -20,7 +21,7 @@ test("tax refund targeting stays inside its owning workspace panel", () => {
 });
 
 test("customs recognition preserves a dirty manual draft from sibling document refreshes", () => {
-  const source = readFileSync("app/modules/tax-refund/upload-components.tsx", "utf8");
+  const source = readTaxRefundModuleSource();
 
   assert.match(source, /if \(!detailChanged && formDirty\) return;/);
   assert.match(source, /formDirty && !window\.confirm\("当前手工填写的报关单信息尚未保存/);

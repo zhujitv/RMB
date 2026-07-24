@@ -1,0 +1,27 @@
+
+
+.inlineEditPanel {
+  margin: 0 0 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #eff6ff;
+  padding: 14px;
+}
+
+.quickCreateHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.quickCreateHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.quickCreateHeader strong {
+  color: #0f172a;
+  font-size: 16px;
+}

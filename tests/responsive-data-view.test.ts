@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readProfitModuleSource } from "./source-helpers.ts";
 
 const responsiveDataView = readFileSync("app/ResponsiveDataView.tsx", "utf8");
 const businessListModules = [
@@ -32,9 +33,9 @@ test("responsive data view only mounts one breakpoint branch", () => {
 });
 
 test("profit analysis uses responsive data view instead of css-hidden duplicate lists", () => {
-  const profitModule = readFileSync("app/modules/ProfitModule.tsx", "utf8");
+  const profitModule = readProfitModuleSource();
 
-  assert.match(profitModule, /import \{ ResponsiveDataView \} from "\.\.\/ResponsiveDataView"/);
+  assert.match(profitModule, /import \{ ResponsiveDataView \} from "\.\.\/\.\.\/ResponsiveDataView"/);
   assert.match(profitModule, /<ResponsiveDataView/);
   assert.match(profitModule, /renderMobile=\{\(\) => \(/);
   assert.match(profitModule, /renderDesktop=\{\(\) => \(/);

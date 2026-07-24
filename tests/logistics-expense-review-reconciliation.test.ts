@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readLogisticsExpenseWorkflowSource } from "./source-helpers.ts";
 
 const reviewRoute = readFileSync("app/api/logistics-costs/review/route.ts", "utf8");
-const reviewWorkflow = readFileSync("lib/platform/logistics-expense-workflow-review.ts", "utf8");
+const reviewWorkflow = readLogisticsExpenseWorkflowSource();
 const reviewActions = readFileSync("app/modules/logistics-fees/use-logistics-fees-review-actions.ts", "utf8");
 
 test("logistics review exposes an admin-scoped exact status reconciliation read", () => {

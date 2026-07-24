@@ -1,7 +1,9 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
+import { readSettingsModuleSource } from "./source-helpers.ts";
 
 const root = process.cwd();
 const readSource = (path: string) => readFileSync(join(root, path), "utf8");
@@ -10,7 +12,7 @@ test("rejected user force delete is guarded by backend status and admin checks",
   const sharedUsersAdmin = readSource("lib/platform/shared-users-admin.ts");
   const usersRoute = readSource("app/api/users/[id]/route.ts");
   const sharedUsersList = readSource("lib/platform/shared-users-list.ts");
-  const schema = readSource("prisma/schema.prisma");
+  const schema = readPrismaSchemaSource();
 
   assert.match(schema, /deletedAt\s+DateTime\?\s+@map\("deleted_at"\)/);
   assert.match(sharedUsersAdmin, /export async function forceDeleteRejectedUser/);
@@ -31,12 +33,12 @@ test("rejected user force delete is guarded by backend status and admin checks",
 
 test("settings users table exposes force delete only for rejected users", () => {
   const workspaceModuleContent = readSource("app/WorkspaceModuleContent.tsx");
-  const settingsTypes = readSource("app/modules/settings/types.ts");
-  const settingsController = readSource("app/modules/settings/use-settings-controller.ts");
-  const settingsTable = readSource("app/modules/settings/settings-table.tsx");
-  const settingsActions = readSource("app/modules/settings/use-settings-controller-actions.ts");
-  const settingsState = readSource("app/modules/settings/use-settings-state.ts");
-  const settingsPanels = readSource("app/modules/settings/module-edit-panels.tsx");
+  const settingsTypes = readSettingsModuleSource();
+  const settingsController = settingsTypes;
+  const settingsTable = settingsTypes;
+  const settingsActions = settingsTypes;
+  const settingsState = settingsTypes;
+  const settingsPanels = settingsTypes;
 
   assert.match(workspaceModuleContent, /<SettingsModule currentUser=\{payload\.user\}/);
   assert.match(settingsTypes, /currentUser\?: \{ role\?: string \} \| null/);

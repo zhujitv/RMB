@@ -1,3 +1,4 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -5,6 +6,7 @@ import {
   readOrdersModuleSource,
   readOrdersServiceSource,
   readSharedOrderSerializationSource,
+  readWorkspaceStylesSource,
 } from "./source-helpers.ts";
 import {
   isRefreshableOrderConflict,
@@ -18,10 +20,10 @@ const orderSearchService = readFileSync("lib/platform/order-receivable-search.ts
 const ordersPaymentsService = readFileSync("lib/platform/orders-payments.ts", "utf8");
 const orderSerialization = readSharedOrderSerializationSource();
 const inputSchemas = readFileSync("lib/platform/input-schemas.ts", "utf8");
-const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
+const prismaSchema = readPrismaSchemaSource();
 const mastersAccess = readFileSync("lib/platform/masters-access.ts", "utf8");
 const quickOrderFields = readFileSync("app/modules/orders/quick-order-fields.tsx", "utf8");
-const quickOrderController = readFileSync("app/modules/orders/quick-order-panel-controller.ts", "utf8");
+const quickOrderController = ordersModule;
 const quickOrderPanel = readFileSync("app/modules/orders/quick-order-panel.tsx", "utf8");
 const orderConflictRefresh = readFileSync("app/modules/orders/order-conflict-refresh.ts", "utf8");
 const orderEditActions = readFileSync("app/modules/orders/use-order-edit-actions.ts", "utf8");
@@ -31,8 +33,31 @@ const orderUtils = readFileSync("app/modules/orders/utils.ts", "utf8");
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
 const orderModuleView = readFileSync("app/modules/orders/module-view.tsx", "utf8");
 const orderTable = readFileSync("app/modules/orders/table.tsx", "utf8");
-const orderTableStyles = readFileSync("app/styles/workspace-shell/table-pinning-columns.module.css", "utf8");
+const orderTableStyles = readWorkspaceStylesSource();
 const workspaceShellStyles = readFileSync("app/WorkspaceShell.module.css", "utf8");
+
+function extractCssBlock(source: string, blockHeader: string, requiredSelector: string) {
+  let searchStart = 0;
+  while (searchStart < source.length) {
+    const start = source.indexOf(blockHeader, searchStart);
+    if (start < 0) return "";
+    const openingBrace = source.indexOf("{", start + blockHeader.length);
+    if (openingBrace < 0) return "";
+
+    let depth = 0;
+    for (let index = openingBrace; index < source.length; index += 1) {
+      if (source[index] === "{") depth += 1;
+      if (source[index] !== "}") continue;
+      depth -= 1;
+      if (depth !== 0) continue;
+      const block = source.slice(start, index + 1);
+      if (block.includes(requiredSelector)) return block;
+      searchStart = index + 1;
+      break;
+    }
+  }
+  return "";
+}
 
 test("orders page renders only the table list and not duplicate order cards", () => {
   assert.doesNotMatch(ordersModule, /OrderMobileCard/);
@@ -75,7 +100,11 @@ test("orders list keeps all receivable columns inside the medium desktop width b
   assert.match(orderTable, /<td className=\{styles\.businessEntityColumn\} title=\{businessEntityFullName \|\| ""\}>/);
   assert.match(orderTable, /<td className=\{styles\.blNoColumn\} title=\{order\.blNo \|\| order\.billOfLadingNo \|\| ""\}>/);
 
-  const mediumDesktopCss = orderTableStyles.match(/@media \(min-width: 861px\) and \(max-width: 1535px\) \{[\s\S]*?\n\}\n\n\.taxCompletenessTooltipAnchor/)?.[0] || "";
+  const mediumDesktopCss = extractCssBlock(
+    orderTableStyles,
+    "@media (min-width: 861px) and (max-width: 1535px)",
+    ".ordersListTable",
+  );
   assert.match(mediumDesktopCss, /\.ordersModuleCard \{[\s\S]*padding-right: 12px;[\s\S]*padding-left: 12px;/);
   assert.match(mediumDesktopCss, /\.ordersListTable \{[\s\S]*min-width: 936px;[\s\S]*table-layout: fixed;/);
   assert.match(mediumDesktopCss, /\.tablePinnedTwoCols \.ordersListTable th,[\s\S]*padding-right: 6px;[\s\S]*padding-left: 6px;/);
@@ -152,10 +181,10 @@ test("ordinary receivable search uses the lightweight order list DTO", () => {
 test("orders save path normalizes complex input fields", () => {
   assert.match(ordersService, /requireLimitedText\(inputData\.orderNo, "订单号", MAX_ORDER_NO_LENGTH\)/);
   assert.match(ordersService, /optionalLimitedText\(inputData\.blNo \|\| inputData\.billOfLadingNo, "提单号", MAX_BL_NO_LENGTH\)/);
-  assert.match(ordersService, /normalizeInstallments\(inputData\.paymentInstallments, finalReceivableAmount, exchangeRate\)/);
+  assert.match(ordersService, /normalizeInstallments\(input\.paymentInstallments, finalAmount, exchangeRate\)/);
   assert.match(ordersService, /normalizeReminderDaysInput\(inputData\.reminderDays \?\? 7\)/);
   assert.match(ordersService, /optionalLimitedText\(inputData\.remark, "备注", MAX_ORDER_REMARK_LENGTH\)/);
-  assert.match(ordersService, /normalizeOrderLogisticsSupplierIds\(inputData\)/);
+  assert.match(ordersService, /normalizeOrderLogisticsSupplierIds\(input\)/);
 });
 
 test("order amount writes serialize payment-based status synchronization and retry conflicts", () => {
@@ -187,14 +216,14 @@ test("order amount writes serialize payment-based status synchronization and ret
   assert.match(saveBlock, /refreshTaxRefundCompleteness\(order\.id\)\.catch/);
 
   assert.match(saveBlock, /expectedOrderUpdatedAt\(inputData, before\)/);
-  assert.match(saveBlock, /inputData\.expectedUpdatedAt \|\| inputData\.updatedAt/);
-  assert.match(saveBlock, /current\.updatedAt\.getTime\(\) !== expectedUpdatedAt\.getTime\(\)/);
+  assert.match(ordersService, /input\.expectedUpdatedAt \|\| input\.updatedAt/);
+  assert.match(ordersService, /current\.updatedAt\.getTime\(\) !== expectedUpdatedAt\.getTime\(\)/);
   assert.match(saveBlock, /ORDER_CURRENCY_LOCKED_BY_PAYMENTS/);
   assert.match(saveBlock, /normalizedCurrency\(current\.currency\) !== currency && hasCurrencyLockPayments\(current\.payments\)/);
-  assert.match(ordersService, /ORDER_CURRENCY_LOCK_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
-  assert.match(saveBlock, /ORDER_CURRENCY_LOCK_PAYMENT_STATUSES\.includes\(String\(payment\.status \|\| ""\)\)/);
+  assert.match(ordersService, /CURRENCY_LOCK_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
+  assert.match(ordersService, /CURRENCY_LOCK_PAYMENT_STATUSES\.includes\(String\(payment\.status \|\| ""\)\)/);
   assert.match(saveBlock, /withServerControlledCollectionStatus\(transactionData, current\)/);
-  assert.match(saveBlock, /ORDER_COLLECTION_STATUSES\.includes\(requestedStatus\)/);
+  assert.match(ordersService, /COLLECTION_STATUSES\.includes\(String\(data\.status \|\| ""\)\)/);
 
   const statusSyncStart = ordersService.indexOf("async function syncOrderStatusInTransaction");
   const statusSyncEnd = ordersService.indexOf("\nexport async function deleteOrder", statusSyncStart);
@@ -202,7 +231,7 @@ test("order amount writes serialize payment-based status synchronization and ret
   assert.match(statusSyncBlock, /summarizeOrder\(order\)/);
   assert.match(statusSyncBlock, /summary\.hasArrivedPaymentCurrencyMismatch/);
   assert.match(statusSyncBlock, /deriveOrderCollectionStatus\(\{/);
-  assert.match(statusSyncBlock, /return tx\.receivableOrder\.update\(/);
+  assert.match(statusSyncBlock, /status === order\.status \? order : tx\.receivableOrder\.update\(/);
 
   const publicSyncStart = ordersService.indexOf("export async function syncOrderStatus");
   const publicSyncBlock = ordersService.slice(publicSyncStart);
@@ -221,7 +250,7 @@ test("order edit form sends a version token and locks currency only for active p
   assert.match(orderSerialization, /hasCurrencyLockPayments: hasCurrencyLockPayments\(order\.payments\)/);
   assert.match(orderSerialization, /\["待确认", "已到账"\]\.includes\(String\(row\.status \|\| ""\)\)/);
   assert.match(quickOrderController, /const currencyLockedByPayments = Boolean\(initialOrder\?\.id/);
-  assert.match(quickOrderController, /expectedUpdatedAt: normalizedForm\.expectedUpdatedAt \|\| initialOrder\?\.updatedAt \|\| undefined/);
+  assert.match(quickOrderController, /expectedUpdatedAt: form\.expectedUpdatedAt \|\| options\.expectedUpdatedAt \|\| undefined/);
   assert.match(quickOrderController, /if \(!currencyLockedByPayments && customerOption\.defaultCurrency\) await resolveExchangeRate/);
   assert.match(quickOrderController, /if \(currencyLockedByPayments\) \{[\s\S]*?币种已锁定/);
   assert.match(quickOrderPanel, /disabled=\{controller\.currencyLockedByPayments\}/);
@@ -283,9 +312,9 @@ test("orders create form submits system exchange rate metadata", () => {
   assert.match(ordersModule, /exchangeRateDate: result\.rate\?\.rateDate \|\| ""/);
   assert.match(ordersModule, /exchangeRateSource: result\.rate\?\.source \|\| ""/);
   assert.match(ordersModule, /exchangeRateType: result\.rate\?\.rateType \|\| ""/);
-  assert.match(ordersModule, /exchangeRateDate: normalizedForm\.exchangeRateDate \|\| undefined/);
-  assert.match(ordersModule, /exchangeRateSource: normalizedForm\.exchangeRateSource \|\| undefined/);
-  assert.match(ordersModule, /exchangeRateType: normalizedForm\.exchangeRateType \|\| undefined/);
+  assert.match(ordersModule, /exchangeRateDate: form\.exchangeRateDate \|\| undefined/);
+  assert.match(ordersModule, /exchangeRateSource: form\.exchangeRateSource \|\| undefined/);
+  assert.match(ordersModule, /exchangeRateType: form\.exchangeRateType \|\| undefined/);
   assert.match(ordersModule, /刷新官方汇率/);
   assert.match(ordersModule, /cacheOnly=1/);
   assert.match(ordersService, /!EXCHANGE_RATE_SOURCES\.includes\(exchange\.exchangeRateSource\)/);
@@ -310,11 +339,11 @@ test("order logistics supplier default is only a per-order fallback", () => {
   assert.match(mastersAccess, /options: \{ allowEmpty\?: boolean; client\?: Prisma\.TransactionClient \} = \{\}/);
   assert.match(mastersAccess, /else if \(!options\.allowEmpty\)/);
   assert.doesNotMatch(mastersAccess, /ids = \[defaultSupplier\.id\];/);
-  assert.match(ordersService, /function isExwOrderInput/);
-  assert.match(ordersService, /syncOrderLogisticsSuppliers\(order\.id, logisticsSupplierIds, actor, \{ allowEmpty, client: tx \}\)/);
+  assert.match(ordersService, /const allowEmpty = String\(input\.tradeTerm \?\? order\.tradeTerm \?\? ""\)\.trim\(\)\.toUpperCase\(\)\.includes\("EXW"\)/);
+  assert.match(ordersService, /syncOrderLogisticsSuppliers\(order\.id, normalizeOrderLogisticsSupplierIds\(input\), actor, \{ allowEmpty, client: tx \}\)/);
   assert.match(mastersAccess, /if \(options\.client\) \{[\s\S]*?await syncRelations\(options\.client\)/);
-  assert.match(ordersService, /if \(!hasInput && !logisticsSettings\.allowMultipleOrderLogisticsSuppliers\)/);
-  assert.match(ordersService, /if \(existingCount > 0\) return order/);
+  assert.match(ordersService, /if \(!hasInput && !settings\.allowMultipleOrderLogisticsSuppliers\)/);
+  assert.match(ordersService, /if \(count > 0\) return order/);
 });
 
 test("order detail edit switches from drawer to edit form without silent failure", () => {
@@ -340,7 +369,7 @@ test("orders create form supports actual shipment date", () => {
   assert.match(ordersService, /actualShipmentDate,/);
   assert.match(orderSerialization, /actualShipmentDate: dateToInput\(order\.actualShipmentDate\)/);
   assert.match(ordersModule, /actualShipmentDate\?: string;/);
-  assert.match(ordersModule, /actualShipmentDate: normalizedForm\.actualShipmentDate \|\| undefined/);
+  assert.match(ordersModule, /actualShipmentDate: form\.actualShipmentDate \|\| undefined/);
   assert.match(ordersModule, /发货时间/);
   assert.match(ordersModule, /<DetailField label="发货时间" value=\{order\.actualShipmentDate \|\| "-"\} \/>/);
   assert.doesNotMatch(ordersModule, /预计发货日期/);

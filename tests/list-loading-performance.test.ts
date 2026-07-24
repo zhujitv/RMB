@@ -1,19 +1,28 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  readCustomerCommunicationModuleSource,
+  readDomesticLogisticsApiSource,
+  readDomesticLogisticsModuleSource,
+  readLogisticsFeesModuleSource,
+  readOrdersModuleSource,
+  readPaymentsModuleSource,
+  readProfitModuleSource,
+  readTaxRefundModuleSource,
+} from "./source-helpers.ts";
 
-const domesticApi = readFileSync("lib/platform/domestic-logistics-api.ts", "utf8");
-const domesticModule = readFileSync("app/modules/DomesticLogisticsModule.tsx", "utf8");
-const domesticView = readFileSync("app/modules/domestic-logistics/module-view.tsx", "utf8");
+const domesticApi = readDomesticLogisticsApiSource();
+const domesticModule = readDomesticLogisticsModuleSource();
+const domesticView = domesticModule;
 
 const guardedListControllers = [
-  "app/modules/OrdersModule.tsx",
-  "app/modules/PaymentsModule.tsx",
-  "app/modules/ProfitModule.tsx",
-  "app/modules/CustomerCommunicationModule.tsx",
-  "app/modules/DomesticLogisticsModule.tsx",
-  "app/modules/tax-refund/use-tax-refund-controller.ts",
-  "app/modules/logistics-fees/use-logistics-fees-list-controller.ts",
+  ["orders", readOrdersModuleSource()],
+  ["payments", readPaymentsModuleSource()],
+  ["profit", readProfitModuleSource()],
+  ["customer communication", readCustomerCommunicationModuleSource()],
+  ["domestic logistics", readDomesticLogisticsModuleSource()],
+  ["tax refund", readTaxRefundModuleSource()],
+  ["logistics fees", readLogisticsFeesModuleSource()],
 ];
 
 test("domestic logistics list is paginated by the API instead of slicing a loaded table", () => {
@@ -36,10 +45,9 @@ test("domestic logistics list is paginated by the API instead of slicing a loade
 });
 
 test("high traffic list controllers ignore stale slower responses", () => {
-  for (const file of guardedListControllers) {
-    const source = readFileSync(file, "utf8");
-    assert.match(source, /listRequestRef|loadCostsDataRequestRef/, `${file} should keep a request sequence ref`);
-    assert.match(source, /requestId !== listRequestRef\.current|dataRequestId !== loadCostsDataRequestRef\.current/, `${file} should ignore stale responses`);
-    assert.match(source, /requestId === listRequestRef\.current|visibleRequestId === loadCostsVisibleRequestRef\.current/, `${file} should only clear visible loading for the active response`);
+  for (const [label, source] of guardedListControllers) {
+    assert.match(source, /listRequestRef|loadCostsDataRequestRef/, `${label} should keep a request sequence ref`);
+    assert.match(source, /requestId !== listRequestRef\.current|dataRequestId !== loadCostsDataRequestRef\.current/, `${label} should ignore stale responses`);
+    assert.match(source, /requestId === listRequestRef\.current|visibleRequestId === loadCostsVisibleRequestRef\.current/, `${label} should only clear visible loading for the active response`);
   }
 });

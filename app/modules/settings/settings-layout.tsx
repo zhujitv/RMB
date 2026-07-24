@@ -1,7 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
 import { useState } from "react";
 import { UiSwitch } from "../../components";
-import styles from "../../WorkspaceShell.module.css";
+import styles from "./settings-styles";
 
 export function SettingsPage({
   title,

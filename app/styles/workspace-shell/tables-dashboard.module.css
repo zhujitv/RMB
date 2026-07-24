@@ -2,54 +2,54 @@
 /* Real style rules live in responsibility-focused sibling modules. */
 
 .detailGrid { composes: detailGrid from "./table-pinning-columns.module.css"; }
-.tablePinnedTwoCols { composes: tablePinnedTwoCols from "./table-pinning-columns.module.css"; composes: tablePinnedTwoCols from "./tax-refund-list-columns.module.css"; }
-.dataTable { composes: dataTable from "./table-pinning-columns.module.css"; composes: dataTable from "./tax-refund-list-columns.module.css"; }
+.tablePinnedTwoCols { composes: tablePinnedTwoCols from "./table-pinning-columns.module.css"; composes: tablePinnedTwoCols from "./table-pinning-responsive.module.css"; composes: tablePinnedTwoCols from "./cost-detail-columns.module.css"; }
+.dataTable { composes: dataTable from "./table-pinning-columns.module.css"; composes: dataTable from "./tax-refund-table-columns.module.css"; composes: dataTable from "./logistics-compact-responsive.module.css"; composes: dataTable from "./cost-detail-columns.module.css"; }
 .clickableRow { composes: clickableRow from "./table-pinning-columns.module.css"; }
-.orderNoColumn { composes: orderNoColumn from "./table-pinning-columns.module.css"; composes: orderNoColumn from "./tax-refund-list-columns.module.css"; }
-.selectionColumn { composes: selectionColumn from "./table-pinning-columns.module.css"; composes: selectionColumn from "./tax-refund-list-columns.module.css"; }
-.customerColumn { composes: customerColumn from "./table-pinning-columns.module.css"; composes: customerColumn from "./tax-refund-list-columns.module.css"; }
-.businessEntityColumn { composes: businessEntityColumn from "./table-pinning-columns.module.css"; }
+.orderNoColumn { composes: orderNoColumn from "./table-pinning-columns.module.css"; composes: orderNoColumn from "./table-pinning-responsive.module.css"; composes: orderNoColumn from "./logistics-compact-columns.module.css"; composes: orderNoColumn from "./logistics-compact-responsive.module.css"; composes: orderNoColumn from "./logistics-bill-row-responsive.module.css"; composes: orderNoColumn from "./cost-detail-columns.module.css"; }
+.selectionColumn { composes: selectionColumn from "./table-pinning-columns.module.css"; composes: selectionColumn from "./logistics-compact-columns.module.css"; composes: selectionColumn from "./logistics-compact-responsive.module.css"; composes: selectionColumn from "./logistics-bill-row-responsive.module.css"; }
+.customerColumn { composes: customerColumn from "./table-pinning-columns.module.css"; composes: customerColumn from "./table-pinning-responsive.module.css"; composes: customerColumn from "./logistics-compact-columns.module.css"; composes: customerColumn from "./logistics-compact-responsive.module.css"; composes: customerColumn from "./logistics-bill-row-responsive.module.css"; composes: customerColumn from "./cost-detail-columns.module.css"; }
+.businessEntityColumn { composes: businessEntityColumn from "./table-pinning-columns.module.css"; composes: businessEntityColumn from "./table-pinning-responsive.module.css"; }
 .businessEntityOtherRow { composes: businessEntityOtherRow from "./table-pinning-columns.module.css"; }
-.blNoColumn { composes: blNoColumn from "./table-pinning-columns.module.css"; composes: blNoColumn from "./tax-refund-list-columns.module.css"; }
-.containerTypeColumn { composes: containerTypeColumn from "./table-pinning-columns.module.css"; composes: containerTypeColumn from "./tax-refund-list-columns.module.css"; }
-.amountColumn { composes: amountColumn from "./table-pinning-columns.module.css"; composes: amountColumn from "./tax-refund-list-columns.module.css"; }
-.statusColumn { composes: statusColumn from "./table-pinning-columns.module.css"; composes: statusColumn from "./tax-refund-list-columns.module.css"; }
-.operationColumn { composes: operationColumn from "./table-pinning-columns.module.css"; composes: operationColumn from "./tax-refund-list-columns.module.css"; }
-.ordersModuleCard { composes: ordersModuleCard from "./table-pinning-columns.module.css"; }
-.ordersListTable { composes: ordersListTable from "./table-pinning-columns.module.css"; }
-.taxCompletenessTooltipAnchor { composes: taxCompletenessTooltipAnchor from "./table-pinning-columns.module.css"; }
-.taxCompletenessTooltipTrigger { composes: taxCompletenessTooltipTrigger from "./table-pinning-columns.module.css"; }
-.taxCompletenessTooltip { composes: taxCompletenessTooltip from "./table-pinning-columns.module.css"; }
-.taxRefundTableWrap { composes: taxRefundTableWrap from "./table-pinning-columns.module.css"; composes: taxRefundTableWrap from "./tax-refund-list-columns.module.css"; }
-.taxRefundTable { composes: taxRefundTable from "./table-pinning-columns.module.css"; composes: taxRefundTable from "./tax-refund-list-columns.module.css"; }
-.taxRefundOrderNoColumn { composes: taxRefundOrderNoColumn from "./table-pinning-columns.module.css"; composes: taxRefundOrderNoColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundBlNoColumn { composes: taxRefundBlNoColumn from "./table-pinning-columns.module.css"; composes: taxRefundBlNoColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundCustomerColumn { composes: taxRefundCustomerColumn from "./table-pinning-columns.module.css"; composes: taxRefundCustomerColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundBusinessEntityColumn { composes: taxRefundBusinessEntityColumn from "./table-pinning-columns.module.css"; composes: taxRefundBusinessEntityColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundDateColumn { composes: taxRefundDateColumn from "./table-pinning-columns.module.css"; composes: taxRefundDateColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundCompletenessColumn { composes: taxRefundCompletenessColumn from "./table-pinning-columns.module.css"; composes: taxRefundCompletenessColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundStatusColumn { composes: taxRefundStatusColumn from "./table-pinning-columns.module.css"; composes: taxRefundStatusColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundActionColumn { composes: taxRefundActionColumn from "./table-pinning-columns.module.css"; composes: taxRefundActionColumn from "./tax-refund-list-columns.module.css"; }
-.taxRefundBlNoList { composes: taxRefundBlNoList from "./tax-refund-list-columns.module.css"; }
-.logisticsCompactTableWrap { composes: logisticsCompactTableWrap from "./tax-refund-list-columns.module.css"; }
-.logisticsCompactTable { composes: logisticsCompactTable from "./tax-refund-list-columns.module.css"; }
-.domesticLogisticsListTable { composes: domesticLogisticsListTable from "./tax-refund-list-columns.module.css"; }
-.destinationColumn { composes: destinationColumn from "./tax-refund-list-columns.module.css"; }
-.cargoColumn { composes: cargoColumn from "./tax-refund-list-columns.module.css"; }
-.logisticsStatusColumn { composes: logisticsStatusColumn from "./tax-refund-list-columns.module.css"; }
-.logisticsExpenseStatusColumn { composes: logisticsExpenseStatusColumn from "./tax-refund-list-columns.module.css"; }
-.detailActionColumn { composes: detailActionColumn from "./tax-refund-list-columns.module.css"; }
-.logisticsCompactRowActive { composes: logisticsCompactRowActive from "./tax-refund-list-columns.module.css"; }
-.costTableWrap { composes: costTableWrap from "./tax-refund-list-columns.module.css"; }
-.supplierColumn { composes: supplierColumn from "./tax-refund-list-columns.module.css"; }
-.costInvoiceActionColumn { composes: costInvoiceActionColumn from "./tax-refund-list-columns.module.css"; }
-.detailField { composes: detailField from "./tax-refund-list-columns.module.css"; }
-.detailFieldWide { composes: detailFieldWide from "./tax-refund-list-columns.module.css"; }
-.moneyCell { composes: moneyCell from "./tax-refund-list-columns.module.css"; }
-.amountCell { composes: amountCell from "./tax-refund-list-columns.module.css"; }
-.amountCellSingle { composes: amountCellSingle from "./tax-refund-list-columns.module.css"; }
-.currencyAmount { composes: currencyAmount from "./tax-refund-list-columns.module.css"; }
-.cnyAmount { composes: cnyAmount from "./tax-refund-list-columns.module.css"; }
+.blNoColumn { composes: blNoColumn from "./table-pinning-columns.module.css"; composes: blNoColumn from "./table-pinning-responsive.module.css"; composes: blNoColumn from "./logistics-compact-columns.module.css"; composes: blNoColumn from "./logistics-compact-responsive.module.css"; composes: blNoColumn from "./logistics-bill-row-responsive.module.css"; }
+.containerTypeColumn { composes: containerTypeColumn from "./table-pinning-columns.module.css"; composes: containerTypeColumn from "./logistics-compact-columns.module.css"; }
+.amountColumn { composes: amountColumn from "./table-pinning-columns.module.css"; composes: amountColumn from "./table-pinning-responsive.module.css"; composes: amountColumn from "./logistics-compact-columns.module.css"; composes: amountColumn from "./logistics-bill-row-responsive.module.css"; composes: amountColumn from "./cost-detail-columns.module.css"; }
+.statusColumn { composes: statusColumn from "./table-pinning-columns.module.css"; composes: statusColumn from "./logistics-bill-row-responsive.module.css"; composes: statusColumn from "./cost-detail-columns.module.css"; }
+.operationColumn { composes: operationColumn from "./table-pinning-columns.module.css"; composes: operationColumn from "./logistics-bill-row-responsive.module.css"; composes: operationColumn from "./cost-detail-columns.module.css"; }
+.ordersModuleCard { composes: ordersModuleCard from "./table-pinning-columns.module.css"; composes: ordersModuleCard from "./table-pinning-responsive.module.css"; }
+.ordersListTable { composes: ordersListTable from "./table-pinning-columns.module.css"; composes: ordersListTable from "./table-pinning-responsive.module.css"; }
+.taxCompletenessTooltipAnchor { composes: taxCompletenessTooltipAnchor from "./tax-completeness-tooltip.module.css"; }
+.taxCompletenessTooltipTrigger { composes: taxCompletenessTooltipTrigger from "./tax-completeness-tooltip.module.css"; }
+.taxCompletenessTooltip { composes: taxCompletenessTooltip from "./tax-completeness-tooltip.module.css"; }
+.taxRefundTableWrap { composes: taxRefundTableWrap from "./tax-refund-table-columns.module.css"; composes: taxRefundTableWrap from "./tax-refund-list-columns.module.css"; composes: taxRefundTableWrap from "./logistics-compact-responsive.module.css"; }
+.taxRefundTable { composes: taxRefundTable from "./tax-refund-table-columns.module.css"; composes: taxRefundTable from "./tax-refund-list-columns.module.css"; composes: taxRefundTable from "./logistics-compact-responsive.module.css"; }
+.taxRefundOrderNoColumn { composes: taxRefundOrderNoColumn from "./tax-refund-table-columns.module.css"; composes: taxRefundOrderNoColumn from "./tax-refund-list-columns.module.css"; composes: taxRefundOrderNoColumn from "./logistics-compact-responsive.module.css"; }
+.taxRefundBlNoColumn { composes: taxRefundBlNoColumn from "./tax-refund-table-columns.module.css"; composes: taxRefundBlNoColumn from "./tax-refund-list-columns.module.css"; composes: taxRefundBlNoColumn from "./logistics-compact-responsive.module.css"; }
+.taxRefundCustomerColumn { composes: taxRefundCustomerColumn from "./tax-refund-table-columns.module.css"; composes: taxRefundCustomerColumn from "./logistics-compact-responsive.module.css"; }
+.taxRefundBusinessEntityColumn { composes: taxRefundBusinessEntityColumn from "./tax-refund-table-columns.module.css"; composes: taxRefundBusinessEntityColumn from "./logistics-compact-responsive.module.css"; }
+.taxRefundDateColumn { composes: taxRefundDateColumn from "./tax-refund-table-columns.module.css"; composes: taxRefundDateColumn from "./logistics-compact-responsive.module.css"; }
+.taxRefundCompletenessColumn { composes: taxRefundCompletenessColumn from "./tax-refund-table-columns.module.css"; composes: taxRefundCompletenessColumn from "./logistics-compact-responsive.module.css"; }
+.taxRefundStatusColumn { composes: taxRefundStatusColumn from "./tax-refund-table-columns.module.css"; composes: taxRefundStatusColumn from "./tax-refund-list-columns.module.css"; composes: taxRefundStatusColumn from "./logistics-compact-responsive.module.css"; }
+.taxRefundActionColumn { composes: taxRefundActionColumn from "./tax-refund-table-columns.module.css"; composes: taxRefundActionColumn from "./logistics-compact-responsive.module.css"; }
+.taxRefundBlNoList { composes: taxRefundBlNoList from "./tax-refund-list-columns.module.css"; composes: taxRefundBlNoList from "./logistics-compact-responsive.module.css"; }
+.logisticsCompactTableWrap { composes: logisticsCompactTableWrap from "./logistics-compact-columns.module.css"; }
+.logisticsCompactTable { composes: logisticsCompactTable from "./logistics-compact-columns.module.css"; composes: logisticsCompactTable from "./logistics-bill-row-responsive.module.css"; }
+.domesticLogisticsListTable { composes: domesticLogisticsListTable from "./logistics-compact-responsive.module.css"; }
+.destinationColumn { composes: destinationColumn from "./logistics-compact-columns.module.css"; composes: destinationColumn from "./logistics-compact-responsive.module.css"; }
+.cargoColumn { composes: cargoColumn from "./logistics-compact-columns.module.css"; composes: cargoColumn from "./logistics-compact-responsive.module.css"; }
+.logisticsStatusColumn { composes: logisticsStatusColumn from "./logistics-compact-columns.module.css"; composes: logisticsStatusColumn from "./logistics-compact-responsive.module.css"; }
+.logisticsExpenseStatusColumn { composes: logisticsExpenseStatusColumn from "./logistics-compact-columns.module.css"; composes: logisticsExpenseStatusColumn from "./logistics-compact-responsive.module.css"; }
+.detailActionColumn { composes: detailActionColumn from "./logistics-compact-columns.module.css"; composes: detailActionColumn from "./logistics-compact-responsive.module.css"; }
+.logisticsCompactRowActive { composes: logisticsCompactRowActive from "./cost-detail-columns.module.css"; }
+.costTableWrap { composes: costTableWrap from "./cost-detail-columns.module.css"; }
+.supplierColumn { composes: supplierColumn from "./cost-detail-columns.module.css"; }
+.costInvoiceActionColumn { composes: costInvoiceActionColumn from "./cost-detail-columns.module.css"; }
+.detailField { composes: detailField from "./cost-detail-columns.module.css"; }
+.detailFieldWide { composes: detailFieldWide from "./cost-detail-columns.module.css"; }
+.moneyCell { composes: moneyCell from "./cost-detail-columns.module.css"; }
+.amountCell { composes: amountCell from "./cost-detail-columns.module.css"; }
+.amountCellSingle { composes: amountCellSingle from "./cost-detail-columns.module.css"; }
+.currencyAmount { composes: currencyAmount from "./cost-detail-columns.module.css"; }
+.cnyAmount { composes: cnyAmount from "./cost-detail-columns.module.css"; }
 .currencyTotalsList { composes: currencyTotalsList from "./logistics-cost-columns.module.css"; }
 .currencyTotalsRow { composes: currencyTotalsRow from "./logistics-cost-columns.module.css"; }
 .costAmountStack { composes: costAmountStack from "./logistics-cost-columns.module.css"; }

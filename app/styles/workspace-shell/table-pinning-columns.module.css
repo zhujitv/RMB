@@ -1,13 +1,11 @@
 /* table-pinning-columns: extracted from tables-dashboard.module.css without changing selectors. */
 /* Shared table columns, details, money cells and dashboard analytics.
  * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
-
 .detailGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
-
 .tablePinnedTwoCols .dataTable th:nth-child(1),
 .tablePinnedTwoCols .dataTable td:nth-child(1) {
   position: sticky;
@@ -16,7 +14,6 @@
   min-width: 120px;
   width: 120px;
 }
-
 .tablePinnedTwoCols .dataTable th:nth-child(2),
 .tablePinnedTwoCols .dataTable td:nth-child(2) {
   position: sticky;
@@ -25,67 +22,54 @@
   min-width: 170px;
   width: 170px;
 }
-
 .tablePinnedTwoCols .dataTable th:nth-child(1),
 .tablePinnedTwoCols .dataTable th:nth-child(2) {
   background: #f8fafc;
 }
-
 .tablePinnedTwoCols .dataTable td:nth-child(1),
 .tablePinnedTwoCols .dataTable td:nth-child(2) {
   background: #fff;
 }
-
 .businessEntityOtherRow {
   --business-entity-row-background: #f3f8ff;
   --business-entity-row-hover-background: #eaf4ff;
   background: var(--business-entity-row-background);
 }
-
 .businessEntityOtherRow:hover {
   background: var(--business-entity-row-hover-background);
 }
-
 .dataTable tr.businessEntityOtherRow > td {
   background: var(--business-entity-row-background);
 }
-
 .dataTable tr.businessEntityOtherRow.clickableRow:hover > td,
 .dataTable tr.businessEntityOtherRow:hover > td {
   background: var(--business-entity-row-hover-background);
 }
-
 .dataTable tr.businessEntityOtherRow.logisticsCompactRowActive > td {
   background: #eff6ff;
 }
-
 .dataTable tr.businessEntityOtherRow.logisticsCompactRowActive:hover > td {
   background: #dbeafe;
 }
-
 .tablePinnedTwoCols .dataTable tr.businessEntityOtherRow td:nth-child(1),
 .tablePinnedTwoCols .dataTable tr.businessEntityOtherRow td:nth-child(2) {
   background: var(--business-entity-row-background);
 }
-
 .tablePinnedTwoCols .clickableRow:hover td:nth-child(1),
 .tablePinnedTwoCols .clickableRow:hover td:nth-child(2) {
   background: #f8fafc;
 }
-
 .tablePinnedTwoCols .dataTable tr.businessEntityOtherRow.clickableRow:hover td:nth-child(1),
 .tablePinnedTwoCols .dataTable tr.businessEntityOtherRow.clickableRow:hover td:nth-child(2),
 .tablePinnedTwoCols .dataTable tr.businessEntityOtherRow:hover td:nth-child(1),
 .tablePinnedTwoCols .dataTable tr.businessEntityOtherRow:hover td:nth-child(2) {
   background: var(--business-entity-row-hover-background);
 }
-
 .dataTable th.orderNoColumn,
 .dataTable td.orderNoColumn {
   width: 180px;
   min-width: 180px;
 }
-
 .dataTable th.selectionColumn,
 .dataTable td.selectionColumn {
   width: 48px;
@@ -93,13 +77,11 @@
   text-align: center;
   vertical-align: middle;
 }
-
 .dataTable th.customerColumn,
 .dataTable td.customerColumn {
   width: 140px;
   min-width: 140px;
 }
-
 .dataTable th.businessEntityColumn,
 .dataTable td.businessEntityColumn {
   width: 140px;
@@ -109,33 +91,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .dataTable th.businessEntityColumn button {
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .dataTable th.blNoColumn,
 .dataTable td.blNoColumn {
   width: 180px;
   min-width: 180px;
 }
-
 .dataTable th.containerTypeColumn,
 .dataTable td.containerTypeColumn {
   width: 116px;
   min-width: 116px;
 }
-
 .dataTable th.amountColumn,
 .dataTable td.amountColumn {
   width: 160px;
   min-width: 160px;
   text-align: right;
 }
-
 .dataTable th.statusColumn,
 .dataTable td.statusColumn {
   width: 112px;
@@ -146,7 +123,6 @@
   word-break: keep-all;
   overflow-wrap: normal;
 }
-
 .dataTable th.operationColumn,
 .dataTable td.operationColumn {
   width: 96px;
@@ -154,276 +130,7 @@
   text-align: center;
   vertical-align: middle;
 }
-
 .ordersModuleCard,
 .ordersListTable {
   min-width: 0;
-}
-
-/*
- * At 1920x1080 with 150% display scaling the browser exposes about 1280 CSS
- * pixels. This order-only density keeps all nine receivable columns visible
- * without changing the shared order/payment/profit column contracts.
- */
-@media (min-width: 861px) and (max-width: 1535px) {
-  .ordersModuleCard {
-    padding-right: 12px;
-    padding-left: 12px;
-  }
-
-  .ordersListTable {
-    min-width: 936px;
-    table-layout: fixed;
-  }
-
-  .tablePinnedTwoCols .ordersListTable th,
-  .tablePinnedTwoCols .ordersListTable td {
-    padding-right: 6px;
-    padding-left: 6px;
-  }
-
-  .tablePinnedTwoCols .ordersListTable th.orderNoColumn,
-  .tablePinnedTwoCols .ordersListTable td.orderNoColumn {
-    width: 108px;
-    min-width: 108px;
-  }
-
-  .tablePinnedTwoCols .ordersListTable th.customerColumn,
-  .tablePinnedTwoCols .ordersListTable td.customerColumn {
-    left: 108px;
-    width: 82px;
-    min-width: 82px;
-  }
-
-  .ordersListTable th.businessEntityColumn,
-  .ordersListTable td.businessEntityColumn {
-    width: 88px;
-    min-width: 88px;
-    max-width: 88px;
-  }
-
-  .ordersListTable th.blNoColumn,
-  .ordersListTable td.blNoColumn {
-    width: 120px;
-    min-width: 120px;
-  }
-
-  .ordersListTable th.amountColumn,
-  .ordersListTable td.amountColumn {
-    width: 134px;
-    min-width: 134px;
-  }
-
-  .ordersListTable th:nth-child(8),
-  .ordersListTable td:nth-child(8) {
-    width: 76px;
-    min-width: 76px;
-    text-align: center;
-  }
-
-  .ordersListTable th:nth-child(9),
-  .ordersListTable td:nth-child(9) {
-    width: 60px;
-    min-width: 60px;
-    text-align: center;
-  }
-
-  .ordersListTable td.orderNoColumn,
-  .ordersListTable td.customerColumn,
-  .ordersListTable td.businessEntityColumn,
-  .ordersListTable td.blNoColumn,
-  .ordersListTable td.orderNoColumn strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .ordersListTable td.orderNoColumn strong {
-    display: block;
-  }
-
-  .ordersListTable td.amountColumn {
-    overflow: visible;
-  }
-
-  .ordersListTable td.amountColumn > div > div {
-    font-size: 12px;
-  }
-
-  .ordersListTable td.amountColumn > div > div + div {
-    font-size: 11px;
-  }
-
-  .ordersListTable td:nth-child(8) > span {
-    padding-right: 5px;
-    padding-left: 5px;
-    font-size: 12px;
-  }
-
-  .ordersListTable td:nth-child(9) > button {
-    padding-right: 8px;
-    padding-left: 8px;
-    white-space: nowrap;
-  }
-}
-
-.taxCompletenessTooltipAnchor {
-  display: inline-block;
-}
-
-.taxCompletenessTooltipTrigger {
-  cursor: help;
-}
-
-.taxCompletenessTooltip {
-  position: fixed;
-  z-index: 1000;
-  width: min(300px, calc(100vw - 32px));
-  transform: translateX(-50%);
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
-  color: #0f172a;
-  padding: 10px 12px;
-  text-align: left;
-  white-space: normal;
-  pointer-events: none;
-}
-
-.taxCompletenessTooltip strong {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.taxCompletenessTooltip ul {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding-left: 16px;
-}
-
-.taxCompletenessTooltip li {
-  color: #475569;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.taxCompletenessTooltip li span {
-  color: #0f172a;
-  font-weight: 700;
-}
-
-.taxRefundTableWrap {
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-}
-
-.taxRefundTable.dataTable {
-  min-width: 1160px;
-  table-layout: fixed;
-}
-
-.taxRefundTable col.taxRefundOrderNoColumn,
-.taxRefundTable th.taxRefundOrderNoColumn,
-.taxRefundTable td.taxRefundOrderNoColumn {
-  width: 150px;
-  min-width: 150px;
-}
-
-.taxRefundTable col.taxRefundBlNoColumn,
-.taxRefundTable th.taxRefundBlNoColumn,
-.taxRefundTable td.taxRefundBlNoColumn {
-  width: 280px;
-  min-width: 240px;
-}
-
-.taxRefundTable col.taxRefundCustomerColumn,
-.taxRefundTable th.taxRefundCustomerColumn,
-.taxRefundTable td.taxRefundCustomerColumn {
-  width: 130px;
-  min-width: 120px;
-}
-
-.taxRefundTable col.taxRefundBusinessEntityColumn,
-.taxRefundTable th.taxRefundBusinessEntityColumn,
-.taxRefundTable td.taxRefundBusinessEntityColumn {
-  width: 140px;
-  min-width: 120px;
-  max-width: 150px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.taxRefundTable th.taxRefundBusinessEntityColumn button {
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.taxRefundTable col.taxRefundDateColumn,
-.taxRefundTable th.taxRefundDateColumn,
-.taxRefundTable td.taxRefundDateColumn {
-  width: 110px;
-  min-width: 110px;
-}
-
-.taxRefundTable col.taxRefundCompletenessColumn,
-.taxRefundTable th.taxRefundCompletenessColumn,
-.taxRefundTable td.taxRefundCompletenessColumn {
-  width: 120px;
-  min-width: 120px;
-  text-align: center;
-}
-
-.taxRefundTable col.taxRefundStatusColumn,
-.taxRefundTable th.taxRefundStatusColumn,
-.taxRefundTable td.taxRefundStatusColumn {
-  width: 160px;
-  min-width: 160px;
-}
-
-.taxRefundTable col.taxRefundActionColumn,
-.taxRefundTable th.taxRefundActionColumn,
-.taxRefundTable td.taxRefundActionColumn {
-  width: 88px;
-  min-width: 88px;
-  text-align: center;
-  overflow: visible;
-  white-space: nowrap;
-}
-
-.taxRefundTable th.taxRefundActionColumn,
-.taxRefundTable td.taxRefundActionColumn {
-  padding-left: 8px;
-  padding-right: 8px;
-}
-
-.taxRefundTable td.taxRefundActionColumn button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  min-width: 64px;
-  height: 32px;
-  min-height: 32px;
-  max-height: none;
-  padding: 6px 12px;
-  white-space: nowrap;
-  overflow: visible;
-  line-height: 20px;
-  vertical-align: middle;
-}
-
-.taxRefundTable th.taxRefundBlNoColumn,
-.taxRefundTable td.taxRefundBlNoColumn {
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
 }

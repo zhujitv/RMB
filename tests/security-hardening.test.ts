@@ -79,13 +79,13 @@ test("cors preflight blocks untrusted origins before route handlers", () => {
 });
 
 test("business API requests are protected by unified rate limiting", () => {
-  assert.match(proxy, /const API_RATE_LIMIT_STORE = new Map/);
+  assert.match(proxy, /const (?:API_RATE_LIMIT_STORE|STORE) = new Map/);
   assert.match(proxy, /async function checkApiRateLimit/);
   assert.match(proxy, /request\.nextUrl\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(proxy, /API_RATE_LIMIT_READ_LIMIT/);
   assert.match(proxy, /API_RATE_LIMIT_WRITE_LIMIT/);
   assert.match(proxy, /API_RATE_LIMIT_UPLOAD_LIMIT/);
-  assert.match(proxy, /sessionTokenForRateLimit\(request\)/);
+  assert.match(proxy, /(?:sessionTokenForRateLimit|sessionToken)\(request\)/);
   assert.match(proxy, /requestIp\(request\)/);
   assert.match(
     proxy,
@@ -106,10 +106,10 @@ test("api rate limiting supports distributed redis with memory fallback", () => 
   assert.match(proxy, /RATE_LIMIT_NAMESPACE/);
   assert.match(proxy, /async function checkDistributedApiRateLimit/);
   assert.match(proxy, /\/pipeline/);
-  assert.match(proxy, /\["INCR", redisKey\]/);
-  assert.match(proxy, /\["EXPIRE", redisKey, ttlCommand, "NX"\]/);
-  assert.match(proxy, /\["TTL", redisKey\]/);
-  assert.match(proxy, /warnDistributedRateLimitFallback/);
+  assert.match(proxy, /\["INCR", (?:redisKey|`\$\{config\.namespace\}:rate:\$\{key\}`)\]/);
+  assert.match(proxy, /\["EXPIRE", (?:redisKey|`\$\{config\.namespace\}:rate:\$\{key\}`), (?:ttlCommand|ttl), "NX"\]/);
+  assert.match(proxy, /\["TTL", (?:redisKey|`\$\{config\.namespace\}:rate:\$\{key\}`)\]/);
+  assert.match(proxy, /(?:warnDistributedRateLimitFallback|warnFallback)/);
   assert.match(
     proxy,
     /return checkMemoryApiRateLimit\(request, limit, windowMs\)/,

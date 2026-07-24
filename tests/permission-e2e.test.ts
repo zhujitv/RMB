@@ -5,7 +5,9 @@ import { rolePermissionSnapshot } from "../lib/platform/shared-permission-data.t
 import {
   readDomesticLogisticsApiSource,
   readLogisticsExpenseAccessSource,
+  readLogisticsExpenseQueriesSource,
   readOrdersServiceSource,
+  readPaymentsServiceSource,
   readSharedAuthSource,
   readSharedUsersSource,
   readShipsgoTrackingSource,
@@ -27,11 +29,11 @@ function assertApiRouteUsesUnifiedAuth(path: string) {
 
 const orderAccess = source("lib/platform/order-access.ts");
 const ordersService = readOrdersServiceSource();
-const paymentsService = source("lib/platform/payments-module.ts");
+const paymentsService = readPaymentsServiceSource();
 const taxRefundService = readTaxRefundsSource();
 const domesticLogisticsService = readDomesticLogisticsApiSource();
 const mastersAccess = source("lib/platform/masters-access.ts");
-const logisticsExpenseQueries = source("lib/platform/logistics-expense-queries.ts");
+const logisticsExpenseQueries = readLogisticsExpenseQueriesSource();
 const logisticsExpenseAccess = readLogisticsExpenseAccessSource();
 const shipsgoTracking = readShipsgoTrackingSource();
 const supplierDocumentService = readSupplierDocumentRequestsSource();
@@ -78,7 +80,10 @@ test("E2E permission: salesperson data stays scoped to own customers across orde
   assert.match(ordersService, /assertCustomerScope\(actor, customerId, tx\)/);
   assert.match(ordersService, /resolveSalespersonUserId\(inputData, actor, transactionCustomer, current, tx\)/);
   assert.match(paymentsService, /assertRead\(actor, "payments"\)/);
-  assert.match(paymentsService, /const accessWhere = orderAccessWhere\(actor\)/);
+  assert.match(
+    paymentsService,
+    /(?:const accessWhere = orderAccessWhere\(actor\)|paymentWhere\(filtersFromQuery\(query\), orderAccessWhere\(actor\)\))/,
+  );
   assert.match(taxRefundService, /orderAccessWhere\(actor\)/);
 });
 

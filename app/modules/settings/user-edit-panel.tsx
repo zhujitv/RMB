@@ -1,46 +1,13 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../../lib/password-policy";
 import { PermissionSelectItem } from "../../components";
 import { SearchAutocomplete } from "../../SearchAutocomplete";
 import styles from "../../WorkspaceShell.module.css";
-import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../../lib/password-policy";
 import { FACTORY_SUPPLIER_ACCOUNT_ROLES, USER_APPROVAL_STATUS_OPTIONS, USER_ROLES } from "./constants";
-import { dataScopeLabel, defaultDataScopeForRole, fuzzyIncludes, isSupplierAccountRole, permissionDefaultsForRole, supplierMatchesUserRole, supplierOptionLabel } from "./helpers";
-import type { PermissionConfig, PermissionOption, SupplierRow, UserForm } from "./types";
-
-function PermissionChoiceGroup({
-  title,
-  options,
-  values,
-  onToggle,
-}: {
-  title: string;
-  options: PermissionOption[];
-  values: string[];
-  onToggle: (value: string) => void;
-}) {
-  return (
-    <section className={styles.permissionGroup}>
-      <div className={styles.permissionGroupHeader}>
-        <strong>{title}</strong>
-        <span>
-          已选择 {values.length} / {options.length} 项
-        </span>
-      </div>
-      <div className={styles.permissionOptionGrid}>
-        {options.map((option) => (
-          <PermissionSelectItem
-            key={option.value}
-            className={styles.permissionOptionCard}
-            label={option.label}
-            checked={values.includes(option.value)}
-            onChange={() => onToggle(option.value)}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
+import { dataScopeLabel, fuzzyIncludes, isSupplierAccountRole, permissionDefaultsForRole, supplierMatchesUserRole, supplierOptionLabel } from "./helpers";
+import { PermissionChoiceGroup } from "./permission-choice-group";
+import type { PermissionConfig, SupplierRow, UserForm } from "./types";
 
 type PermissionTabKey = "menus" | "reads" | "writes";
 

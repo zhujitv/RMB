@@ -1,14 +1,15 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readCostRecordsMutationsSource, readLogisticsExpenseInvoiceSource, readLogisticsExpenseWorkflowSource, readOrderDocumentsSource, readSupplierDocumentRequestsSource } from "./source-helpers.ts";
+import { readCostRecordsMutationsSource, readFileAssetsSource, readLogisticsExpenseInvoiceSource, readLogisticsExpenseWorkflowSource, readOrderDocumentsSource, readSupplierDocumentRequestsSource } from "./source-helpers.ts";
 
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const migration = readFileSync(
   "prisma/migrations/20260701193000_file_assets/migration.sql",
   "utf8",
 );
-const fileAssets = readFileSync("lib/platform/file-assets.ts", "utf8");
+const fileAssets = readFileAssetsSource();
 const orderDocuments = readOrderDocumentsSource();
 const costs = readCostRecordsMutationsSource();
 const supplierDocuments = readSupplierDocumentRequestsSource();

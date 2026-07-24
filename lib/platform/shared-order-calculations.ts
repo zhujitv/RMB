@@ -1,157 +1,27 @@
-import { nonEmpty, normalizeEmail, num } from "./shared-base-utils";
+import { nonEmpty, normalizeEmail } from "./shared-base-utils";
 import { calculateCommissionFormulaBase } from "./commission-formula";
 import { COMMISSION_LOGISTICS_COST_TYPES, NON_PARTICIPATING_COST_TYPES, ORDER_COST_STATUS_VOID } from "./shared-constants";
 import { taxDocumentCompleteness } from "./shared-tax-completeness";
+import type { CostLike, NumericLike, OrderLike, OrderSummary, TaxLogisticsMissingItem } from "./shared-order-calculation-types";
+import { calcReminderStatus } from "./shared-order-reminders";
+import {
+  confirmedPayment,
+  deriveOrderCollectionBalance,
+  hasArrivedPaymentCurrencyMismatch,
+  paymentAmountForOrderCurrency,
+  roundMoney,
+} from "./shared-order-collections";
 
-type NumericLike = number | string | { toString(): string };
-
-export type PaymentLike = {
-  status?: string | null;
-  deletedAt?: Date | string | null;
-  currency?: string | null;
-  amount?: NumericLike | null;
-  amountCny?: NumericLike | null;
-  paymentType?: string | null;
-};
-
-type CostLike = {
-  status?: string | null;
-  paymentStatus?: string | null;
-  deletedAt?: Date | string | null;
-  costType?: string | null;
-  costConfirmed?: boolean | null;
-  amountCny?: NumericLike | null;
-  createdById?: string | null;
-};
-
-type SalespersonLike = {
-  name?: string | null;
-  email?: string | null;
-};
-
-type OrderLike = {
-  currency?: string | null;
-  salespersonUserId?: string | null;
-  salesperson?: SalespersonLike | null;
-  salespersonCommissionRate?: NumericLike | null;
-  commissionStatus?: string | null;
-  status?: string | null;
-  receivableAmount?: NumericLike | null;
-  receivableAmountCny?: NumericLike | null;
-  estimatedReceivableAmount?: NumericLike | null;
-  estimatedReceivableAmountCny?: NumericLike | null;
-  actualShipmentAmount?: NumericLike | null;
-  actualShipmentAmountCny?: NumericLike | null;
-  finalReceivableAmount?: NumericLike | null;
-  finalReceivableAmountCny?: NumericLike | null;
-  exchangeRate?: NumericLike | null;
-  depositRatio?: NumericLike | null;
-  dueDate?: Date | null;
-  reminderDays?: NumericLike | null;
-  payments?: PaymentLike[] | null;
-  costs?: CostLike[] | null;
-};
-
-type TaxLogisticsMissingItem = {
-  label?: string | null;
-  invoiceLabel?: string | null;
-  missingCostLabel?: string | null;
-  costType?: string | null;
-  [key: string]: unknown;
-};
-
-export type OrderSummary = {
-  receivableCny: number;
-  receivableAmount: number;
-  estimatedReceivableAmount: number;
-  estimatedReceivableAmountCny: number;
-  actualShipmentAmount: number | null;
-  actualShipmentAmountCny: number | null;
-  finalReceivableAmount: number;
-  finalReceivableAmountCny: number;
-  confirmedPaymentsCny: number;
-  confirmedPaymentsAmount: number;
-  arrivedPaymentsCny: number;
-  arrivedPaymentsAmount: number;
-  prepaidAmountCny: number;
-  receivedDepositCny: number;
-  receivedDepositAmount: number;
-  requiredDepositAmount: number;
-  requiredDepositAmountCny: number;
-  depositGapCny: number;
-  depositOverpaidCny: number;
-  depositRatio: number | null;
-  pendingPaymentsCny: number;
-  pendingPaymentsAmount: number;
-  arrivedBalanceAmount: number;
-  arrivedBalanceCny: number;
-  arrivedOutstandingAmount: number;
-  arrivedOutstandingCny: number;
-  balanceCny: number;
-  balanceAmount: number;
-  outstandingCny: number;
-  outstandingAmount: number;
-  overpaidCny: number;
-  overpaidAmount: number;
-  exchangeDifferenceCny: number;
-  hasArrivedPaymentCurrencyMismatch: boolean;
-  isOverpaid: boolean;
-  isUnderpaid: boolean;
-  totalCostCny: number;
-  confirmedTotalCostCny: number;
-  paidConfirmedCostCny: number;
-  logisticsCostCny: number;
-  confirmedLogisticsCostCny: number;
-  expectedTaxRefundIncomeCny: number;
-  taxLogisticsCostsComplete: boolean;
-  taxLogisticsMissing: TaxLogisticsMissingItem[];
-  taxLogisticsMissingLabels: string[];
-  allCostsConfirmed: boolean;
-  logisticsCostConfirmed: boolean;
-  realSalespersonSet: boolean;
-  commissionRate: number;
-  commissionFormulaMode: string;
-  commissionFormulaLabel: string;
-  commissionFormulaDescription: string;
-  commissionFormulaSource: string;
-  commissionFormulaDeductions: unknown;
-  commissionFormulaFloorAtZero: boolean;
-  commissionBaseCny: number;
-  estimatedCommissionBaseCny: number;
-  estimatedCommissionCny: number;
-  settleableCommissionBaseCny: number;
-  settleableCommissionCny: number;
-  expectedGrossProfit: number;
-  expectedGrossMargin: number | null;
-  realizedGrossProfit: number | null;
-  realizedGrossMargin: number | null;
-  actualGrossProfit: number | null;
-  netCashFlowCny: number;
-  grossMargin: number | null;
-  reminderStatus: string;
-  overdueDays: number;
-  commissionStatus?: string;
-  commissionCanSettle?: boolean;
-  commissionAmountCny?: number;
-};
-
-type ReminderResult = {
-  status: string;
-  overdueDays: number;
-};
-
-export function confirmedPayment(payment: PaymentLike) {
-  return payment.status === "已到账" && !payment.deletedAt;
-}
-
-export function hasArrivedPaymentCurrencyMismatch(order: OrderLike) {
-  const orderCurrency = nonEmpty(order.currency).toUpperCase() || "CNY";
-  return (order.payments || []).some((payment) => {
-    if (!confirmedPayment(payment)) return false;
-    const paymentCurrency = nonEmpty(payment.currency).toUpperCase();
-    return Boolean(paymentCurrency) && paymentCurrency !== orderCurrency;
-  });
-}
+export type { OrderSummary, PaymentLike } from "./shared-order-calculation-types";
+export {
+  confirmedPayment,
+  deriveOrderCollectionBalance,
+  deriveOrderCollectionStatus,
+  hasArrivedPaymentCurrencyMismatch,
+  paymentAmountForOrderCurrency,
+  roundMoney,
+} from "./shared-order-collections";
+export { calcReminderStatus } from "./shared-order-reminders";
 
 export function validCost(cost: CostLike) {
   return cost.status !== ORDER_COST_STATUS_VOID
@@ -185,82 +55,6 @@ export function allCostsConfirmed(costs: CostLike[] = []) {
   return validCosts.length > 0 && validCosts.every((cost) => cost.costConfirmed === true);
 }
 
-export function roundMoney(value: unknown) {
-  return Math.round(num(value) * 100) / 100;
-}
-
-export function paymentAmountForOrderCurrency(
-  payment: PaymentLike,
-  orderCurrencyInput: unknown,
-  orderExchangeRateInput: unknown,
-) {
-  const orderCurrency = String(orderCurrencyInput || "CNY").toUpperCase();
-  const paymentCurrency = String(payment.currency || orderCurrency).toUpperCase();
-  const paymentAmount = Number(payment.amount || 0);
-  if (paymentCurrency === orderCurrency) return paymentAmount;
-  const orderExchangeRate = Number(orderExchangeRateInput) || 1;
-  return Number(payment.amountCny || 0) / orderExchangeRate;
-}
-
-export function deriveOrderCollectionBalance({
-  receivableAmount,
-  receivedAmount,
-  receivedAmountCny,
-  orderExchangeRate,
-}: {
-  receivableAmount: unknown;
-  receivedAmount: unknown;
-  receivedAmountCny: unknown;
-  orderExchangeRate: unknown;
-}) {
-  const normalizedReceivableAmount = roundMoney(receivableAmount);
-  const normalizedReceivedAmount = roundMoney(receivedAmount);
-  const exchangeRate = Number(orderExchangeRate) > 0 ? Number(orderExchangeRate) : 1;
-  const balanceAmount = roundMoney(normalizedReceivableAmount - normalizedReceivedAmount);
-  const outstandingAmount = Math.max(balanceAmount, 0);
-  const overpaidAmount = Math.max(-balanceAmount, 0);
-  const balanceCny = roundMoney(balanceAmount * exchangeRate);
-  const outstandingCny = roundMoney(outstandingAmount * exchangeRate);
-  const overpaidCny = roundMoney(overpaidAmount * exchangeRate);
-  const exchangeDifferenceCny = roundMoney(
-    Number(receivedAmountCny || 0) - roundMoney(normalizedReceivedAmount * exchangeRate),
-  );
-  return {
-    receivedAmount: normalizedReceivedAmount,
-    balanceAmount,
-    outstandingAmount,
-    overpaidAmount,
-    balanceCny,
-    outstandingCny,
-    overpaidCny,
-    exchangeDifferenceCny,
-  };
-}
-
-export function deriveOrderCollectionStatus({
-  currentStatus,
-  actualShipmentAmount,
-  receivedAmount,
-  outstandingAmount,
-  overpaidAmount,
-}: {
-  currentStatus?: string | null;
-  actualShipmentAmount?: unknown;
-  receivedAmount: unknown;
-  outstandingAmount: unknown;
-  overpaidAmount: unknown;
-}) {
-  const status = String(currentStatus || "");
-  if (["草稿", "已关闭", "已取消"].includes(status)) return status;
-  if (roundMoney(overpaidAmount) > 0) return "多收款";
-  if (roundMoney(outstandingAmount) <= 0) return "已收齐";
-  if (roundMoney(receivedAmount) > 0) return "部分收款";
-  if (["部分收款", "已收齐", "多收款"].includes(status)) {
-    return actualShipmentAmount == null ? "已确认" : "已发货";
-  }
-  return status;
-}
-
 export function hasRealSalesperson(order: OrderLike) {
   if (!order.salespersonUserId || !order.salesperson) return false;
   const name = nonEmpty(order.salesperson.name);
@@ -286,26 +80,6 @@ export function derivedCommissionStatus(order: OrderLike, summary: OrderSummary)
 export function depositRatioForPaymentTerm(paymentTermType: string | null | undefined, before?: { depositRatio?: NumericLike | null } | null) {
   if (!paymentTermType && before) return before.depositRatio == null ? null : Number(before.depositRatio);
   return null;
-}
-
-export function calcReminderStatus({
-  outstandingCny,
-  dueDate,
-  reminderDays,
-}: {
-  outstandingCny: number;
-  dueDate?: Date | null;
-  reminderDays?: NumericLike | null;
-}): ReminderResult {
-  if (outstandingCny <= 0) return { status: "已结清", overdueDays: 0 };
-  if (!dueDate) return { status: "未到期", overdueDays: 0 };
-  const today = new Date();
-  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const due = new Date(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate());
-  const diff = Math.round((due.getTime() - todayDate.getTime()) / 86400000);
-  if (diff < 0) return { status: "已逾期", overdueDays: Math.abs(diff) };
-  if (diff <= Number(reminderDays || 0)) return { status: "即将到期", overdueDays: 0 };
-  return { status: "未到期", overdueDays: 0 };
 }
 
 export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Record<string, unknown> | null): OrderSummary {

@@ -7,6 +7,7 @@ import {
   readLogisticsExpenseWorkflowSource,
   readOrderDocumentsSource,
   readOrdersServiceSource,
+  readNotificationTemplatesSource,
   readPaymentsServiceSource,
   readSharedAuthSource,
   readSharedUsersSource,
@@ -45,7 +46,7 @@ const supplierDocuments = readSupplierDocumentRequestsSource();
 const shipsgoTracking = readShipsgoTrackingSource();
 const companyProfile = source("lib/platform/company-profile.ts");
 const commissionFormula = source("lib/platform/commission-formula.ts");
-const notificationTemplates = source("lib/platform/notification-templates.ts");
+const notificationTemplates = readNotificationTemplatesSource();
 const securityAuditScript = source("scripts/security-audit.mjs");
 
 test("auth lifecycle records sanitized audit events", () => {

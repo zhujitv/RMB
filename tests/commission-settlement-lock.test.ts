@@ -1,7 +1,16 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createJiti } from "jiti";
+import {
+  readCostRecordsMutationsSource,
+  readLogisticsExpenseCostSource,
+  readLogisticsExpenseWorkflowSource,
+  readOrdersServiceSource,
+  readPaymentsServiceSource,
+  readTaxRefundsSource,
+} from "./source-helpers.ts";
 
 process.env.DATABASE_URL ||= "postgresql://test:test@localhost:5432/test";
 
@@ -13,18 +22,18 @@ const {
 } = jiti("../lib/platform/commission-settlement-lock.ts") as typeof import("../lib/platform/commission-settlement-lock.ts");
 const { summarizeOrderWithCommissionSnapshot } = jiti("../lib/platform/shared-commission-summary.ts") as typeof import("../lib/platform/shared-commission-summary.ts");
 
-const ordersSource = readFileSync("lib/platform/orders-module-mutations.ts", "utf8");
-const paymentsSource = readFileSync("lib/platform/payments-module.ts", "utf8");
-const supplierCostsSource = readFileSync("lib/platform/cost-records-supplier-mutations.ts", "utf8");
+const ordersSource = readOrdersServiceSource();
+const paymentsSource = readPaymentsServiceSource();
+const supplierCostsSource = readCostRecordsMutationsSource();
 const logisticsCostsSource = readFileSync("lib/platform/cost-records-logistics-mutations.ts", "utf8");
 const costPaymentSource = readFileSync("lib/platform/cost-records-payment-mutations.ts", "utf8");
 const costTypeSource = readFileSync("lib/platform/cost-records-mutation-cost-type.ts", "utf8");
-const logisticsExpenseSource = readFileSync("lib/platform/logistics-expense-access-mutations.ts", "utf8");
-const logisticsBasicSource = readFileSync("lib/platform/logistics-expense-workflow-basic-mutations.ts", "utf8");
-const settlementSource = readFileSync("lib/platform/tax-refunds-actions.ts", "utf8");
+const logisticsExpenseSource = readLogisticsExpenseCostSource();
+const logisticsBasicSource = readLogisticsExpenseWorkflowSource();
+const settlementSource = readTaxRefundsSource();
 const settlementRouteSource = readFileSync("app/api/commissions/[orderId]/settle/route.ts", "utf8");
 const profitModuleSource = readFileSync("app/modules/ProfitModule.tsx", "utf8");
-const schemaSource = readFileSync("prisma/schema.prisma", "utf8");
+const schemaSource = readPrismaSchemaSource();
 const migrationSource = readFileSync("prisma/migrations/20260721110000_commission_settlement_reversal_snapshot/migration.sql", "utf8");
 
 test("commission settlement evidence makes the order immutable for commission-affecting writes", () => {

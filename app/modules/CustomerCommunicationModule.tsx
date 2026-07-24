@@ -1,32 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiRequestError, apiJson } from "../api";
-import { DismissibleLayer, PaginationBar } from "../components";
-import { CustomerCommunicationDrawer } from "./customer-communication-drawer";
-import { formatDate, formatDateTime } from "../formatters";
-import styles from "../WorkspaceShell.module.css";
 import type { PermissionSnapshot, User } from "../types";
-import type { CommunicationDetail, CommunicationDraft, CommunicationListResponse, CommunicationRow, MailForm } from "./customer-communication-types";
 import { canWritePermission } from "../utils";
-import { getBusinessEntityRowClass } from "./business-entity-row-style";
 import { useWorkspaceTabBusy, useWorkspaceTabDirty, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
-
-const LANGUAGE_OPTIONS = [
-  { value: "EN", label: "英文" },
-  { value: "ZH", label: "中文" },
-  { value: "RU", label: "俄文" },
-];
-
-const MANUAL_SEND_METHOD_OPTIONS = ["系统邮件", "手动邮件", "微信", "QQ", "WhatsApp", "客户平台", "其它"];
-
-type ManualMarkDialogState = {
-  row: CommunicationRow;
-  deliveryMethod: string;
-  sentAt: string;
-  remark: string;
-};
+import { CustomerCommunicationDrawer } from "./customer-communication-drawer";
+import { CustomerCommunicationList } from "./customer-communication-list";
+import { ManualMarkDialog } from "./customer-communication-manual-dialog";
+import type { CommunicationDetail, CommunicationListResponse, CommunicationRow, MailForm } from "./customer-communication-types";
+import { formFromDraft, templateFromDraft } from "./customer-communication-utils";
+import { useCustomerCommunicationManualMark } from "./use-customer-communication-manual-mark";
 
 export function CustomerCommunicationModule({
   currentUser,
@@ -55,10 +40,23 @@ export function CustomerCommunicationModule({
   const [detailError, setDetailError] = useState("");
   const [mailForm, setMailForm] = useState<MailForm | null>(null);
   const [sending, setSending] = useState(false);
-  const [manualMarkDialog, setManualMarkDialog] = useState<ManualMarkDialogState | null>(null);
-  const [manualMarkBusyId, setManualMarkBusyId] = useState("");
-  const [manualMarkError, setManualMarkError] = useState("");
   const listRequestRef = useRef(0);
+  const {
+    manualMarkDialog,
+    setManualMarkDialog,
+    manualMarkBusyId,
+    manualMarkError,
+    openManualMarkDialog,
+    submitManualMark,
+    unmarkManualSent,
+  } = useCustomerCommunicationManualMark({
+    detailOrderId,
+    setRows,
+    setDetail,
+    setMailForm,
+    setError,
+    setNotice,
+  });
 
   const canSendByPermission = canWritePermission(currentUser, permissions, "customerCommunication", ["管理员", "业务员"]);
   const canManualMark = canSendByPermission && ["管理员", "业务员"].includes(currentUser.role);
@@ -210,164 +208,30 @@ export function CustomerCommunicationModule({
     }
   }
 
-  function updateRowFromDetail(nextDetail: CommunicationDetail) {
-    if (!nextDetail.order?.id) return;
-    setRows((current) => current.map((row) => (row.id === nextDetail.order.id ? { ...row, ...nextDetail.order } : row)));
-    if (detailOrderId === nextDetail.order.id) {
-      setDetail(nextDetail);
-      setMailForm(formFromDraft(nextDetail.draft || null));
-    }
-  }
-
-  function openManualMarkDialog(row: CommunicationRow) {
-    setManualMarkError("");
-    setManualMarkDialog({
-      row,
-      deliveryMethod: "手动邮件",
-      sentAt: currentDateTimeLocalValue(),
-      remark: "",
-    });
-  }
-
-  async function submitManualMark(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!manualMarkDialog) return;
-    const row = manualMarkDialog.row;
-    setManualMarkBusyId(row.id);
-    setManualMarkError("");
-    setNotice("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string; detail?: CommunicationDetail }>(
-        `/api/customer-communications/${encodeURIComponent(row.id)}/mark-sent`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            deliveryMethod: manualMarkDialog.deliveryMethod,
-            sentAt: manualMarkDialog.sentAt,
-            remark: manualMarkDialog.remark,
-          }),
-        },
-      );
-      if (result.success !== true || !result.detail) throw new Error(result.message || "手动标记已发送失败");
-      updateRowFromDetail(result.detail);
-      setManualMarkDialog(null);
-      setNotice(result.message || "已手动标记为已发送。");
-    } catch (markError) {
-      setManualMarkError(markError instanceof Error ? markError.message : "手动标记已发送失败");
-    } finally {
-      setManualMarkBusyId("");
-    }
-  }
-
-  async function unmarkManualSent(row: CommunicationRow) {
-    if (!window.confirm(`确认取消订单 ${row.orderNo || "-"} 的手动已发送标记？`)) return;
-    setManualMarkBusyId(row.id);
-    setError("");
-    setNotice("");
-    try {
-      const result = await apiJson<{ success?: boolean; message?: string; detail?: CommunicationDetail }>(
-        `/api/customer-communications/${encodeURIComponent(row.id)}/unmark-sent`,
-        { method: "POST", body: JSON.stringify({}) },
-      );
-      if (result.success !== true || !result.detail) throw new Error(result.message || "取消手动发送标记失败");
-      updateRowFromDetail(result.detail);
-      setNotice(result.message || "已取消手动发送标记。");
-    } catch (unmarkError) {
-      setError(unmarkError instanceof Error ? unmarkError.message : "取消手动发送标记失败");
-    } finally {
-      setManualMarkBusyId("");
-    }
-  }
-
   return (
-    <section className={`${styles.moduleCard} ${styles.logisticsTypographyScope}`}>
-      <div className={styles.moduleHeader}>
-        <div>
-          <h2>客户沟通</h2>
-          <p>按订单集中处理客户清关资料邮件和发送记录。</p>
-        </div>
-        <div className={styles.headerActions}>
-          <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => void loadRows(page, keyword)}>
-            刷新
-          </button>
-        </div>
-      </div>
-
-      {notice ? <div className={styles.inlineSuccess}>{notice}</div> : null}
-      {error ? <div className={styles.inlineError}>{error}</div> : null}
-
-      <form className={styles.headerActions} onSubmit={submitSearch}>
-        <input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          placeholder="订单号 / 客户简称 / 提单号"
-        />
-        <button className={styles.primaryButtonCompact} type="submit" disabled={loading}>查询</button>
-        <button className={styles.secondaryButton} type="button" disabled={loading} onClick={() => {
-          setKeyword("");
-          void loadRows(1, "");
-        }}>重置</button>
-      </form>
-
-      <div className={styles.tableWrap}>
-        <table className={styles.dataTable}>
-          <thead>
-            <tr>
-              <th>订单号</th>
-              <th>客户简称</th>
-              <th>提单号</th>
-              <th>业务主体</th>
-              <th>申报日期</th>
-              <th>物流状态</th>
-              <th>清关资料发送状态</th>
-              <th>最近发送时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9}><div className={styles.emptyState}>正在加载客户沟通列表...</div></td></tr>
-            ) : rows.length ? rows.map((row) => (
-              <tr key={row.id} className={getBusinessEntityRowClass(row, styles)}>
-                <td><strong>{row.orderNo || "-"}</strong></td>
-                <td>{row.customerShortName || "-"}</td>
-                <td>{row.billOfLadingNo || "-"}</td>
-                <td>{row.businessEntityName || "-"}</td>
-                <td>{formatDate(row.declarationDate)}</td>
-                <td>{row.logisticsStatus || "-"}</td>
-                <td><StatusBadge row={row} /></td>
-                <td>{formatDateTime(row.latestSentAt)}</td>
-                <td>
-                  <div className={styles.inlineActionGroup}>
-                    <button className={styles.secondaryButton} type="button" onClick={() => void openDetail(row.id)}>详情</button>
-                    {canManualMark ? (
-                      <button
-                        className={styles.secondaryButton}
-                        type="button"
-                        disabled={manualMarkBusyId === row.id}
-                        onClick={() => {
-                          if (row.manualMarked) {
-                            void unmarkManualSent(row);
-                          } else {
-                            openManualMarkDialog(row);
-                          }
-                        }}
-                      >
-                        {manualMarkBusyId === row.id ? "处理中..." : manualMarkButtonLabel(row)}
-                      </button>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            )) : (
-              <tr><td colSpan={9}><div className={styles.emptyState}>未找到需要发送清关资料的订单</div></td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={(nextPage) => void loadRows(nextPage, keyword)} />
-
+    <>
+      <CustomerCommunicationList
+        rows={rows}
+        keyword={keyword}
+        total={total}
+        page={page}
+        totalPages={totalPages}
+        loading={loading}
+        error={error}
+        notice={notice}
+        canManualMark={canManualMark}
+        manualMarkBusyId={manualMarkBusyId}
+        onKeywordChange={setKeyword}
+        onSearch={submitSearch}
+        onReset={() => { setKeyword(""); void loadRows(1, ""); }}
+        onRefresh={() => void loadRows(page, keyword)}
+        onPage={(nextPage) => void loadRows(nextPage, keyword)}
+        onOpenDetail={(orderId) => void openDetail(orderId)}
+        onToggleManualMark={(row) => {
+          if (row.manualMarked) void unmarkManualSent(row);
+          else openManualMarkDialog(row);
+        }}
+      />
       {detailOrderId ? (
         <CustomerCommunicationDrawer
           detail={detail}
@@ -383,120 +247,16 @@ export function CustomerCommunicationModule({
           onLanguageChange={updateLanguage}
         />
       ) : null}
-
       {manualMarkDialog ? (
-        <DismissibleLayer
-          ariaLabel="手动标记已发送"
-          overlayClassName={styles.modalOverlay}
-          surfaceClassName={styles.modalCard}
+        <ManualMarkDialog
+          state={manualMarkDialog}
+          error={manualMarkError}
+          busy={Boolean(manualMarkBusyId)}
+          onChange={setManualMarkDialog}
+          onSubmit={submitManualMark}
           onClose={() => setManualMarkDialog(null)}
-          dismissible={!manualMarkBusyId}
-          dismissConfirmMessage="当前标记内容尚未提交，确定关闭吗？"
-        >
-          {({ requestClose }) => (
-            <form className={styles.workspaceModalForm} onSubmit={submitManualMark} inert={Boolean(manualMarkBusyId)} aria-busy={Boolean(manualMarkBusyId)}>
-              <div className={styles.modalHeader}>
-                <div>
-                  <strong>手动标记已发送</strong>
-                  <small>{manualMarkDialog.row.orderNo || "-"} · {manualMarkDialog.row.customerShortName || "-"}</small>
-                </div>
-                <button className={styles.ghostButton} type="button" disabled={Boolean(manualMarkBusyId)} onClick={requestClose}>关闭</button>
-              </div>
-              {manualMarkError ? <div className={styles.inlineError}>{manualMarkError}</div> : null}
-              <div className={styles.shippingDocsFormGrid}>
-                <label>
-                  发送方式
-                  <select
-                    value={manualMarkDialog.deliveryMethod}
-                    onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, deliveryMethod: event.target.value })}
-                    required
-                  >
-                    {MANUAL_SEND_METHOD_OPTIONS.map((method) => <option key={method} value={method}>{method}</option>)}
-                  </select>
-                </label>
-                <label>
-                  发送时间
-                  <input
-                    type="datetime-local"
-                    value={manualMarkDialog.sentAt}
-                    onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, sentAt: event.target.value })}
-                    required
-                  />
-                </label>
-                <label className={styles.shippingDocsWideField}>
-                  备注
-                  <textarea
-                    value={manualMarkDialog.remark}
-                    onChange={(event) => setManualMarkDialog({ ...manualMarkDialog, remark: event.target.value })}
-                    rows={4}
-                    placeholder="可填写微信、QQ、客户平台记录编号或人工邮件说明"
-                  />
-                </label>
-              </div>
-              <div className={styles.modalFooter}>
-                <button className={styles.secondaryButton} type="button" disabled={Boolean(manualMarkBusyId)} onClick={requestClose}>取消</button>
-                <button className={styles.primaryButtonCompact} type="submit" disabled={Boolean(manualMarkBusyId)}>
-                  {manualMarkBusyId ? "提交中..." : "确认标记"}
-                </button>
-              </div>
-            </form>
-          )}
-        </DismissibleLayer>
+        />
       ) : null}
-    </section>
+    </>
   );
-}
-
-function StatusBadge({ row }: { row: CommunicationRow }) {
-  const danger = ["FAILED", "MISSING"].includes(String(row.clearanceStatus || ""));
-  const success = ["SENT", "MANUAL_SENT"].includes(String(row.clearanceStatus || ""));
-  const className = `${styles.statusBadge} ${success ? styles.statusBadgeSuccess : danger ? styles.statusBadgeDanger : ""}`;
-  return <span className={className}>{row.clearanceStatusLabel || "-"}</span>;
-}
-
-function manualMarkButtonLabel(row: CommunicationRow) {
-  if (row.manualMarked || row.clearanceStatus === "MANUAL_SENT") return "取消标记";
-  if (row.clearanceStatus === "SENT") return "重新标记";
-  return "标记已发送";
-}
-
-function currentDateTimeLocalValue() {
-  const now = new Date();
-  const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
-  return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
-}
-
-function formFromDraft(draft: CommunicationDraft | null): MailForm | null {
-  if (!draft) return null;
-  return {
-    recipientEmails: (draft.recipientEmails || []).join("\n"),
-    ccEmails: (draft.ccEmails || []).join("\n"),
-    emailLanguage: String(draft.language || "EN").toUpperCase(),
-    emailSubject: draft.subject || "",
-    emailBody: draft.body || "",
-  };
-}
-
-function templateFromDraft(draft: CommunicationDraft, language: string) {
-  const labels = (draft.documents || []).filter((item) => item.exists).map((item) => item.emailLabel || item.label || "");
-  const lines = (labels.length ? labels : ["Commercial Invoice", "Packing List", "Customs Declaration"]).map((label) => `- ${label}`).join("\n");
-  const orderNo = draft.orderNo || "-";
-  const blNo = draft.blNo || draft.billOfLadingNo || "-";
-  const customsDate = draft.customsDeclarationDate || "-";
-  if (language === "ZH") {
-    return {
-      emailSubject: `订单 ${orderNo} / 提单 ${blNo} 清关资料`,
-      emailBody: ["您好！", "", "请查收本邮件附件中的清关资料：", "", lines, "", `提单号：${blNo}`, `申报日期：${customsDate}`, "", "NEXTWOOD"].join("\n"),
-    };
-  }
-  if (language === "RU") {
-    return {
-      emailSubject: `Отгрузочные документы по заказу ${orderNo} / коносамент ${blNo}`,
-      emailBody: ["Здравствуйте!", "", `Во вложении направляем отгрузочные документы по заказу ${orderNo}.`, "", "Документы во вложении:", lines, "", `Номер коносамента: ${blNo}`, `Дата декларации: ${customsDate}`, "", "С уважением,", "Zhejiang Lainuo Building Materials Co., Ltd."].join("\n"),
-    };
-  }
-  return {
-    emailSubject: `Shipping Documents for Order ${orderNo} / B/L ${blNo}`,
-    emailBody: ["Dear Customer,", "", "Please find attached the shipping documents for your customs clearance:", "", lines, "", "This email also serves as the shipment notification.", "", "Best regards,", "NEXTWOOD"].join("\n"),
-  };
 }

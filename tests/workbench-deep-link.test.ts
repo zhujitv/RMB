@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { refreshTaxRefundAfterDocumentMutation } from "../app/modules/tax-refund/post-document-mutation-refresh.ts";
+import { readTaxRefundModuleSource, readWorkspaceShellSource } from "./source-helpers.ts";
 import {
   WORKBENCH_DEEP_LINK_PARAM,
   buildWorkbenchDeepLink,
@@ -92,10 +93,10 @@ test("tax refund document refresh runs independently and reports non-blocking fa
 
 test("deep link and export-invoice refresh are wired through the production UI chain", () => {
   const reminderSource = readFileSync("lib/platform/workbench-todo-reminders.ts", "utf8");
-  const shellSource = readFileSync("app/WorkspaceShell.tsx", "utf8");
+  const shellSource = readWorkspaceShellSource();
   const contentSource = readFileSync("app/WorkspaceModuleContent.tsx", "utf8");
-  const controllerSource = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
-  const mutationSource = readFileSync("app/modules/tax-refund/use-tax-refund-mutations.ts", "utf8");
+  const controllerSource = readTaxRefundModuleSource();
+  const mutationSource = controllerSource;
 
   assert.match(reminderSource, /buildWorkbenchDeepLink\(appBaseUrl\(\), todo\.action\?\.href\)/);
   assert.doesNotMatch(reminderSource, /\^https\?:\\\/\\\//);

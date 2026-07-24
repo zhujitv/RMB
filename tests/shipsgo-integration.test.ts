@@ -1,3 +1,4 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -11,9 +12,12 @@ import {
 import {
   readDomesticLogisticsModuleSource,
   readDomesticLogisticsOpsSource,
+  readFreightowerTrackingSource,
+  readNotificationEngineSource,
   readSettingsModuleSource,
   readSharedConstantsSource,
   readShipsgoTrackingSource,
+  readTrackingMapSource,
   readWorkspaceStylesSource,
 } from "./source-helpers.ts";
 
@@ -21,10 +25,10 @@ const constants = readSharedConstantsSource();
 const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
 const trackingService = readShipsgoTrackingSource();
 const shipsgoControlTowerService = readFileSync("lib/platform/shipsgo-control-tower.ts", "utf8");
-const freightowerService = readFileSync("lib/platform/freightower-tracking.ts", "utf8");
-const notificationDefinitions = readFileSync("lib/platform/notification-definitions.ts", "utf8");
+const freightowerService = readFreightowerTrackingSource();
+const notificationDefinitions = readNotificationEngineSource();
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const migration = readFileSync("prisma/migrations/20260628100000_shipsgo_trackings/migration.sql", "utf8");
 const masterBlMigration = readFileSync("prisma/migrations/20260628123000_shipsgo_master_bl_containers/migration.sql", "utf8");
 const settingsRoute = readFileSync("app/api/settings/shipsgo/route.ts", "utf8");
@@ -41,8 +45,8 @@ const domesticLogisticsOps = readDomesticLogisticsOpsSource();
 const settingsModule = readSettingsModuleSource();
 const logisticsRoute = readFileSync("app/api/domestic-logistics/route.ts", "utf8");
 const logisticsModule = readDomesticLogisticsModuleSource();
-const trackingMapPage = readFileSync("app/tracking-map/page.tsx", "utf8");
-const trackingMapClient = readFileSync("app/tracking-map/tracking-map-client.tsx", "utf8");
+const trackingMapPage = readTrackingMapSource();
+const trackingMapClient = trackingMapPage;
 const workspaceStyles = readWorkspaceStylesSource();
 
 test("ShipsGo integration settings are stored safely in system settings", () => {
@@ -202,7 +206,7 @@ test("ShipsGo tracking mutations are role-scoped to admin and owning sales", () 
   assert.match(trackingService, /function assertShipsgoTrackingDeleteAccess/);
   assert.match(trackingService, /SHIPSGO_TRACKING_DELETE_ADMIN_ONLY/);
   assert.match(trackingService.match(/export async function createShipsgoOceanTracking[\s\S]*?const payload = createPayloadFromInput/)?.[0] || "", /assertShipsgoTrackingWriteAccess\(actor, order\)/);
-  assert.match(trackingService.match(/export async function syncShipsgoOceanTracking[\s\S]*?if \(!before\.shipsgoShipmentId\)/)?.[0] || "", /assertShipsgoTrackingWriteAccess\(actor, before\.order\)/);
+  assert.match(trackingService.match(/export async function syncShipsgoOceanTracking[\s\S]*?return syncLoadedShipsgoOceanTracking/)?.[0] || "", /assertShipsgoTrackingWriteAccess\(actor, before\.order\)/);
   assert.match(trackingService.match(/export async function recoverShipsgoOceanTracking[\s\S]*?const masterBlNo/)?.[0] || "", /assertShipsgoTrackingWriteAccess\(actor, order\)/);
   assert.match(trackingService, /export async function deleteShipsgoOceanTracking/);
 });
@@ -341,7 +345,7 @@ test("domestic logistics exposes ocean control tower tab and fullscreen monitor 
   assert.match(logisticsModule, /row\.blNo \|\| row\.billOfLadingNo \|\| row\.masterBlNo \|\| "-"/);
   assert.match(trackingService, /blNo: row\.order\?\.blNo \|\| tracking\.masterBlNo \|\| tracking\.bookingNumber \|\| ""/);
   assert.match(trackingService, /billOfLadingNo: row\.order\?\.blNo \|\| tracking\.masterBlNo \|\| tracking\.bookingNumber \|\| ""/);
-  assert.match(logisticsModule, /const canManageShipsgoTracking = \["管理员", "业务员"\]\.includes\(currentUser\.role\)/);
+  assert.match(logisticsModule, /canManageShipsgoTracking: \["管理员", "业务员"\]\.includes\(user\.role\)[\s\S]*canWritePermission\(user, permissions, "domesticLogistics", \["管理员", "业务员"\]\)/);
   assert.match(logisticsModule, /暂无已同步运输节点，请联系管理员或业务员同步最新状态。/);
   assert.doesNotMatch(logisticsModule.match(/function ShipsgoControlTowerView[\s\S]*?function ControlTowerStatCard/)?.[0] || "", /\/api\/shipsgo\/ocean-trackings",\s*\{/);
   assert.match(workspaceStyles, /\.controlTowerFullscreen/);

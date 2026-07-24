@@ -1,48 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiJson } from "../../api";
-import { customerDisplayName } from "../../utils";
 import type { CustomerAutocompleteOption } from "../../CustomerAutocomplete";
+import { customerDisplayName } from "../../utils";
 import {
   LOGISTICS_SUPPLIER_TYPES,
   emptyQuickOrderForm,
   type BusinessEntityOption,
-  type ExchangeRateResponse,
-  type QuickOrderForm,
-  type SettingsResponse,
-  type SuppliersResponse,
   type OrderRow,
+  type QuickOrderForm,
   type SalespersonOption,
   type SupplierOption,
 } from "./model";
 import { loadLatestOrderAfterConflict } from "./order-conflict-refresh";
+import { hasHistoricalBusinessDate, isExwTradeTerm } from "./quick-order-controller-utils";
+import { loadQuickOrderFormOptions } from "./quick-order-form-options";
+import { quickOrderPayload } from "./quick-order-payload";
+import { useQuickOrderExchangeRate } from "./use-quick-order-exchange-rate";
 import { derivedDueDate, installmentTotal, orderFormFromRow } from "./utils";
-
-type BusinessEntitiesResponse = {
-  entities?: BusinessEntityOption[];
-};
-
-type SalespeopleResponse = {
-  salespeople?: SalespersonOption[];
-};
-
-function normalizedOrderTradeTerm(value: string) {
-  return String(value || "").trim().toUpperCase();
-}
-
-function isExwTradeTerm(value: string) {
-  return normalizedOrderTradeTerm(value).includes("EXW");
-}
-
-function hasHistoricalBusinessDate(form: QuickOrderForm) {
-  const today = new Date().toISOString().slice(0, 10);
-  return [
-    form.actualShipmentDate,
-    form.blDate,
-    form.expectedArrivalDate,
-    form.expectedPaymentDate,
-    form.dueDate,
-  ].some((value) => Boolean(value && value < today));
-}
 
 export type UseQuickOrderPanelControllerParams = {
   initialOrder?: OrderRow | null;
@@ -65,11 +39,18 @@ export function useQuickOrderPanelController({
   const [businessEntities, setBusinessEntities] = useState<BusinessEntityOption[]>([]);
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
   const [allowMultipleLogisticsSuppliers, setAllowMultipleLogisticsSuppliers] = useState(false);
-  const [exchangeMeta, setExchangeMeta] = useState("");
-  const [exchangeCacheMissing, setExchangeCacheMissing] = useState(false);
-  const [refreshingExchangeRate, setRefreshingExchangeRate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const {
+    exchangeMeta,
+    exchangeCacheMissing,
+    refreshingExchangeRate,
+    setExchangeCacheMissing,
+    syncExchangeMetadata,
+    clearExchangeMetadata,
+    resolveExchangeRate,
+    refreshOfficialExchangeRate,
+  } = useQuickOrderExchangeRate({ form, setForm, setMessage });
 
   const logisticsSuppliers = useMemo(() => (
     suppliers.filter((supplier) => supplier.status !== "停用" && LOGISTICS_SUPPLIER_TYPES.includes(supplier.supplierType || ""))
@@ -83,18 +64,8 @@ export function useQuickOrderPanelController({
 
   const loadOrderSnapshot = useCallback((order?: OrderRow | null) => {
     setForm(orderFormFromRow(order));
-    setExchangeCacheMissing(false);
-    if (order?.currency) {
-      const hasExchangeMeta = Boolean(order.exchangeRate && order.exchangeRateDate && order.exchangeRateSource && order.exchangeRateType);
-      setExchangeMeta(order.currency === "CNY"
-        ? "来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000"
-        : hasExchangeMeta
-          ? `来源：${order.exchangeRateSource} ｜ 类型：${order.exchangeRateType} ｜ 更新时间：${order.exchangeRateDate}`
-          : "当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。");
-    } else {
-      setExchangeMeta("");
-    }
-  }, []);
+    syncExchangeMetadata(order);
+  }, [syncExchangeMetadata]);
 
   useEffect(() => {
     loadOrderSnapshot(initialOrder);
@@ -113,7 +84,7 @@ export function useQuickOrderPanelController({
     if (!defaultLogisticsSupplier) return;
     setForm((current) => (
       isExwTradeTerm(current.tradeTerm) ? current :
-      current.logisticsSupplierIds.length ? current : { ...current, logisticsSupplierIds: [defaultLogisticsSupplier.id] }
+        current.logisticsSupplierIds.length ? current : { ...current, logisticsSupplierIds: [defaultLogisticsSupplier.id] }
     ));
   }, [allowMultipleLogisticsSuppliers, defaultLogisticsSupplier?.id, form.tradeTerm]);
 
@@ -131,87 +102,13 @@ export function useQuickOrderPanelController({
 
   async function loadFormOptions() {
     try {
-      const [settingsResult, suppliersResult, businessEntitiesResult, salespeopleResult] = await Promise.all([
-        apiJson<SettingsResponse>("/api/exchange-rates/settings").catch(() => null),
-        apiJson<SuppliersResponse>("/api/suppliers/available").catch(() => null),
-        apiJson<BusinessEntitiesResponse>("/api/business-entities").catch(() => null),
-        canManageOrderAssignments
-          ? apiJson<SalespeopleResponse>("/api/settings/customers?page=1&pageSize=1").catch(() => null)
-          : Promise.resolve(null),
-      ]);
-      setAllowMultipleLogisticsSuppliers(Boolean(settingsResult?.settings?.allowMultipleOrderLogisticsSuppliers));
-      setSuppliers(Array.isArray(suppliersResult?.suppliers) ? suppliersResult.suppliers : []);
-      setBusinessEntities(Array.isArray(businessEntitiesResult?.entities) ? businessEntitiesResult.entities : []);
-      setSalespeople(Array.isArray(salespeopleResult?.salespeople) ? salespeopleResult.salespeople : []);
+      const options = await loadQuickOrderFormOptions(canManageOrderAssignments);
+      setAllowMultipleLogisticsSuppliers(options.allowMultipleLogisticsSuppliers);
+      setSuppliers(options.suppliers);
+      setBusinessEntities(options.businessEntities);
+      setSalespeople(options.salespeople);
     } catch (optionError) {
       setMessage(optionError instanceof Error ? optionError.message : "读取订单配置失败");
-    }
-  }
-
-  async function resolveExchangeRate(currency: string) {
-    const normalized = currency.trim().toUpperCase();
-    if (!normalized) {
-      setExchangeMeta("");
-      setExchangeCacheMissing(false);
-      setForm((current) => ({ ...current, exchangeRate: "", exchangeRateDate: "", exchangeRateSource: "", exchangeRateType: "" }));
-      return;
-    }
-    if (normalized === "CNY") {
-      setExchangeMeta("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
-      setExchangeCacheMissing(false);
-      setForm((current) => ({ ...current, exchangeRate: "1", exchangeRateDate: "", exchangeRateSource: "系统", exchangeRateType: "人民币" }));
-      return;
-    }
-    await refreshOfficialExchangeRate(normalized, { quiet: true });
-  }
-
-  async function refreshOfficialExchangeRate(currencyInput = form.currency, options: { quiet?: boolean } = {}) {
-    const normalized = currencyInput.trim().toUpperCase();
-    if (!normalized) {
-      setMessage("请先选择币种");
-      return false;
-    }
-    if (normalized === "CNY") {
-      setForm((current) => ({ ...current, currency: "CNY", exchangeRate: "1", exchangeRateDate: "", exchangeRateSource: "系统", exchangeRateType: "人民币" }));
-      setExchangeMeta("来源：系统 ｜ 类型：人民币 ｜ 汇率：1.0000");
-      setExchangeCacheMissing(false);
-      if (!options.quiet) setMessage("");
-      return true;
-    }
-    setRefreshingExchangeRate(true);
-    setExchangeCacheMissing(false);
-    setExchangeMeta("正在读取官方汇率缓存...");
-    try {
-      const result = await apiJson<ExchangeRateResponse>(`/api/exchange-rates?currency=${encodeURIComponent(normalized)}&cacheOnly=1`);
-      const rate = Number(result.rate?.rateToCny ?? result.rate?.exchangeRate ?? result.rate?.rate ?? 0);
-      if (rate > 0) {
-        setForm((current) => ({
-          ...current,
-          currency: normalized,
-          exchangeRate: String(rate),
-          exchangeRateDate: result.rate?.rateDate || "",
-          exchangeRateSource: result.rate?.source || "",
-          exchangeRateType: result.rate?.rateType || "",
-        }));
-        setExchangeMeta(`来源：${result.rate?.source || "系统"} ｜ 类型：${result.rate?.rateType || "现汇买入价"} ｜ 更新时间：${result.rate?.rateDate || "-"}`);
-        setMessage("");
-        setExchangeCacheMissing(false);
-        return true;
-      } else {
-        throw new Error("当前币种暂无官方汇率缓存，请到系统设置刷新汇率。");
-      }
-    } catch (rateError) {
-      const typedError = rateError as { status?: number; code?: string; message?: string };
-      const isMissingCache = typedError.status === 404 || typedError.code === "EXCHANGE_RATE_NOT_FOUND";
-      const nextMessage = isMissingCache
-        ? "当前币种暂无官方汇率缓存，请到系统设置刷新汇率。"
-        : (typedError.message || "读取官方汇率失败，请稍后重试。");
-      setExchangeMeta(nextMessage);
-      setMessage(nextMessage);
-      setExchangeCacheMissing(isMissingCache);
-      return false;
-    } finally {
-      setRefreshingExchangeRate(false);
     }
   }
 
@@ -320,44 +217,19 @@ export function useQuickOrderPanelController({
     setMessage("");
     try {
       const isEdit = Boolean(initialOrder?.id);
-      const payload = {
-        ...(isEdit ? { expectedUpdatedAt: normalizedForm.expectedUpdatedAt || initialOrder?.updatedAt || undefined } : {}),
-        customerId: normalizedForm.customerId,
-        orderNo: normalizedForm.orderNo.trim(),
-        blNo: normalizedForm.blNo.trim(),
-        currency: normalizedForm.currency,
-        exchangeRate: Number(normalizedForm.exchangeRate),
-        exchangeRateDate: normalizedForm.exchangeRateDate || undefined,
-        exchangeRateSource: normalizedForm.exchangeRateSource || undefined,
-        exchangeRateType: normalizedForm.exchangeRateType || undefined,
-        estimatedReceivableAmount: Number(normalizedForm.estimatedReceivableAmount),
-        finalReceivableAmount: normalizedForm.finalReceivableAmount ? Number(normalizedForm.finalReceivableAmount) : undefined,
-        actualShipmentAmount: normalizedForm.actualShipmentAmount ? Number(normalizedForm.actualShipmentAmount) : undefined,
-        actualShipmentDate: normalizedForm.actualShipmentDate || undefined,
-        tradeTerm: normalizedForm.tradeTerm,
-        paymentTermType: normalizedForm.paymentTermType,
-        blDate: normalizedForm.blDate || undefined,
-        expectedArrivalDate: normalizedForm.expectedArrivalDate || undefined,
-        expectedPaymentDate: normalizedForm.expectedPaymentDate || undefined,
-        dueDate: normalizedForm.dueDate || undefined,
-        creditDays: ["OA", "AFTER_ARRIVAL"].includes(normalizedForm.paymentTermType) ? Number(normalizedForm.creditDays || 0) : undefined,
-        paymentInstallments: normalizedForm.paymentTermType === "INSTALLMENT"
-          ? normalizedForm.paymentInstallments.map((row) => ({ ratio: Number(row.ratio), condition: row.condition.trim() }))
-          : undefined,
-        reminderDays: Number(normalizedForm.reminderDays || 7),
-        status: normalizedForm.status,
-        businessEntityId: normalizedForm.businessEntityId || undefined,
-        ...(canManageOrderAssignments ? { salespersonUserId: normalizedForm.salespersonUserId } : {}),
+      const payload = quickOrderPayload(normalizedForm, {
+        isEdit,
+        expectedUpdatedAt: initialOrder?.updatedAt,
+        canManageOrderAssignments,
         logisticsSupplierIds,
-        remark: normalizedForm.remark.trim(),
-      };
+      });
       const result = await apiJson<{ success?: boolean; message?: string; order?: OrderRow; data?: OrderRow }>(
         isEdit ? `/api/orders/${encodeURIComponent(initialOrder?.id || "")}` : "/api/orders",
         { method: isEdit ? "PATCH" : "POST", body: JSON.stringify(payload) },
       );
       if (result.success !== true) throw new Error(result.message || "订单保存失败");
       setForm({ ...emptyQuickOrderForm });
-      setExchangeMeta("");
+      clearExchangeMetadata();
       onSaved(result.order || result.data || null);
     } catch (saveError) {
       const orderId = initialOrder?.id || "";

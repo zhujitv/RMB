@@ -2,14 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
-import { ConfirmationDialog, PaginationBar, useConfirmationDialog } from "../components";
+import { useConfirmationDialog } from "../components";
 import { formatCny } from "../formatters";
-import { ResponsiveDataView } from "../ResponsiveDataView";
 import type { User } from "../types";
-import styles from "../WorkspaceShell.module.css";
-import { ProfitDetailDrawer, ProfitMobileCard, ProfitRows } from "./profit/profit-panels";
-import { PAGE_SIZE, type ProfitResponse, type ProfitRow } from "./profit/shared";
 import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
+import { ProfitModuleView } from "./profit/module-view";
+import { PAGE_SIZE, type ProfitResponse, type ProfitRow } from "./profit/shared";
 
 export function ProfitModule({
   currentUser,
@@ -221,105 +219,32 @@ export function ProfitModule({
   });
 
   return (
-    <section className={styles.moduleCard}>
-      <div className={styles.moduleHeader}>
-        <div>
-          <h2>利润分析</h2>
-        </div>
-        <button
-          className={styles.secondaryButton}
-          type="button"
-          disabled={loading}
-          onClick={() => {
-            setNotice("");
-            void loadRows(page);
-          }}
-        >
-          {loading ? "刷新中..." : "刷新"}
-        </button>
-      </div>
-
-      <div className={styles.listToolbar}>
-        <input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") submitSearch();
-          }}
-          placeholder="搜索订单号 / 客户简称 / 客户全称 / 业务员"
-        />
-        <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
-        <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>
-      </div>
-
-      {error ? <div className={styles.inlineError}>{error}</div> : null}
-      {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
-
-      <ResponsiveDataView
-        renderMobile={() => (
-          <div>
-            {loading ? (
-              <div className={styles.emptyState}>数据加载中...</div>
-            ) : rows.length ? rows.map((row) => (
-              <ProfitMobileCard key={row.id} row={row} onViewDetail={() => setDetailRow(row)} />
-            )) : (
-              <div className={styles.emptyState}>未找到匹配的利润分析订单</div>
-            )}
-          </div>
-        )}
-        renderDesktop={() => (
-          <div className={`${styles.tableWrap} ${styles.tablePinnedTwoCols}`}>
-            <table className={styles.dataTable}>
-              <thead>
-                <tr>
-                  <th className={styles.orderNoColumn}>订单号</th>
-                  <th className={styles.customerColumn}>客户简称</th>
-                  <th className={styles.amountColumn}>最终应收</th>
-                  <th className={styles.amountColumn}>总成本</th>
-                  <th className={styles.amountColumn}>预计毛利</th>
-                  <th>预计毛利率</th>
-                  <th>详情</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
-                  </tr>
-                ) : rows.length ? rows.map((row) => (
-                  <ProfitRows key={row.id} row={row} onViewDetail={() => setDetailRow(row)} />
-                )) : (
-                  <tr>
-                    <td colSpan={7}><div className={styles.emptyState}>未找到匹配的利润分析订单</div></td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      />
-
-      <PaginationBar total={total} page={page} totalPages={totalPages} loading={loading} onPage={gotoPage} />
-      {detailRow ? (
-        <ProfitDetailDrawer
-          row={detailRow}
-          settling={settlingId === detailRow.id}
-          reversing={reversingId === detailRow.id}
-          canSettleCommission={canSettleCommission}
-          canReverseCommission={canReverseCommission}
-          onSettle={() => void settleCommission(detailRow)}
-          onReverse={() => void reverseCommission(detailRow)}
-          onClose={() => setDetailRow(null)}
-        />
-      ) : null}
-      {confirmation ? (
-        <ConfirmationDialog
-          state={confirmation}
-          onCancel={cancelConfirmation}
-          onConfirm={confirmConfirmation}
-          onInputChange={updateConfirmationInput}
-        />
-      ) : null}
-    </section>
+    <ProfitModuleView
+      rows={rows}
+      total={total}
+      page={page}
+      totalPages={totalPages}
+      keyword={keyword}
+      detailRow={detailRow}
+      settlingId={settlingId}
+      reversingId={reversingId}
+      loading={loading}
+      error={error}
+      notice={notice}
+      canSettleCommission={canSettleCommission}
+      canReverseCommission={canReverseCommission}
+      confirmation={confirmation}
+      onKeywordChange={setKeyword}
+      onSubmitSearch={submitSearch}
+      onResetSearch={resetSearch}
+      onRefresh={() => { setNotice(""); void loadRows(page); }}
+      onPage={gotoPage}
+      onSetDetailRow={setDetailRow}
+      onSettle={(row) => void settleCommission(row)}
+      onReverse={(row) => void reverseCommission(row)}
+      onCancelConfirmation={cancelConfirmation}
+      onConfirmConfirmation={confirmConfirmation}
+      onUpdateConfirmationInput={updateConfirmationInput}
+    />
   );
 }

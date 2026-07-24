@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  readLogisticsExpenseAccessSource,
+  readLogisticsExpensePaymentSource,
+  readLogisticsExpenseQueriesSource,
+  readPaymentsServiceSource,
+  readTaxRefundActionsSource,
+  readTaxRefundSharedSource,
+} from "./source-helpers.ts";
 
 import {
   analyzeTaxRefundLogisticsClosure,
@@ -175,12 +183,12 @@ test("profit analysis query remains independent from tax refund archive status",
 });
 
 test("tax refund submit and logistics mutations are wired to the closure archive guard", () => {
-  const taxActions = readFileSync(new URL("../lib/platform/tax-refunds-actions.ts", import.meta.url), "utf8");
-  const taxShared = readFileSync(new URL("../lib/platform/tax-refunds-shared.ts", import.meta.url), "utf8");
-  const payments = readFileSync(new URL("../lib/platform/payments-module.ts", import.meta.url), "utf8");
-  const logisticsQueries = readFileSync(new URL("../lib/platform/logistics-expense-queries.ts", import.meta.url), "utf8");
-  const logisticsMutations = readFileSync(new URL("../lib/platform/logistics-expense-access-mutations.ts", import.meta.url), "utf8");
-  const logisticsInvoiceWorkflow = readFileSync(new URL("../lib/platform/logistics-expense-workflow-invoice.ts", import.meta.url), "utf8");
+  const taxActions = readTaxRefundActionsSource();
+  const taxShared = readTaxRefundSharedSource();
+  const payments = readPaymentsServiceSource();
+  const logisticsQueries = readLogisticsExpenseQueriesSource();
+  const logisticsMutations = readLogisticsExpenseAccessSource();
+  const logisticsInvoiceWorkflow = readLogisticsExpensePaymentSource();
   const statusStart = taxActions.indexOf("export async function updateTaxRefundStatus");
   const cancelStart = taxActions.indexOf("export async function cancelTaxRefundArchive", statusStart);
   const settleStart = taxActions.indexOf("export async function settleCommission", cancelStart);

@@ -2,6 +2,12 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { apiJson } from "../../api";
 import {
+  costFormFromRow,
+  costItemFromRow,
+  exchangeRateMeta,
+  initialSupplierFromCost
+} from "./helpers";
+import {
   FACTORY_COST_TYPES,
   FOREIGN_CURRENCY_COST_TYPES,
   PRODUCT_SUPPLIER_TYPES,
@@ -15,13 +21,7 @@ import {
   type SupplierOption,
   type SuppliersResponse,
 } from "./model";
-import {
-  costFormFromRow,
-  costItemFromRow,
-  exchangeRateMeta,
-  initialSupplierFromCost,
-  isProductSupplierPaymentFormLocked,
-} from "./helpers";
+import { quickCostPayloadItems, validateQuickCostItems } from "./quick-cost-form-utils";
 
 function quickCostDraftSignature(form: QuickCostForm, items: CostItemForm[]) {
   return JSON.stringify({
@@ -225,43 +225,13 @@ export function useQuickCostForm({
       setMessage("请选择关联订单");
       return;
     }
-    for (const [index, item] of items.entries()) {
-      if (!item.supplierId) {
-        setMessage(`第 ${index + 1} 条成本请选择供应商`);
-        return;
-      }
-      if (!item.amount || Number(item.amount) <= 0) {
-        setMessage(`第 ${index + 1} 条成本请填写供应商成本金额`);
-        return;
-      }
-      if (!Number(item.exchangeRate)) {
-        setMessage(`第 ${index + 1} 条成本请填写汇率；CNY 成本汇率应自动为 1`);
-        return;
-      }
-      const selectedSupplier = supplierOptions.find((supplier) => supplier.id === item.supplierId) || null;
-      if (!isProductSupplierPaymentFormLocked(item, selectedSupplier, canManageFactoryPayments) && item.paymentStatus === "已支付" && !item.paymentDate) {
-        setMessage(`第 ${index + 1} 条成本已支付时必须填写付款日期`);
-        return;
-      }
-    }
+    const validationMessage = validateQuickCostItems(items, supplierOptions, canManageFactoryPayments);
+    if (validationMessage) return setMessage(validationMessage);
 
     setSaving(true);
     setMessage("");
     try {
-      const payloadItems = items.map((item) => ({
-        supplierId: item.supplierId,
-        costType: item.costType,
-        amount: Number(item.amount),
-        currency: item.currency,
-        exchangeRate: Number(item.exchangeRate),
-        exchangeRateDate: item.exchangeRateDate || undefined,
-        exchangeRateSource: item.exchangeRateSource || undefined,
-        exchangeRateType: item.exchangeRateType || undefined,
-        paymentStatus: item.paymentStatus,
-        paymentDate: item.paymentDate || undefined,
-        costConfirmed: item.costConfirmed === "true",
-        remark: item.remark.trim(),
-      }));
+      const payloadItems = quickCostPayloadItems(items);
       const result = await apiJson<{ success?: boolean; message?: string; cost?: CostRow; costs?: CostRow[]; data?: { cost?: CostRow; costs?: CostRow[] } }>(
         editMode ? `/api/costs/${encodeURIComponent(initialCost?.id || "")}` : "/api/costs",
         {

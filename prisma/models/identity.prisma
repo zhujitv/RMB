@@ -1,0 +1,141 @@
+model User {
+  id                   String    @id @default(cuid())
+  name                 String
+  email                String    @unique
+  passwordHash         String    @map("password_hash")
+  role                 String    @default("业务员")
+  phone                String?
+  englishName          String?   @map("english_name")
+  department           String?
+  avatarInitials       String?   @map("avatar_initials")
+  avatarUrl            String?   @map("avatar_url")
+  defaultLanguage      String?   @map("default_language")
+  defaultHome          String?   @map("default_home")
+  pageSize             Int?      @map("page_size")
+  loginAlertEnabled    Boolean   @default(true) @map("login_alert_enabled")
+  customPermissions    Json?     @map("custom_permissions")
+  supplierId           String?   @map("supplier_id")
+  mustChangePassword   Boolean   @default(false) @map("must_change_password")
+  passwordPolicyPassed Boolean   @default(false) @map("password_policy_passed")
+  passwordChangedAt    DateTime? @map("password_changed_at")
+  emailVerified        Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt      DateTime? @map("email_verified_at")
+  approvalStatus       String    @default("APPROVED") @map("approval_status")
+  isActive             Boolean   @default(true) @map("is_active")
+  deletedAt            DateTime? @map("deleted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  salesOrders                            ReceivableOrder[]              @relation("SalesOrders")
+  responsibleCustomers                   Customer[]                     @relation("CustomerSalesperson")
+  createdOrders                          ReceivableOrder[]              @relation("OrdersCreated")
+  updatedOrders                          ReceivableOrder[]              @relation("OrdersUpdated")
+  createdPayments                        Payment[]                      @relation("PaymentsCreated")
+  updatedPayments                        Payment[]                      @relation("PaymentsUpdated")
+  createdCosts                           OrderCost[]                    @relation("CostsCreated")
+  updatedCosts                           OrderCost[]                    @relation("CostsUpdated")
+  createdSuppliers                       Supplier[]                     @relation("SuppliersCreated")
+  updatedSuppliers                       Supplier[]                     @relation("SuppliersUpdated")
+  uploadedDocuments                      OrderDocument[]                @relation("DocumentsUploaded")
+  confirmedOcrTasks                      OcrTask[]                      @relation("OcrTaskConfirmedBy")
+  rejectedOcrTasks                       OcrTask[]                      @relation("OcrTaskRejectedBy")
+  commissionSettlements                  ReceivableOrder[]              @relation("CommissionSettlements")
+  commissionSettlementRecords            CommissionSettlement[]         @relation("CommissionSettlementSettledBy")
+  commissionSettlementReversals          CommissionSettlement[]         @relation("CommissionSettlementReversedBy")
+  salespersonCommissionSettlementRecords CommissionSettlement[]         @relation("CommissionSettlementSalesperson")
+  archivedTaxRefundOrders                ReceivableOrder[]              @relation("TaxRefundArchivedBy")
+  submittedTaxRefundOrders               ReceivableOrder[]              @relation("TaxRefundSubmittedBy")
+  sessions                               UserSession[]
+  loginAttempts                          LoginAttempt[]
+  emailVerificationTokens                EmailVerificationToken[]
+  auditLogs                              AuditLog[]
+  supplierOperator                       Supplier?                      @relation("SupplierOperators", fields: [supplierId], references: [id])
+  submittedDomesticLogistics             DomesticLogisticsInfo[]        @relation("DomesticLogisticsSubmittedBy")
+  confirmedDomesticLogistics             DomesticLogisticsInfo[]        @relation("DomesticLogisticsFinanceConfirmedBy")
+  uploadedDomesticLogisticsDocuments     DomesticLogisticsDocument[]
+  sentShippingDocumentNotifications      ShippingDocumentNotification[] @relation("ShippingDocumentNotificationSentBy")
+  createdLogisticsExpenses               LogisticsExpense[]             @relation("LogisticsExpenseCreatedBy")
+  updatedLogisticsExpenses               LogisticsExpense[]             @relation("LogisticsExpenseUpdatedBy")
+  reviewedLogisticsExpenses              LogisticsExpense[]             @relation("LogisticsExpenseReviewedBy")
+  invoiceUploadedLogisticsExpenses       LogisticsExpense[]             @relation("LogisticsExpenseInvoiceUploadedBy")
+  invoiceConfirmedLogisticsExpenses      LogisticsExpense[]             @relation("LogisticsExpenseInvoiceConfirmedBy")
+  submittedLogisticsBills                LogisticsBill[]                @relation("LogisticsBillSubmittedBy")
+  reviewedLogisticsBills                 LogisticsBill[]                @relation("LogisticsBillReviewedBy")
+  createdLogisticsBills                  LogisticsBill[]                @relation("LogisticsBillCreatedBy")
+  updatedLogisticsBills                  LogisticsBill[]                @relation("LogisticsBillUpdatedBy")
+  voidedLogisticsBills                   LogisticsBill[]                @relation("LogisticsBillVoidedBy")
+  sentSupplierDocumentRequests           SupplierDocumentRequest[]      @relation("SupplierDocumentRequestRequestedBy")
+  completedSupplierDocumentRequests      SupplierDocumentRequest[]      @relation("SupplierDocumentRequestCompletedBy")
+  deletedSupplierDocumentRequests        SupplierDocumentRequest[]      @relation("SupplierDocumentRequestDeletedBy")
+  assignedOrderLogisticsSuppliers        OrderLogisticsSupplier[]       @relation("OrderLogisticsSupplierAssignedBy")
+  createdShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingCreatedBy")
+  updatedShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingUpdatedBy")
+  todoReminderLogs                       TodoReminderLog[]              @relation("TodoReminderLogOwner")
+
+  @@index([supplierId])
+  @@index([approvalStatus])
+  @@index([deletedAt])
+  @@index([emailVerified])
+  @@index([passwordPolicyPassed])
+  @@map("users")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+  @@map("email_verification_tokens")
+}
+
+model UserSession {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("user_sessions")
+}
+
+model LoginAttempt {
+  id            String    @id @default(cuid())
+  key           String
+  email         String?
+  ipAddress     String?   @map("ip_address")
+  userAgent     String?   @map("user_agent")
+  failureReason String?   @map("failure_reason")
+  geoCountry    String?   @map("geo_country")
+  geoRegion     String?   @map("geo_region")
+  geoCity       String?   @map("geo_city")
+  geoIsp        String?   @map("geo_isp")
+  geoSource     String?   @map("geo_source")
+  geoResolvedAt DateTime? @map("geo_resolved_at")
+  success       Boolean   @default(false)
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([key, createdAt])
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@map("login_attempts")
+}

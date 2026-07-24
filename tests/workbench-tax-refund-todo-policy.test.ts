@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { forEachTaxRefundTodoPage, isOnlyExportInvoiceMissing } from "../lib/platform/workbench-tax-refund-todo-policy.ts";
+import { readOrderDocumentsSource, readSharedTaxCompletenessSource, readWorkbenchTodosSource } from "./source-helpers.ts";
 
 process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/test";
 const require = createRequire(import.meta.url);
@@ -18,11 +19,11 @@ const { isTaxRefundExportInvoiceFinanceUser } = await createJiti(import.meta.url
 const { canAccessOrder } = await createJiti(import.meta.url).import("../lib/platform/order-access.ts") as {
   canAccessOrder: (user: Record<string, unknown>, order: Record<string, unknown>) => boolean;
 };
-const sharedCompletenessSource = readFileSync("lib/platform/shared-tax-completeness.ts", "utf8");
+const sharedCompletenessSource = readSharedTaxCompletenessSource();
 const taxSyncSource = readFileSync("lib/platform/shared-tax-sync.ts", "utf8");
-const taxTodoSource = readFileSync("lib/platform/workbench-tax-profit-todos.ts", "utf8");
-const orderDocumentUploadSource = readFileSync("lib/platform/order-documents-upload.ts", "utf8");
-const orderDocumentFilesSource = readFileSync("lib/platform/order-documents-files.ts", "utf8");
+const taxTodoSource = readWorkbenchTodosSource();
+const orderDocumentUploadSource = readOrderDocumentsSource();
+const orderDocumentFilesSource = orderDocumentUploadSource;
 
 function completeness(overrides: Record<string, unknown> = {}) {
   return {

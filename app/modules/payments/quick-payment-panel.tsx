@@ -3,29 +3,18 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { ApiRequestError, apiJson } from "../../api";
-import { SearchAutocomplete } from "../../SearchAutocomplete";
-import { customerDisplayName, customerLegalName } from "../../utils";
-import { moneyText } from "../../formatters";
-import styles from "../../WorkspaceShell.module.css";
-import { CURRENCIES, PAYMENT_TYPES, type ExchangeRateResponse, type OrdersResponse, type PaymentOrderOption, type PaymentRow, type QuickPaymentForm } from "./types";
-import { orderLabel, paymentFormFromRow, paymentStatusOptions } from "./helpers";
 import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
-
-type PaymentFieldErrors = Partial<Record<keyof QuickPaymentForm, string>>;
-const FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE = "该订单尚无历史收款，不能登记尾款，请选择预付款、分批款或全款。";
-
-function numericValue(...values: unknown[]) {
-  for (const value of values) {
-    if (value === null || value === undefined || value === "") continue;
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) return numeric;
-  }
-  return 0;
-}
-
-function orderReceivedCny(order?: PaymentOrderOption | null) {
-  return numericValue(order?.receivedAmountCny, order?.summary?.confirmedPaymentsCny);
-}
+import { paymentFormFromRow } from "./helpers";
+import { QuickPaymentFormView } from "./quick-payment-form-view";
+import {
+  createPaymentOrderOptions,
+  createPaymentOrderSummary,
+  normalizeQuickPaymentForm,
+  quickPaymentPayload,
+  validateQuickPaymentForm,
+  type PaymentFieldErrors,
+} from "./quick-payment-utils";
+import { type ExchangeRateResponse, type OrdersResponse, type PaymentOrderOption, type PaymentRow, type QuickPaymentForm } from "./types";
 
 export function QuickCreatePaymentPanel({
   initialPayment,
@@ -198,43 +187,9 @@ export function QuickCreatePaymentPanel({
     }
   }
 
-  function validateQuickPaymentForm(nextForm: QuickPaymentForm, selectedOrder?: PaymentOrderOption | null) {
-    const errors: PaymentFieldErrors = {};
-    const currency = nextForm.currency.trim().toUpperCase();
-    const amountText = nextForm.amount.trim();
-    const amount = Number(amountText);
-    const exchangeRateText = nextForm.exchangeRate.trim();
-    const exchangeRate = Number(exchangeRateText);
-
-    if (!nextForm.orderId.trim()) errors.orderId = "请选择关联订单";
-    if (!nextForm.paymentDate.trim()) errors.paymentDate = "请选择收款日期";
-    if (!nextForm.paymentType.trim()) errors.paymentType = "请选择收款类型";
-    else if (nextForm.paymentType === "尾款" && selectedOrder && orderReceivedCny(selectedOrder) <= 0) {
-      errors.paymentType = FIRST_RECEIPT_FINAL_PAYMENT_MESSAGE;
-    }
-    if (!amountText) errors.amount = "请输入收款金额";
-    else if (!Number.isFinite(amount) || amount <= 0) errors.amount = "收款金额必须大于 0";
-    if (!currency) errors.currency = "请选择币种";
-    if (currency && currency !== "CNY") {
-      if (!exchangeRateText) errors.exchangeRate = "汇率不能为空";
-      else if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) errors.exchangeRate = "汇率必须大于 0";
-    }
-    return errors;
-  }
-
   async function submitQuickPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalizedCurrency = form.currency.trim().toUpperCase();
-    const normalizedForm: QuickPaymentForm = normalizedCurrency === "CNY"
-      ? {
-        ...form,
-        currency: normalizedCurrency,
-        exchangeRate: "1.0000",
-        exchangeRateDate: form.exchangeRateDate || form.paymentDate,
-        exchangeRateSource: form.exchangeRateSource || "系统",
-        exchangeRateType: form.exchangeRateType || "人民币",
-      }
-      : { ...form, currency: normalizedCurrency };
+    const normalizedForm = normalizeQuickPaymentForm(form);
     const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
     const errors = validateQuickPaymentForm(normalizedForm, selectedOrder);
     setFieldErrors(errors);
@@ -257,21 +212,7 @@ export function QuickCreatePaymentPanel({
         isEdit ? `/api/payments/${encodeURIComponent(editingSnapshot?.id || "")}` : "/api/payments",
         {
           method: isEdit ? "PATCH" : "POST",
-          body: JSON.stringify({
-            orderId: normalizedForm.orderId,
-            paymentDate: normalizedForm.paymentDate,
-            paymentType: normalizedForm.paymentType,
-            amount: Number(normalizedForm.amount),
-            currency: normalizedForm.currency,
-            exchangeRate: Number(normalizedForm.exchangeRate),
-            exchangeRateDate: normalizedForm.exchangeRateDate || undefined,
-            exchangeRateSource: normalizedForm.exchangeRateSource || undefined,
-            exchangeRateType: normalizedForm.exchangeRateType || undefined,
-            status: form.status,
-            bankReference: normalizedForm.bankReference.trim(),
-            remark: normalizedForm.remark.trim(),
-            ...(isEdit ? { expectedUpdatedAt: editingSnapshot?.updatedAt || undefined } : {}),
-          }),
+          body: JSON.stringify(quickPaymentPayload(normalizedForm, editingSnapshot)),
         },
       );
       if (result.success !== true) throw new Error(result.message || "收款保存失败");
@@ -290,148 +231,41 @@ export function QuickCreatePaymentPanel({
     }
   }
 
-  const initialOrder: PaymentOrderOption | null = editingSnapshot?.orderId ? {
-    id: editingSnapshot.orderId,
-    orderNo: editingSnapshot.orderNo,
-    customerName: editingSnapshot.customerName,
-    customerFullName: editingSnapshot.customerFullName,
-    customerShortName: editingSnapshot.customerShortName,
-    currency: editingSnapshot.currency,
-  } : null;
-  const orderOptions = initialOrder && !orders.some((order) => order.id === initialOrder.id)
-    ? [initialOrder, ...orders]
-    : orders;
+  const orderOptions = createPaymentOrderOptions(editingSnapshot, orders);
   const selectedOrder = orderOptions.find((order) => order.id === form.orderId);
-  const selectedOrderMeta = selectedOrder ? [
-    { label: "订单号", value: selectedOrder.orderNo || "-" },
-    { label: "客户简称", value: customerDisplayName(selectedOrder) || "-" },
-    { label: "订单币种", value: selectedOrder.currency || "-" },
-    {
-      label: "应收金额",
-      value: moneyText(
-        selectedOrder.currency || "CNY",
-        selectedOrder.finalReceivableAmount ?? selectedOrder.receivableAmount ?? selectedOrder.summary?.receivableAmount,
-        selectedOrder.finalReceivableAmountCny ?? selectedOrder.receivableAmountCny ?? selectedOrder.summary?.receivableCny,
-      ),
-    },
-    {
-      label: "已收金额",
-      value: moneyText(
-        selectedOrder.currency || "CNY",
-        selectedOrder.receivedAmount ?? selectedOrder.summary?.confirmedPaymentsAmount,
-        selectedOrder.receivedAmountCny ?? selectedOrder.summary?.confirmedPaymentsCny,
-      ),
-    },
-    {
-      label: "未收金额",
-      value: moneyText(
-        selectedOrder.currency || "CNY",
-        selectedOrder.outstandingAmount ?? selectedOrder.summary?.outstandingAmount,
-        selectedOrder.outstandingCny ?? selectedOrder.summary?.outstandingCny,
-      ),
-    },
-  ] : [];
+  const selectedOrderMeta = createPaymentOrderSummary(selectedOrder);
   const currencyLocked = Boolean(selectedOrder?.currency);
 
+  function handleExchangeRateChange(value: string) {
+    setForm((current) => ({
+      ...current,
+      exchangeRate: value,
+      exchangeRateDate: current.currency === "CNY" ? current.exchangeRateDate : "",
+      exchangeRateSource: current.currency === "CNY" ? current.exchangeRateSource : "",
+      exchangeRateType: current.currency === "CNY" ? current.exchangeRateType : "",
+    }));
+  }
+
   return (
-    <form className={styles.quickCreatePanel} onSubmit={submitQuickPayment} noValidate inert={saving} aria-busy={saving}>
-      <div className={styles.quickCreateHeader}>
-        <div>
-          <strong>{editingSnapshot?.id ? "编辑收款" : "快速登记收款"}</strong>
-        </div>
-      </div>
-
-      {message ? <div className={styles.inlineError}>{message}</div> : null}
-
-      <div className={styles.reportFilterGrid}>
-        <label>
-          关联订单
-          <SearchAutocomplete
-            value={selectedOrder || null}
-            cacheKey="payment-orders"
-            emptyLabel="未找到应收订单"
-            placeholder="输入订单号 / 提单号 / 客户简称"
-            getLabel={orderLabel}
-            getDescription={(order) => `${customerLegalName(order)}${order.currency ? ` · ${order.currency}` : ""}${order.outstandingCny != null ? ` · 未收 ${moneyText(order.currency || "CNY", order.outstandingAmount, order.outstandingCny)}` : ""}`}
-            search={searchOrders}
-            onSelect={(order) => void handleOrderSelect(order)}
-          />
-          {fieldErrors.orderId ? <small className={styles.inlineError}>{fieldErrors.orderId}</small> : null}
-        </label>
-        <label>
-          收款日期
-          <input type="date" value={form.paymentDate} onChange={(event) => void handlePaymentDateChange(event.target.value)} aria-invalid={Boolean(fieldErrors.paymentDate)} />
-          {fieldErrors.paymentDate ? <small className={styles.inlineError}>{fieldErrors.paymentDate}</small> : null}
-        </label>
-        <label>
-          收款类型
-          <select value={form.paymentType} onChange={(event) => setFormValue("paymentType", event.target.value)}>
-            <option value="">请选择收款类型</option>
-            {PAYMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-          </select>
-          {fieldErrors.paymentType ? <small className={styles.inlineError}>{fieldErrors.paymentType}</small> : null}
-        </label>
-        <label>
-          收款金额
-          <input value={form.amount} onChange={(event) => setFormValue("amount", event.target.value)} inputMode="decimal" aria-invalid={Boolean(fieldErrors.amount)} />
-          {fieldErrors.amount ? <small className={styles.inlineError}>{fieldErrors.amount}</small> : null}
-        </label>
-        <label>
-          币种
-          <select value={form.currency} onChange={(event) => void handleCurrencyChange(event.target.value)} disabled={currencyLocked}>
-            <option value="">请选择币种</option>
-            {CURRENCIES.filter(Boolean).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
-          </select>
-          {fieldErrors.currency ? <small className={styles.inlineError}>{fieldErrors.currency}</small> : null}
-        </label>
-        <label>
-          汇率
-          <input
-            value={form.exchangeRate}
-            onChange={(event) => {
-              const value = event.target.value;
-              setForm((current) => ({
-                ...current,
-                exchangeRate: value,
-                exchangeRateDate: current.currency === "CNY" ? current.exchangeRateDate : "",
-                exchangeRateSource: current.currency === "CNY" ? current.exchangeRateSource : "",
-                exchangeRateType: current.currency === "CNY" ? current.exchangeRateType : "",
-              }));
-            }}
-            readOnly={form.currency === "CNY"}
-            inputMode="decimal"
-            aria-invalid={Boolean(fieldErrors.exchangeRate)}
-          />
-          {fieldErrors.exchangeRate ? <small className={styles.inlineError}>{fieldErrors.exchangeRate}</small> : null}
-        </label>
-        <label>
-          收款状态
-          <select value={form.status} onChange={(event) => setFormValue("status", event.target.value)}>
-            {paymentStatusOptions(canConfirmArrived).map((status) => <option key={status} value={status}>{status}</option>)}
-          </select>
-        </label>
-        <label>
-          银行流水号
-          <input value={form.bankReference} onChange={(event) => setFormValue("bankReference", event.target.value)} placeholder="可选" />
-        </label>
-        <label>
-          备注
-          <input value={form.remark} onChange={(event) => setFormValue("remark", event.target.value)} placeholder="可选" />
-        </label>
-      </div>
-
-      <div className={styles.quickCreateMeta}>
-        {selectedOrderMeta.length ? selectedOrderMeta.map((item) => (
-          <span key={item.label}>{item.label}：{item.value}</span>
-        )) : <span>订单：-</span>}
-        {currencyLocked ? <span>收款币种已锁定为订单币种，不能混用其它币种。</span> : null}
-        <span>{exchangeMeta || "汇率来源：待获取"}</span>
-      </div>
-
-      <div className={styles.detailActions}>
-        <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : editingSnapshot?.id ? "更新收款" : "保存收款"}</button>
-        <button className={styles.secondaryButton} type="button" onClick={onCancel} disabled={saving}>取消</button>
-      </div>
-    </form>
+    <QuickPaymentFormView
+      editing={Boolean(editingSnapshot?.id)}
+      form={form}
+      selectedOrder={selectedOrder}
+      selectedOrderMeta={selectedOrderMeta}
+      currencyLocked={currencyLocked}
+      exchangeMeta={exchangeMeta}
+      fieldErrors={fieldErrors}
+      message={message}
+      saving={saving}
+      canConfirmArrived={canConfirmArrived}
+      searchOrders={searchOrders}
+      onSubmit={submitQuickPayment}
+      onCancel={onCancel}
+      onOrderSelect={(order) => void handleOrderSelect(order)}
+      onPaymentDateChange={(value) => void handlePaymentDateChange(value)}
+      onCurrencyChange={(value) => void handleCurrencyChange(value)}
+      onExchangeRateChange={handleExchangeRateChange}
+      onFieldChange={setFormValue}
+    />
   );
 }

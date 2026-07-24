@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useConfirmationDialog } from "../components";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission } from "../utils";
 import { canVoidCost, hasPaymentVoucher, isVoidedCost } from "./costs/helpers";
+import { PAGE_SIZE, type CostRow } from "./costs/model";
 import { CostsModuleView } from "./costs/module-view";
-import { PAGE_SIZE, type CostFormDrawerState, type CostInvoiceGroupRow, type CostOrderSummary, type CostRow } from "./costs/model";
 import { useCostDocumentActions } from "./costs/use-cost-document-actions";
+import { useCostDrawerState } from "./costs/use-cost-drawer-state";
+import { useCostWorkspacePresentation } from "./costs/use-cost-workspace-presentation";
 import { useCostsListController } from "./costs/use-costs-list-controller";
-import { useWorkspaceTabBusy, useWorkspaceTabDiscardGuard, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 
 export function CostsModule({
   currentUser,
@@ -22,22 +23,18 @@ export function CostsModule({
   initialKeyword?: string;
   initialOpenToken?: number;
 }) {
-  const [detailCost, setDetailCost] = useState<CostRow | null>(null);
-  const [detailOrderSummary, setDetailOrderSummary] = useState<CostOrderSummary | null>(null);
-  const [detailInvoiceGroup, setDetailInvoiceGroup] = useState<CostInvoiceGroupRow | null>(null);
-  const [costFormDrawer, setCostFormDrawer] = useState<CostFormDrawerState | null>(null);
-  const [returnDetailCost, setReturnDetailCost] = useState<CostRow | null>(null);
-  const [documentCost, setDocumentCost] = useState<CostRow | null>(null);
-  const [documentLoading, setDocumentLoading] = useState(false);
-  const [documentError, setDocumentError] = useState("");
-  const [uploadingKey, setUploadingKey] = useState("");
-  const [paymentSavingId, setPaymentSavingId] = useState("");
-  const [costTypeSavingId, setCostTypeSavingId] = useState("");
-  const [voucherUploadingKey, setVoucherUploadingKey] = useState("");
-  const [voucherPreviewCost, setVoucherPreviewCost] = useState<CostRow | null>(null);
-  const [uploadProgressByKey, setUploadProgressByKey] = useState<Record<string, number>>({});
-  const [deletingDocumentId, setDeletingDocumentId] = useState("");
-  const [deletingId, setDeletingId] = useState("");
+  const {
+    detailCost, setDetailCost, detailOrderSummary, setDetailOrderSummary,
+    detailInvoiceGroup, setDetailInvoiceGroup, costFormDrawer, setCostFormDrawer,
+    returnDetailCost, setReturnDetailCost, documentCost, setDocumentCost,
+    documentLoading, setDocumentLoading, documentError, setDocumentError,
+    uploadingKey, setUploadingKey, paymentSavingId, setPaymentSavingId,
+    costTypeSavingId, setCostTypeSavingId, voucherUploadingKey, setVoucherUploadingKey,
+    voucherPreviewCost, setVoucherPreviewCost, uploadProgressByKey, setUploadProgressByKey,
+    deletingDocumentId, setDeletingDocumentId, deletingId, setDeletingId,
+    clearTransientState, openCreateCostDrawer, openEditCostDrawer, openCopyCostDrawer,
+    closeCostFormDrawer, closeDocumentsDrawer,
+  } = useCostDrawerState();
   const [selectedCostIds, setSelectedCostIds] = useState<string[]>([]);
   const {
     confirmation,
@@ -49,23 +46,6 @@ export function CostsModule({
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "业务员"]);
   const canManageFactoryPayments = ["管理员", "财务"].includes(currentUser.role);
   const canManageCostType = ["管理员", "财务"].includes(currentUser.role);
-  useWorkspaceTabBusy(Boolean(
-    deletingDocumentId
-    || deletingId
-    || uploadingKey
-    || paymentSavingId
-    || costTypeSavingId
-    || voucherUploadingKey,
-  ));
-  const confirmDiscardCostEdit = useWorkspaceTabDiscardGuard("当前成本内容尚未保存，确定放弃吗？");
-  const clearTransientState = useCallback(() => {
-    setDetailCost(null);
-    setDetailOrderSummary(null);
-    setDetailInvoiceGroup(null);
-    setCostFormDrawer(null);
-    setReturnDetailCost(null);
-  }, []);
-
   const {
     rows,
     orderRows,
@@ -83,7 +63,6 @@ export function CostsModule({
     activeRows,
     setRows,
     setOrderRows,
-    setInvoiceGroupRows,
     setTotal,
     setError,
     setNotice,
@@ -97,58 +76,6 @@ export function CostsModule({
     costMatchesSubmittedFilters,
     refreshCostAggregatesInBackground,
   } = useCostsListController({ initialKeyword, initialOpenToken, clearTransientState });
-
-  function openCreateCostDrawer() {
-    if (costFormDrawer && !confirmDiscardCostEdit()) return;
-    setDetailCost(null);
-    setDetailOrderSummary(null);
-    setDetailInvoiceGroup(null);
-    setDocumentCost(null);
-    setReturnDetailCost(null);
-    setCostFormDrawer({ mode: "create", cost: null });
-  }
-
-  function openEditCostDrawer(cost: CostRow, options: { returnToDetail?: boolean } = {}) {
-    if (costFormDrawer && !confirmDiscardCostEdit()) return;
-    setReturnDetailCost(options.returnToDetail ? cost : null);
-    setDetailCost(null);
-    setDetailOrderSummary(null);
-    setDetailInvoiceGroup(null);
-    setDocumentCost(null);
-    setCostFormDrawer({ mode: "edit", cost });
-  }
-
-  function openCopyCostDrawer(cost: CostRow) {
-    if (costFormDrawer && !confirmDiscardCostEdit()) return;
-    const copiedCost: CostRow = {
-      ...cost,
-      id: "",
-      paymentStatus: "待支付",
-      paymentDate: "",
-      paid: false,
-      paidAt: "",
-      paymentVoucherUrl: "",
-      paymentVoucherFileName: "",
-      paymentVoucherMimeType: "",
-      paymentVoucherUploadedAt: "",
-      documents: [],
-      status: "ACTIVE",
-      voidedAt: "",
-      voidReason: "",
-    };
-    setReturnDetailCost(null);
-    setDetailCost(null);
-    setDetailOrderSummary(null);
-    setDetailInvoiceGroup(null);
-    setDocumentCost(null);
-    setCostFormDrawer({ mode: "copy", cost: copiedCost });
-  }
-
-  function closeCostFormDrawer() {
-    if (returnDetailCost) setDetailCost(returnDetailCost);
-    setReturnDetailCost(null);
-    setCostFormDrawer(null);
-  }
 
   function mergeCostRows(saved: CostRow | CostRow[] | null | undefined) {
     const savedRows = (Array.isArray(saved) ? saved : saved ? [saved] : []).filter((item): item is CostRow => Boolean(item?.id));
@@ -284,47 +211,10 @@ export function CostsModule({
     if (costView !== "details") refreshCostAggregatesInBackground();
   }
 
-  const workspaceCost = costFormDrawer?.cost || documentCost || detailCost;
-  const workspaceCostTitle = workspaceCost?.orderNo || workspaceCost?.blNo || workspaceCost?.id || "详情";
-  useWorkspaceTabPresentation({
-    title: costFormDrawer
-      ? `${costFormDrawer.mode === "edit" ? "编辑" : costFormDrawer.mode === "copy" ? "复制" : "新建"}成本${workspaceCost ? ` · ${workspaceCostTitle}` : ""}`
-      : documentCost
-        ? `成本资料 · ${workspaceCostTitle}`
-        : detailCost
-          ? `成本 · ${workspaceCostTitle}`
-          : detailOrderSummary
-            ? `订单成本 · ${detailOrderSummary.orderNo || "详情"}`
-            : detailInvoiceGroup
-              ? `发票组 · ${detailInvoiceGroup.orderNo || detailInvoiceGroup.id}`
-              : "成本管理",
-    view: costFormDrawer || documentCost ? "edit" : detailCost || detailOrderSummary || detailInvoiceGroup ? "detail" : "list",
-    contextKey: costFormDrawer
-      ? `${costFormDrawer.mode}:${costFormDrawer.cost?.id || "new"}`
-      : documentCost
-        ? `documents:${documentCost.id}:${documentCost.updatedAt || documentCost.costType || "current"}`
-        : detailCost
-          ? `detail:${detailCost.id}`
-          : detailOrderSummary
-            ? `order:${detailOrderSummary.orderId || detailOrderSummary.orderNo || "summary"}`
-            : detailInvoiceGroup
-              ? `invoice:${detailInvoiceGroup.id}`
-              : "list:costs",
-    ensureListTab: Boolean(costFormDrawer || documentCost || detailCost || detailOrderSummary || detailInvoiceGroup),
+  useCostWorkspacePresentation({
+    costFormDrawer, documentCost, detailCost, detailOrderSummary, detailInvoiceGroup,
+    page, submittedFilters, archiveScope, costView, loadCosts,
   });
-  useWorkspaceTabReactivation(() => {
-    void loadCosts(page, submittedFilters, archiveScope, costView);
-  });
-
-  function closeDocumentsDrawer() {
-    setDocumentCost(null);
-    setDocumentError("");
-    setUploadingKey("");
-    setPaymentSavingId("");
-    setCostTypeSavingId("");
-    setVoucherUploadingKey("");
-    setDeletingDocumentId("");
-  }
 
   return (
     <CostsModuleView

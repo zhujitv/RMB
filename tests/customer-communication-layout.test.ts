@@ -1,3 +1,4 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -26,7 +27,7 @@ const shippingNotificationConstants = readFileSync("lib/platform/shared-document
 const shippingNotificationTypes = readFileSync("lib/platform/shared-serialization-types.ts", "utf8");
 const customerCommunicationMarkRoute = readFileSync("app/api/customer-communications/[orderId]/mark-sent/route.ts", "utf8");
 const customerCommunicationUnmarkRoute = readFileSync("app/api/customer-communications/[orderId]/unmark-sent/route.ts", "utf8");
-const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
+const prismaSchema = readPrismaSchemaSource();
 const manualMarkMigration = readFileSync("prisma/migrations/20260707133000_customer_communication_manual_mark/migration.sql", "utf8");
 
 test("workspace layout uses fixed chrome with main content scrolling", () => {

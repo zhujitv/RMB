@@ -193,10 +193,10 @@ test("logistics review pushes costs and notifies invoice upload after approval",
   assert.match(backend, /linkLogisticsExpenseInvoiceDocumentsToCosts/);
   assert.match(backend, /tx\.orderDocument\.updateMany/);
   assert.match(backend, /tx\.fileAsset\.updateMany/);
-  assert.match(reviewLogisticsExpenseBillsSource, /const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents\(tx, rows, actorId\(actor\), now\)/);
-  assert.match(reviewLogisticsExpenseBillsSource, /rows\.length !== expectedRowCount[\s\S]*rowsByBillId\.size !== ids\.length[\s\S]*LOGISTICS_BILL_ROWS_INCOMPLETE/);
-  assert.match(reviewLogisticsExpenseBillsSource, /outboxIntents\.length !== ids\.length[\s\S]*LOGISTICS_INVOICE_OUTBOX_INCOMPLETE/);
-  assert.match(reviewLogisticsExpenseBillsSource, /const auditEntries: LogisticsExpenseApprovalAuditEntry\[\][\s\S]*notificationOutboxId:/);
+  assert.match(approveLogisticsExpenseBillRowsSource, /const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents\(tx, rows, actorId\(actor\), now\)/);
+  assert.match(approveLogisticsExpenseBillRowsSource, /rows\.length !== expectedRowCount[\s\S]*rowsByBillId\.size !== ids\.length[\s\S]*LOGISTICS_BILL_ROWS_INCOMPLETE/);
+  assert.match(approveLogisticsExpenseBillRowsSource, /outboxIntents\.length !== ids\.length[\s\S]*LOGISTICS_INVOICE_OUTBOX_INCOMPLETE/);
+  assert.match(approveLogisticsExpenseBillRowsSource, /const auditEntries: LogisticsExpenseApprovalAuditEntry\[\][\s\S]*notificationOutboxId:/);
   assert.match(reviewLogisticsExpenseBillsFunctionSource, /approvalAuditEntries\.push\(\.\.\.\(approval\?\.auditEntries \|\| \[\]\)\)[\s\S]*"物流费用审核日志写入"[\s\S]*writeAudit\(request, actor, "审核通过物流费用账单"/);
   assert.match(
     approveLogisticsExpenseBillRowsSource,
@@ -341,7 +341,7 @@ test("USD ocean freight invoices use foreign currency amount from remarks instea
   assert.match(backend, /source: "FOREIGN_CURRENCY_REMARK"/);
   assert.match(backend, /source: "FOREIGN_CURRENCY_MISSING"/);
   assert.match(backend, /recognizedAmount: validation\.recognizedAmount/);
-  assert.match(backend, /invoiceRecognizedAmount: validation\.recognizedAmount \|\| null/);
+  assert.match(backend, /invoiceRecognizedAmount: input\.recognizedAmount \|\| null/);
   assert.match(backend, /taxInvoiceAmount: validation\.taxInvoiceAmount/);
 });
 

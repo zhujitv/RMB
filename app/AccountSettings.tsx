@@ -2,15 +2,17 @@
 
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
+import { LoginRecordsPanel, PreferencesPanel } from "./account-settings/activity-panels";
+import { readAvatarFile } from "./account-settings/avatar-file";
+import { passwordStrength } from "./account-settings/helpers";
+import { type AccountSettingsProps, type AccountTab, type LoginRecord, type LoginRecordsResponse, type PasswordResponse, type ProfileResponse } from "./account-settings/model";
+import { AccountSettingsHeader, AccountSettingsTabs } from "./account-settings/navigation";
+import { ProfilePanel, SecurityPanel } from "./account-settings/panels";
 import { apiJson } from "./api";
 import { initials } from "./utils";
-import styles from "./WorkspaceShell.module.css";
-import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
-import { passwordStrength } from "./account-settings/helpers";
-import { LoginRecordsPanel, PreferencesPanel } from "./account-settings/activity-panels";
-import { ProfilePanel, SecurityPanel } from "./account-settings/panels";
-import { ACCOUNT_TABS, type AccountSettingsProps, type AccountTab, type LoginRecord, type LoginRecordsResponse, type PasswordResponse, type ProfileResponse } from "./account-settings/model";
 import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "./workspace/workspace-tab-context";
+import styles from "./WorkspaceShell.module.css";
 
 export function AccountSettings({ user, companyProfile, onProfileSaved, onBeforePasswordChange, onPasswordChanged }: AccountSettingsProps) {
   const [tab, setTab] = useState<AccountTab>("profile");
@@ -204,54 +206,21 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onBefore
     const file = event.target.files?.[0];
     if (!file) return;
     setMessage("");
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      setMessage("头像仅支持 PNG、JPG 或 WebP 图片。");
-      event.target.value = "";
-      return;
-    }
-    if (file.size > 220 * 1024) {
-      setMessage("头像文件不能超过 220KB。");
-      event.target.value = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setProfileForm((current) => ({ ...current, avatarUrl: String(reader.result || "") }));
-    };
-    reader.onerror = () => setMessage("头像读取失败，请重新选择。");
-    reader.readAsDataURL(file);
+    void readAvatarFile(file)
+      .then((avatarUrl) => setProfileForm((current) => ({ ...current, avatarUrl })))
+      .catch((error) => setMessage(error instanceof Error ? error.message : "头像读取失败，请重新选择。"));
+    event.target.value = "";
   }
 
   return (
     <section className={styles.accountSettingsPage} inert={busy} aria-busy={busy}>
-      <div className={styles.accountSettingsHeader}>
-        {profileForm.avatarUrl ? (
-          <img className={styles.accountAvatarImage} src={profileForm.avatarUrl} alt="用户头像" />
-        ) : (
-          <span className={styles.avatarLarge}>{avatarText}</span>
-        )}
-        <div>
-          <h2>{user.name}</h2>
-          <p>{user.role} · {user.email}</p>
-        </div>
-      </div>
+      <AccountSettingsHeader user={user} avatarText={avatarText} avatarUrl={profileForm.avatarUrl} />
       <div className={styles.accountSettingsLayout}>
-        <nav className={styles.accountTabList} aria-label="个人设置">
-          {ACCOUNT_TABS.map((item) => (
-            <button
-              key={item.key}
-              className={tab === item.key ? styles.accountTabActive : ""}
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setTab(item.key);
-                setMessage("");
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
+        <AccountSettingsTabs
+          activeTab={tab}
+          busy={busy}
+          onSelect={(nextTab) => { setTab(nextTab); setMessage(""); }}
+        />
         <div className={styles.accountTabContent}>
           {tab === "profile" ? (
             <ProfilePanel

@@ -1,0 +1,179 @@
+import type { CompanyProfileSettings } from "../../types";
+import type { NotificationVariableDefinition } from "./types-integrations";
+import type { SettingsTabKey } from "./types-records";
+
+export type ExchangeRateForm = {
+  source: string;
+  rateType: string;
+  autoUpdate: boolean;
+  allowManualEdit: boolean;
+  allowMultipleOrderLogisticsSuppliers: boolean;
+  allowAdminIncompleteTaxSubmit: boolean;
+  paymentVoucherReminderStartDate: string;
+};
+
+export type CommissionFormulaForm = {
+  mode: string;
+  label: string;
+  source: string;
+  deductions: string[];
+  floorAtZero: boolean;
+};
+
+export type NotificationTemplateForm = {
+  type: string;
+  name: string;
+  module: string;
+  description: string;
+  enabled: boolean;
+  editable: boolean;
+  supportsAttachments: boolean;
+  securitySensitive: boolean;
+  subjectTemplate: string;
+  bodyTemplate: string;
+  variables: NotificationVariableDefinition[];
+  recipientConfig: Record<string, unknown>;
+  extraConfig: Record<string, unknown>;
+  ccAdminEmails: boolean;
+  ccEmails: string;
+};
+
+export type ShipsgoIntegrationForm = {
+  enabled: boolean;
+  activeProvider: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  apiKeyConfigured: boolean;
+  shipsgoEnabled: boolean;
+  freightowerEnabled: boolean;
+  freightowerApiBaseUrl: string;
+  freightowerClientId: string;
+  freightowerClientIdConfigured: boolean;
+  freightowerSecret: string;
+  freightowerSecretConfigured: boolean;
+  freightowerMapKey: string;
+  freightowerMapKeyConfigured: boolean;
+  freightowerWebhookSecret: string;
+  freightowerWebhookSecretConfigured: boolean;
+  freightowerDefaultCarrierCode: string;
+  freightowerDefaultPortCode: string;
+  freightowerDefaultIsExport: string;
+  freightowerDefaultLang: string;
+  freightowerHiddenReference: boolean;
+  oceanTrackingEnabled: boolean;
+  airTrackingEnabled: boolean;
+  manualSyncEnabled: boolean;
+  autoSyncEnabled: boolean;
+  dailySyncTime: string;
+  webhookEnabled: boolean;
+  webhookSecret: string;
+  webhookSecretConfigured: boolean;
+  liveMapEnabled: boolean;
+  customerPushEnabled: boolean;
+  creditWarningThreshold: string;
+};
+
+export type OcrIntegrationForm = {
+  enabled: boolean;
+  provider: string;
+  apiBaseUrl: string;
+  accessKeyId: string;
+  accessKeyIdConfigured: boolean;
+  accessKeySecret: string;
+  accessKeySecretConfigured: boolean;
+  appCode: string;
+  appCodeConfigured: boolean;
+  invoiceTextEnabled: boolean;
+  logisticsInvoiceEnabled: boolean;
+  timeoutMs: string;
+};
+
+export type CompanyProfileForm = {
+  brandName: string;
+  systemName: string;
+  companyNameZh: string;
+  companyNameEn: string;
+  shortName: string;
+  website: string;
+  contactEmail: string;
+  contactPhone: string;
+  address: string;
+  logoUrl: string;
+  footerText: string;
+};
+
+export type CustomerForm = {
+  id: string;
+  name: string;
+  shortName: string;
+  country: string;
+  defaultCurrency: string;
+  salespersonUserId: string;
+  commissionRate: string;
+  commissionStatus: string;
+  contactPerson: string;
+  contactEmail: string;
+  contactPhone: string;
+  enableAutoShippingDocsNotification: boolean;
+  shippingDocsEmails: string;
+  shippingDocsCcEmails: string;
+  autoSendDocumentTypes: string[];
+  clearanceEmailLanguage: string;
+  remark: string;
+};
+
+export type SupplierForm = {
+  id: string;
+  supplierName: string;
+  supplierType: string;
+  status: string;
+  country: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+  invoiceTitle: string;
+  taxNumber: string;
+  bankName: string;
+  bankAccount: string;
+  allowDomesticLogisticsEntry: boolean;
+  allowLogisticsExpenseEntry: boolean;
+  allowLogisticsInvoiceUpload: boolean;
+  allowFactoryDocumentUpload: boolean;
+  isDefaultLogisticsSupplier: boolean;
+  allowedLogisticsCostTypes: string[];
+  remark: string;
+};
+
+export type BusinessEntityForm = {
+  id: string;
+  name: string;
+  shortName: string;
+  isDefault: boolean;
+  status: string;
+  sortOrder: string;
+  remark: string;
+};
+
+export type UserForm = {
+  id: string;
+  expectedUpdatedAt: string;
+  name: string;
+  email: string;
+  role: string;
+  approvalStatus: string;
+  supplierId: string;
+  password: string;
+  permissionMode: string;
+  dataScope: string;
+  menus: string[];
+  reads: string[];
+  writes: string[];
+};
+
+export type SettingsModuleProps = {
+  initialTab?: SettingsTabKey;
+  initialTabToken?: number;
+  currentUser?: { role?: string } | null;
+  onCompanyProfileSaved?: (settings: CompanyProfileSettings) => void;
+};

@@ -1,0 +1,127 @@
+
+
+.logisticsCompactRowActive {
+  background: #eff6ff;
+}
+
+.logisticsCompactRowActive:hover {
+  background: #dbeafe;
+}
+
+.tablePinnedTwoCols .dataTable th.orderNoColumn,
+.tablePinnedTwoCols .dataTable td.orderNoColumn {
+  width: 180px;
+  min-width: 180px;
+}
+
+.tablePinnedTwoCols .dataTable th.customerColumn,
+.tablePinnedTwoCols .dataTable td.customerColumn {
+  left: 180px;
+  width: 140px;
+  min-width: 140px;
+}
+
+.costTableWrap.tablePinnedTwoCols .dataTable th:nth-child(1),
+.costTableWrap.tablePinnedTwoCols .dataTable td:nth-child(1),
+.costTableWrap.tablePinnedTwoCols .dataTable th.orderNoColumn,
+.costTableWrap.tablePinnedTwoCols .dataTable td.orderNoColumn {
+  width: 180px;
+  min-width: 180px;
+}
+
+.costTableWrap.tablePinnedTwoCols .dataTable th:nth-child(2),
+.costTableWrap.tablePinnedTwoCols .dataTable td:nth-child(2),
+.costTableWrap.tablePinnedTwoCols .dataTable th.customerColumn,
+.costTableWrap.tablePinnedTwoCols .dataTable td.customerColumn {
+  left: 180px;
+  width: 120px;
+  min-width: 120px;
+}
+
+.costTableWrap .dataTable th.amountColumn,
+.costTableWrap .dataTable td.amountColumn {
+  width: 136px;
+  min-width: 136px;
+  text-align: right;
+}
+
+.costTableWrap .dataTable th.supplierColumn,
+.costTableWrap .dataTable td.supplierColumn {
+  width: 240px;
+  min-width: 240px;
+  max-width: 280px;
+}
+
+.costTableWrap .dataTable th.statusColumn,
+.costTableWrap .dataTable td.statusColumn {
+  width: 126px;
+  min-width: 126px;
+}
+
+.costTableWrap .dataTable th.operationColumn,
+.costTableWrap .dataTable td.operationColumn {
+  width: 80px;
+  min-width: 80px;
+}
+
+.costTableWrap .dataTable th.costInvoiceActionColumn,
+.costTableWrap .dataTable td.costInvoiceActionColumn {
+  width: 390px;
+  min-width: 390px;
+}
+
+.detailField {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.detailField span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.detailField strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.detailFieldWide {
+  grid-column: 1 / -1;
+}
+
+.moneyCell,
+.amountCell {
+  font-weight: 600;
+}
+
+.amountCell {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.amountCellSingle {
+  gap: 0;
+}
+
+.currencyAmount {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cnyAmount {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}

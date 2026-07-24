@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef, type KeyboardEvent } from "react";
-import type { WorkspaceTab } from "./workspace-tabs";
-import styles from "../WorkspaceShell.module.css";
 import {
   canDuplicateWorkspaceMenu,
   focusWorkspaceTabAfterAction,
 } from "./use-workspace-tabs";
+import styles from "./workspace-styles";
+import type { WorkspaceTab } from "./workspace-tabs";
 
 export function WorkspaceTabsBar({
   tabs,

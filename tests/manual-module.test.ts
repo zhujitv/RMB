@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const manualModule = readFileSync("app/modules/ManualModule.tsx", "utf8");
+const manualModule = [
+  "app/modules/ManualModule.tsx",
+  "app/modules/manual-content.ts",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 
 test("manual explains current tax refund document upload workflow", () => {
   assert.match(manualModule, /操作手册/);

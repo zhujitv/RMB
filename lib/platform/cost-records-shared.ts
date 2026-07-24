@@ -1,20 +1,13 @@
-import { prisma } from "../prisma";
 import { Prisma } from "../generated/prisma/client.js";
-import { attachBusinessDocumentsToCost } from "./business-documents";
 import { businessEntityFieldsFromOrder } from "./business-entities";
-import { logisticsCostSourceSelect } from "./cost-records-logistics-source";
 import { normalizeCurrencyCode, summarizeCurrencyTotals } from "./currency-totals";
 import {
-  COST_DUPLICATE_GUARD_LOOKBACK_MS,
-  COST_IDEMPOTENCY_WINDOW_MS,
   FACTORY_SUPPLIER_COST_TYPES,
   LOGISTICS_COST_TYPES,
-  ORDER_COST_STATUS_VOID,
   SUPPLIER_DOCUMENT_TYPES,
   TAX_REFUND_LOGISTICS_INVOICE_COST_TYPES,
   customerFullName,
   customerShortName,
-  isPlainRecord,
   isLogisticsCostType,
   isTaxRefundFactoryCost,
   isTaxRefundLogisticsInvoiceCost,
@@ -24,6 +17,8 @@ import {
   supplierTypeForCost,
   validCost,
 } from "./shared";
+
+export { createCostIdempotently, duplicateCostFingerprint, includeCostRelations } from "./cost-records-idempotency";
 
 type CostDocumentLike = {
   documentType?: string | null;
@@ -65,13 +60,9 @@ type CostSummaryOrderLike = {
   finalReceivableAmountCny?: NumericLike | null;
   costs?: CostLike[] | null;
 };
-type DuplicateCostOptions = {
-  sameCreator?: boolean;
-};
 type CostQuery = {
   get(key: string): string | null;
 };
-type CostCreateData = Prisma.OrderCostUncheckedCreateInput;
 type CostBreakdownKey = "factory" | "logistics" | "other";
 
 const FACTORY_SUMMARY_COST_TYPES = [...FACTORY_SUPPLIER_COST_TYPES, "样品费"];
@@ -214,133 +205,6 @@ export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
     costs: summaryCosts.map(safeSerializeCost),
     ...buckets,
   };
-}
-
-export function includeCostRelations() {
-  return Prisma.validator<Prisma.OrderCostInclude>()({
-    order: {
-      include: {
-        customer: true,
-        businessEntity: true,
-        salesperson: true,
-        commissionSettlementRecords: {
-          where: { status: "ACTIVE", reversedAt: null },
-          select: { id: true, status: true, reversedAt: true },
-          take: 1,
-        },
-      },
-    },
-    supplier: true,
-    createdBy: true,
-    updatedBy: true,
-    generatedLogisticsExpense: { select: logisticsCostSourceSelect() },
-    supplierDocumentRequests: {
-      where: { deletedAt: null },
-      select: { id: true, deletedAt: true },
-      take: 1,
-    },
-    documents: {
-      where: { deletedAt: null },
-      include: { uploadedBy: true, supplier: true },
-      orderBy: [{ documentType: "asc" }, { createdAt: "desc" }],
-    },
-  });
-}
-
-type CostWithRelations = Prisma.OrderCostGetPayload<{ include: ReturnType<typeof includeCostRelations> }>;
-type CostRecordClient = {
-  orderCost: Pick<typeof prisma.orderCost, "create" | "findFirst">;
-};
-type CreateCostIdempotentlyOptions = {
-  attachDocuments?: boolean;
-  createdBefore?: Date;
-};
-
-function duplicateDate(value: unknown) {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(String(value));
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function duplicateNumber(value: unknown) {
-  return Number(value || 0);
-}
-
-function duplicateText(value: unknown, fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-function duplicateCreatedAtWindow(windowMs: number, createdBefore?: Date): Prisma.DateTimeFilter<"OrderCost"> {
-  return {
-    gte: new Date(Date.now() - windowMs),
-    ...(createdBefore ? { lt: createdBefore } : {}),
-  };
-}
-
-function duplicateCostWhere(data: CostCreateData, windowMs: number, { sameCreator = false }: DuplicateCostOptions = {}, createdBefore?: Date): Prisma.OrderCostWhereInput {
-  return {
-    deletedAt: null,
-    status: { not: ORDER_COST_STATUS_VOID },
-    orderId: data.orderId,
-    supplierId: data.supplierId || null,
-    costType: data.costType,
-    amount: data.amount,
-    currency: duplicateText(data.currency, "CNY") || "CNY",
-    exchangeRate: data.exchangeRate,
-    paymentDate: duplicateDate(data.paymentDate),
-    sourceType: duplicateText(data.sourceType, "MANUAL") || "MANUAL",
-    sourceId: data.sourceId || null,
-    remark: data.remark || null,
-    createdAt: duplicateCreatedAtWindow(windowMs, createdBefore),
-    ...(sameCreator ? { createdById: data.createdById || null } : {}),
-  };
-}
-
-export function duplicateCostFingerprint(data: Pick<CostCreateData, "orderId" | "supplierId" | "costType" | "amount" | "currency" | "exchangeRate" | "paymentDate" | "sourceType" | "sourceId" | "remark">) {
-  return [
-    data.orderId || "",
-    data.supplierId || "",
-    data.costType || "",
-    duplicateText(data.currency, "CNY") || "CNY",
-    duplicateNumber(data.amount).toFixed(2),
-    duplicateNumber(data.exchangeRate).toFixed(6),
-    duplicateDate(data.paymentDate)?.toISOString().slice(0, 10) || "",
-    duplicateText(data.sourceType, "MANUAL") || "MANUAL",
-    data.sourceId || "",
-    data.remark || "",
-  ].join("|");
-}
-
-async function findDuplicateCost(client: CostRecordClient, data: CostCreateData, windowMs: number, options: DuplicateCostOptions = {}, createdBefore?: Date) {
-  return client.orderCost.findFirst({
-    where: duplicateCostWhere(data, windowMs, options, createdBefore),
-    include: includeCostRelations(),
-    orderBy: [{ createdAt: "desc" }],
-  });
-}
-
-function isUniqueConstraintError(error: unknown) {
-  return isPlainRecord(error) && error.code === "P2002";
-}
-
-async function maybeAttachBusinessDocuments(cost: CostWithRelations, attachDocuments: boolean) {
-  return attachDocuments ? await attachBusinessDocumentsToCost(cost) as CostWithRelations : cost;
-}
-
-export async function createCostIdempotently(data: CostCreateData, client: CostRecordClient = prisma, options: CreateCostIdempotentlyOptions = {}): Promise<{ cost: CostWithRelations; reused: boolean }> {
-  const attachDocuments = options.attachDocuments !== false;
-  const recentDuplicate = await findDuplicateCost(client, data, COST_IDEMPOTENCY_WINDOW_MS, {}, options.createdBefore);
-  if (recentDuplicate) return { cost: await maybeAttachBusinessDocuments(recentDuplicate, attachDocuments), reused: true };
-  try {
-    const cost = await client.orderCost.create({ data, include: includeCostRelations() });
-    return { cost: await maybeAttachBusinessDocuments(cost, attachDocuments), reused: false };
-  } catch (error) {
-    if (!isUniqueConstraintError(error)) throw error;
-    const guardedDuplicate = await findDuplicateCost(client, data, COST_DUPLICATE_GUARD_LOOKBACK_MS, { sameCreator: true }, options.createdBefore)
-      || await findDuplicateCost(client, data, COST_DUPLICATE_GUARD_LOOKBACK_MS, {}, options.createdBefore);
-    if (guardedDuplicate) return { cost: await maybeAttachBusinessDocuments(guardedDuplicate, attachDocuments), reused: true };
-    throw error;
-  }
 }
 
 export function serializeCosts(rows: unknown[] = []) {

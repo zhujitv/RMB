@@ -1,0 +1,28 @@
+
+
+.logisticsDetailTableWrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.logisticsDetailTable {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #0f172a;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.logisticsDetailTable th,
+.logisticsDetailTable td {
+  height: 34px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #edf2f7;
+  text-align: left;
+  vertical-align: middle;
+}

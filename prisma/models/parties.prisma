@@ -1,0 +1,103 @@
+model Customer {
+  id                                 String    @id @default(cuid())
+  name                               String
+  shortName                          String?   @map("short_name")
+  country                            String?
+  defaultCurrency                    String?   @map("default_currency")
+  salespersonUserId                  String?   @map("salesperson_user_id")
+  commissionRate                     Decimal   @default(0) @map("commission_rate") @db.Decimal(8, 2)
+  commissionStatus                   String    @default("启用") @map("commission_status")
+  contactPerson                      String?   @map("contact_person")
+  contactEmail                       String?   @map("contact_email")
+  contactPhone                       String?   @map("contact_phone")
+  enableAutoShippingDocsNotification Boolean   @default(false) @map("enable_auto_shipping_docs_notification")
+  shippingDocsEmails                 Json?     @map("shipping_docs_emails")
+  shippingDocsCcEmails               Json?     @map("shipping_docs_cc_emails")
+  autoSendDocumentTypes              Json?     @map("auto_send_document_types")
+  clearanceEmailLanguage             String    @default("EN") @map("clearance_email_language")
+  remark                             String?
+  createdAt                          DateTime  @default(now()) @map("created_at")
+  updatedAt                          DateTime  @updatedAt @map("updated_at")
+  deletedAt                          DateTime? @map("deleted_at")
+
+  salesperson                   User?                          @relation("CustomerSalesperson", fields: [salespersonUserId], references: [id])
+  orders                        ReceivableOrder[]
+  shippingDocumentNotifications ShippingDocumentNotification[]
+
+  @@index([name])
+  @@index([shortName])
+  @@index([salespersonUserId])
+  @@index([commissionStatus])
+  @@index([deletedAt])
+  @@map("customers")
+}
+
+model BusinessEntity {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  shortName String?   @map("short_name")
+  isDefault Boolean   @default(false) @map("is_default")
+  status    String    @default("启用")
+  sortOrder Int       @default(0) @map("sort_order")
+  remark    String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  orders ReceivableOrder[]
+
+  @@index([status])
+  @@index([isDefault])
+  @@index([deletedAt])
+  @@map("business_entities")
+}
+
+model Supplier {
+  id                          String    @id @default(cuid())
+  supplierName                String    @map("supplier_name")
+  supplierType                String    @default("其他供应商") @map("supplier_type")
+  country                     String?
+  contactPerson               String?   @map("contact_person")
+  phone                       String?
+  email                       String?
+  address                     String?
+  invoiceTitle                String?   @map("invoice_title")
+  taxNumber                   String?   @map("tax_number")
+  bankName                    String?   @map("bank_name")
+  bankAccount                 String?   @map("bank_account")
+  remark                      String?
+  status                      String    @default("启用")
+  allowDomesticLogisticsEntry Boolean   @default(false) @map("allow_domestic_logistics_entry")
+  allowLogisticsExpenseEntry  Boolean   @default(false) @map("allow_logistics_expense_entry")
+  allowLogisticsInvoiceUpload Boolean   @default(false) @map("allow_logistics_invoice_upload")
+  allowFactoryDocumentUpload  Boolean   @default(false) @map("allow_factory_document_upload")
+  isDefaultLogisticsSupplier  Boolean   @default(false) @map("is_default_logistics_supplier")
+  allowedLogisticsCostTypes   Json?     @map("allowed_logistics_cost_types")
+  createdById                 String?   @map("created_by")
+  updatedById                 String?   @map("updated_by")
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  deletedAt                   DateTime? @map("deleted_at")
+
+  createdBy               User?                     @relation("SuppliersCreated", fields: [createdById], references: [id])
+  updatedBy               User?                     @relation("SuppliersUpdated", fields: [updatedById], references: [id])
+  costs                   OrderCost[]
+  documents               OrderDocument[]
+  operatorUsers           User[]                    @relation("SupplierOperators")
+  logisticsExpenses       LogisticsExpense[]
+  logisticsBills          LogisticsBill[]
+  assignedOrders          OrderLogisticsSupplier[]
+  factoryDocumentRequests SupplierDocumentRequest[]
+  ocrTasks                OcrTask[]
+
+  @@index([supplierName])
+  @@index([supplierType])
+  @@index([status])
+  @@index([allowDomesticLogisticsEntry])
+  @@index([allowLogisticsExpenseEntry])
+  @@index([allowLogisticsInvoiceUpload])
+  @@index([allowFactoryDocumentUpload])
+  @@index([isDefaultLogisticsSupplier])
+  @@index([deletedAt])
+  @@map("suppliers")
+}

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { apiJson } from "../../api";
 import { logisticsCostTypeDefaultCurrency, logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
+import { apiJson } from "../../api";
+import { createInitialExpenseForm, normalizeExpenseSubmission } from "./expense-form-controller-utils";
 import {
-  DEFAULT_BILLING_METHOD,
   emptyExpenseForm,
   emptyExpenseItem,
   type ExchangeRateResponse,
@@ -14,14 +14,12 @@ import {
 import {
   allowedCostTypeOptions,
   filterLogisticsFeeSuppliers,
-  lineSubtotal,
   logisticsExpenseFormCurrencySummary,
   mergeOrders,
   mergeSuppliers,
   normalizeExpenseItemCostType,
   normalizeExpenseOrder,
   supplierLabel,
-  validBillingQuantity,
 } from "./shared";
 
 type UseLogisticsExpenseFormControllerParams = {
@@ -30,29 +28,6 @@ type UseLogisticsExpenseFormControllerParams = {
   currentUserRole?: string;
   currentUserSupplierId?: string;
 };
-
-function createInitialExpenseForm({
-  initialOrderId,
-  initialSuppliers,
-  isLockedSupplier,
-  currentUserSupplierId,
-}: {
-  initialOrderId: string;
-  initialSuppliers: SupplierOption[];
-  isLockedSupplier: boolean;
-  currentUserSupplierId: string;
-}): ExpenseForm {
-  return {
-    ...emptyExpenseForm,
-    orderId: initialOrderId,
-    supplierId: isLockedSupplier
-      ? currentUserSupplierId
-      : initialSuppliers.length === 1
-        ? initialSuppliers[0].id
-        : "",
-    items: [emptyExpenseItem()],
-  };
-}
 
 export function useLogisticsExpenseFormController({
   onSaved,
@@ -255,17 +230,7 @@ export function useLogisticsExpenseFormController({
 
   async function submitExpense(auditStatus: "草稿" | "待审核") {
     if (!form.orderId) return setMessage("请选择关联订单");
-    const normalizedItems = form.items.map((item) => ({
-      costType: item.costType,
-      billingMethod: DEFAULT_BILLING_METHOD,
-      amount: lineSubtotal(item),
-      billingQuantity: Number(item.appliedContainerCount || 1),
-      appliedContainerCount: Number(item.appliedContainerCount || 1),
-      currency: item.currency,
-      exchangeRate: Number(item.exchangeRate),
-      remark: item.remark.trim(),
-    }));
-    const invalidIndex = normalizedItems.findIndex((item) => !item.costType || !item.amount || item.amount <= 0 || !item.currency || !item.exchangeRate || item.exchangeRate <= 0 || !validBillingQuantity(item.appliedContainerCount) || item.appliedContainerCount <= 0);
+    const { items: normalizedItems, invalidIndex } = normalizeExpenseSubmission(form.items);
     if (invalidIndex >= 0) return setMessage(`请完整填写第 ${invalidIndex + 1} 行费用类型、单价/金额、适用数量、币种和汇率`);
     setSaving(true);
     setMessage("");

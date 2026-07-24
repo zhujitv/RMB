@@ -1,0 +1,129 @@
+
+
+.logisticsExpenseDrawer {
+  width: min(1200px, 94vw);
+}
+
+.logisticsExpenseDrawer .sideDrawerHeader {
+  padding: 14px 18px;
+}
+
+.logisticsExpenseDrawer .sideDrawerBody {
+  padding: 14px 18px 18px;
+}
+
+.logisticsDrawerSection {
+  display: grid;
+  gap: 12px;
+}
+
+.logisticsDrawerSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.logisticsDrawerSectionHeader > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logisticsDrawerSectionHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logisticsDrawerSectionHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.logisticsInvoiceGroupsPanel {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.logisticsInvoiceGroupsHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logisticsInvoiceGroupsHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.logisticsInvoiceGroupsHeader strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logisticsInvoiceGroupsHeader span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.logisticsInvoiceGroupsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.logisticsInvoiceGroupCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.logisticsInvoiceGroupTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.logisticsInvoiceGroupTitle strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsInvoiceGroupMeta {
+  display: grid;
+  gap: 3px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.logisticsInvoiceGroupMeta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsInvoiceGroupError {
+  color: #b91c1c;
+}

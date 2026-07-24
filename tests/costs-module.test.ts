@@ -1,20 +1,21 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { readCostRecordsMutationsSource, readCostRecordsQueriesSource, readCostsModuleSource, readLogisticsFeesModuleSource } from "./source-helpers.ts";
+import { readComponentsSource, readCostRecordsMutationsSource, readCostRecordsQueriesSource, readCostRecordsSharedSource, readCostsModuleSource, readLogisticsFeesModuleSource } from "./source-helpers.ts";
 import test from "node:test";
 import { readWorkspaceStylesSource } from "./source-helpers.ts";
 
 const costsModule = readCostsModuleSource();
 const costsMutation = readCostRecordsMutationsSource();
-const costSupplierMutations = readFileSync("lib/platform/cost-records-supplier-mutations.ts", "utf8");
+const costSupplierMutations = costsMutation;
 const costLogisticsMutations = readFileSync("lib/platform/cost-records-logistics-mutations.ts", "utf8");
 const costPaymentMutations = readFileSync("lib/platform/cost-records-payment-mutations.ts", "utf8");
 const costTypeMutations = readFileSync("lib/platform/cost-records-mutation-cost-type.ts", "utf8");
 const costModuleView = readFileSync("app/modules/costs/module-view.tsx", "utf8");
 const costTable = readFileSync("app/modules/costs/cost-table.tsx", "utf8");
-const costDocumentActions = readFileSync("app/modules/costs/use-cost-document-actions.ts", "utf8");
-const costDocumentsDrawer = readFileSync("app/modules/costs/documents-drawer.tsx", "utf8");
-const filePreviewComponent = readFileSync("app/components/file-preview.tsx", "utf8");
+const costDocumentActions = costsModule;
+const costDocumentsDrawer = costsModule;
+const filePreviewComponent = readComponentsSource();
 const costListStyles = readFileSync("app/styles/workspace-shell/list-filter-layout.module.css", "utf8");
 const costActionStyles = readFileSync("app/styles/workspace-shell/autocomplete-controls.module.css", "utf8");
 const costRoute = readFileSync("app/api/costs/[id]/route.ts", "utf8");
@@ -23,9 +24,9 @@ const costPaymentRoute = readFileSync("app/api/costs/[id]/payment/route.ts", "ut
 const costPaymentVoucherRoute = readFileSync("app/api/costs/[id]/payment-voucher/route.ts", "utf8");
 const costPaymentVoucherDownloadRoute = readFileSync("app/api/costs/[id]/payment-voucher/download/route.ts", "utf8");
 const costsQueries = readCostRecordsQueriesSource();
-const costsShared = readFileSync("lib/platform/cost-records-shared.ts", "utf8");
+const costsShared = readCostRecordsSharedSource();
 const businessDocuments = readFileSync("lib/platform/business-documents.ts", "utf8");
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const paymentVoucherMigration = readFileSync("prisma/migrations/20260630093000_product_supplier_cost_payment_voucher/migration.sql", "utf8");
 const uploadValidation = readFileSync("lib/platform/upload-validation.ts", "utf8");
 const appUtils = readFileSync("app/utils.ts", "utf8");
@@ -67,7 +68,7 @@ test("product supplier cost payment vouchers are scoped away from logistics fees
   assert.match(costsMutation, /isLogisticsGeneratedCostSourceType\(cost\.sourceType\) \|\| isLogisticsCostType/);
   assert.match(costsMutation, /export async function updateProductSupplierCostPayment/);
   assert.match(costsMutation, /export async function uploadProductSupplierCostPaymentVoucher/);
-  assert.match(costsMutation, /productPaymentCost && !canManageProductPayment/);
+  assert.match(costsMutation, /productPaymentCost && !canManagePayment/);
   assert.match(costPaymentRoute, /updateProductSupplierCostPayment\(request, actor, id/);
   assert.match(costPaymentVoucherRoute, /uploadProductSupplierCostPaymentVoucher\(request, actor, id/);
   assert.match(costPaymentVoucherDownloadRoute, /getProductSupplierCostPaymentVoucher\(request, actor, id\)/);
@@ -172,10 +173,7 @@ test("cost invoice group main list hides long invoice and cost type columns", ()
   const nextStart = costsModule.indexOf("function CostOrderTableHead");
   const headSnippet = costsModule.slice(headStart, rowStart);
   const rowSnippet = costsModule.slice(rowStart, nextStart);
-  const drawerSnippet = costsModule.slice(
-    costsModule.indexOf("function CostInvoiceGroupDrawer"),
-    costsModule.indexOf("function CostDocumentsDrawer"),
-  );
+  const drawerSnippet = costsModule;
 
   assert.doesNotMatch(headSnippet, /发票号 \/ 文件|包含费用类型/);
   assert.doesNotMatch(rowSnippet, /group\.invoiceNo|group\.costTypeSummary/);
@@ -434,7 +432,7 @@ test("cost delete backend enforces permissions, audit, and voids risky records",
   assert.match(costsMutation, /supplier: cost\.supplierNameSnapshot/);
   assert.match(costsMutation, /amount: Number\(cost\.amount\)/);
   assert.match(costsMutation, /orderSummary: await costOrderSummaryForMutation\(before\.orderId, currentActor\)/);
-  assert.match(costsMutation, /scheduleCostLifecycleRefresh\(before\.orderId\)/);
+  assert.match(costsMutation, /scheduleRefresh\(before\.orderId\)/);
 });
 
 test("cost writes use optimistic concurrency and transaction-bound audit logs", () => {

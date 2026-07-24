@@ -1,13 +1,14 @@
+import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import { MoneyAmount } from "../../components";
 import { formatCurrencyAmount } from "../../formatters";
 import { customerDisplayName, customerLegalName } from "../../utils";
-import { summarizeCurrencyTotals } from "../../../lib/platform/currency-totals";
-import { logisticsCostTypeLabel } from "../../../lib/platform/logistics-cost-types";
 import styles from "../../WorkspaceShell.module.css";
 import { getBusinessEntityRowClass } from "../business-entity-row-style";
+import { canDeleteCost, canVoidCost, costStatusLabel, currencyTotalAmount, isLogisticsGeneratedCost, isVoidedCost, singlePaymentVoucherCost } from "./helpers";
 import { CostInvoiceActions } from "./invoice-actions";
-import { FACTORY_DOCUMENT_TYPES, type CostInvoiceGroupRow, type CostOrderSummary, type CostRow, type CostView } from "./model";
-import { canDeleteCost, canVoidCost, costStatusLabel, costSupplierName, currencyTotalAmount, hasPaymentVoucher, isFactoryCost, isLogisticsGeneratedCost, isLogisticsInvoiceCost, isProductSupplierPaid, isProductSupplierPaymentEnabled, isVoidedCost, singlePaymentVoucherCost } from "./helpers";
+import { type CostInvoiceGroupRow, type CostOrderSummary, type CostRow, type CostView } from "./model";
+
+export { recalculateOrderSummary } from "./cost-order-summary";
 
 export function CostTableRows({
   cost,
@@ -269,39 +270,4 @@ export function CostOrderAmountCell({
       <strong className={styles.costAmountTotal}>{formatCurrencyAmount(currency, amount)}</strong>
     </div>
   );
-}
-
-export function recalculateOrderSummary(order: CostOrderSummary, costs: CostRow[]): CostOrderSummary {
-  const activeCosts = costs.filter((cost) => Boolean(cost.id));
-  const currencyTotals = summarizeCurrencyTotals(activeCosts);
-  const confirmed = activeCosts.filter((cost) => cost.costConfirmed).length;
-  const documentProgress = activeCosts.reduce((acc, cost) => {
-    const successDocs = (cost.documents || []).filter((document) => document.uploadStatus === "SUCCESS");
-    if (isFactoryCost(cost)) {
-      FACTORY_DOCUMENT_TYPES.forEach((type) => {
-        acc.total += 1;
-        if (successDocs.some((document) => document.documentType === type.value)) acc.completed += 1;
-      });
-    } else if (isLogisticsInvoiceCost(cost)) {
-      acc.total += 1;
-      if (successDocs.some((document) => document.documentType === "SUPPLIER_INVOICE")) acc.completed += 1;
-    }
-    return acc;
-  }, { completed: 0, total: 0 });
-  return {
-    ...order,
-    costs: activeCosts,
-    costCount: activeCosts.length,
-    totalCostCny: currencyTotals.totalCny,
-    currencyTotals,
-    costConfirmProgress: {
-      completed: confirmed,
-      total: activeCosts.length,
-      text: activeCosts.length ? `${confirmed}/${activeCosts.length}` : "无成本",
-    },
-    documentProgress: {
-      ...documentProgress,
-      text: documentProgress.total ? `${documentProgress.completed}/${documentProgress.total}` : "无需资料",
-    },
-  };
 }

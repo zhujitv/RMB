@@ -1,7 +1,8 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { isExwTradeTerm, sanitizeDomesticLogisticsRowsForRender } from "../app/modules/domestic-logistics/model.ts";
+import { createJiti } from "jiti";
 import {
   readDomesticLogisticsApiSource,
   readDomesticLogisticsModuleSource,
@@ -13,6 +14,11 @@ import {
   readTaxRefundsSource,
   readWorkspaceStylesSource,
 } from "./source-helpers.ts";
+
+const jiti = createJiti(import.meta.url);
+const { isExwTradeTerm, sanitizeDomesticLogisticsRowsForRender } = jiti(
+  "../app/modules/domestic-logistics/model.ts",
+) as typeof import("../app/modules/domestic-logistics/model.ts");
 
 const moduleSource = readDomesticLogisticsModuleSource();
 const taxModuleSource = readTaxRefundModuleSource();
@@ -56,7 +62,7 @@ const domesticLogisticsApi = readDomesticLogisticsApiSource();
 const taxRefundService = readTaxRefundsSource();
 const domesticLogisticsArchiveRoute = readFileSync("app/api/domestic-logistics/archive/route.ts", "utf8");
 const exportInvoiceRemarkFormatter = readFileSync("lib/platform/export-invoice-remark.ts", "utf8");
-const prismaSchema = readFileSync("prisma/schema.prisma", "utf8");
+const prismaSchema = readPrismaSchemaSource();
 const reportService = readReportServiceSource();
 const manualModule = readFileSync("app/modules/ManualModule.tsx", "utf8");
 const sharedConstants = readSharedConstantsSource();
@@ -161,17 +167,17 @@ test("tax refund list keeps bill of lading readable between order and customer",
   assert.match(mediumDesktopCss, /\.taxRefundTable col\.taxRefundStatusColumn,[\s\S]*width: 140px;[\s\S]*min-width: 140px;/);
   assert.match(mediumDesktopCss, /\.taxRefundTable td\.taxRefundStatusColumn > select \{[\s\S]*width: 100%;[\s\S]*min-width: 0;/);
   assert.match(mediumDesktopCss, /\.taxRefundTable td\.taxRefundActionColumn button \{[\s\S]*min-width: 48px;/);
-  for (const className of [
-    "taxRefundTableWrap",
-    "taxRefundCustomerColumn",
-    "taxRefundBusinessEntityColumn",
-    "taxRefundDateColumn",
-    "taxRefundCompletenessColumn",
-    "taxRefundActionColumn",
+  for (const [className, sourceFile] of [
+    ["taxRefundTableWrap", "tax-refund-list-columns"],
+    ["taxRefundCustomerColumn", "tax-refund-table-columns"],
+    ["taxRefundBusinessEntityColumn", "tax-refund-table-columns"],
+    ["taxRefundDateColumn", "tax-refund-table-columns"],
+    ["taxRefundCompletenessColumn", "tax-refund-table-columns"],
+    ["taxRefundActionColumn", "tax-refund-table-columns"],
   ]) {
     assert.match(
       tableStyleExports,
-      new RegExp(`\\.${className} \\{[^}]*composes: ${className} from "\\./tax-refund-list-columns\\.module\\.css";`),
+      new RegExp(`\\.${className} \\{[^}]*composes: ${className} from "\\./${sourceFile}\\.module\\.css";`),
     );
   }
 });
@@ -227,10 +233,10 @@ test("export invoice remark is structured and hidden from logistics views", () =
 test("tax refund detail hydrates archived logistics transport items by bill of lading", () => {
   assert.match(taxRefundService, /hydrateTaxRefundOrderLogisticsInfo/);
   assert.match(taxRefundService, /taxRefundDetailBillOfLadingNumbers/);
-  assert.match(taxRefundService, /guardedPrismaFindMany<[\s\S]*client\.logisticsBill,\s*"logisticsBill"[\s\S]*where: \{ orderId: order\.id, deletedAt: null/);
+  assert.match(taxRefundService, /guardedPrismaFindMany<[\s\S]*client\.logisticsBill,\s*"logisticsBill"[\s\S]*where:\s*\{\s*orderId: order\.id,\s*deletedAt: null/);
   assert.match(taxRefundService, /client: Prisma\.TransactionClient \| typeof prisma = prisma/);
   assert.match(taxRefundService, /\{ blNo: \{ in: billOfLadingNumbers \} \}/);
-  assert.match(taxRefundService, /logisticsBills: \{ some: \{ deletedAt: null, status: \{ not: "voided" \}, billOfLadingNo: \{ in: billOfLadingNumbers \} \} \}/);
+  assert.match(taxRefundService, /logisticsBills:\s*\{\s*some:\s*\{\s*deletedAt: null,\s*status:\s*\{\s*not: "voided"\s*\},\s*billOfLadingNo:\s*\{\s*in: billOfLadingNumbers\s*\},?\s*\},?\s*\}/);
   assert.match(taxRefundService, /select: domesticLogisticsInfoSafeSelect\(\)/);
   assert.match(taxRefundService, /combineTaxRefundDomesticLogisticsInfos/);
   assert.match(taxRefundService, /transportItems = infos\.flatMap/);

@@ -4,7 +4,7 @@ import {
   INITIAL_ADMIN_EMAIL,
   INITIAL_ADMIN_PASSWORD,
 } from "./shared-constants";
-import { assertSafeInitialAdminConfig, hashPassword, timingSafeEqualText } from "./shared-auth";
+import { assertSafeInitialAdminConfig, hashPassword, timingSafeEqualText } from "./shared-auth-password";
 import { USER_AUTH_SELECT, autoAvatarInitialsFor, resolveAvatarInitials } from "./shared-users-types";
 
 let missingAvatarInitialsBackfilled = false;

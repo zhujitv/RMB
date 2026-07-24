@@ -1,0 +1,148 @@
+
+
+.logisticsInvoiceValidationBox {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.logisticsInvoiceValidationHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsInvoiceValidationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.logisticsInvoiceValidationItem {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.logisticsInvoiceValidationItem span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.logisticsInvoiceValidationItem strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logisticsInvoiceValidationError {
+  padding: 7px 8px;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  background: #fff7f7;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.logisticsInvoiceValidationActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.logisticsInvoiceOcrWaiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.logisticsInvoiceOcrButtonLoading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.logisticsInvoiceOcrSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: logisticsInvoiceSpin 0.8s linear infinite;
+}
+
+@keyframes logisticsInvoiceSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.logisticsInvoiceFileList {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.logisticsInvoiceFileList strong {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.logisticsInvoiceFileRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+  flex-wrap: wrap;
+}
+
+.logisticsInvoiceFileName {
+  max-width: 220px;
+  overflow: hidden;
+  color: #0f172a;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .logisticsInvoiceGroupsGrid {
+    grid-template-columns: 1fr;
+  }
+}

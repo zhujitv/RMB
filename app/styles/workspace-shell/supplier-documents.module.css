@@ -4,28 +4,28 @@
 .supplierDocumentsPage { composes: supplierDocumentsPage from "./supplier-request-dialog.module.css"; }
 .supplierDocumentsHeader { composes: supplierDocumentsHeader from "./supplier-request-dialog.module.css"; }
 .supplierDocumentHeaderActions { composes: supplierDocumentHeaderActions from "./supplier-request-dialog.module.css"; }
-.supplierDocumentRequestDialog { composes: supplierDocumentRequestDialog from "./supplier-request-dialog.module.css"; }
-.supplierDocumentRequestTypes { composes: supplierDocumentRequestTypes from "./supplier-request-dialog.module.css"; }
+.supplierDocumentRequestDialog { composes: supplierDocumentRequestDialog from "./supplier-request-dialog.module.css"; composes: supplierDocumentRequestDialog from "./supplier-request-task-list.module.css"; }
+.supplierDocumentRequestTypes { composes: supplierDocumentRequestTypes from "./supplier-request-dialog.module.css"; composes: supplierDocumentRequestTypes from "./supplier-request-task-list.module.css"; }
 .supplierDocumentRequestTypeCard { composes: supplierDocumentRequestTypeCard from "./supplier-request-dialog.module.css"; }
 .supplierDocumentRequestTypeCardSelected { composes: supplierDocumentRequestTypeCardSelected from "./supplier-request-dialog.module.css"; }
 .supplierDocumentRequestTypeCheck { composes: supplierDocumentRequestTypeCheck from "./supplier-request-dialog.module.css"; }
 .supplierDocumentRequestTypeText { composes: supplierDocumentRequestTypeText from "./supplier-request-dialog.module.css"; }
 .supplierDocumentRequestTypeTitle { composes: supplierDocumentRequestTypeTitle from "./supplier-request-dialog.module.css"; }
 .supplierDocumentRequestTypeDescription { composes: supplierDocumentRequestTypeDescription from "./supplier-request-dialog.module.css"; }
-.supplierDocumentRequestCostField { composes: supplierDocumentRequestCostField from "./supplier-request-dialog.module.css"; }
-.supplierDocumentRequestMessage { composes: supplierDocumentRequestMessage from "./supplier-request-dialog.module.css"; }
-.supplierDocumentsStats { composes: supplierDocumentsStats from "./supplier-request-dialog.module.css"; }
-.supplierDocumentsStatCard { composes: supplierDocumentsStatCard from "./supplier-request-dialog.module.css"; }
-.supplierDocumentsListToolbar { composes: supplierDocumentsListToolbar from "./supplier-request-dialog.module.css"; }
-.supplierDocumentsTaskList { composes: supplierDocumentsTaskList from "./supplier-request-dialog.module.css"; }
-.supplierDocumentTaskCard { composes: supplierDocumentTaskCard from "./supplier-request-dialog.module.css"; }
-.supplierDocumentTaskRow { composes: supplierDocumentTaskRow from "./supplier-request-dialog.module.css"; }
-.supplierDocumentTaskOrder { composes: supplierDocumentTaskOrder from "./supplier-request-dialog.module.css"; }
-.supplierDocumentTaskSupplier { composes: supplierDocumentTaskSupplier from "./supplier-request-dialog.module.css"; }
-.supplierDocumentTaskDate { composes: supplierDocumentTaskDate from "./supplier-request-dialog.module.css"; }
-.supplierDocumentTaskRequirement { composes: supplierDocumentTaskRequirement from "./supplier-request-dialog.module.css"; }
-.statusPill { composes: statusPill from "./supplier-request-dialog.module.css"; composes: statusPill from "./supplier-request-cost-list.module.css"; }
-.supplierDocumentTaskActions { composes: supplierDocumentTaskActions from "./supplier-request-dialog.module.css"; composes: supplierDocumentTaskActions from "./supplier-request-cost-list.module.css"; }
+.supplierDocumentRequestCostField { composes: supplierDocumentRequestCostField from "./supplier-request-dialog.module.css"; composes: supplierDocumentRequestCostField from "./supplier-request-task-list.module.css"; }
+.supplierDocumentRequestMessage { composes: supplierDocumentRequestMessage from "./supplier-request-dialog.module.css"; composes: supplierDocumentRequestMessage from "./supplier-request-task-list.module.css"; }
+.supplierDocumentsStats { composes: supplierDocumentsStats from "./supplier-request-task-list.module.css"; }
+.supplierDocumentsStatCard { composes: supplierDocumentsStatCard from "./supplier-request-task-list.module.css"; }
+.supplierDocumentsListToolbar { composes: supplierDocumentsListToolbar from "./supplier-request-task-list.module.css"; }
+.supplierDocumentsTaskList { composes: supplierDocumentsTaskList from "./supplier-request-task-list.module.css"; }
+.supplierDocumentTaskCard { composes: supplierDocumentTaskCard from "./supplier-request-task-list.module.css"; }
+.supplierDocumentTaskRow { composes: supplierDocumentTaskRow from "./supplier-request-task-list.module.css"; }
+.supplierDocumentTaskOrder { composes: supplierDocumentTaskOrder from "./supplier-request-task-list.module.css"; }
+.supplierDocumentTaskSupplier { composes: supplierDocumentTaskSupplier from "./supplier-request-task-list.module.css"; }
+.supplierDocumentTaskDate { composes: supplierDocumentTaskDate from "./supplier-request-task-list.module.css"; }
+.supplierDocumentTaskRequirement { composes: supplierDocumentTaskRequirement from "./supplier-request-task-list.module.css"; }
+.statusPill { composes: statusPill from "./supplier-request-task-list.module.css"; composes: statusPill from "./supplier-request-cost-list.module.css"; }
+.supplierDocumentTaskActions { composes: supplierDocumentTaskActions from "./supplier-request-task-list.module.css"; composes: supplierDocumentTaskActions from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentDeleteButton { composes: supplierDocumentDeleteButton from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentTaskDetail { composes: supplierDocumentTaskDetail from "./supplier-request-cost-list.module.css"; }
 .supplierDocumentTaskDetailMobileHeader { composes: supplierDocumentTaskDetailMobileHeader from "./supplier-request-cost-list.module.css"; }

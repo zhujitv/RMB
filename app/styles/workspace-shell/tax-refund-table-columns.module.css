@@ -1,0 +1,113 @@
+
+
+.taxRefundTableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+.taxRefundTable.dataTable {
+  min-width: 1160px;
+  table-layout: fixed;
+}
+
+.taxRefundTable col.taxRefundOrderNoColumn,
+.taxRefundTable th.taxRefundOrderNoColumn,
+.taxRefundTable td.taxRefundOrderNoColumn {
+  width: 150px;
+  min-width: 150px;
+}
+
+.taxRefundTable col.taxRefundBlNoColumn,
+.taxRefundTable th.taxRefundBlNoColumn,
+.taxRefundTable td.taxRefundBlNoColumn {
+  width: 280px;
+  min-width: 240px;
+}
+
+.taxRefundTable col.taxRefundCustomerColumn,
+.taxRefundTable th.taxRefundCustomerColumn,
+.taxRefundTable td.taxRefundCustomerColumn {
+  width: 130px;
+  min-width: 120px;
+}
+
+.taxRefundTable col.taxRefundBusinessEntityColumn,
+.taxRefundTable th.taxRefundBusinessEntityColumn,
+.taxRefundTable td.taxRefundBusinessEntityColumn {
+  width: 140px;
+  min-width: 120px;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.taxRefundTable th.taxRefundBusinessEntityColumn button {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.taxRefundTable col.taxRefundDateColumn,
+.taxRefundTable th.taxRefundDateColumn,
+.taxRefundTable td.taxRefundDateColumn {
+  width: 110px;
+  min-width: 110px;
+}
+
+.taxRefundTable col.taxRefundCompletenessColumn,
+.taxRefundTable th.taxRefundCompletenessColumn,
+.taxRefundTable td.taxRefundCompletenessColumn {
+  width: 120px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.taxRefundTable col.taxRefundStatusColumn,
+.taxRefundTable th.taxRefundStatusColumn,
+.taxRefundTable td.taxRefundStatusColumn {
+  width: 160px;
+  min-width: 160px;
+}
+
+.taxRefundTable col.taxRefundActionColumn,
+.taxRefundTable th.taxRefundActionColumn,
+.taxRefundTable td.taxRefundActionColumn {
+  width: 88px;
+  min-width: 88px;
+  text-align: center;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.taxRefundTable th.taxRefundActionColumn,
+.taxRefundTable td.taxRefundActionColumn {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.taxRefundTable td.taxRefundActionColumn button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 64px;
+  height: 32px;
+  min-height: 32px;
+  max-height: none;
+  padding: 6px 12px;
+  white-space: nowrap;
+  overflow: visible;
+  line-height: 20px;
+  vertical-align: middle;
+}
+
+.taxRefundTable th.taxRefundBlNoColumn,
+.taxRefundTable td.taxRefundBlNoColumn {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}

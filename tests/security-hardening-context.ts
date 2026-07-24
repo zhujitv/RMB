@@ -1,9 +1,10 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { readCostRecordsMutationsSource, readCostsModuleSource, readDomesticLogisticsModuleSource, readLogisticsExpenseInvoiceSource, readLogisticsFeesModuleSource, readOrderDocumentsSource, readOrdersServiceSource, readPaymentsServiceSource, readSharedBaseUtilsSource, readSharedUsersSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
 export const nextConfig = readFileSync("next.config.mjs", "utf8");
-export const proxy = readFileSync("proxy.ts", "utf8");
+export const proxy = ["proxy.ts", "proxy-rate-limit.ts"].map((file) => readFileSync(file, "utf8")).join("\n");
 export const securityHeaders = readFileSync("lib/security-headers.mjs", "utf8");
 export const apiRouteGuard = readFileSync("lib/api-route-guard.ts", "utf8");
 export const sharedBaseUtils = readSharedBaseUtilsSource();
@@ -44,7 +45,7 @@ export const settingsUsersRoute = readFileSync(
   "app/api/settings/users/route.ts",
   "utf8",
 );
-export const schema = readFileSync("prisma/schema.prisma", "utf8");
+export const schema = readPrismaSchemaSource();
 export const packageJson = readFileSync("package.json", "utf8");
 export const runWithEnvScript = readFileSync("scripts/run-with-env.mjs", "utf8");
 export const securityAuditScript = readFileSync("scripts/security-audit.mjs", "utf8");

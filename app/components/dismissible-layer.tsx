@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import styles from "../WorkspaceShell.module.css";
+import styles from "../workspace/workspace-styles";
 import { useWorkspaceTabContext } from "../workspace/workspace-tab-context";
 
 let activeDismissibleLayerCount = 0;

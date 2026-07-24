@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
 import { runNonCriticalTask } from "./shared-constants";
 import { assertJsonObject, codedError, isPlainRecord, nonEmpty, requireValidEmailList } from "./shared-base-utils";
-import { assertRead, assertWrite } from "./shared-auth";
+import { assertRead, assertWrite } from "./shared-access";
 import { writeAudit } from "./shared-audit";
 import {
   TEXT_LIMITS,

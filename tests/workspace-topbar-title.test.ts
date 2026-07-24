@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   readCostsModuleSource,
+  readDashboardModuleSource,
   readDomesticLogisticsModuleSource,
   readLogisticsFeesModuleSource,
   readOrdersModuleSource,
   readPaymentsModuleSource,
+  readProfitModuleSource,
   readReportsModuleSource,
   readSettingsModuleSource,
   readTaxRefundModuleSource,
@@ -18,14 +20,14 @@ const businessModuleSources = [
   readOrdersModuleSource(),
   readPaymentsModuleSource(),
   readCostsModuleSource(),
-  "app/modules/ProfitModule.tsx",
+  readProfitModuleSource(),
   readDomesticLogisticsModuleSource(),
   readTaxRefundModuleSource(),
   readReportsModuleSource(),
   readSettingsModuleSource(),
-  "app/modules/DashboardModule.tsx",
+  readDashboardModuleSource(),
   readLogisticsFeesModuleSource(),
-].map((source) => source.endsWith(".tsx") ? readFileSync(source, "utf8") : source).join("\n");
+].join("\n");
 
 test("workspace topbar title follows the active business tab", () => {
   assert.match(workspaceLayout, /const topbarTitle = activeTabTitle \|\| menuTitle/);

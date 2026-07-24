@@ -4,6 +4,7 @@ import test from "node:test";
 import React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import ts from "typescript";
+import { readCostsModuleSource } from "./source-helpers.ts";
 
 type LayerStack = {
   mount: (id: symbol) => void;
@@ -36,6 +37,7 @@ function loadDismissibleLayerTestExports() {
     if (specifier === "react/jsx-runtime") return jsxRuntime;
     if (specifier === "react-dom") return { createPortal: (node: unknown) => node };
     if (specifier.endsWith(".module.css")) return styles;
+    if (specifier.endsWith("/workspace/workspace-styles")) return styles;
     if (specifier.endsWith("/workspace/workspace-tab-context")) {
       return { useWorkspaceTabContext: () => null };
     }
@@ -133,7 +135,7 @@ test("dismissible layer keeps mount order stable, scopes focus to workspace, and
 });
 
 test("cost drawer confirms a dirty draft once and leaves its animated onClose unguarded", () => {
-  const costsModule = readFileSync("app/modules/CostsModule.tsx", "utf8");
+  const costsModule = readCostsModuleSource();
   const costFormDrawer = readFileSync("app/modules/costs/cost-form-drawer.tsx", "utf8");
   const closeCostFormDrawer = costsModule.match(/function closeCostFormDrawer\(\) \{([\s\S]*?)\n  \}/)?.[1] || "";
 

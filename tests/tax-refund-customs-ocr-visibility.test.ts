@@ -1,9 +1,10 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
   readOcrIntegrationSource,
-  readTaxRefundModuleSource,
+  readTaxRefundUploadSource,
   readTaxRefundsSource,
 } from "./source-helpers.ts";
 
@@ -14,17 +15,14 @@ const detail = [
 const model = readFileSync("app/modules/tax-refund/model.ts", "utf8");
 const controller = readFileSync("app/modules/tax-refund/use-tax-refund-controller.ts", "utf8");
 const overlays = readFileSync("app/modules/tax-refund/overlays.tsx", "utf8");
-const uploadComponents = [
-  "app/modules/tax-refund/upload-components.tsx",
-  "app/modules/tax-refund/upload-card.tsx",
-].map((file) => readFileSync(file, "utf8")).join("\n");
+const uploadComponents = readTaxRefundUploadSource();
 const taxRefundService = readTaxRefundsSource();
 const customsRecognition = readFileSync("lib/platform/customs-recognition.ts", "utf8");
 const taxProfitBarrel = readFileSync("lib/platform/tax-profit.ts", "utf8");
 const taxRefundDetailRoute = readFileSync("app/api/tax-refunds/[orderId]/route.ts", "utf8");
 const customsOcrRoute = readFileSync("app/api/tax-refund/[orderId]/recognize-customs-declaration/route.ts", "utf8");
 const taxRefundCalculationRoute = readFileSync("app/api/tax-refund/[orderId]/calculation/route.ts", "utf8");
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const migration = readFileSync("prisma/migrations/20260703102000_remove_tax_refund_ocr_calculation/migration.sql", "utf8");
 const ocrIntegration = readOcrIntegrationSource();
 

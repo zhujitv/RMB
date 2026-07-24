@@ -1,3 +1,4 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
@@ -7,7 +8,7 @@ import {
   readTaxRefundsSource,
 } from "./source-helpers.ts";
 
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const migration = readFileSync("prisma/migrations/20260702161000_tax_refund_list_performance/migration.sql", "utf8");
 const service = readTaxRefundsSource();
 const sync = readFileSync("lib/platform/shared-tax-sync.ts", "utf8");

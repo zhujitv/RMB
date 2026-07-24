@@ -1,17 +1,11 @@
 import { prisma } from "../prisma";
 import type { OrderDocumentType, Prisma } from "../generated/prisma/client.js";
-import {
-  CUSTOMER_VIEW_ALL_ROLES,
-  DOMESTIC_LOGISTICS_DOCUMENT_TYPES,
-  DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
-  LEGACY_LOGISTICS_OPERATOR_ROLE,
-  LOGISTICS_OPERATOR_ROLE,
-  canRead,
-  canWrite,
-  codedError,
-  effectivePermissions,
-  nonEmpty,
-} from "./shared";
+import { canRead, canWrite } from "./shared-access";
+import { codedError, nonEmpty } from "./shared-base-utils";
+import { DOMESTIC_LOGISTICS_SUPPLIER_TYPES } from "./shared-cost-constants";
+import { DOMESTIC_LOGISTICS_DOCUMENT_TYPES } from "./shared-document-constants";
+import { LEGACY_LOGISTICS_OPERATOR_ROLE, LOGISTICS_OPERATOR_ROLE } from "./shared-party-constants";
+import { CUSTOMER_VIEW_ALL_ROLES, effectivePermissions } from "./shared-permission-data";
 import { orderAccessWhere, orderOwnedBySalesperson, orderSalespersonOwnershipWhere } from "./order-access";
 
 type ActorLike = {

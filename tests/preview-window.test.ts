@@ -410,7 +410,7 @@ test("tax refund legacy OCR endpoints are disabled while PDF text reread is avai
 test("admin can delete uploaded customs documents with confirmation", () => {
   assert.match(
     domesticLogisticsModule,
-    /const canDeleteCustomsDocuments = canWritePermission\(currentUser, permissions, "documents", \["管理员"\]\)/,
+    /canDeleteCustomsDocuments: canWritePermission\(user, permissions, "documents", \["管理员"\]\)/,
   );
   assert.match(domesticLogisticsModule, /title: "确定删除该文件？"/);
   assert.match(domesticLogisticsModule, /message: "删除后需要重新上传。"/);

@@ -1,3 +1,4 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -32,7 +33,7 @@ const sharedConstantsSource = readSharedConstantsSource();
 const sharedExchangeSource = readFileSync("lib/platform/shared-exchange-settings.ts", "utf8");
 const settingsHelpersSource = `${readSettingsModuleSource()}\n${readFileSync("lib/platform/shared-exchange-settings.ts", "utf8")}`;
 const settingsCardsSource = readSettingsModuleSource();
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const vercelConfig = readFileSync("vercel.json", "utf8");
 const styles = readCssModuleGraphSource("app/styles/workspace-shell/workbench.module.css");
 
@@ -184,7 +185,7 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /logisticsSupplierAssigned\(workflowOrder\)/);
   assert.match(workbenchSource, /function logisticsBillReviewAccessWhere/);
   assert.match(workbenchSource, /isAdmin\(actor\) \|\| isFinance\(actor\) \|\| isSalesperson\(actor\)/);
-  assert.match(workbenchSource, /reviewAccessWhere/);
+  assert.match(workbenchSource, /logisticsBillReviewAccessWhere\(actor\)/);
   assert.match(workbenchSource, /\{ invoiceStatus: \{ in: LOGISTICS_INVOICE_TO_UPLOAD_STATUSES \} \}/);
   assert.match(workbenchSource, /LOGISTICS_INVOICE_TO_UPLOAD_STATUSES = \["待开票", "未通知", "已通知开票", "通知失败", "待开票 \/ 通知失败", "部分未通知", "部分已通知", "部分待开票", "部分上传发票", "部分已上传", "部分上传", "部分已确认"\]/);
   assert.match(workbenchSource, /LOGISTICS_PAYMENT_READY_INVOICE_STATUSES = \["已确认", "已确认发票"\]/);
@@ -201,8 +202,8 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /isOnlyExportInvoiceMissing\(completeness\)/);
   assert.match(workbenchSource, /taxRefundExportInvoiceFinanceUsers\.filter\(\(user\) => canAccessOrder\(user, orderWithCompleteness\)\)/);
   assert.match(workbenchSource, /type: "TAX_EXPORT_INVOICE_MISSING"[\s\S]*title: "出口发票待上传"[\s\S]*dueAt: orderWithCompleteness\.taxRefundCompletenessUpdatedAt \|\| orderWithCompleteness\.updatedAt[\s\S]*visibility: "OWNER_ONLY"/);
-  assert.match(workbenchSource, /supplierDocumentBlockedOrderIds\.has\(order\.id\)/);
-  assert.match(workbenchSource, /supplierDocumentBlockedOrderIds\.has\(order\.id\) \|\| !doneSupplierDocumentRequests\(workflowOrder\)/);
+  assert.match(workbenchSource, /(?:supplierDocumentBlockedOrderIds|blockedOrderIds)\.has\(order\.id\)/);
+  assert.match(workbenchSource, /(?:supplierDocumentBlockedOrderIds|blockedOrderIds)\.has\(order\.id\) \|\| !doneSupplierDocumentRequests\(workflowOrder\)/);
   assert.match(workbenchSource, /summary\.commissionCanSettle && taxFinalized/);
   assert.match(workbenchSource, /hasProfitException && summary\.allCostsConfirmed && summary\.logisticsCostConfirmed && taxFinalized/);
   assert.match(workbenchSource, /listShipsgoControlTowerTrackings\(new URLSearchParams\(\), actor\)/);

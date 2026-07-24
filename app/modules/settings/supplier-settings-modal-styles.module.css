@@ -1,0 +1,9 @@
+.supplierSettingsModalCard { composes: supplierSettingsModalCard from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }
+.supplierSettingsModalHeader { composes: supplierSettingsModalHeader from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }
+.supplierSettingsModalClose { composes: supplierSettingsModalClose from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }
+.supplierSettingsModalForm { composes: supplierSettingsModalForm from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }
+.supplierSettingsModalBody { composes: supplierSettingsModalBody from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }
+.supplierSettingsModalFieldGrid { composes: supplierSettingsModalFieldGrid from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }
+.supplierSettingsModalCostGrid { composes: supplierSettingsModalCostGrid from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }
+.supplierSettingsModalFooter { composes: supplierSettingsModalFooter from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }
+.supplierSettingsDeleteButton { composes: supplierSettingsDeleteButton from "../../styles/workspace-shell/supplier-settings-modal.module.css"; }

@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  readAccountSettingsSource,
+  readCostsModuleSource,
+  readCustomerCommunicationModuleSource,
+  readLogisticsFeesModuleSource,
+  readOrdersModuleSource,
+  readPaymentsModuleSource,
+  readSupplierDocumentsModuleSource,
+} from "./source-helpers.ts";
 
 function source(path: string) {
   return readFileSync(path, "utf8");
@@ -77,23 +86,24 @@ test("control-tower sync busy state survives the view component and blocks navig
 
 test("busy forms become inert until their async mutation settles", () => {
   const expected = [
-    ["app/modules/orders/quick-order-panel.tsx", /inert=\{controller\.saving\}/],
-    ["app/modules/payments/quick-payment-panel.tsx", /inert=\{saving\}/],
-    ["app/modules/costs/quick-create-cost-panel.tsx", /inert=\{controller\.saving\}/],
-    ["app/modules/logistics-fees/expense-form-view.tsx", /inert=\{saving\}/],
-    ["app/modules/logistics-fees/details-drawer.tsx", /inert=\{saving\}/],
-    ["app/AccountSettings.tsx", /inert=\{busy\}/],
-    ["app/modules/supplier-documents/create-request-dialog.tsx", /inert=\{saving\}/],
-    ["app/modules/customer-communication-drawer.tsx", /inert=\{sending\}/],
+    ["orders", readOrdersModuleSource(), /inert=\{controller\.saving\}/],
+    ["payments", readPaymentsModuleSource(), /inert=\{saving\}/],
+    ["costs", readCostsModuleSource(), /inert=\{controller\.saving\}/],
+    ["logistics fees", readLogisticsFeesModuleSource(), /inert=\{saving\}/],
+    ["logistics fee details", readLogisticsFeesModuleSource(), /inert=\{saving\}/],
+    ["account", readAccountSettingsSource(), /inert=\{busy\}/],
+    ["supplier documents", readSupplierDocumentsModuleSource(), /inert=\{saving\}/],
+    ["customer communication", readCustomerCommunicationModuleSource(), /inert=\{sending\}/],
   ] as const;
 
-  for (const [path, pattern] of expected) assert.match(source(path), pattern, path);
+  for (const [label, moduleSource, pattern] of expected) assert.match(moduleSource, pattern, label);
 });
 
 test("customer communication protects authored content before changing templates", () => {
-  const communication = source("app/modules/CustomerCommunicationModule.tsx");
+  const communication = readCustomerCommunicationModuleSource();
 
   assert.match(communication, /const hasManualContent = mailForm\.emailSubject !== currentTemplate\.emailSubject/);
   assert.match(communication, /切换语言将替换当前邮件标题和正文/);
-  assert.match(communication, /inert=\{Boolean\(manualMarkBusyId\)\}/);
+  assert.match(communication, /busy=\{Boolean\(manualMarkBusyId\)\}/);
+  assert.match(communication, /inert=\{busy\}/);
 });

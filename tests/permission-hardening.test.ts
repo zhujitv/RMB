@@ -4,6 +4,7 @@ import test from "node:test";
 import { effectivePermissions, rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
 import {
   readOrderDocumentsSource,
+  readProfitOverviewSource,
   readReportServiceSource,
   readReportsModuleSource,
   readSharedAuthSource,
@@ -18,7 +19,7 @@ const backend = [
   readSharedConstantsSource(),
   readFileSync("lib/platform/shared-permission-data.ts", "utf8"),
   readFileSync("lib/platform/shared-access.ts", "utf8"),
-  readFileSync("lib/platform/profit-overview.ts", "utf8"),
+  readProfitOverviewSource(),
 ].join("\n");
 const workspaceShell = readWorkspaceShellSource();
 const authMeRoute = readFileSync("app/api/auth/me/route.ts", "utf8");

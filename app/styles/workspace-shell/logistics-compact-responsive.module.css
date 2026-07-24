@@ -1,0 +1,195 @@
+
+
+/*
+ * A 1920px Windows desktop at 125%-150% display scaling exposes roughly a
+ * 1280px-1536px CSS viewport. Keep the tax-refund and domestic-logistics lists
+ * within the remaining content width without changing control-tower or fee tables.
+ */
+@media (min-width: 861px) and (max-width: 1535px) {
+  .taxRefundTableWrap .taxRefundTable.dataTable {
+    min-width: 900px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable thead th,
+  .taxRefundTableWrap .taxRefundTable tbody td {
+    padding-right: 6px;
+    padding-left: 6px;
+    font-size: 12px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable thead th {
+    white-space: nowrap;
+  }
+
+  .taxRefundTableWrap .taxRefundTable col.taxRefundOrderNoColumn,
+  .taxRefundTableWrap .taxRefundTable th.taxRefundOrderNoColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundOrderNoColumn {
+    width: 110px;
+    min-width: 110px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable col.taxRefundBlNoColumn,
+  .taxRefundTableWrap .taxRefundTable th.taxRefundBlNoColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundBlNoColumn {
+    width: 185px;
+    min-width: 185px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable col.taxRefundCustomerColumn,
+  .taxRefundTableWrap .taxRefundTable th.taxRefundCustomerColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundCustomerColumn {
+    width: 100px;
+    min-width: 100px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable col.taxRefundBusinessEntityColumn,
+  .taxRefundTableWrap .taxRefundTable th.taxRefundBusinessEntityColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundBusinessEntityColumn {
+    width: 110px;
+    min-width: 110px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable col.taxRefundDateColumn,
+  .taxRefundTableWrap .taxRefundTable th.taxRefundDateColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundDateColumn {
+    width: 88px;
+    min-width: 88px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable col.taxRefundCompletenessColumn,
+  .taxRefundTableWrap .taxRefundTable th.taxRefundCompletenessColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundCompletenessColumn {
+    width: 92px;
+    min-width: 92px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable col.taxRefundStatusColumn,
+  .taxRefundTableWrap .taxRefundTable th.taxRefundStatusColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundStatusColumn {
+    width: 140px;
+    min-width: 140px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable col.taxRefundActionColumn,
+  .taxRefundTableWrap .taxRefundTable th.taxRefundActionColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundActionColumn {
+    width: 65px;
+    min-width: 65px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable td.taxRefundOrderNoColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundCustomerColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundBusinessEntityColumn,
+  .taxRefundTableWrap .taxRefundTable td.taxRefundBlNoColumn .taxRefundBlNoList span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .taxRefundTableWrap .taxRefundTable td.taxRefundStatusColumn > select {
+    width: 100%;
+    min-width: 0;
+    padding-right: 26px;
+    background-position: right 7px center;
+    background-size: 14px 14px;
+  }
+
+  .taxRefundTableWrap .taxRefundTable td.taxRefundStatusColumn > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .taxRefundTableWrap .taxRefundTable td.taxRefundActionColumn button {
+    min-width: 48px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .domesticLogisticsListTable {
+    min-width: 900px;
+  }
+
+  .domesticLogisticsListTable thead th,
+  .domesticLogisticsListTable tbody td {
+    padding-right: 6px;
+    padding-left: 6px;
+    font-size: 12px;
+  }
+
+  .domesticLogisticsListTable thead th {
+    white-space: nowrap;
+  }
+
+  .domesticLogisticsListTable col.selectionColumn,
+  .domesticLogisticsListTable th.selectionColumn,
+  .domesticLogisticsListTable td.selectionColumn {
+    width: 36px;
+    min-width: 36px;
+  }
+
+  .domesticLogisticsListTable col.orderNoColumn,
+  .domesticLogisticsListTable th.orderNoColumn,
+  .domesticLogisticsListTable td.orderNoColumn {
+    width: 112px;
+    min-width: 112px;
+  }
+
+  .domesticLogisticsListTable col.blNoColumn,
+  .domesticLogisticsListTable th.blNoColumn,
+  .domesticLogisticsListTable td.blNoColumn {
+    width: 175px;
+    min-width: 175px;
+  }
+
+  .domesticLogisticsListTable col.customerColumn,
+  .domesticLogisticsListTable th.customerColumn,
+  .domesticLogisticsListTable td.customerColumn {
+    width: 100px;
+    min-width: 100px;
+  }
+
+  .domesticLogisticsListTable col.destinationColumn,
+  .domesticLogisticsListTable th.destinationColumn,
+  .domesticLogisticsListTable td.destinationColumn {
+    width: 80px;
+    min-width: 80px;
+  }
+
+  .domesticLogisticsListTable col.cargoColumn,
+  .domesticLogisticsListTable th.cargoColumn,
+  .domesticLogisticsListTable td.cargoColumn {
+    width: 110px;
+    min-width: 110px;
+  }
+
+  .domesticLogisticsListTable col.logisticsStatusColumn,
+  .domesticLogisticsListTable th.logisticsStatusColumn,
+  .domesticLogisticsListTable td.logisticsStatusColumn {
+    width: 76px;
+    min-width: 76px;
+  }
+
+  .domesticLogisticsListTable col.logisticsExpenseStatusColumn,
+  .domesticLogisticsListTable th.logisticsExpenseStatusColumn,
+  .domesticLogisticsListTable td.logisticsExpenseStatusColumn {
+    width: 92px;
+    min-width: 92px;
+  }
+
+  .domesticLogisticsListTable col.detailActionColumn,
+  .domesticLogisticsListTable th.detailActionColumn,
+  .domesticLogisticsListTable td.detailActionColumn {
+    width: 60px;
+    min-width: 60px;
+  }
+
+  .domesticLogisticsListTable td.logisticsStatusColumn > span,
+  .domesticLogisticsListTable td.logisticsExpenseStatusColumn > button {
+    max-width: 100%;
+    padding-right: 4px;
+    padding-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

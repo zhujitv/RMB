@@ -1,7 +1,9 @@
+import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  readBusinessEntitiesSource,
   readCostRecordsQueriesSource,
   readCostsModuleSource,
   readCustomerCommunicationModuleSource,
@@ -26,19 +28,16 @@ import {
   readWorkspaceStylesSource,
 } from "./source-helpers.ts";
 
-const schema = readFileSync("prisma/schema.prisma", "utf8");
+const schema = readPrismaSchemaSource();
 const migration = readFileSync("prisma/migrations/20260701223000_business_entities/migration.sql", "utf8");
-const service = readFileSync("lib/platform/business-entities.ts", "utf8");
+const service = readBusinessEntitiesSource();
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const ordersService = readOrdersServiceSource();
 const orderRelations = readFileSync("lib/platform/shared-order-relations.ts", "utf8");
 const orderSerialization = readSharedOrderSerializationSource();
 const orderModel = readFileSync("app/modules/orders/model.ts", "utf8");
-const quickOrderPanel = [
-  "app/modules/orders/quick-order-panel.tsx",
-  "app/modules/orders/quick-order-panel-controller.ts",
-].map((file) => readFileSync(file, "utf8")).join("\n");
 const ordersModule = readOrdersModuleSource();
+const quickOrderPanel = ordersModule;
 const orderDetailDrawer = readFileSync("app/modules/orders/detail-drawer.tsx", "utf8");
 const reportService = readReportServiceSource();
 const taxRefundService = readTaxRefundsSource();
@@ -49,7 +48,7 @@ const taxRefundController = readTaxRefundModuleSource();
 const reportsModule = readReportsModuleSource();
 const listRoute = readFileSync("app/api/business-entities/route.ts", "utf8");
 const transferRoute = readFileSync("app/api/orders/[id]/business-entity/route.ts", "utf8");
-const settingsTypes = readFileSync("app/modules/settings/types.ts", "utf8");
+const settingsTypes = readSettingsModuleSource();
 const settingsConstants = readSettingsModuleSource();
 const settingsCards = readSettingsModuleSource();
 const settingsController = readSettingsModuleSource();
@@ -110,7 +109,7 @@ test("orders UI can select filter display and transfer business entity", () => {
   assert.match(quickOrderPanel, /\/api\/business-entities/);
   assert.match(quickOrderPanel, /业务主体/);
   assert.match(quickOrderPanel, /disabled=\{Boolean\(initialOrder\?\.id\)\}/);
-  assert.match(quickOrderPanel, /businessEntityId: normalizedForm\.businessEntityId/);
+  assert.match(quickOrderPanel, /businessEntityId: form\.businessEntityId \|\| undefined/);
   assert.match(ordersModule, /全部业务主体/);
   assert.match(ordersModule, /businessEntityColumn/);
   assert.match(ordersModule, /entity\.displayName \|\| entity\.shortName \|\| entity\.name/);
@@ -132,7 +131,8 @@ test("reports expose business entity columns and filters", () => {
   assert.match(reportsModule, /全部业务主体/);
   assert.match(reportsModule, /businessEntityDisplayName/);
   assert.match(reportsModule, /businessEntityFullName\(row\)/);
-  assert.match(reportsModule, /updateFilter\("businessEntityId"/);
+  assert.match(reportsModule, /onFilterChange\("businessEntityId"/);
+  assert.match(reportsModule, /onFilterChange=\{updateFilter\}/);
 });
 
 test("tax refund list exposes business entity filter display and export column", () => {

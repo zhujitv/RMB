@@ -1,0 +1,106 @@
+
+
+.logisticsBillRowActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Keep every logistics-fee workflow column visible on scaled Windows desktops. */
+
+@media (min-width: 861px) and (max-width: 1691px) {
+  .logisticsCompactTable.logisticsFeesBillListTable {
+    min-width: 900px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable thead th,
+  .logisticsCompactTable.logisticsFeesBillListTable tbody td {
+    padding-right: 5px;
+    padding-left: 5px;
+    font-size: 12px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable col.selectionColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable th.selectionColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.selectionColumn {
+    width: 36px;
+    min-width: 36px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable col.orderNoColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable th.orderNoColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.orderNoColumn {
+    width: 110px;
+    min-width: 110px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable col.blNoColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable th.blNoColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.blNoColumn {
+    width: 150px;
+    min-width: 150px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable col.customerColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable th.customerColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.customerColumn {
+    width: 90px;
+    min-width: 90px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable col.amountColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable th.amountColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.amountColumn {
+    width: 90px;
+    min-width: 90px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable col.statusColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable th.statusColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.statusColumn {
+    width: 72px;
+    min-width: 72px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable col.operationColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable th.operationColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.operationColumn {
+    width: 108px;
+    min-width: 108px;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable td.orderNoColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.blNoColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.customerColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.amountColumn,
+  .logisticsCompactTable.logisticsFeesBillListTable td.statusColumn {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable td.statusColumn > * {
+    max-width: 100%;
+    padding-right: 4px;
+    padding-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable .logisticsBillRowActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+  }
+
+  .logisticsCompactTable.logisticsFeesBillListTable .logisticsBillRowActions > button {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 4px;
+    font-size: 12px;
+  }
+}

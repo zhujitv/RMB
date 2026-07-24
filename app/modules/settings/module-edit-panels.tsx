@@ -1,11 +1,11 @@
 import { DismissibleLayer } from "../../components";
-import styles from "../../WorkspaceShell.module.css";
 import { CustomerEditPanel, SupplierEditPanel } from "./customer-supplier-panels";
 import { customerFormFromRow, emptyCustomerForm, emptySupplierForm, filtersForTab, supplierFormFromRow } from "./helpers";
+import styles from "./settings-styles";
 import { SettingsTable } from "./settings-table";
 import type { SupplierForm, SupplierRow, UserRow } from "./types";
-import { UserEditPanel } from "./user-edit-panel";
 import type { useSettingsController } from "./use-settings-controller";
+import { UserEditPanel } from "./user-edit-panel";
 
 type SettingsController = ReturnType<typeof useSettingsController> & {
   confirmDiscardCurrentSettings: () => boolean;
@@ -28,7 +28,6 @@ export function SettingsEntityEditors({ settings }: { settings: SettingsControll
     setCustomerForm,
     setCustomerMessage,
     setSupplierForm,
-    setSupplierMessage,
     setUserForm,
     setSelectedUserId,
     setUserMessage,
