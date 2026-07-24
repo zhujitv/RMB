@@ -7,7 +7,7 @@ import { getBusinessEntityRowClass } from "../business-entity-row-style";
 import { CustomsDocumentPanel } from "./customs-documents-panel";
 import { DomesticLogisticsEditPanel } from "./edit-panel";
 import { firstItemValue, showContainerManagementFields } from "./helpers";
-import { ARCHIVE_BUTTON_DISABLED_TOOLTIP, type DomesticLogisticsDocument, type DomesticLogisticsInfo, type DomesticLogisticsRow, type ShipsgoFeatureFlags, type ShipsgoTrackingRow } from "./model";
+import { ARCHIVE_BUTTON_DISABLED_TOOLTIP, isExwTradeTerm, type DomesticLogisticsDocument, type DomesticLogisticsInfo, type DomesticLogisticsRow, type ShipsgoFeatureFlags, type ShipsgoTrackingRow } from "./model";
 import { ShipsgoOrderTrackingPanel } from "./order-tracking-panel";
 
 export function DomesticLogisticsRows({
@@ -84,6 +84,7 @@ export function DomesticLogisticsRows({
   const info = row.domesticLogisticsInfo;
   const destinationText = info?.destinationPlace || firstItemValue(info, "arrivalPlace") || "-";
   const cargoText = info?.cargoDescription || firstItemValue(info, "cargoName") || "-";
+  const isExwOrder = isExwTradeTerm(row.tradeTerm);
   return (
     <>
       <tr className={getBusinessEntityRowClass(row, styles, styles.clickableRow)} onClick={onToggle}>
@@ -105,7 +106,7 @@ export function DomesticLogisticsRows({
         <td className={styles.destinationColumn} title={destinationText}>{destinationText}</td>
         <td className={styles.cargoColumn} title={cargoText}>{cargoText}</td>
         <td className={styles.logisticsStatusColumn}><span className={`${styles.statusPill} ${row.logisticsStatus === "已提交" ? styles.statusSuccess : styles.statusWarning}`}>{row.logisticsStatus || "未提交"}</span></td>
-        <td className={styles.logisticsExpenseStatusColumn}><DomesticLogisticsExpenseStatusButton row={row} onOpen={onOpenExpenseStatus} /></td>
+        <td className={styles.logisticsExpenseStatusColumn}>{isExwOrder ? null : <DomesticLogisticsExpenseStatusButton row={row} onOpen={onOpenExpenseStatus} />}</td>
         <td className={styles.detailActionColumn}><button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onToggle(); }}>{expanded ? "收起" : "详情"}</button></td>
       </tr>
       {expanded ? (
@@ -113,7 +114,7 @@ export function DomesticLogisticsRows({
           <td colSpan={colSpan}>
             <div className={styles.detailCard}>
               <div className={styles.detailActions}>
-                {canCreateLogisticsExpense ? (
+                {canCreateLogisticsExpense && !isExwOrder ? (
                   <button
                     className={`${styles.logisticsActionBtn} ${styles.logisticsSecondaryBtn}`}
                     type="button"

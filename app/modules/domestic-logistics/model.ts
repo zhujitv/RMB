@@ -129,6 +129,7 @@ export type DomesticLogisticsRow = {
   orderNo?: string;
   blNo?: string;
   billOfLadingNo?: string;
+  tradeTerm?: string;
   customerName?: string;
   customerFullName?: string;
   customerShortName?: string;
@@ -273,6 +274,7 @@ const ALLOWED_LOGISTICS_ROW_KEYS = [
   "orderNo",
   "blNo",
   "billOfLadingNo",
+  "tradeTerm",
   "customerName",
   "customerFullName",
   "customerShortName",
@@ -316,6 +318,11 @@ export const ARCHIVE_BUTTON_RULE = {
   deny: ["草稿", "待审核", "已驳回", "未上传发票", "已归档"],
 } as const;
 export const CONTAINER_TYPE_OPTIONS = ["20GP", "40GP", "40HQ", "45HQ"];
+
+export function isExwTradeTerm(value: string | null | undefined) {
+  return String(value || "").trim().toUpperCase().includes("EXW");
+}
+
 export const EMPTY_SHIPSGO_CONTROL_TOWER_STATS: ShipsgoControlTowerStats = {
   inTransitCount: 0,
   soonArrivingCount: 0,

@@ -87,6 +87,7 @@ export type DomesticOrderLike = {
   id?: string;
   orderNo?: string | null;
   blNo?: string | null;
+  tradeTerm?: string | null;
   salespersonUserId?: string | null;
   customer?: { salespersonUserId?: string | null; country?: string | null } | null;
   customerNameSnapshot?: string | null;

@@ -207,6 +207,7 @@ export function serializeDomesticLogisticsOrder(order: DomesticOrderLike = {}, a
     orderNo: order.orderNo,
     blNo: order.blNo || "",
     billOfLadingNo: order.blNo || "",
+    tradeTerm: order.tradeTerm || "",
     customerShortName: shortCustomerName || fullCustomerName,
     customerName: shortCustomerName || fullCustomerName,
     customerFullName: fullCustomerName,

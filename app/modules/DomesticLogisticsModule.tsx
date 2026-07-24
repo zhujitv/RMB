@@ -10,6 +10,7 @@ import { useDomesticLogisticsActions } from "./domestic-logistics/use-domestic-l
 import {
   PAGE_SIZE,
   domesticLogisticsCanArchive,
+  isExwTradeTerm,
   sanitizeDomesticLogisticsRowsForRender,
   type DomesticLogisticsResponse,
   type DomesticLogisticsInfo,
@@ -203,6 +204,7 @@ export function DomesticLogisticsModule({
   }
 
   function openLogisticsExpenseStatus(row: DomesticLogisticsRow) {
+    if (isExwTradeTerm(row.tradeTerm)) return;
     const status = row.logisticsExpenseStatus || "未录入";
     setExpandedId(row.id);
     setEditingOrderId("");

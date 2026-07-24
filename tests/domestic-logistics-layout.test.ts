@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { isExwTradeTerm, sanitizeDomesticLogisticsRowsForRender } from "../app/modules/domestic-logistics/model.ts";
 import {
   readDomesticLogisticsApiSource,
   readDomesticLogisticsModuleSource,
@@ -102,6 +103,23 @@ test("domestic logistics list keeps compact accepted columns", () => {
   assert.match(moduleSource, /DomesticLogisticsExpenseStatusButton/);
   assert.match(moduleSource, /onOpenLogisticsFees/);
   assert.doesNotMatch(moduleSource, /<LogisticsFeesModule/);
+});
+
+test("EXW logistics rows hide expense entry status and prompts", () => {
+  assert.equal(isExwTradeTerm("EXW"), true);
+  assert.equal(isExwTradeTerm("  exw 报关  "), true);
+  for (const tradeTerm of ["FOB", "CFR", "CIF", "DDP", "DAP", "其他"]) {
+    assert.equal(isExwTradeTerm(tradeTerm), false);
+  }
+  assert.equal(isExwTradeTerm(undefined), false);
+  assert.equal(sanitizeDomesticLogisticsRowsForRender([{ id: "exw-order", tradeTerm: "EXW" }])[0]?.tradeTerm, "EXW");
+
+  assert.match(domesticLogisticsOps, /tradeTerm: order\.tradeTerm \|\| ""/);
+  assert.match(moduleSource, /"tradeTerm"/);
+  assert.match(moduleSource, /const isExwOrder = isExwTradeTerm\(row\.tradeTerm\);/);
+  assert.match(moduleSource, /isExwOrder \? null : <DomesticLogisticsExpenseStatusButton/);
+  assert.match(moduleSource, /canCreateLogisticsExpense && !isExwOrder/);
+  assert.match(moduleSource, /if \(isExwTradeTerm\(row\.tradeTerm\)\) return;/);
 });
 
 test("tax refund list keeps bill of lading readable between order and customer", () => {
