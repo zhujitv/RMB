@@ -59,7 +59,7 @@ export function authLoadErrorState(error: unknown): AuthState {
       : "登录已过期，请重新登录。";
     return {
       status: "guest",
-      message: withErrorCode(guestMessage, errorCode),
+      message: guestMessage,
     };
   }
 

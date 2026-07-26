@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createJiti } from "jiti";
 import { effectivePermissions, rolePermissionSnapshot } from "../lib/platform/shared-permission-data.ts";
 import {
   readOrderDocumentsSource,
@@ -12,6 +13,10 @@ import {
   readTaxRefundModuleSource,
   readWorkspaceShellSource,
 } from "./source-helpers.ts";
+
+const jiti = createJiti(import.meta.url);
+const { ApiRequestError } = await jiti.import<typeof import("../app/api.ts")>("../app/api.ts");
+const { authLoadErrorState } = await jiti.import<typeof import("../app/workspace-auth-helpers.ts")>("../app/workspace-auth-helpers.ts");
 
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
 const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
@@ -280,7 +285,8 @@ test("workspace auth distinguishes expired login from server-side profile failur
   assert.match(workspaceShell, /function authLoadErrorState\(error: unknown\): AuthState/);
   assert.match(workspaceShell, /accountStateCodes = \["EMAIL_NOT_VERIFIED", "USER_PENDING_APPROVAL", "USER_DISABLED", "AUTH_USER_NOT_FOUND"\]/);
   assert.match(workspaceShell, /error\.code === "PASSWORD_CHANGE_REQUIRED" \|\| accountStateCodes\.includes\(error\.code \|\| ""\)/);
-  assert.match(workspaceShell, /message: withErrorCode\(guestMessage, errorCode\)/);
+  assert.match(workspaceShell, /message: guestMessage/);
+  assert.doesNotMatch(workspaceShell, /message: withErrorCode\(guestMessage, errorCode\)/);
   assert.match(workspaceShell, /message: "无法读取当前用户信息"/);
   assert.doesNotMatch(workspaceShell, /message: "工作台初始化失败。"/);
   assert.match(workspaceShell, /setAuth\(nextAuth \|\| \{ status: "error", message: "无法读取当前用户信息", detail: "初始化流程未返回有效状态。"/);
@@ -300,6 +306,21 @@ test("auth me initialization returns classified diagnostics instead of one gener
   assert.match(sharedAuth, /outcome = "user-not-found"/);
   assert.match(sharedAuth, /outcome = "role-missing"/);
   assert.match(sharedAuth, /outcome = "approval-pending"/);
+});
+
+test("workspace login page does not expose unauthenticated error codes", () => {
+  const state = authLoadErrorState(new ApiRequestError("请先登录", 401, "AUTH-UNAUTHENTICATED"));
+  assert.equal(state.status, "guest");
+  assert.equal(state.message, "登录已过期，请重新登录。");
+  assert.doesNotMatch(state.message || "", /AUTH-UNAUTHENTICATED|错误代码/);
+
+  const disabledState = authLoadErrorState(new ApiRequestError("账号已停用，请联系管理员。", 403, "USER_DISABLED"));
+  assert.equal(disabledState.status, "guest");
+  assert.equal(disabledState.message, "账号已停用，请联系管理员。");
+
+  const serverFailure = authLoadErrorState(new ApiRequestError("系统暂时无法读取账户信息", 500, "AUTH-001"));
+  assert.equal(serverFailure.status, "error");
+  assert.match(serverFailure.detail || "", /AUTH-001/);
 });
 
 test("workspace boot order enters loading before permission checks", () => {
