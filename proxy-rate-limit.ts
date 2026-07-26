@@ -35,7 +35,14 @@ function rateLimitConfig() {
 function distributedRateLimitConfig() {
   const explicit = [process.env.RATE_LIMIT_REDIS_REST_URL, process.env.RATE_LIMIT_REDIS_REST_TOKEN];
   const upstash = [process.env.UPSTASH_REDIS_REST_URL, process.env.UPSTASH_REDIS_REST_TOKEN];
-  const [rawUrl, rawToken] = explicit.every((value) => String(value || "").trim()) ? explicit : upstash;
+  const vercelUpstash = [
+    process.env.UPSTASH_REDIS_KV_REST_API_URL,
+    process.env.UPSTASH_REDIS_KV_REST_API_TOKEN,
+  ];
+  const candidates = [explicit, upstash, vercelUpstash];
+  const [rawUrl, rawToken] = candidates.find(
+    (pair) => pair.every((value) => String(value || "").trim()),
+  ) || candidates.find((pair) => pair.some((value) => String(value || "").trim())) || explicit;
   const restUrl = String(rawUrl || "").replace(/\/+$/, "");
   const restToken = String(rawToken || "");
   const namespace = String(process.env.RATE_LIMIT_NAMESPACE || "nextwood").replace(/[^a-z0-9:_-]/gi, "_");

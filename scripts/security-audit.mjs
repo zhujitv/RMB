@@ -66,6 +66,7 @@ const proxy = ["proxy.ts", "proxy-rate-limit.ts"]
 for (const pattern of [
   /distributedRateLimitConfig/,
   /UPSTASH_REDIS_REST_URL/,
+  /UPSTASH_REDIS_KV_REST_API_URL/,
   /RATE_LIMIT_REDIS_REST_URL/,
   /\/pipeline/,
   /checkDistributedApiRateLimit/,

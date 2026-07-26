@@ -205,6 +205,7 @@ test("ci runs the security audit guardrail", () => {
   assert.match(ciWorkflow, /npm run verify:ci/);
   assert.match(securityAuditScript, /Strict-Transport-Security/);
   assert.match(securityAuditScript, /UPSTASH_REDIS_REST_URL/);
+  assert.match(securityAuditScript, /UPSTASH_REDIS_KV_REST_API_URL/);
   assert.match(securityAuditScript, /AUTH_PATTERNS/);
   assert.match(securityAuditScript, /dangerouslySetInnerHTML/);
   assert.match(securityAuditScript, /SECURITY_ROLE_MATRIX/);

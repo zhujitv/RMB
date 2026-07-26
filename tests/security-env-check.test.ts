@@ -10,6 +10,8 @@ const SECURITY_ENV_KEYS = [
   "SETTINGS_ENCRYPTION_KEY",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
+  "UPSTASH_REDIS_KV_REST_API_URL",
+  "UPSTASH_REDIS_KV_REST_API_TOKEN",
   "RATE_LIMIT_REDIS_REST_URL",
   "RATE_LIMIT_REDIS_REST_TOKEN",
   "STRICT_PRODUCTION_SECURITY",
@@ -81,6 +83,18 @@ test("valid production configuration passes while error details remain forbidden
   });
   assert.equal(exposed.status, 1);
   assert.match(exposed.stderr, /EXPOSE_ERROR_DETAILS/);
+});
+
+test("Vercel Upstash integration variables satisfy the production gate", () => {
+  const result = runSecurityEnvironmentCheck({
+    ...validProductionEnvironment,
+    UPSTASH_REDIS_REST_URL: "",
+    UPSTASH_REDIS_REST_TOKEN: "",
+    UPSTASH_REDIS_KV_REST_API_URL: "https://vercel-upstash.example.net",
+    UPSTASH_REDIS_KV_REST_API_TOKEN: "integration-token",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /passed/);
 });
 
 test("Vercel preview builds keep non-production compatibility", () => {

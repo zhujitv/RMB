@@ -102,6 +102,7 @@ test("business API requests are protected by unified rate limiting", () => {
 test("api rate limiting supports distributed redis with memory fallback", () => {
   assert.match(proxy, /function distributedRateLimitConfig/);
   assert.match(proxy, /UPSTASH_REDIS_REST_URL/);
+  assert.match(proxy, /UPSTASH_REDIS_KV_REST_API_URL/);
   assert.match(proxy, /RATE_LIMIT_REDIS_REST_URL/);
   assert.match(proxy, /REDIS_RESPONSE_MAX_BYTES/);
   assert.match(proxy, /readRedisJson\(response\)/);
