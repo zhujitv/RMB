@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { apiError, deleteLogisticsExpenseInvoice, parseJsonBody, uploadLogisticsExpenseInvoice } from "../../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../../lib/api-route-guard";
+import { assertMultipartRequestWithinLimit } from "../../../../../lib/platform/upload-request-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,6 +16,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await requireApiActor(request);
     const { id } = await params;
+    assertMultipartRequestWithinLimit(request);
     const formData = await request.formData();
     const result = await uploadLogisticsExpenseInvoice(request, actor, id, formData);
     return NextResponse.json({ success: true, ...result, message: "上传成功" }, { status: 201 });

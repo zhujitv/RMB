@@ -1,9 +1,19 @@
 import type { NextRequest } from "next/server";
+import { resolveTrustedClientIp } from "./lib/client-ip";
 
 const STORE = new Map<string, { count: number; resetAt: number }>();
-const DEFAULTS = { windowMs: 60_000, readLimit: 1000, writeLimit: 300, uploadLimit: 60 };
+const DEFAULTS = {
+  windowMs: 60_000,
+  readLimit: 1000,
+  writeLimit: 300,
+  uploadLimit: 60,
+  registrationWindowMs: 15 * 60_000,
+  registrationLimit: 5,
+  memoryMaxBuckets: 20_000,
+};
 let lastCleanupAt = 0;
 let lastFallbackWarningAt = 0;
+const REDIS_RESPONSE_MAX_BYTES = 128 * 1024;
 
 function positiveIntegerFromEnv(name: string, fallback: number) {
   const value = Number.parseInt(process.env[name] || "", 10);
@@ -16,24 +26,26 @@ function rateLimitConfig() {
     readLimit: positiveIntegerFromEnv("API_RATE_LIMIT_READ_LIMIT", DEFAULTS.readLimit),
     writeLimit: positiveIntegerFromEnv("API_RATE_LIMIT_WRITE_LIMIT", DEFAULTS.writeLimit),
     uploadLimit: positiveIntegerFromEnv("API_RATE_LIMIT_UPLOAD_LIMIT", DEFAULTS.uploadLimit),
+    registrationWindowMs: positiveIntegerFromEnv("API_RATE_LIMIT_REGISTRATION_WINDOW_MS", DEFAULTS.registrationWindowMs),
+    registrationLimit: positiveIntegerFromEnv("API_RATE_LIMIT_REGISTRATION_LIMIT", DEFAULTS.registrationLimit),
+    memoryMaxBuckets: positiveIntegerFromEnv("API_RATE_LIMIT_MEMORY_MAX_BUCKETS", DEFAULTS.memoryMaxBuckets),
   };
 }
 
 function distributedRateLimitConfig() {
-  const restUrl = String(process.env.RATE_LIMIT_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/+$/, "");
-  const restToken = String(process.env.RATE_LIMIT_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "");
+  const explicit = [process.env.RATE_LIMIT_REDIS_REST_URL, process.env.RATE_LIMIT_REDIS_REST_TOKEN];
+  const upstash = [process.env.UPSTASH_REDIS_REST_URL, process.env.UPSTASH_REDIS_REST_TOKEN];
+  const [rawUrl, rawToken] = explicit.every((value) => String(value || "").trim()) ? explicit : upstash;
+  const restUrl = String(rawUrl || "").replace(/\/+$/, "");
+  const restToken = String(rawToken || "");
   const namespace = String(process.env.RATE_LIMIT_NAMESPACE || "nextwood").replace(/[^a-z0-9:_-]/gi, "_");
-  return restUrl && restToken ? { restUrl, restToken, namespace } : null;
-}
-
-function requestIp(request: NextRequest) {
-  return request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip")
-    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-}
-
-function sessionToken(request: NextRequest) {
-  return request.cookies.get("__Host-fta_session")?.value || request.cookies.get("fta_session")?.value
-    || request.cookies.get("fta_user_id")?.value || "";
+  if (!restUrl && !restToken) return null;
+  if (!restUrl || !restToken) throw new Error("Distributed rate limit configuration is incomplete");
+  const parsed = new URL(restUrl);
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+    throw new Error("Distributed rate limit endpoint must use HTTPS without URL credentials");
+  }
+  return { restUrl, restToken, namespace };
 }
 
 function hashIdentity(value = "") {
@@ -45,32 +57,45 @@ function hashIdentity(value = "") {
   return (hash >>> 0).toString(36);
 }
 
-function normalizedPath(pathname = "") {
-  return pathname.split("/").map((segment) => {
-    if (/^[0-9a-f]{8,}-[0-9a-f-]{8,}$/i.test(segment) || /^[0-9a-f]{16,}$/i.test(segment) || /^\d+$/.test(segment)) return ":id";
-    return segment;
-  }).join("/");
-}
-
 function isUnsafeMethod(method = "") {
   return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
 }
 
 function isUploadRequest(request: NextRequest) {
-  return isUnsafeMethod(request.method) && /\/(documents|invoice|attachments|import|package)(\/|$)/i.test(request.nextUrl.pathname);
+  const uploadPath = /\/(?:[^/]+-)?(?:documents?|invoices?)(?:\/|$)|\/(?:attachments|import|package|payment-voucher|supplier-document-requests)(?:\/|$)/i;
+  return isUnsafeMethod(request.method) && uploadPath.test(request.nextUrl.pathname);
+}
+
+function isRegistrationRequest(request: NextRequest) {
+  return request.method.toUpperCase() === "POST" && request.nextUrl.pathname === "/api/auth/register";
 }
 
 function identity(request: NextRequest) {
-  const token = sessionToken(request);
-  return token ? `session:${hashIdentity(token)}` : `ip:${hashIdentity(requestIp(request))}`;
+  // This layer cannot authenticate cookies. A network identity prevents a
+  // forged session token from creating unlimited fresh rate-limit buckets.
+  return `ip:${hashIdentity(resolveTrustedClientIp(request) || "unknown")}`;
 }
 
-function rateLimitKey(request: NextRequest) {
-  return ["api", isUnsafeMethod(request.method) ? "write" : "read", normalizedPath(request.nextUrl.pathname), identity(request)].join(":");
+export function apiRateLimitKey(request: NextRequest) {
+  const requestClass = isRegistrationRequest(request)
+    ? "registration"
+    : isUploadRequest(request)
+      ? "upload"
+      : isUnsafeMethod(request.method)
+        ? "write"
+        : "read";
+  return [
+    "api",
+    requestClass,
+    identity(request),
+  ].join(":");
 }
 
 function requestLimit(request: NextRequest) {
   const config = rateLimitConfig();
+  if (isRegistrationRequest(request)) {
+    return { limit: config.registrationLimit, windowMs: config.registrationWindowMs };
+  }
   return {
     limit: isUploadRequest(request) ? config.uploadLimit : isUnsafeMethod(request.method) ? config.writeLimit : config.readLimit,
     windowMs: config.windowMs,
@@ -78,12 +103,16 @@ function requestLimit(request: NextRequest) {
 }
 
 function checkMemoryApiRateLimit(request: NextRequest, limit: number, windowMs: number, now = Date.now()) {
+  const { memoryMaxBuckets } = rateLimitConfig();
   if (now - lastCleanupAt >= 60_000) {
     lastCleanupAt = now;
     for (const [key, bucket] of STORE.entries()) if (bucket.resetAt <= now) STORE.delete(key);
   }
-  const key = rateLimitKey(request);
+  const key = apiRateLimitKey(request);
   const current = STORE.get(key);
+  if (!current && STORE.size >= memoryMaxBuckets) {
+    return { allowed: false, limit, remaining: 0, resetAt: now + windowMs };
+  }
   const bucket = current && current.resetAt > now ? current : { count: 0, resetAt: now + windowMs };
   bucket.count += 1;
   STORE.set(key, bucket);
@@ -99,20 +128,54 @@ function warnFallback(error: unknown) {
   });
 }
 
+async function readRedisJson(response: Response) {
+  const declaredBytes = Number(response.headers.get("content-length") || 0);
+  if (Number.isFinite(declaredBytes) && declaredBytes > REDIS_RESPONSE_MAX_BYTES) {
+    await response.body?.cancel();
+    throw new Error("Redis rate limit response is too large");
+  }
+  if (!response.body) throw new Error("Redis rate limit response is empty");
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > REDIS_RESPONSE_MAX_BYTES) {
+      await reader.cancel();
+      throw new Error("Redis rate limit response is too large");
+    }
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(combined));
+}
+
 async function checkDistributedApiRateLimit(key: string, limit: number, windowMs: number, now = Date.now()) {
   const config = distributedRateLimitConfig();
   if (!config) return null;
   const ttl = Math.max(1, Math.ceil(windowMs / 1000));
+  const timeoutMs = Math.min(5000, Math.max(250, positiveIntegerFromEnv("RATE_LIMIT_REDIS_TIMEOUT_MS", 1500)));
   const response = await fetch(`${config.restUrl}/pipeline`, {
     method: "POST",
     headers: { Authorization: `Bearer ${config.restToken}`, "Content-Type": "application/json" },
     body: JSON.stringify([["INCR", `${config.namespace}:rate:${key}`], ["EXPIRE", `${config.namespace}:rate:${key}`, ttl, "NX"], ["TTL", `${config.namespace}:rate:${key}`]]),
     cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`Redis rate limit request failed: ${response.status}`);
-  const result = await response.json();
+  const result = await readRedisJson(response);
   const count = Number(result?.[0]?.result ?? result?.[0] ?? 0);
   const ttlSeconds = Number(result?.[2]?.result ?? result?.[2] ?? ttl);
+  if (!Number.isFinite(count) || count < 1 || !Number.isFinite(ttlSeconds)) {
+    throw new Error("Redis rate limit response is invalid");
+  }
   return { allowed: count <= limit, limit, remaining: Math.max(0, limit - count), resetAt: now + Math.max(1, ttlSeconds > 0 ? ttlSeconds : ttl) * 1000 };
 }
 
@@ -122,7 +185,7 @@ export async function checkApiRateLimit(request: NextRequest) {
   }
   const { limit, windowMs } = requestLimit(request);
   try {
-    const distributed = await checkDistributedApiRateLimit(rateLimitKey(request), limit, windowMs);
+    const distributed = await checkDistributedApiRateLimit(apiRateLimitKey(request), limit, windowMs);
     if (distributed) return distributed;
   } catch (error) {
     warnFallback(error);

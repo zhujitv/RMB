@@ -1,11 +1,11 @@
-import { isIP } from "node:net";
 import { prisma } from "../prisma";
-import { normalizeClientIp, resolveIpGeolocation } from "./ip-geolocation";
+import { resolveTrustedClientIp } from "../client-ip";
 import { timeServerStep } from "./shared-base-utils";
 import { LEGACY_SESSION_COOKIE_NAME, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "./shared-constants";
 import { UNSAFE_METHODS } from "./shared-permission-data";
 import { permissionError } from "./shared-access";
 import { randomToken, sessionTokenHash } from "./shared-auth-password";
+import { boundedUserAgent } from "./shared-auth-input";
 
 export type RequestLike = {
   url?: string;
@@ -54,39 +54,8 @@ export type GetActorOptions = {
   allowPasswordChangeRequired?: boolean;
 };
 
-function splitIpHeader(value: string | null | undefined) {
-  return String(value || "")
-    .split(",")
-    .map((part) => normalizeClientIp(part))
-    .filter(Boolean);
-}
-
-function isPublicClientIp(ip: string) {
-  if (!isIP(ip)) return false;
-  const geo = resolveIpGeolocation(ip);
-  return !["本地", "内网", "保留地址"].includes(geo.country);
-}
-
-function isValidClientAddress(ip: string) {
-  return Boolean(isIP(ip)) || ip.toLowerCase() === "localhost";
-}
-
-function firstPublicOrFirstValidIp(value: string | null | undefined) {
-  const candidates = splitIpHeader(value);
-  return candidates.find(isPublicClientIp) || candidates.find(isValidClientAddress) || "";
-}
-
 export function requestIp(request: RequestLike) {
-  const forwardedFor = firstPublicOrFirstValidIp(request?.headers?.get("x-forwarded-for"));
-  if (forwardedFor) return forwardedFor;
-  const realIp = firstPublicOrFirstValidIp(request?.headers?.get("x-real-ip"));
-  if (realIp) return realIp;
-  const cfIp = firstPublicOrFirstValidIp(request?.headers?.get("cf-connecting-ip"));
-  if (cfIp) return cfIp;
-  const vercelIp = firstPublicOrFirstValidIp(request?.headers?.get("vercel-forwarded-for"));
-  if (vercelIp) return vercelIp;
-  const requestIpValue = firstPublicOrFirstValidIp(request?.ip);
-  return requestIpValue || null;
+  return resolveTrustedClientIp(request);
 }
 
 export function requestSessionToken(request: RequestLike) {
@@ -204,7 +173,7 @@ export async function createUserSession(request: RequestLike, user: SessionUserL
       userId: user.id,
       tokenHash: sessionTokenHash(token),
       expiresAt,
-      userAgent: request?.headers?.get("user-agent")?.slice(0, 500) || null,
+      userAgent: boundedUserAgent(request?.headers?.get("user-agent")),
       ipAddress: requestIp(request),
     },
   });

@@ -12,6 +12,7 @@ import {
   UNSAFE_INITIAL_ADMIN_EMAILS,
   UNSAFE_INITIAL_ADMIN_PASSWORDS,
 } from "./shared-constants";
+import { passwordMeetsPolicy } from "../password-policy";
 
 export function sha256Hex(value: unknown) {
   return crypto.createHash("sha256").update(String(value || "")).digest("hex");
@@ -97,6 +98,17 @@ export async function verifyPassword(password: unknown, passwordHash: unknown) {
   }
 }
 
+const LOGIN_DUMMY_PASSWORD_HASH = "$2b$12$M9IbpCX0Tswtpvnec5KSg..qTUM/1B2IeOTogMsj9acJpYKV1PXl6";
+
+export async function verifyLoginPassword(password: unknown, passwordHash: unknown) {
+  const stored = String(passwordHash || "");
+  const matched = stored ? await verifyPassword(password, stored) : false;
+  if (!isBcryptHash(stored)) {
+    await verifyPassword(password, LOGIN_DUMMY_PASSWORD_HASH);
+  }
+  return Boolean(stored) && matched;
+}
+
 export function unsafeInitialAdminConfig(email: unknown, password: unknown) {
   const normalizedEmail = normalizeEmail(email);
   return UNSAFE_INITIAL_ADMIN_EMAILS.includes(normalizedEmail)
@@ -109,7 +121,7 @@ export function isUnsafeDefaultAdminEmail(email: unknown) {
 
 export function assertSafeInitialAdminConfig() {
   if (!INITIAL_ADMIN_EMAIL || !INITIAL_ADMIN_PASSWORD) return false;
-  if (unsafeInitialAdminConfig(INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD)) {
+  if (unsafeInitialAdminConfig(INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD) || !passwordMeetsPolicy(INITIAL_ADMIN_PASSWORD)) {
     throw codedError("生产环境禁止使用默认管理员账号或默认密码，请重新配置 INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD。", 500, "UNSAFE_INITIAL_ADMIN_CONFIG");
   }
   return true;

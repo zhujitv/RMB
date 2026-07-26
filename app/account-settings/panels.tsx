@@ -58,7 +58,7 @@ export function ProfilePanel({
         <div className={styles.accountAvatarActions}>
           <strong>用户头像</strong>
           <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onAvatarUpload} />
-          <span className={styles.mutedText}>支持 PNG、JPG、WebP，建议小于 220KB。</span>
+          <span className={styles.mutedText}>支持 PNG、JPG、WebP，文件不能超过 200KB。</span>
         </div>
       </div>
       <div className={styles.accountFormGrid}>

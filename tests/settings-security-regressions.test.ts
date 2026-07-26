@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const usersAdmin = readFileSync("lib/platform/shared-users-admin.ts", "utf8");
+const usersAdminInvariant = readFileSync("lib/platform/shared-users-admin-invariant.ts", "utf8");
 const notificationSettings = readFileSync("lib/platform/notification-settings.ts", "utf8");
 const notificationSend = readFileSync("lib/platform/notification-send.ts", "utf8");
 const userRegistration = readFileSync("lib/platform/shared-users-registration.ts", "utf8");
@@ -12,7 +13,8 @@ test("delegated user managers cannot elevate privileges or manage privileged acc
   assert.match(usersAdmin, /非管理员只能维护未配置组合权限的业务员账号/);
   assert.match(usersAdmin, /不能修改当前账号自身的角色、权限或启用状态/);
   assert.match(usersAdmin, /非管理员只能修改未配置组合权限的业务员账号状态/);
-  assert.match(usersAdmin, /LAST_ACTIVE_ADMIN_REQUIRED/);
+  assert.match(usersAdminInvariant, /LAST_ACTIVE_ADMIN_REQUIRED/);
+  assert.match(usersAdminInvariant, /Serializable/);
   assert.match(usersAdmin, /USER_SELF_STATUS_CHANGE_FORBIDDEN/);
 });
 

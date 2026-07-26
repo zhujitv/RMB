@@ -38,8 +38,12 @@ export async function recognizePdfTextWithOcr(
 
 export async function recognizeLogisticsInvoiceWithOcr(
   buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<OcrRecognitionResult> {
-  const settings = await ensureOcrFeatureEnabled("logisticsInvoice");
+  if (options.signal?.aborted) throw options.signal.reason;
+  const loadedSettings = await ensureOcrFeatureEnabled("logisticsInvoice");
+  const requestedTimeoutMs = Math.max(1000, Math.trunc(Number(options.timeoutMs) || loadedSettings.timeoutMs));
+  const settings = { ...loadedSettings, timeoutMs: Math.min(loadedSettings.timeoutMs, requestedTimeoutMs) };
   const fileBuffer = bufferFromInput(buffer);
-  return recognizeAliyunVatInvoice(fileBuffer, settings);
+  return recognizeAliyunVatInvoice(fileBuffer, settings, { signal: options.signal });
 }

@@ -50,8 +50,6 @@ export type ManagedFileMetadata = {
   originalFileName: string;
   mimeType: string;
   fileSize: number;
-  storageKey: string;
-  bucket: string;
   uploadedAt: unknown;
   uploadedBy: {
     id: string;
@@ -210,8 +208,6 @@ export function managedFileMetadata(input: {
     originalFileName: String(input.originalFileName || input.originalFilename || input.originalName || ""),
     mimeType: String(input.mimeType || ""),
     fileSize: Number(input.fileSize || 0),
-    storageKey: String(input.storageKey || ""),
-    bucket: String(input.bucket || input.r2Bucket || ""),
     uploadedAt: input.uploadedAt || null,
     uploadedBy,
     binding: input.binding || {},

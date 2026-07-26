@@ -6,6 +6,7 @@ import { extractPdfTextFromPdfBuffer } from "../customs-declaration-parser";
 import { codedError, isPlainRecord } from "./shared-base-utils";
 import { extractAliyunInvoiceRecognitionData } from "./aliyun-invoice-ocr-parser";
 import { aliyunEndpointFromUrl } from "./ocr-integration-reliability";
+import { normalizeAliyunDocMindEndpoint } from "./outbound-request-security";
 import {
   type OcrFeatureKey,
   type OcrRecognitionOptions,
@@ -29,9 +30,11 @@ export function createAliyunOcrClient(settings: ReturnType<typeof normalizeOcrIn
 }
 
 export function aliyunDocMindEndpoint() {
-  return (process.env.ALIYUN_DOCMIND_ENDPOINT || process.env.DOCMIND_API_ENDPOINT || "docmind-api.cn-hangzhou.aliyuncs.com")
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "");
+  return normalizeAliyunDocMindEndpoint(
+    process.env.ALIYUN_DOCMIND_ENDPOINT
+      || process.env.DOCMIND_API_ENDPOINT
+      || "docmind-api.cn-hangzhou.aliyuncs.com",
+  );
 }
 
 export function createAliyunDocMindClient(settings: ReturnType<typeof normalizeOcrIntegrationSettings>) {
@@ -77,12 +80,26 @@ export async function recognizeWithPdfTextFallback(
 export async function recognizeAliyunVatInvoice(
   buffer: Buffer,
   settings: ReturnType<typeof normalizeOcrIntegrationSettings>,
+  options: { signal?: AbortSignal } = {},
 ): Promise<OcrRecognitionResult> {
+  if (options.signal?.aborted) throw options.signal.reason;
   const client = createAliyunOcrClient(settings);
-  const response = await client.recognizeInvoice(new RecognizeInvoiceRequest({
-    body: Readable.from(buffer),
-    pageNo: 1,
-  }));
+  const body = Readable.from(buffer);
+  const abortBody = () => body.destroy(
+    options.signal?.reason instanceof Error ? options.signal.reason : new Error("OCR request aborted"),
+  );
+  options.signal?.addEventListener("abort", abortBody, { once: true });
+  let response;
+  try {
+    response = await client.recognizeInvoice(new RecognizeInvoiceRequest({
+      body,
+      pageNo: 1,
+    }));
+  } finally {
+    options.signal?.removeEventListener("abort", abortBody);
+    body.destroy();
+  }
+  if (options.signal?.aborted) throw options.signal.reason;
   const rawJson = toPlainJson(response);
   const responseBody = isPlainRecord(rawJson) ? rawJson.body : response.body;
   const { extractedFields, text } = extractAliyunInvoiceRecognitionData(responseBody);

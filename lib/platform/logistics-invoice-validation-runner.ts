@@ -19,7 +19,11 @@ import {
 } from "./logistics-invoice-validation-model";
 import { recognizeAndValidateLogisticsInvoiceGroup } from "./logistics-invoice-validation-recognition";
 
-export async function runLogisticsInvoiceOcrTask(taskId: string) {
+export async function runLogisticsInvoiceOcrTask(
+  taskId: string,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+) {
+  if (options.signal?.aborted) throw options.signal.reason;
   const task = await prisma.ocrTask.findUnique({ where: { id: taskId } });
   if (!task) throw codedError("物流发票识别任务不存在。", 404, "LOGISTICS_INVOICE_OCR_TASK_NOT_FOUND");
   if (task.module !== LOGISTICS_INVOICE_OCR_MODULE) {
@@ -75,6 +79,8 @@ export async function runLogisticsInvoiceOcrTask(taskId: string) {
     rows: mappedRows,
     actor: null,
     taskId: task.id,
+    signal: options.signal,
+    timeoutMs: options.timeoutMs,
   });
 }
 
@@ -133,24 +139,25 @@ async function markLogisticsInvoiceOcrTaskFailed(taskId: string, error: unknown,
 }
 
 export async function runLogisticsInvoiceOcrTaskWithTimeout(taskId: string, timeoutMs = DEFAULT_LOGISTICS_INVOICE_OCR_TASK_TIMEOUT_MS) {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const safeTimeoutMs = Math.min(Math.max(Math.trunc(Number(timeoutMs) || DEFAULT_LOGISTICS_INVOICE_OCR_TASK_TIMEOUT_MS), 1000), 120_000);
+  const controller = new AbortController();
+  const timeoutError = codedError(LOGISTICS_INVOICE_OCR_TIMEOUT_MESSAGE, 504, "LOGISTICS_INVOICE_OCR_TASK_TIMEOUT");
+  const timeout = setTimeout(() => controller.abort(timeoutError), safeTimeoutMs);
   try {
-    return await Promise.race([
-      runLogisticsInvoiceOcrTask(taskId),
-      new Promise<Awaited<ReturnType<typeof runLogisticsInvoiceOcrTask>>>((_, reject) => {
-        timeout = setTimeout(() => {
-          reject(codedError(LOGISTICS_INVOICE_OCR_TIMEOUT_MESSAGE, 504, "LOGISTICS_INVOICE_OCR_TASK_TIMEOUT"));
-        }, timeoutMs);
-      }),
-    ]);
+    const result = await runLogisticsInvoiceOcrTask(taskId, {
+      signal: controller.signal,
+      timeoutMs: safeTimeoutMs,
+    });
+    if (controller.signal.aborted) throw timeoutError;
+    return result;
   } catch (error) {
-    if ((error as { code?: unknown } | null)?.code === "LOGISTICS_INVOICE_OCR_TASK_TIMEOUT") {
-      console.error("logistics-invoice-ocr-timeout", { taskId, timeoutMs });
-      return markLogisticsInvoiceOcrTaskFailed(taskId, error, "物流发票识别超时");
+    if (controller.signal.aborted || (error as { code?: unknown } | null)?.code === "LOGISTICS_INVOICE_OCR_TASK_TIMEOUT") {
+      console.error("logistics-invoice-ocr-timeout", { taskId, timeoutMs: safeTimeoutMs });
+      return markLogisticsInvoiceOcrTaskFailed(taskId, timeoutError, "物流发票识别超时");
     }
     throw error;
   } finally {
-    if (timeout) clearTimeout(timeout);
+    clearTimeout(timeout);
   }
 }
 

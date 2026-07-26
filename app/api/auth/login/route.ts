@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import {
   apiError,
   assertLoginNotRateLimited,
@@ -7,17 +7,19 @@ import {
   ensureDefaultUsers,
   isInitialAdminPasswordLogin,
   isUnsafeDefaultAdminEmail,
+  loginCredentials,
   logSecurityEvent,
   logServerError,
-  normalizeEmail,
   parseJsonBody,
   passwordHashNeedsUpgrade,
   publicUser,
   recordLoginAttempt,
+  runNonCriticalTask,
+  sendUserLoginAlert,
   setSessionCookie,
   sha256Hex,
   upgradePasswordHash,
-  verifyPassword,
+  verifyLoginPassword,
   writeAuthAudit,
 } from "../../../../lib/platform-db";
 import { passwordMeetsPolicy } from "../../../../lib/password-policy";
@@ -43,7 +45,17 @@ const recordLoginAttemptTyped = recordLoginAttempt as (
   success: boolean,
   userId?: string | null,
   failureReason?: string | null,
-) => Promise<void>;
+) => Promise<{
+  id?: string | null;
+  createdAt?: Date | string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  geoCountry?: string | null;
+  geoRegion?: string | null;
+  geoCity?: string | null;
+  geoIsp?: string | null;
+  geoSource?: string | null;
+} | void>;
 
 const LOGIN_USER_SELECT = {
   id: true,
@@ -61,6 +73,7 @@ const LOGIN_USER_SELECT = {
   emailVerifiedAt: true,
   approvalStatus: true,
   isActive: true,
+  loginAlertEnabled: true,
   createdAt: true,
   updatedAt: true,
 };
@@ -128,7 +141,8 @@ export async function POST(request: NextRequest) {
     assertSameOriginRequest(request);
     await ensureDefaultUsers();
     const body = await parseJsonBody(request) as LoginRequestBody;
-    const email = normalizeEmail(body.email);
+    const credentials = loginCredentials(body as Record<string, unknown>);
+    const email = credentials.email;
     await assertLoginNotRateLimited(request, email);
     if (isUnsafeDefaultAdminEmail(email)) {
       await recordLoginAttempt(request, email, false, null, "default_admin_disabled");
@@ -140,13 +154,14 @@ export async function POST(request: NextRequest) {
       where: { email: { equals: email, mode: "insensitive" } },
       select: LOGIN_USER_SELECT,
     });
+    const passwordMatches = await verifyLoginPassword(credentials.password, user?.passwordHash);
     if (!user) {
       logSecurityEvent("login failed", loginAuditContext("user_not_found", email));
       await recordLoginAttemptTyped(request, email, false, null, "user_not_found");
       recordLoginAudit(request, "登录失败", false, "user_not_found", email);
       return loginFailure("邮箱或密码错误", 401, "INVALID_CREDENTIALS");
     }
-    if (!(await verifyPassword(body.password || "", user.passwordHash))) {
+    if (!passwordMatches) {
       logSecurityEvent("login failed", loginAuditContext("wrong_password", email, user.id));
       await recordLoginAttemptTyped(request, email, false, user.id, "wrong_password");
       recordLoginAudit(request, "登录失败", false, "wrong_password", email, user.id);
@@ -177,7 +192,7 @@ export async function POST(request: NextRequest) {
       recordLoginAudit(request, "登录失败", false, "user_disabled", email, user.id);
       return loginFailure("账号已停用", 403, "USER_DISABLED");
     }
-    const currentPasswordMeetsPolicy = passwordMeetsPolicy(body.password || "");
+    const currentPasswordMeetsPolicy = passwordMeetsPolicy(credentials.password);
     if (!user.passwordPolicyPassed && !currentPasswordMeetsPolicy) {
       user = await prisma.user.update({
         where: { id: user.id },
@@ -197,18 +212,18 @@ export async function POST(request: NextRequest) {
     if (passwordHashNeedsUpgrade(user.passwordHash) && currentPasswordMeetsPolicy) {
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash: upgradePasswordHash(body.password || "") },
+        data: { passwordHash: upgradePasswordHash(credentials.password) },
         select: LOGIN_USER_SELECT,
       });
     }
-    if (!user.mustChangePassword && isInitialAdminPasswordLogin(user, body.password || "")) {
+    if (!user.mustChangePassword && isInitialAdminPasswordLogin(user, credentials.password)) {
       user = await prisma.user.update({
         where: { id: user.id },
         data: { mustChangePassword: true, passwordPolicyPassed: false },
         select: LOGIN_USER_SELECT,
       });
     }
-    await recordLoginAttemptTyped(request, email, true, user.id);
+    const successfulLoginAttempt = await recordLoginAttemptTyped(request, email, true, user.id);
     const session = await createUserSession(request, user);
     const safeUser = publicUser(user);
     if (!safeUser) {
@@ -227,6 +242,15 @@ export async function POST(request: NextRequest) {
         : "登录成功",
     });
     setSessionCookie(response, session.token);
+    if (user.loginAlertEnabled !== false && successfulLoginAttempt) {
+      after(async () => {
+        await runNonCriticalTask(
+          "账号登录提醒邮件",
+          () => sendUserLoginAlert(user, successfulLoginAttempt),
+          { context: { userId: user.id, loginAttemptId: successfulLoginAttempt.id || "" } },
+        );
+      });
+    }
     return response;
   } catch (error: unknown) {
     const typedError = (error || {}) as ErrorLike;

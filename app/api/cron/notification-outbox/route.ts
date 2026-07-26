@@ -5,6 +5,7 @@ import {
   getCronActor,
   logServerError,
   ok,
+  processFileStorageDeletionOutbox,
   processLogisticsInvoiceNotificationOutbox,
   writeAudit,
 } from "../../../../lib/platform-db";
@@ -16,13 +17,17 @@ export const maxDuration = 300;
 export async function GET(request: NextRequest) {
   try {
     assertCronSecret(request);
-    const result = await processLogisticsInvoiceNotificationOutbox({ limit: 8 });
+    const [notifications, fileDeletions] = await Promise.all([
+      processLogisticsInvoiceNotificationOutbox({ limit: 8 }),
+      processFileStorageDeletionOutbox(20),
+    ]);
+    const result = { notifications, fileDeletions };
     const actor = await getCronActor();
     if (actor) {
       void writeAudit(
         request,
         actor,
-        "执行物流开票通知队列",
+        "执行通知与文件清理队列",
         "notification_outbox",
         "logistics-invoice-cron",
         null,

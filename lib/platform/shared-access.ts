@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { nonEmpty } from "./shared-base-utils";
 import { LOGISTICS_OPERATOR_ROLE } from "./shared-constants";
 import { DATA_SCOPES, effectivePermissions } from "./shared-permission-data";
+import { timingSafeEqualText } from "./shared-auth-password";
 
 type PermissionError = Error & {
   status?: number;
@@ -94,12 +95,27 @@ export function requireAdminGlobal(user: AccessUser, message = "无权限访问�
 
 export function assertCronSecret(request: RequestLike) {
   const secret = nonEmpty(process.env.CRON_SECRET);
-  if (!secret || secret === "change-me") {
+  if (!cronSecretIsStrong(secret)) {
     throw permissionError("CRON_SECRET 未配置或仍为默认值", 403);
   }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+  const authorization = request.headers.get("authorization") || "";
+  const candidate = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  if (!timingSafeEqualText(candidate, secret)) {
     throw permissionError("定时任务密钥不正确", 401);
   }
+}
+
+export function cronSecretIsStrong(value: unknown) {
+  const secret = nonEmpty(value);
+  const normalized = secret.toLowerCase();
+  const placeholders = new Set([
+    "change-me",
+    "use-a-long-random-secret",
+    "replace-me",
+    "your-cron-secret",
+    "ci-secret",
+  ]);
+  return secret.length >= 32 && new Set(secret).size >= 12 && !placeholders.has(normalized);
 }
 
 export async function getCronActor() {

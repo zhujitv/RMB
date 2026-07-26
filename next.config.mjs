@@ -7,7 +7,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   allowedDevOrigins: ["localhost", "127.0.0.1"],
-  serverExternalPackages: ["@napi-rs/canvas", "geoip-lite", "pdfjs-dist"],
+  serverExternalPackages: ["@napi-rs/canvas", "geoip-lite", "pdf2json", "pdfjs-dist"],
   async headers() {
     return [
       {

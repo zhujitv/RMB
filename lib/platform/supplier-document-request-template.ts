@@ -131,8 +131,6 @@ export async function getSupplierDocumentRequestTemplateMetadata(_request: Audit
       originalFileName: asset?.originalFileName || row.templateOriginalName || row.templateFileName,
       mimeType,
       fileSize: row.templateFileSize,
-      storageKey: asset?.storageKey || row.templateStorageKey,
-      bucket: asset?.bucket || row.templateBucket,
       uploadedAt: asset?.uploadedAt || row.createdAt,
       binding: {
         orderId: row.orderId,

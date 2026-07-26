@@ -1,6 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
-import { codedError, logServerError, nonEmpty, normalizeEmail, requireText, requireValidEmail } from "./shared-base-utils";
+import { codedError, logServerError, nonEmpty, normalizeEmail, requireText } from "./shared-base-utils";
 import { assertWrite, permissionError } from "./shared-access";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
@@ -17,6 +17,8 @@ import { hashPassword } from "./shared-auth-password";
 import { revokeUserSessions } from "./shared-auth-request";
 import { writeAudit } from "./shared-audit";
 import { assertPasswordPolicy } from "./shared-users-registration";
+import { authPassword, requireAuthEmail, requireAuthName } from "./shared-auth-input";
+import { assertAdministratorStatusChange, assertAnotherActiveAdministrator, isActiveAdministratorDemotion, runAdministratorInvariantTransaction } from "./shared-users-admin-invariant";
 import {
   USER_PUBLIC_SELECT,
   type ActorLike,
@@ -39,22 +41,6 @@ function samePermissionConfig(left: unknown, right: unknown) {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
-async function assertAnotherActiveAdministrator(userId: string) {
-  const anotherAdministrator = await prisma.user.findFirst({
-    where: {
-      id: { not: userId },
-      role: "管理员",
-      isActive: true,
-      approvalStatus: "APPROVED",
-      deletedAt: null,
-    },
-    select: { id: true },
-  });
-  if (!anotherAdministrator) {
-    throw codedError("必须至少保留一个已启用的管理员账号。", 409, "LAST_ACTIVE_ADMIN_REQUIRED");
-  }
-}
-
 export async function saveUser(request: AuditRequestLike, actor: ActorLike, input: UserInput, id: string | null = null) {
   assertWrite(actor, "users");
   const expectedUpdatedAtText = id ? nonEmpty(input.expectedUpdatedAt || input.updatedAt) : "";
@@ -72,8 +58,8 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
   const customPermissions = normalizedCustomPermissionInput(input.customPermissions || input.permissions, role);
   const before = id ? await prisma.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT }) : null;
   if (id && !before) throw permissionError("用户不存在", 404);
-  const name = requireText(input.name, "姓名");
-  const email = requireValidEmail(input.email, "邮箱");
+  const name = requireAuthName(input.name);
+  const email = requireAuthEmail(input.email);
   const emailChanged = Boolean(id && before && normalizeEmail(before.email) !== email);
   const emailIsAdminVerified = !id || emailChanged;
   const requestedApprovalStatus = String(input.approvalStatus || "");
@@ -103,10 +89,7 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
   if (id && actor?.id === id && (roleChanged || permissionsChanged || statusChanged)) {
     throw codedError("不能修改当前账号自身的角色、权限或启用状态。", 403, "USER_SELF_PRIVILEGE_CHANGE_FORBIDDEN");
   }
-  if (id && beforeRole === "管理员" && before?.isActive && before.approvalStatus === "APPROVED"
-    && (role !== "管理员" || approvalStatus !== "APPROVED")) {
-    await assertAnotherActiveAdministrator(id);
-  }
+  const protectsAdministratorInvariant = Boolean(id && isActiveAdministratorDemotion(before, role, approvalStatus));
   const data: Record<string, unknown> = {
     name,
     email,
@@ -131,8 +114,9 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
     data.supplierId = supplier.id;
   }
   if (input.password) {
-    assertPasswordPolicy(input.password);
-    data.passwordHash = hashPassword(String(input.password));
+    const password = authPassword(input.password);
+    assertPasswordPolicy(password);
+    data.passwordHash = hashPassword(password);
     data.mustChangePassword = true;
     data.passwordPolicyPassed = false;
   }
@@ -159,7 +143,8 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
   let user;
   if (id) {
     try {
-      user = await prisma.$transaction(async (tx) => {
+      user = await runAdministratorInvariantTransaction(async (tx) => {
+        if (protectsAdministratorInvariant) await assertAnotherActiveAdministrator(tx, id);
         const updated = await tx.user.updateMany({
           where: { id, updatedAt: expectedUpdatedAt as Date },
           data: data as Prisma.UserUncheckedUpdateManyInput,
@@ -168,6 +153,7 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
         return tx.user.findUnique({ where: { id }, select: USER_PUBLIC_SELECT });
       });
     } catch (error: unknown) {
+      if ((error as { status?: number } | null)?.status) throw error;
       logServerError("user role or supplier update failed", error, { userId: id, role, supplierId: data.supplierId });
       throw codedError("用户角色或供应商绑定保存失败。", 500, "ROLE_UPDATE_FAILED");
     }
@@ -212,9 +198,6 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
   if (actor?.id === id && nextStatus !== before.approvalStatus) {
     throw codedError("不能修改当前账号自身的启用状态。", 403, "USER_SELF_STATUS_CHANGE_FORBIDDEN");
   }
-  if (before.role === "管理员" && before.isActive && before.approvalStatus === "APPROVED" && nextStatus !== "APPROVED") {
-    await assertAnotherActiveAdministrator(id);
-  }
   if (nextStatus === "APPROVED" && before.emailVerified === false) {
     throw codedError("邮箱未验证，不能启用账号。", 400, "EMAIL_NOT_VERIFIED");
   }
@@ -229,13 +212,16 @@ export async function updateUserStatus(request: AuditRequestLike, actor: ActorLi
       throw codedError("当前角色只能绑定产品供应商", 400, "SUPPLIER_TYPE_MISMATCH");
     }
   }
-  const user = await prisma.user.update({
-    where: { id },
-    data: {
-      approvalStatus: nextStatus,
-      isActive: nextStatus === "APPROVED",
-    },
-    select: USER_PUBLIC_SELECT,
+  const user = await runAdministratorInvariantTransaction(async (tx) => {
+    await assertAdministratorStatusChange(tx, id, nextStatus);
+    return tx.user.update({
+      where: { id },
+      data: {
+        approvalStatus: nextStatus,
+        isActive: nextStatus === "APPROVED",
+      },
+      select: USER_PUBLIC_SELECT,
+    });
   });
   if (nextStatus !== "APPROVED") await revokeUserSessions(id);
   runNonCriticalTask("用户状态操作日志写入", () => writeAudit(request, actor, "更新用户状态", "users", id, before, user));

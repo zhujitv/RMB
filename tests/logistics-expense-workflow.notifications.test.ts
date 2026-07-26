@@ -133,7 +133,11 @@ test("approved logistics expenses notify supplier contacts without coupling emai
 	assert.match(logisticsNotificationOutboxCronRoute, /maxDuration = 300/);
 	assert.match(vercelConfigSource, /"path": "\/api\/cron\/notification-outbox"[\s\S]*"schedule": "\*\/5 \* \* \* \*"/);
 	assert.match(backend, /isLegacyLogisticsTemplateFingerprint/);
-	assert.match(backend, /AbortSignal\.timeout\(timeoutMs\)/);
+	assert.match(backend, /signal: resendRequestSignal\(\)/);
+	assert.match(backend, /await assertResendResponseOk\(response\)/);
+	assert.match(backend, /createOutboundTimeoutSignal\(timeoutMs\)/);
+	assert.match(backend, /RESEND_ERROR_RESPONSE_MAX_BYTES = 256 \* 1024/);
+	assert.match(backend, /readResponseTextLimited\(response, RESEND_ERROR_RESPONSE_MAX_BYTES\)/);
 	assert.match(backend, /if \(providerDelivered\)[\s\S]*sent: true[\s\S]*trackingError: message/);
 });
 

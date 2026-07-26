@@ -68,11 +68,11 @@ export function LoginPanel({
           <form className={`${styles.authForm} ${styles.loginAuthForm}`} onSubmit={onLogin}>
             <label>
               <span>邮箱</span>
-              <input name="email" type="email" autoComplete="email" required />
+              <input name="email" type="email" autoComplete="email" maxLength={254} required />
             </label>
             <label>
               <span>密码</span>
-              <input name="password" type="password" autoComplete="current-password" required />
+              <input name="password" type="password" autoComplete="current-password" maxLength={128} required />
             </label>
             {message ? <p className={styles.formMessage}>{message}</p> : null}
             <button className={styles.loginSubmitButton} type="submit" disabled={loginBusy}>
@@ -104,11 +104,11 @@ export function LoginPanel({
             <form className={`${styles.authForm} ${styles.loginAuthForm}`} onSubmit={onRegister}>
               <label>
                 <span>姓名</span>
-                <input name="name" type="text" autoComplete="name" required />
+                <input name="name" type="text" autoComplete="name" maxLength={100} required />
               </label>
               <label>
                 <span>邮箱</span>
-                <input name="email" type="email" autoComplete="email" required />
+                <input name="email" type="email" autoComplete="email" maxLength={254} required />
               </label>
               <label>
                 <span>密码</span>
@@ -116,6 +116,7 @@ export function LoginPanel({
                   name="password"
                   type="password"
                   autoComplete="new-password"
+                  maxLength={128}
                   value={registerPassword}
                   onChange={(event) => setRegisterPassword(event.target.value)}
                   required
@@ -127,6 +128,7 @@ export function LoginPanel({
                   name="confirmPassword"
                   type="password"
                   autoComplete="new-password"
+                  maxLength={128}
                   value={registerConfirmPassword}
                   onChange={(event) => setRegisterConfirmPassword(event.target.value)}
                   required

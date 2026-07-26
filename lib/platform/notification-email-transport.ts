@@ -1,5 +1,6 @@
-import { codedError, isPlainRecord } from "./shared-base-utils";
+import { codedError } from "./shared-base-utils";
 import type { NotificationAttachment } from "./notification-definitions";
+import { assertResendResponseOk, resendRequestSignal } from "./resend-email-security";
 
 export function notificationMailConfig() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -36,10 +37,6 @@ export async function sendResendEmail({
   idempotencyKey?: string | null;
 }) {
   const { apiKey, from, endpoint } = notificationMailConfig();
-  const configuredTimeout = Number(process.env.RESEND_SEND_TIMEOUT_MS || 10000);
-  const timeoutMs = Number.isFinite(configuredTimeout)
-    ? Math.min(30000, Math.max(1000, configuredTimeout))
-    : 10000;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -55,13 +52,7 @@ export async function sendResendEmail({
       text: body,
       attachments: attachments.length ? resendAttachmentPayload(attachments) : undefined,
     }),
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: resendRequestSignal(),
   });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as unknown;
-    const errorData = isPlainRecord(data) ? data : {};
-    const nestedError = isPlainRecord(errorData.error) ? errorData.error : {};
-    const reason = errorData.message || nestedError.message || errorData.error || `HTTP ${response.status}`;
-    throw codedError(`Resend 邮件发送失败：${reason}`, response.status, "RESEND_SEND_FAILED");
-  }
+  await assertResendResponseOk(response);
 }

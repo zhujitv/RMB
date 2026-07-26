@@ -22,6 +22,7 @@ export {
   rolePermissions,
 } from "./shared-access";
 export * from "./shared-auth-password";
+export * from "./shared-auth-input";
 export * from "./shared-auth-request";
 export * from "./shared-auth-actor";
 export * from "./shared-auth-login";

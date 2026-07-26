@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig, env } from "prisma/config";
+import { secureDatabaseUrl } from "./lib/database-url-security";
 
 const originalEnvKeys = new Set(Object.keys(process.env));
 
@@ -38,27 +39,12 @@ function loadEnvFile(fileName: string) {
 
 [".env", ".env.local"].forEach(loadEnvFile);
 
-function normalizeDatabaseUrlForPrisma(url: string) {
-  try {
-    const parsed = new URL(url);
-    const isPostgres = parsed.protocol === "postgresql:" || parsed.protocol === "postgres:";
-    const isRailwayTcpProxy = parsed.hostname.endsWith(".proxy.rlwy.net");
-    if (isPostgres && isRailwayTcpProxy && !parsed.searchParams.has("sslmode")) {
-      parsed.searchParams.set("sslmode", "disable");
-      return parsed.toString();
-    }
-  } catch {
-    return url;
-  }
-  return url;
-}
-
 export default defineConfig({
   schema: "prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: normalizeDatabaseUrlForPrisma(env("DATABASE_URL")),
+    url: secureDatabaseUrl(env("DATABASE_URL")),
   },
 });

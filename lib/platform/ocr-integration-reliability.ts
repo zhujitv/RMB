@@ -1,10 +1,10 @@
-import { codedError, isPlainRecord, nonEmpty } from "./shared-base-utils";
+import { codedError, isPlainRecord, nonEmpty, redactSensitiveText } from "./shared-base-utils";
 import { logServerError, type AppError } from "./shared-base-errors";
+import { fetchAliyunOcrApi } from "./outbound-request-security";
 import {
   normalizeOcrIntegrationSettings,
   ocrErrorText,
   sleep,
-  toPlainJson,
 } from "./ocr-integration-shared";
 
 export const ALIYUN_OCR_RETRY_DELAYS_MS = [1000, 2000, 5000] as const;
@@ -14,7 +14,6 @@ type AliyunOcrSettings = ReturnType<typeof normalizeOcrIntegrationSettings>;
 type AliyunOcrFailureDetails = {
   requestId: string;
   httpStatus: string;
-  responseBody: string;
   errorCode: string;
   errorMessage: string;
 };
@@ -34,16 +33,6 @@ export function aliyunEndpointFromUrl(value: string) {
 export function aliyunRegionFromUrl(value: string) {
   const endpoint = aliyunEndpointFromUrl(value);
   return endpoint.match(/^ocr-api\.([a-z0-9-]+)\.aliyuncs\.com$/i)?.[1] || process.env.ALIYUN_OCR_REGION || "";
-}
-
-function jsonSnippet(value: unknown, limit = 2000) {
-  if (value == null) return "";
-  try {
-    const text = typeof value === "string" ? value : JSON.stringify(toPlainJson(value));
-    return text.slice(0, limit);
-  } catch {
-    return String(value).slice(0, limit);
-  }
 }
 
 function headerValue(headers: unknown, key: string) {
@@ -85,13 +74,11 @@ export function aliyunOcrErrorDiagnostics(error: unknown): AliyunOcrFailureDetai
     message,
     name: nonEmpty(record.name),
   };
-  const body = response.body || response.data || data.body || data.response || fallbackBody;
   return {
     requestId,
     httpStatus: statusValue == null ? "" : String(statusValue),
-    responseBody: jsonSnippet(body),
     errorCode: code,
-    errorMessage: message,
+    errorMessage: redactSensitiveText(message || fallbackBody.message, 500),
   };
 }
 
@@ -113,7 +100,6 @@ function aliyunOcrLogContext(apiName: string, settings: AliyunOcrSettings, attem
   const diagnostics = error ? aliyunOcrErrorDiagnostics(error) : {
     requestId: "",
     httpStatus: "",
-    responseBody: "",
     errorCode: "",
     errorMessage: "",
   };
@@ -126,7 +112,6 @@ function aliyunOcrLogContext(apiName: string, settings: AliyunOcrSettings, attem
     attempt,
     requestId: diagnostics.requestId || "-",
     httpStatus: diagnostics.httpStatus || "-",
-    responseBody: diagnostics.responseBody || "-",
     errorCode: diagnostics.errorCode || "-",
     errorMessage: diagnostics.errorMessage || "-",
   };
@@ -175,31 +160,18 @@ async function withAliyunOcrRetry<T>(
     timeoutMs: settings.timeoutMs,
     requestId: diagnostics.requestId,
     httpStatus: diagnostics.httpStatus,
-    responseBody: diagnostics.responseBody,
     errorCode: diagnostics.errorCode,
     errorMessage: diagnostics.errorMessage,
   };
   throw error;
 }
 
-async function readResponseBodySnippet(response: Response) {
-  try {
-    return (await response.text()).slice(0, 1000);
-  } catch (error) {
-    return `body_unreadable:${ocrErrorText(error)}`;
-  }
-}
-
 export async function checkAliyunOcrConnectivity(settings: AliyunOcrSettings) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.min(Math.max(settings.timeoutMs, 3000), 15000));
   try {
-    const response = await fetch(settings.apiBaseUrl, {
+    const response = await fetchAliyunOcrApi(settings.apiBaseUrl, {
       method: "GET",
-      signal: controller.signal,
-      cache: "no-store",
-    });
-    const body = await readResponseBodySnippet(response);
+    }, Math.min(Math.max(settings.timeoutMs, 3000), 15000));
+    await response.body?.cancel();
     console.info("aliyun-ocr-health-check", {
       provider: settings.provider,
       endpoint: aliyunEndpointFromUrl(settings.apiBaseUrl),
@@ -207,9 +179,8 @@ export async function checkAliyunOcrConnectivity(settings: AliyunOcrSettings) {
       timeoutMs: settings.timeoutMs,
       httpStatus: response.status,
       requestId: response.headers.get("x-acs-request-id") || response.headers.get("x-acs-requestid") || "-",
-      responseBody: body || "-",
     });
-    return { ok: response.status < 500, status: response.status, body };
+    return { ok: response.status < 500, status: response.status };
   } catch (error) {
     logServerError("aliyun-ocr-health-check-failed", error, {
       provider: settings.provider,
@@ -217,9 +188,7 @@ export async function checkAliyunOcrConnectivity(settings: AliyunOcrSettings) {
       region: aliyunRegionFromUrl(settings.apiBaseUrl),
       timeoutMs: settings.timeoutMs,
     });
-    return { ok: false, status: 0, body: ocrErrorText(error) };
-  } finally {
-    clearTimeout(timeout);
+    return { ok: false, status: 0 };
   }
 }
 

@@ -1,6 +1,10 @@
 import { AUTO_RATE_CURRENCIES, BOC_CURRENCY_NAMES } from "./shared-constants";
-import { dateFromInput, normalizeDateText, todayInputInChina } from "./shared-base-utils";
+import { dateFromInput, isPlainRecord, normalizeDateText, todayInputInChina } from "./shared-base-utils";
 import type { ExchangeRateRowInput } from "./shared-exchange-types";
+import { createOutboundTimeoutSignal, readResponseTextLimited } from "./outbound-request-security";
+
+const EXCHANGE_SOURCE_TIMEOUT_MS = 10_000;
+const EXCHANGE_SOURCE_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 
 export function htmlText(value: unknown = "") {
   return String(value)
@@ -23,9 +27,12 @@ export function exchangeSourceOrder(preferred: unknown) {
 }
 
 export async function fetchBocRates(rateDate: string, rateType: string): Promise<ExchangeRateRowInput[]> {
-  const response = await fetch("https://www.boc.cn/sourcedb/whpj/", { cache: "no-store" });
+  const response = await fetch("https://www.boc.cn/sourcedb/whpj/", {
+    cache: "no-store",
+    signal: createOutboundTimeoutSignal(EXCHANGE_SOURCE_TIMEOUT_MS),
+  });
   if (!response.ok) return [];
-  const html = await response.text();
+  const html = await readResponseTextLimited(response, EXCHANGE_SOURCE_RESPONSE_MAX_BYTES);
   const rows = [...html.matchAll(/<tr[^>]*data-currency=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/tr>/gi)];
   return rows.flatMap((match) => {
     const currency = Object.entries(BOC_CURRENCY_NAMES).find(([, name]) => name === match[1])?.[0];
@@ -64,9 +71,10 @@ export async function fetchOfficialFallbackRates(source: string, rateDate: strin
     body,
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     cache: "no-store",
+    signal: createOutboundTimeoutSignal(EXCHANGE_SOURCE_TIMEOUT_MS),
   });
   if (!response.ok) return [];
-  const html = await response.text();
+  const html = await readResponseTextLimited(response, EXCHANGE_SOURCE_RESPONSE_MAX_BYTES);
   const rows = [...html.matchAll(/<tr class=\"first\"[\s\S]*?<\/tr>/gi)]
     .map((row) => [...row[0].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => htmlText(cell[1])))
     .filter((cells) => /^\d{4}-\d{2}-\d{2}$/.test(cells[0]) && cells[0] <= rateDate)
@@ -86,11 +94,16 @@ export async function fetchOfficialFallbackRates(source: string, rateDate: strin
 }
 
 export async function fetchThirdPartyRates(rateDate: string, rateType: string): Promise<ExchangeRateRowInput[]> {
-  const response = await fetch(`https://api.frankfurter.app/${encodeURIComponent(rateDate)}?from=CNY&to=${AUTO_RATE_CURRENCIES.join(",")}`, { cache: "no-store" });
+  const response = await fetch(`https://api.frankfurter.app/${encodeURIComponent(rateDate)}?from=CNY&to=${AUTO_RATE_CURRENCIES.join(",")}`, {
+    cache: "no-store",
+    signal: createOutboundTimeoutSignal(EXCHANGE_SOURCE_TIMEOUT_MS),
+  });
   if (!response.ok) return [];
-  const data = await response.json();
+  const parsed = JSON.parse(await readResponseTextLimited(response, EXCHANGE_SOURCE_RESPONSE_MAX_BYTES)) as unknown;
+  const data = isPlainRecord(parsed) ? parsed : {};
   const actualDate = normalizeDateText(data.date, rateDate);
-  return Object.entries(data.rates || {}).flatMap(([currency, rateFromCny]) => {
+  const rates = isPlainRecord(data.rates) ? data.rates : {};
+  return Object.entries(rates).flatMap(([currency, rateFromCny]) => {
     const rate = Number(rateFromCny);
     if (!AUTO_RATE_CURRENCIES.includes(currency) || !(rate > 0)) return [];
     return [{
@@ -109,4 +122,3 @@ export async function fetchRatesBySource(source: string, rateDate: string, rateT
   if (source === "第三方API") return fetchThirdPartyRates(rateDate, rateType);
   return [];
 }
-

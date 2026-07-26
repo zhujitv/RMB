@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteOrder, getOrder, ok, parseJsonBody, saveOrder } from "../../../../lib/platform-db";
+import { apiError, apiErrorWithLegacyShape, deleteOrder, getOrder, ok, parseJsonBody, saveOrder } from "../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
@@ -7,12 +7,6 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
-};
-
-type ErrorLike = {
-  status?: number;
-  code?: string;
-  message?: string;
 };
 
 const saveOrderTyped = saveOrder as (
@@ -45,13 +39,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       message: "订单保存成功",
     });
   } catch (error: unknown) {
-    const typedError = (error || {}) as ErrorLike;
-    const status = typedError.status || 500;
-    return NextResponse.json({
-      success: false,
-      errorCode: typedError.code || "ORDER_SAVE_FAILED",
-      message: typedError.message || "更新应收订单失败",
-    }, { status });
+    return apiErrorWithLegacyShape(error, "更新应收订单失败", "ORDER_SAVE_FAILED");
   }
 }
 

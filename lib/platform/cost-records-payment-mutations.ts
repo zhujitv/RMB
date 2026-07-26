@@ -11,6 +11,7 @@ import {
   assertWrite,
   codedError,
   deleteManagedStoredFile,
+  enqueueFileStorageDeletion,
   findActiveFileAssetBySource,
   managedFileMetadata,
   managedPreviewableMimeType,
@@ -130,6 +131,15 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
       }
       const saved = await tx.orderCost.findUnique({ where: { id }, include: includeCostRelations() });
       if (!saved) throw codedError("付款凭证状态已发生变化，请刷新后重试。", 409, "PAYMENT_VOUCHER_REPLACE_CONFLICT");
+      if (previousStorageKey && previousStorageKey !== storedFile.storageKey) {
+        await enqueueFileStorageDeletion(tx, {
+          storageKey: previousStorageKey,
+          sourceTable: FILE_ASSET_SOURCE_TABLES.ORDER_COSTS,
+          sourceId: id,
+          fileRole: FILE_ASSET_ROLES.PAYMENT_VOUCHER,
+          deleteAfter: new Date(),
+        });
+      }
       await upsertFileAssetForPaymentVoucher(tx, saved);
       await writeAudit(request, currentActor, "上传产品供应商货款付款凭证", "order_costs", id, before, {
         costId: id,
@@ -154,7 +164,7 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
   return safeSerializeCost(await attachBusinessDocumentsToCost(updated));
 }
 
-export async function getProductSupplierCostPaymentVoucherMetadata(_request: AuditRequestLike, actor: CostActorInput, id: string) {
+async function resolveProductSupplierCostPaymentVoucher(actor: CostActorInput, id: string) {
   assertRead(actor, "costs");
   const currentActor = requireCostActor(actor);
   const cost = await loadCostForPayment(currentActor, id);
@@ -174,8 +184,6 @@ export async function getProductSupplierCostPaymentVoucherMetadata(_request: Aud
       fileName,
       originalFileName: asset?.originalFileName || cost.paymentVoucherFileName,
       mimeType,
-      storageKey,
-      bucket: asset?.bucket || cost.paymentVoucherBucket,
       uploadedAt: asset?.uploadedAt || cost.paymentVoucherUploadedAt,
       uploadedBy: asset?.uploadedById ? cost.updatedBy : null,
       binding: {
@@ -188,6 +196,7 @@ export async function getProductSupplierCostPaymentVoucherMetadata(_request: Aud
     previewKind: managedPreviewableMimeType(mimeType),
   };
   return {
+    storageKey,
     mimeType: metadata.mimeType,
     fileName: metadata.fileName,
     cost: safeSerializeCost(cost),
@@ -195,15 +204,19 @@ export async function getProductSupplierCostPaymentVoucherMetadata(_request: Aud
   };
 }
 
+export async function getProductSupplierCostPaymentVoucherMetadata(_request: AuditRequestLike, actor: CostActorInput, id: string) {
+  const { storageKey: _storageKey, ...publicResult } = await resolveProductSupplierCostPaymentVoucher(actor, id);
+  return publicResult;
+}
+
 export async function getProductSupplierCostPaymentVoucher(request: AuditRequestLike, actor: CostActorInput, id: string) {
-  const metadata = await getProductSupplierCostPaymentVoucherMetadata(request, actor, id);
-  const storageKey = metadata.metadata.storageKey || "";
-  const body = await readR2Object(storageKey);
+  const resolved = await resolveProductSupplierCostPaymentVoucher(actor, id);
+  const body = await readR2Object(resolved.storageKey);
   return {
     body,
-    mimeType: metadata.mimeType,
-    fileName: metadata.fileName,
-    cost: metadata.cost,
-    metadata: metadata.metadata,
+    mimeType: resolved.mimeType,
+    fileName: resolved.fileName,
+    cost: resolved.cost,
+    metadata: resolved.metadata,
   };
 }

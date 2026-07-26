@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   DEFAULT_SHIPSGO_INTEGRATION_SETTINGS,
   SHIPSGO_INTEGRATION_SETTING_KEY,
@@ -7,6 +8,8 @@ import {
 import { assertJsonObject, codedError, isPlainRecord, nonEmpty, num } from "./shared-base-utils";
 import { assertRead, assertWrite } from "./shared-auth";
 import { writeAudit } from "./shared-audit";
+import { decryptSystemSettingSecrets, encryptSystemSettingSecrets } from "./system-setting-secrets";
+import { readSystemSettingWithEncryptedSecrets } from "./system-setting-secret-migration";
 
 type SettingsActor = Parameters<typeof assertRead>[0];
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
@@ -43,6 +46,8 @@ type ShipsgoIntegrationInput = {
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const SHIPSGO_API_HOSTS = new Set(["api.shipsgo.com"]);
 const FREIGHTOWER_API_HOSTS = new Set(["openapi.freightower.com"]);
+const SHIPSGO_SECRET_FIELDS = ["apiKey", "freightowerClientId", "freightowerSecret", "freightowerMapKey",
+  "freightowerWebhookSecret", "webhookSecret"] as const;
 
 function cleanSecret(value: unknown, limit = 500) {
   return nonEmpty(value)
@@ -166,6 +171,14 @@ function settingValue(setting: unknown) {
   return isPlainRecord(setting) && "value" in setting ? setting.value : setting;
 }
 
+function decryptedShipsgoSettingValue(value: unknown) {
+  return decryptSystemSettingSecrets(value, SHIPSGO_INTEGRATION_SETTING_KEY, SHIPSGO_SECRET_FIELDS);
+}
+
+function readStoredShipsgoSettingValue() {
+  return readSystemSettingWithEncryptedSecrets(SHIPSGO_INTEGRATION_SETTING_KEY, DEFAULT_SHIPSGO_INTEGRATION_SETTINGS, SHIPSGO_SECRET_FIELDS);
+}
+
 export function serializeShipsgoIntegrationSetting(setting: unknown) {
   const normalized = normalizeShipsgoIntegrationSettings(settingValue(setting) || {});
   return {
@@ -208,26 +221,23 @@ export function serializeShipsgoFeatureFlags(setting: unknown) {
 }
 
 export async function getShipsgoIntegrationSettings() {
-  const setting = await prisma.systemSetting.findUnique({ where: { key: SHIPSGO_INTEGRATION_SETTING_KEY } });
-  return normalizeShipsgoIntegrationSettings(setting?.value || DEFAULT_SHIPSGO_INTEGRATION_SETTINGS);
+  return normalizeShipsgoIntegrationSettings(await readStoredShipsgoSettingValue());
 }
 
 export async function readShipsgoIntegrationSettings(actor: SettingsActor) {
   assertRead(actor, "settings");
-  const setting = await prisma.systemSetting.findUnique({ where: { key: SHIPSGO_INTEGRATION_SETTING_KEY } });
-  return serializeShipsgoIntegrationSetting(setting || DEFAULT_SHIPSGO_INTEGRATION_SETTINGS);
+  return serializeShipsgoIntegrationSetting(await readStoredShipsgoSettingValue());
 }
 
 export async function readShipsgoFeatureFlags() {
-  const setting = await prisma.systemSetting.findUnique({ where: { key: SHIPSGO_INTEGRATION_SETTING_KEY } });
-  return serializeShipsgoFeatureFlags(setting || DEFAULT_SHIPSGO_INTEGRATION_SETTINGS);
+  return serializeShipsgoFeatureFlags(await readStoredShipsgoSettingValue());
 }
 
 export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, actor: SettingsActor, input: unknown = {}) {
   assertWrite(actor, "settings");
   const data = assertJsonObject(input);
   const before = await prisma.systemSetting.findUnique({ where: { key: SHIPSGO_INTEGRATION_SETTING_KEY } });
-  const current = normalizeShipsgoIntegrationSettings(before?.value || DEFAULT_SHIPSGO_INTEGRATION_SETTINGS);
+  const current = normalizeShipsgoIntegrationSettings(decryptedShipsgoSettingValue(before?.value || DEFAULT_SHIPSGO_INTEGRATION_SETTINGS));
   const value = normalizeShipsgoIntegrationSettings({
     ...current,
     ...data,
@@ -250,13 +260,14 @@ export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, 
   if (value.webhookEnabled && value.activeProvider === "FREIGHTOWER" && !value.freightowerWebhookSecret) {
     throw codedError("启用飞驼可视推送前请先填写推送 Access Secret", 400, "FREIGHTOWER_WEBHOOK_SECRET_REQUIRED");
   }
+  const storedValue = encryptSystemSettingSecrets(value, SHIPSGO_INTEGRATION_SETTING_KEY, SHIPSGO_SECRET_FIELDS);
   const setting = await prisma.systemSetting.upsert({
     where: { key: SHIPSGO_INTEGRATION_SETTING_KEY },
-    update: { value },
-    create: { key: SHIPSGO_INTEGRATION_SETTING_KEY, value },
+    update: { value: storedValue as Prisma.InputJsonValue },
+    create: { key: SHIPSGO_INTEGRATION_SETTING_KEY, value: storedValue as Prisma.InputJsonValue },
   });
   await runNonCriticalTask("大掌櫃集成设置操作日志写入", () => (
     writeAudit(request, actor, "更新大掌櫃集成设置", "system_settings", SHIPSGO_INTEGRATION_SETTING_KEY, before, setting)
   ));
-  return serializeShipsgoIntegrationSetting(setting);
+  return serializeShipsgoIntegrationSetting(value);
 }

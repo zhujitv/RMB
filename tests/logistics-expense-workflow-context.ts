@@ -47,6 +47,7 @@ export const backend = [
   logisticsInvoiceNotificationOutboxSource,
   readNotificationTemplatesSource(),
   readNotificationEngineSource(),
+  readFileSync("lib/platform/resend-email-security.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-groups.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-amount-parser.ts", "utf8"),
   readFileSync("lib/platform/logistics-invoice-validation-rules.ts", "utf8"),

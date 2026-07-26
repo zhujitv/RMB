@@ -161,8 +161,6 @@ export async function getOrderDocumentFileMetadata(_request: AuditRequestLike, a
       originalFileName: fileDocument.originalFilename || fileDocument.originalName || fileDocument.fileName,
       mimeType: fileDocument.mimeType,
       fileSize: fileDocument.fileSize,
-      storageKey: fileDocument.storageKey,
-      r2Bucket: fileDocument.r2Bucket,
       uploadedAt: fileDocument.uploadedAt,
       uploadedBy: fileDocument.uploadedBy,
       binding: {

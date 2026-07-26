@@ -3,6 +3,7 @@ import { codedError, isPlainRecord, nonEmpty, num } from "./shared-base-utils";
 import { timingSafeEqualText } from "./shared-auth";
 import { recordAt, textAt } from "./shipsgo-tracking-mapping-helpers";
 import { safeJsonParse, type ShipsgoSettings } from "./shipsgo-tracking-utils";
+import { createOutboundTimeoutSignal, readResponseTextLimited } from "./outbound-request-security";
 
 type FreightowerTokenCache = {
   token: string;
@@ -11,6 +12,8 @@ type FreightowerTokenCache = {
 };
 
 let tokenCache: FreightowerTokenCache | null = null;
+const TRACKING_PROVIDER_TIMEOUT_MS = 15000;
+const TRACKING_PROVIDER_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 
 function freightowerApiBaseUrl(settings: ShipsgoSettings) {
   return String(settings.freightowerApiBaseUrl || "https://openapi.freightower.com").replace(/\/+$/, "");
@@ -57,17 +60,24 @@ export function freightowerSubscribedMessage(payload: unknown) {
 async function getFreightowerToken(settings: ShipsgoSettings, forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && tokenCache?.token && tokenCache.expiresAt > now + 60_000) return tokenCache;
-  const response = await fetch(`${freightowerApiBaseUrl(settings)}/auth/api/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      clientId: settings.freightowerClientId,
-      secret: settings.freightowerSecret,
-    }),
-    cache: "no-store",
-    redirect: "error",
-  });
-  const text = await response.text();
+  let response: Response;
+  let text: string;
+  try {
+    response = await fetch(`${freightowerApiBaseUrl(settings)}/auth/api/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        clientId: settings.freightowerClientId,
+        secret: settings.freightowerSecret,
+      }),
+      cache: "no-store",
+      redirect: "error",
+      signal: createOutboundTimeoutSignal(TRACKING_PROVIDER_TIMEOUT_MS),
+    });
+    text = await readResponseTextLimited(response, TRACKING_PROVIDER_RESPONSE_MAX_BYTES);
+  } catch {
+    throw codedError("飞驼可视 Token 获取失败。", 502, "FREIGHTOWER_TOKEN_FAILED");
+  }
   const data = text ? safeJsonParse(text) : {};
   const tokenData = recordAt(data, "data");
   const accessToken = textAt(tokenData, "access_token") || textAt(data, "access_token");
@@ -90,19 +100,26 @@ export async function freightowerApiRequest<T>(
   forceTokenRefresh = false,
 ): Promise<T> {
   const token = await getFreightowerToken(settings, forceTokenRefresh);
-  const response = await fetch(`${freightowerApiBaseUrl(settings)}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `${token.tokenType} ${token.token}`,
-      access_token: token.token,
-    },
-    body: JSON.stringify(body),
-    cache: "no-store",
-    redirect: "error",
-  });
-  const text = await response.text();
+  let response: Response;
+  let text: string;
+  try {
+    response = await fetch(`${freightowerApiBaseUrl(settings)}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `${token.tokenType} ${token.token}`,
+        access_token: token.token,
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+      redirect: "error",
+      signal: createOutboundTimeoutSignal(TRACKING_PROVIDER_TIMEOUT_MS),
+    });
+    text = await readResponseTextLimited(response, TRACKING_PROVIDER_RESPONSE_MAX_BYTES);
+  } catch {
+    throw codedError(freightowerApiErrorMessage(path, 502, {}), 502, "FREIGHTOWER_API_ERROR");
+  }
   const data = text ? safeJsonParse(text) : {};
   if (isTokenExpiredResponse(data) && !forceTokenRefresh) {
     tokenCache = null;

@@ -115,7 +115,8 @@ test("preview route returns structured JSON errors when stream fails", () => {
     previewRoute,
     /function previewErrorResponse\(error(?:: ErrorLike)?\)/,
   );
-  assert.match(previewRoute, /Response\.json\(\{ error: message, code \}/);
+  assert.match(previewRoute, /apiErrorSafe500\(error, "文件暂时无法预览，请下载查看。", code\)/);
+  assert.doesNotMatch(previewRoute, /error\?\.message/);
   assert.match(previewRoute, /X-Preview-Error-Code/);
   assert.match(previewRoute, /文件暂时无法预览，请下载查看。/);
 });

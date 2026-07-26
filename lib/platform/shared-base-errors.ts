@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 
 export type AppError = Error & {
   status?: number;
@@ -11,11 +12,25 @@ export function codedError(message: string, status: number, code: string): AppEr
   const error: AppError = new Error(message);
   error.status = status;
   error.code = code;
-  error.expose = true;
+  error.expose = status < 500;
   return error;
 }
 
-export const SENSITIVE_LOG_KEY_PATTERN = /(password|passwd|pwd|token|secret|authorization|cookie|database_url|databaseurl|smtp|r2_|access_key|secret_key|file(name)?|original(name|filename)|email|url)$/i;
+export const SENSITIVE_LOG_KEY_PATTERN = /(password|passwd|pwd|token|secret|credential|authorization|cookie|database_url|databaseurl|smtp|r2_|access[_-]?key|api[_-]?key|app[_-]?code|client[_-]?id|map[_-]?key|private[_-]?key|response(body|text|payload|data)|raw(json|body|payload)|textpreview|document(text|content)?|extractedfields|parsedjson|file(name)?|original(name|filename)|email|url)$/i;
+export const BUSINESS_IDENTIFIER_LOG_KEY_PATTERN = /^(?:id|actorId|userId|loginAttemptId|orderId|orderNo|blNo|billOfLadingNo|shipmentId|shipmentNo|supplierId|customerId|costId|requestId|entityId|documentId|invoiceId|invoiceNo|bankReference)$/i;
+
+export function redactSensitiveText(value: unknown, limit = 300) {
+  const text = String(value ?? "")
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [redacted]")
+    .replace(/\bLTAI[A-Za-z0-9]{12,}\b/g, "[redacted-access-key]")
+    .replace(
+      /((?:password|passwd|pwd|token|secret|api[_-]?key|access[_-]?key(?:[_-]?(?:id|secret))?|app[_-]?code|authorization|cookie)\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}&]+)/gi,
+      "$1[redacted]",
+    )
+    .replace(/([?&](?:token|secret|key|api[_-]?key|access[_-]?key|signature|credential)=)[^&#\s]*/gi, "$1[redacted]")
+    .replace(/(https?:\/\/)[^/@\s]+:[^/@\s]+@/gi, "$1[redacted]@");
+  return text.length > limit ? `${text.slice(0, limit)}...` : text;
+}
 
 export function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -23,8 +38,13 @@ export function isPlainRecord(value: unknown): value is Record<string, unknown> 
 
 function sanitizeLogValue(key: string, value: unknown, depth = 0): unknown {
   if (SENSITIVE_LOG_KEY_PATTERN.test(key)) return "[redacted]";
+  if (BUSINESS_IDENTIFIER_LOG_KEY_PATTERN.test(key)) {
+    if (value == null || value === "") return value;
+    const digest = crypto.createHash("sha256").update(String(value)).digest("hex").slice(0, 12);
+    return `[id:${digest}]`;
+  }
   if (value == null) return value;
-  if (typeof value === "string") return value.length > 300 ? `${value.slice(0, 300)}...` : value;
+  if (typeof value === "string") return redactSensitiveText(value);
   if (typeof value === "number" || typeof value === "boolean") return value;
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) {
@@ -48,8 +68,10 @@ function errorForLog(error: unknown) {
     name: typedError.name || "Error",
     status,
     code: typedError.code || undefined,
-    message: (!isProduction || status < 500 || typedError.expose) ? (typedError.message || "未知错误") : "internal_server_error",
-    stack: !isProduction ? typedError.stack : undefined,
+    message: (!isProduction || status < 500 || typedError.expose)
+      ? redactSensitiveText(typedError.message || "未知错误")
+      : "internal_server_error",
+    stack: !isProduction && typedError.stack ? redactSensitiveText(typedError.stack, 2000) : undefined,
     details: typedError.details ? sanitizeForLog(typedError.details) : undefined,
   };
 }

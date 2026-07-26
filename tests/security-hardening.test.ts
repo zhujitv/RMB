@@ -85,8 +85,8 @@ test("business API requests are protected by unified rate limiting", () => {
   assert.match(proxy, /API_RATE_LIMIT_READ_LIMIT/);
   assert.match(proxy, /API_RATE_LIMIT_WRITE_LIMIT/);
   assert.match(proxy, /API_RATE_LIMIT_UPLOAD_LIMIT/);
-  assert.match(proxy, /(?:sessionTokenForRateLimit|sessionToken)\(request\)/);
-  assert.match(proxy, /requestIp\(request\)/);
+  assert.doesNotMatch(proxy, /(?:sessionTokenForRateLimit|sessionToken)\(request\)/);
+  assert.match(proxy, /resolveTrustedClientIp\(request\)/);
   assert.match(
     proxy,
     /const apiRateLimit = await checkApiRateLimit\(request\)/,
@@ -103,6 +103,8 @@ test("api rate limiting supports distributed redis with memory fallback", () => 
   assert.match(proxy, /function distributedRateLimitConfig/);
   assert.match(proxy, /UPSTASH_REDIS_REST_URL/);
   assert.match(proxy, /RATE_LIMIT_REDIS_REST_URL/);
+  assert.match(proxy, /REDIS_RESPONSE_MAX_BYTES/);
+  assert.match(proxy, /readRedisJson\(response\)/);
   assert.match(proxy, /RATE_LIMIT_NAMESPACE/);
   assert.match(proxy, /async function checkDistributedApiRateLimit/);
   assert.match(proxy, /\/pipeline/);
@@ -198,7 +200,7 @@ test("user email writes use shared email format validation", () => {
   assert.match(sharedBaseUtils, /export function requireValidEmail/);
   assert.match(sharedBaseUtils, /VALIDATION_INVALID_EMAIL/);
   assert.match(sharedUtils, /requireValidEmail/);
-  assert.match(sharedUsers, /const email = requireValidEmail\(input\.email, "邮箱"\)/);
+  assert.match(sharedUsers, /const email = requireAuthEmail\(input\.email\)/);
   assert.match(sharedUsers, /const data: Record<string, unknown> = \{[\s\S]*email,/);
   assert.doesNotMatch(
     sharedUsers,

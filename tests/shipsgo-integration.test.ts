@@ -26,6 +26,8 @@ const service = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
 const trackingService = readShipsgoTrackingSource();
 const shipsgoControlTowerService = readFileSync("lib/platform/shipsgo-control-tower.ts", "utf8");
 const freightowerService = readFreightowerTrackingSource();
+const shipsgoRequestSource = readFileSync("lib/platform/shipsgo-tracking-utils.ts", "utf8");
+const freightowerRequestSource = readFileSync("lib/platform/freightower-api.ts", "utf8");
 const notificationDefinitions = readNotificationEngineSource();
 const shared = readFileSync("lib/platform/shared.ts", "utf8");
 const schema = readPrismaSchemaSource();
@@ -160,6 +162,18 @@ test("ShipsGo service uses official v2 headers and signature validation", () => 
   assert.match(trackingService, /handleShipsgoWebhook/);
   assert.match(trackingService, /createHmac\("sha256"/);
   assert.match(trackingService, /timingSafeEqualText/);
+});
+
+test("tracking provider requests enforce timeout and bounded response reads", () => {
+  for (const source of [shipsgoRequestSource, freightowerRequestSource]) {
+    assert.match(source, /createOutboundTimeoutSignal\(TRACKING_PROVIDER_TIMEOUT_MS/);
+    assert.match(source, /readResponseTextLimited\(response, TRACKING_PROVIDER_RESPONSE_MAX_BYTES\)/);
+    assert.match(source, /TRACKING_PROVIDER_RESPONSE_MAX_BYTES = 2 \* 1024 \* 1024/);
+    assert.doesNotMatch(source, /response\.text\(\)/);
+  }
+  assert.match(shipsgoRequestSource, /SHIPSGO_API_ERROR/);
+  assert.match(freightowerRequestSource, /FREIGHTOWER_TOKEN_FAILED/);
+  assert.match(freightowerRequestSource, /FREIGHTOWER_API_ERROR/);
 });
 
 test("ShipsGo routes expose create, sync and webhook endpoints", () => {

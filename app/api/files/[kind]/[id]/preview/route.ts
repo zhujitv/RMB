@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import {
+  apiErrorSafe500,
   getManagedFilePreview,
   getManagedFilePreviewMetadata,
   managedFileStreamHeaders,
@@ -18,17 +19,13 @@ type ErrorLike = {
   message?: string;
 };
 
-function previewErrorResponse(error: ErrorLike) {
+async function previewErrorResponse(error: ErrorLike) {
   const status = error?.status || 500;
   const code = error?.code || (status === 403 ? "PERMISSION_DENIED" : "FILE_PREVIEW_FAILED");
-  const message = error?.message || "文件暂时无法预览，请下载查看。";
-  return Response.json({ error: message, code }, {
-    status,
-    headers: {
-      "Cache-Control": "no-store",
-      "X-Preview-Error-Code": code,
-    },
-  });
+  const response = await apiErrorSafe500(error, "文件暂时无法预览，请下载查看。", code);
+  response.headers.set("Cache-Control", "no-store");
+  response.headers.set("X-Preview-Error-Code", code);
+  return response;
 }
 
 export async function GET(request: NextRequest, { params }: RouteContext) {

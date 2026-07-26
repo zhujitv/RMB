@@ -1,19 +1,14 @@
 import { prisma } from "../prisma";
-import type { Prisma } from "../generated/prisma/client.js";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
   LEGACY_FACTORY_SUPPLIER_TYPE,
   LOGISTICS_SUPPLIER_TYPE_CODE,
-  LOGISTICS_OPERATOR_ROLE,
   PRODUCT_SUPPLIER_TYPE_CODE,
-  PRODUCT_SUPPLIER_TYPES,
   SUPPLIER_STATUSES,
   SUPPLIER_TYPES,
   assertRead,
   assertWrite,
   booleanInput,
-  canRead,
-  canWrite,
   codedError,
   nonEmpty,
   normalizeLogisticsCostTypeList,
@@ -24,71 +19,32 @@ import {
   requireText,
   runNonCriticalTask,
   serializeSupplier,
+  serializeSupplierOption,
   supplierTypeStorageValue,
   writeAudit,
 } from "./shared";
-import { effectivePermissions } from "./shared-permissions";
 import {
-  isExternalLogisticsSupplierAccount,
-  isInternalLogisticsOperator,
-} from "./masters-access";
+  AVAILABLE_SUPPLIER_SELECT,
+  canListAvailableSupplierOptions,
+  canReadFullSupplierRecords,
+  supplierListWhere,
+  type SupplierSelectionActor,
+  type SupplierSelectionQuery,
+} from "./supplier-selection";
 
 type ListOptions = { paginated?: boolean };
 type SupplierInput = Record<string, unknown>;
-type QueryLike = { get(name: string): string | null } | null | undefined;
+type QueryLike = SupplierSelectionQuery;
 type AuditRequestLike = Parameters<typeof writeAudit>[0];
-type ActorLike = { id?: string | null; role?: string | null; supplierId?: string | null } | null | undefined;
+type ActorLike = SupplierSelectionActor;
 
 export async function listSuppliers(query: QueryLike, actor: ActorLike = null, onlyActive = false, options: ListOptions = {}) {
   if (!onlyActive) {
     assertRead(actor, "suppliers");
-  } else if (!canRead(actor, "suppliers") && !canWrite(actor, "costs") && !canWrite(actor, "logistics") && !canWrite(actor, "domesticLogistics") && !canWrite(actor, "taxRefund")) {
+  } else if (!canListAvailableSupplierOptions(actor)) {
     throw permissionError("没有权限搜索供应商");
   }
-  const keyword = nonEmpty(query?.get("q") || query?.get("keyword") || query?.get("party"));
-  const typeText = nonEmpty(query?.get("type") || query?.get("supplierType"));
-  const statusText = nonEmpty(query?.get("status"));
-  const typeMap: Record<string, string | string[]> = {
-    factory: PRODUCT_SUPPLIER_TYPES,
-    logistics: "物流供应商",
-    logisticsfee: DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
-    "logistics-fee": DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
-    logistics_fee: DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
-    customs: "报关供应商",
-    ocean: "海运供应商",
-    shipping: "海运供应商",
-    other: "其他供应商",
-  };
-  const statusMap: Record<string, string> = { active: "启用", enabled: "启用", inactive: "停用", disabled: "停用" };
-  const supplierType = typeText ? (typeMap[typeText.toLowerCase()] || typeText) : "";
-  const requestedStatus = statusText ? (statusMap[statusText.toLowerCase()] || statusText) : "";
-  const actorSupplierId = nonEmpty(actor?.supplierId);
-  const supplierScope: Prisma.SupplierWhereInput = isExternalLogisticsSupplierAccount(actor) && actorSupplierId
-    ? { id: actorSupplierId }
-    : (actor?.role === LOGISTICS_OPERATOR_ROLE ? { id: "__no_supplier_bound__" } : {});
-  const where: Prisma.SupplierWhereInput = {
-    deletedAt: null,
-    ...supplierScope,
-    ...((onlyActive || actor?.role !== "管理员")
-      ? { status: "启用" }
-      : (SUPPLIER_STATUSES.includes(requestedStatus) ? { status: requestedStatus } : {})),
-    ...(Array.isArray(supplierType)
-      ? { supplierType: { in: supplierType } }
-      : (supplierType && PRODUCT_SUPPLIER_TYPES.includes(supplierType)
-        ? { supplierType: { in: PRODUCT_SUPPLIER_TYPES } }
-        : (supplierType && SUPPLIER_TYPES.includes(supplierType)
-          ? { supplierType: supplierTypeStorageValue(supplierType) }
-          : {}))),
-    ...(keyword ? {
-      OR: [
-        { supplierName: { contains: keyword, mode: "insensitive" } },
-        { invoiceTitle: { contains: keyword, mode: "insensitive" } },
-        { contactPerson: { contains: keyword, mode: "insensitive" } },
-        { supplierType: { contains: keyword, mode: "insensitive" } },
-        { taxNumber: { contains: keyword, mode: "insensitive" } },
-      ],
-    } : {}),
-  };
+  const where = supplierListWhere(query, actor, onlyActive);
   if (options.paginated) {
     const { page, pageSize } = pageParams(query, 20, 100);
     const [total, suppliers] = await Promise.all([
@@ -113,7 +69,26 @@ export async function listSuppliers(query: QueryLike, actor: ActorLike = null, o
 }
 
 export async function listAvailableSuppliers(query: QueryLike, actor: ActorLike) {
-  return listSuppliers(query, actor, true);
+  if (!canListAvailableSupplierOptions(actor)) {
+    throw permissionError("没有权限搜索供应商");
+  }
+  const where = supplierListWhere(query, actor, true);
+  if (canReadFullSupplierRecords(actor)) {
+    const suppliers = await prisma.supplier.findMany({
+      where,
+      include: { createdBy: true, updatedBy: true },
+      orderBy: [{ supplierName: "asc" }],
+      take: 200,
+    });
+    return suppliers.map(serializeSupplier);
+  }
+  const supplierOptions = await prisma.supplier.findMany({
+    where,
+    select: AVAILABLE_SUPPLIER_SELECT,
+    orderBy: [{ supplierName: "asc" }],
+    take: 200,
+  });
+  return supplierOptions.map(serializeSupplierOption);
 }
 
 export async function assertSupplierActive(supplierId: string) {

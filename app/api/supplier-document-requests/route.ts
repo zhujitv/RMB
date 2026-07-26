@@ -6,6 +6,9 @@ import {
 } from "../../../lib/platform/supplier-document-request-types";
 
 import { requireApiActor } from "../../../lib/api-route-guard";
+import {
+  assertMultipartRequestWithinLimit,
+} from "../../../lib/platform/upload-request-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,10 +37,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireApiActor(request);
-    const contentLength = Number(request.headers.get("content-length") || 0);
-    if (contentLength > SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES) {
-      throw codedError("回传表格请求体过大，请确认 Excel 文件小于 4MB 后重新上传。", 413, "SUPPLIER_DOCUMENT_REQUEST_BODY_TOO_LARGE");
-    }
+    const contentLength = assertMultipartRequestWithinLimit(request, {
+      maxBytes: SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES,
+      message: "回传表格请求体过大，请确认 Excel 文件小于 4MB 后重新上传。",
+      code: "SUPPLIER_DOCUMENT_REQUEST_BODY_TOO_LARGE",
+    });
     let formData: FormData;
     try {
       formData = await request.formData();

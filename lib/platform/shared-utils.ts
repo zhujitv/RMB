@@ -32,6 +32,7 @@ export {
   todayInputInChina,
   validEmail,
 } from "./shared-base-utils";
+export { apiErrorSafe500, apiErrorWithLegacyShape } from "./shared-api-error-compat";
 export type { InputSchema } from "./shared-base-utils";
 import { PAYMENT_TERM_LABELS, PAYMENT_TERM_TYPES } from "./shared-constants";
 import { codedError, optional } from "./shared-base-utils";

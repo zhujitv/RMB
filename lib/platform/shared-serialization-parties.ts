@@ -120,3 +120,19 @@ export function serializeSupplier(supplierInput: unknown = {}) {
     updatedAt: supplier.updatedAt,
   };
 }
+
+export function serializeSupplierOption(supplierInput: unknown = {}) {
+  const supplier = asLooseRecord<SupplierLike>(supplierInput);
+  return {
+    id: supplier.id,
+    supplierName: supplier.supplierName,
+    supplierType: supplierTypeDisplayName(supplier.supplierType),
+    status: supplier.status,
+    allowDomesticLogisticsEntry: Boolean(supplier.allowDomesticLogisticsEntry),
+    allowLogisticsExpenseEntry: Boolean(supplier.allowLogisticsExpenseEntry),
+    allowLogisticsInvoiceUpload: Boolean(supplier.allowLogisticsInvoiceUpload),
+    allowFactoryDocumentUpload: Boolean(supplier.allowFactoryDocumentUpload),
+    isDefaultLogisticsSupplier: Boolean(supplier.isDefaultLogisticsSupplier),
+    allowedLogisticsCostTypes: expandLegacyFullLogisticsCostTypeList(supplier.allowedLogisticsCostTypes || []),
+  };
+}

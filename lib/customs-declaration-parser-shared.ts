@@ -52,6 +52,10 @@ export type Candidate = {
 
 export type PdfParseOptions = {
   requireText?: boolean;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  maxPages?: number;
+  maxTextItems?: number;
 };
 
 export type ParserError = Error & {

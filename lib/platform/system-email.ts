@@ -1,4 +1,5 @@
-import { codedError, isPlainRecord } from "./shared-base-utils";
+import { codedError } from "./shared-base-utils";
+import { assertResendResponseOk, resendRequestSignal } from "./resend-email-security";
 
 type SendSystemEmailInput = {
   recipientEmails: string[];
@@ -34,12 +35,7 @@ export async function sendSystemEmail({ recipientEmails, ccEmails = [], subject,
       subject,
       text: body,
     }),
+    signal: resendRequestSignal(),
   });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as unknown;
-    const errorData = isPlainRecord(data) ? data : {};
-    const nestedError = isPlainRecord(errorData.error) ? errorData.error : {};
-    const reason = errorData.message || nestedError.message || errorData.error || `HTTP ${response.status}`;
-    throw codedError(`Resend 邮件发送失败：${reason}`, response.status, "RESEND_SEND_FAILED");
-  }
+  await assertResendResponseOk(response);
 }

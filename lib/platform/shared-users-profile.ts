@@ -4,6 +4,7 @@ import { codedError, requireText } from "./shared-base-utils";
 import { permissionError, type AccessUser } from "./shared-access";
 import { runNonCriticalTask } from "./shared-constants";
 import { writeAudit } from "./shared-audit";
+import { requireAuthName } from "./shared-auth-input";
 import {
   type AuditRequestLike,
   type ActorLike,
@@ -16,7 +17,7 @@ export async function updateOwnProfile(request: AuditRequestLike, actor: ActorLi
   const actorId = requireText(actor?.id, "当前用户");
   const user = await prisma.user.findUnique({ where: { id: actorId } });
   if (!user || !user.isActive) throw permissionError("请先登录", 401);
-  const name = requireText(input.name, "姓名");
+  const name = requireAuthName(input.name);
   const englishName = String(input.englishName || "").trim().slice(0, 80);
   const avatarInitials = resolveAvatarInitials(input, name, user);
   const avatarUrl = normalizeAvatarUrl(input.avatarUrl);
@@ -47,14 +48,37 @@ export async function updateOwnProfile(request: AuditRequestLike, actor: ActorLi
   return publicUser(updated);
 }
 
+export const MAX_AVATAR_BYTES = 200 * 1024;
+
+function avatarSignature(body: Buffer) {
+  if (body.byteLength >= 8 && body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png";
+  if (body.byteLength >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return "jpeg";
+  if (body.byteLength >= 12 && body.subarray(0, 4).toString("ascii") === "RIFF" && body.subarray(8, 12).toString("ascii") === "WEBP") return "webp";
+  return "";
+}
+
 export function normalizeAvatarUrl(value: unknown) {
   const text = String(value || "").trim();
   if (!text) return null;
   if (text.length > 300_000) throw codedError("头像文件过大，请选择更小的图片。", 400, "AVATAR_TOO_LARGE");
-  if (!/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(text)) {
+  const match = text.match(/^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/]*={0,2})$/i);
+  if (!match || match[2].length % 4 !== 0) {
     throw codedError("头像仅支持 PNG、JPG 或 WebP 图片。", 400, "AVATAR_TYPE_INVALID");
   }
-  return text;
+  const declaredType = match[1].toLowerCase() === "jpg" ? "jpeg" : match[1].toLowerCase();
+  const body = Buffer.from(match[2], "base64");
+  if (!body.byteLength) throw codedError("头像文件不能为空。", 400, "AVATAR_EMPTY");
+  if (body.byteLength > MAX_AVATAR_BYTES) {
+    throw codedError("头像文件过大，请选择不超过 200KB 的图片。", 400, "AVATAR_TOO_LARGE");
+  }
+  if (body.toString("base64") !== match[2]) {
+    throw codedError("头像数据格式错误，请重新选择图片。", 400, "AVATAR_BASE64_INVALID");
+  }
+  const detectedType = avatarSignature(body);
+  if (!detectedType || detectedType !== declaredType) {
+    throw codedError("头像内容与图片类型不一致。", 400, "AVATAR_SIGNATURE_INVALID");
+  }
+  return `data:image/${detectedType};base64,${body.toString("base64")}`;
 }
 
 export function browserLabel(userAgent: string | null | undefined) {

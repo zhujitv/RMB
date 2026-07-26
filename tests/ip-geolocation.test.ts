@@ -7,6 +7,7 @@ import { readSharedAuthSource, readSharedUsersSource } from "./source-helpers.ts
 
 const schema = readPrismaSchemaSource();
 const sharedAuth = readSharedAuthSource();
+const clientIp = readFileSync("lib/client-ip.ts", "utf8");
 const sharedUsers = readSharedUsersSource();
 const migration = readFileSync("prisma/migrations/20260628193000_login_attempt_ip_geolocation/migration.sql", "utf8");
 const localDb = readFileSync("data/ip-geolocation-ranges.json", "utf8");
@@ -31,11 +32,12 @@ test("login attempts persist local IP geolocation fields", () => {
   assert.match(migration, /ADD COLUMN IF NOT EXISTS "geo_country"/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS "failure_reason"/);
   assert.match(localDb, /"cidr": "127\.0\.0\.0\/8"/);
-  assert.match(sharedAuth, /request\?\.headers\?\.get\("x-forwarded-for"\)/);
-  assert.match(sharedAuth, /request\?\.headers\?\.get\("x-real-ip"\)/);
-  assert.match(sharedAuth, /request\?\.headers\?\.get\("cf-connecting-ip"\)/);
-  assert.match(sharedAuth, /request\?\.headers\?\.get\("vercel-forwarded-for"\)/);
-  assert.match(sharedAuth, /candidates\.find\(isPublicClientIp\)/);
+  assert.match(sharedAuth, /resolveTrustedClientIp\(request\)/);
+  assert.match(clientIp, /x-vercel-forwarded-for/);
+  assert.match(clientIp, /x-forwarded-for/);
+  assert.match(clientIp, /x-real-ip/);
+  assert.match(clientIp, /cf-connecting-ip/);
+  assert.match(clientIp, /TRUST_PROXY_HEADERS/);
   assert.match(sharedAuth, /const ipGeo = resolveIpGeolocation\(ipAddress\)/);
   assert.match(sharedAuth, /failureReason: success \? null : failureReason/);
   assert.match(sharedAuth, /console\.info\("login attempt captured"/);

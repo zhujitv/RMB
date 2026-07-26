@@ -1,9 +1,13 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
+import { resolveTrustedClientIp } from "../client-ip";
+import { logServerError } from "./shared-base-errors";
 
 export const SENSITIVE_AUDIT_KEY_PATTERN = /(password|passwordHash|token|secret|accessKey|apiKey|appCode|clientId|mapKey|authorization|cookie|session|storageKey|r2Key|r2Bucket|fileUrl|avatarUrl|originalName|originalFilename)/i;
 
 type AuditRequestLike = {
+  url?: string;
+  ip?: string | null;
   headers?: {
     get(name: string): string | null;
   };
@@ -53,12 +57,6 @@ type FilterRow = {
   costs?: FilterCost[] | null;
 };
 
-export function requestIp(request: AuditRequestLike) {
-  return request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || request?.headers?.get("x-real-ip")
-    || null;
-}
-
 type AuditJsonValue = string | number | boolean | null | AuditJsonValue[] | { [key: string]: AuditJsonValue };
 
 export function sanitizeAuditData(value: unknown, depth = 0): AuditJsonValue {
@@ -101,7 +99,7 @@ export async function writeAudit(
       entityId,
       beforeData: sanitizeJson(beforeData),
       afterData: sanitizeJson(afterData),
-      ipAddress: requestIp(request),
+      ipAddress: resolveTrustedClientIp(request),
     },
   });
 }
@@ -123,9 +121,15 @@ export async function writeAuthAudit(request: AuditRequestLike, input: AuthAudit
         ...(input.details || {}),
       },
     );
-  } catch {
+  } catch (error: unknown) {
     // Auth audit is important, but login and verification flows must not fail
     // solely because the audit sink is temporarily unavailable.
+    logServerError("critical auth audit write failed", error, {
+      action: input.action,
+      success: input.success,
+      userId: input.userId || "",
+      loginIdHash: input.loginIdHash || "",
+    });
   }
 }
 

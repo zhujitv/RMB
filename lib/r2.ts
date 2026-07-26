@@ -35,6 +35,13 @@ type R2UploadInput = {
   contentType?: string | null;
 };
 
+type ReadR2ObjectOptions = {
+  maxBytes?: number;
+  signal?: AbortSignal;
+};
+
+export const DEFAULT_R2_BUFFER_LIMIT_BYTES = 64 * 1024 * 1024;
+
 type TransformableStream = {
   transformToByteArray?: () => Promise<Uint8Array>;
   [Symbol.asyncIterator]?: () => AsyncIterator<Uint8Array | Buffer | string>;
@@ -221,32 +228,55 @@ export async function signedDownloadUrl(key: string, fileName: string, expiresIn
   }
 }
 
-async function streamToBuffer(stream: TransformableStream) {
+async function streamToBuffer(stream: TransformableStream, maxBytes: number) {
   if (!stream) return Buffer.alloc(0);
+  if (typeof stream[Symbol.asyncIterator] === "function") {
+    const asyncStream = stream as AsyncIterable<Uint8Array | Buffer | string>;
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    for await (const chunk of asyncStream) {
+      const buffer = Buffer.from(chunk);
+      totalBytes += buffer.byteLength;
+      if (totalBytes > maxBytes) {
+        throw storageError("文件超过安全读取上限，无法继续处理。", 413, "R2_OBJECT_TOO_LARGE");
+      }
+      chunks.push(buffer);
+    }
+    return Buffer.concat(chunks, totalBytes);
+  }
   if (typeof stream.transformToByteArray === "function") {
-    return Buffer.from(await stream.transformToByteArray());
+    const body = Buffer.from(await stream.transformToByteArray());
+    if (body.byteLength > maxBytes) {
+      throw storageError("文件超过安全读取上限，无法继续处理。", 413, "R2_OBJECT_TOO_LARGE");
+    }
+    return body;
   }
-  if (typeof stream[Symbol.asyncIterator] !== "function") {
-    return Buffer.alloc(0);
-  }
-  const asyncStream = stream as AsyncIterable<Uint8Array | Buffer | string>;
-  const chunks: Buffer[] = [];
-  for await (const chunk of asyncStream) chunks.push(Buffer.from(chunk));
-  return Buffer.concat(chunks);
+  return Buffer.alloc(0);
 }
 
-export async function readR2Object(key: string) {
+export async function readR2Object(key: string, options: ReadR2ObjectOptions = {}) {
   if (!key) throw storageError("R2 文件 key 缺失，无法读取文件。", 404, "R2_OBJECT_NOT_FOUND");
   const bucket = r2BucketName();
+  const maxBytes = Math.min(
+    DEFAULT_R2_BUFFER_LIMIT_BYTES,
+    Math.max(1, Math.trunc(Number(options.maxBytes) || DEFAULT_R2_BUFFER_LIMIT_BYTES)),
+  );
   let result: GetObjectCommandOutput;
   try {
-    result = await r2Client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    result = await r2Client().send(
+      new GetObjectCommand({ Bucket: bucket, Key: key }),
+      options.signal ? { abortSignal: options.signal } : undefined,
+    );
   } catch (error) {
     throw normalizeStorageError(error);
   }
+  if (Number(result.ContentLength || 0) > maxBytes) {
+    throw storageError("文件超过安全读取上限，无法继续处理。", 413, "R2_OBJECT_TOO_LARGE");
+  }
   try {
-    return await streamToBuffer(result.Body as TransformableStream);
+    return await streamToBuffer(result.Body as TransformableStream, maxBytes);
   } catch (error) {
+    if ((error as StorageError | null)?.code === "R2_OBJECT_TOO_LARGE") throw error;
     const typedError = (error || {}) as { message?: string };
     throw storageError("R2 文件流读取失败，请稍后重试。", 502, "R2_STREAM_FAILED", { providerMessage: typedError.message || "" });
   }

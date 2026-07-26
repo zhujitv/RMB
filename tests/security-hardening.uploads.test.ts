@@ -172,7 +172,7 @@ test("expected auth failures do not flood server error logs", () => {
 test("local build scripts load env files before prisma commands", () => {
   assert.match(
     packageJson,
-    /"build:app": "node scripts\/run-with-env\.mjs prisma generate && next build"/,
+    /"build:app": "node scripts\/run-with-env\.mjs node scripts\/security-env-check\.mjs && node scripts\/run-with-env\.mjs prisma generate && next build"/,
   );
   assert.match(
     packageJson,
@@ -180,8 +180,9 @@ test("local build scripts load env files before prisma commands", () => {
   );
   assert.match(
     packageJson,
-    /"build": "npm run build:release"/,
+    /"build": "npm run build:app"/,
   );
+  assert.doesNotMatch(packageJson, /"build": "[^"]*migrate deploy/);
   assert.match(
     packageJson,
     /"db:deploy": "node scripts\/run-with-env\.mjs prisma migrate deploy"/,
@@ -197,7 +198,7 @@ test("local build scripts load env files before prisma commands", () => {
 test("ci runs the security audit guardrail", () => {
   assert.match(
     packageJson,
-    /"security:audit": "node scripts\/security-audit\.mjs"/,
+    /"security:audit": "node scripts\/security-audit\.mjs && node scripts\/lockfile-integrity\.mjs"/,
   );
   assert.match(packageJson, /"verify:ci": "[^"]*npm run security:audit/);
   assert.match(packageJson, /"verify:release": "[^"]*npm run security:audit/);

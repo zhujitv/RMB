@@ -5,6 +5,7 @@ import {
   num,
 } from "./shared-base-utils";
 import { getShipsgoIntegrationSettings } from "./shipsgo-integration";
+import { createOutboundTimeoutSignal, readResponseTextLimited } from "./outbound-request-security";
 
 export type ShipsgoActor = {
   id?: string | null;
@@ -39,6 +40,8 @@ export const FREIGHTOWER_PROVIDER = "FREIGHTOWER";
 export const OCEAN_MODE = "OCEAN";
 const CONTAINER_PATTERN = /^[A-Z]{4}[0-9]{7}$/;
 const CARRIER_PATTERN = /^(SG_)?[A-Z0-9]{4}$/;
+const TRACKING_PROVIDER_TIMEOUT_MS = 15000;
+const TRACKING_PROVIDER_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 
 export function actorId(actor: ShipsgoActor) {
   return nonEmpty(actor?.id);
@@ -136,18 +139,25 @@ export async function shipsgoApiRequest<T>(
   options: RequestInit = {},
   allowConflict = false,
 ): Promise<ShipsgoApiResponse<T>> {
-  const response = await fetch(`${shipsgoApiBaseUrl(settings)}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Shipsgo-User-Token": settings.apiKey,
-      ...(options.headers || {}),
-    },
-    cache: "no-store",
-    redirect: "error",
-  });
-  const text = await response.text();
+  let response: Response;
+  let text: string;
+  try {
+    response = await fetch(`${shipsgoApiBaseUrl(settings)}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-Shipsgo-User-Token": settings.apiKey,
+        ...(options.headers || {}),
+      },
+      cache: "no-store",
+      redirect: "error",
+      signal: createOutboundTimeoutSignal(TRACKING_PROVIDER_TIMEOUT_MS, options.signal),
+    });
+    text = await readResponseTextLimited(response, TRACKING_PROVIDER_RESPONSE_MAX_BYTES);
+  } catch {
+    throw codedError(shipsgoApiErrorMessage(502, {}), 502, "SHIPSGO_API_ERROR");
+  }
   const data = text ? safeJsonParse(text) : {};
   if (!response.ok && !(allowConflict && response.status === 409)) {
     throw codedError(shipsgoApiErrorMessage(response.status, data), shipsgoApiErrorStatus(response.status), "SHIPSGO_API_ERROR");

@@ -44,7 +44,10 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
   rows: LogisticsInvoiceValidationRow[];
   actor: ActorLike;
   taskId?: string;
+  signal?: AbortSignal;
+  timeoutMs?: number;
 }) {
+  if (input.signal?.aborted) throw input.signal.reason;
   const rows = input.rows.filter((row) => row.id);
   const rowIds = rows.map((row) => row.id);
   const documentId = nonEmpty(input.documentId);
@@ -114,6 +117,7 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
         include: { results: true },
       });
   if (task.status !== LOGISTICS_INVOICE_VALIDATION_PROCESSING || task.validationStatus !== "PROCESSING") return task;
+  if (input.signal?.aborted) throw input.signal.reason;
   await updateRowsWithValidationResult({
     rowIds,
     actor: input.actor,
@@ -129,8 +133,13 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
   let latestApiName = "";
   let latestProvider = "ALIYUN";
   try {
-    const fileBuffer = await readR2Object(document.storageKey);
-    const recognized = await recognizeLogisticsInvoiceWithOcr(fileBuffer);
+    const fileBuffer = await readR2Object(document.storageKey, { maxBytes: 10 * 1024 * 1024, signal: input.signal });
+    if (input.signal?.aborted) throw input.signal.reason;
+    const recognized = await recognizeLogisticsInvoiceWithOcr(fileBuffer, {
+      signal: input.signal,
+      timeoutMs: input.timeoutMs,
+    });
+    if (input.signal?.aborted) throw input.signal.reason;
     const text = cleanText(recognized.text);
     const structuredFields = recognized.extractedFields || {};
     latestRawText = text;
@@ -215,6 +224,7 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
     invalidateWorkbenchTodosCache();
     return saved;
   } catch (error) {
+    if (input.signal?.aborted) throw input.signal.reason || error;
     const message = error instanceof Error ? error.message : String(error || "识别失败");
     const validationJson = {
       invoiceGroupKey: input.invoiceGroupKey,

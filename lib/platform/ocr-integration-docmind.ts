@@ -4,6 +4,8 @@ import DocMindClient, {
 } from "@alicloud/docmind-api20220711";
 import { type CustomsDeclarationItemFields } from "../customs-declaration-parser";
 import { codedError, isPlainRecord } from "./shared-base-utils";
+import { logServerError } from "./shared-base-errors";
+import { readAliyunDocMindOutputSafely } from "./outbound-request-security";
 import {
   DOCMIND_CUSTOMS_MAX_POLLS,
   DOCMIND_CUSTOMS_POLL_INTERVAL_MS,
@@ -63,16 +65,13 @@ export function collectDocMindOutputFileUrls(value: unknown, output: string[] = 
 export async function readDocMindOutputFiles(rawStatusJson: unknown[]) {
   const urls = [...new Set(rawStatusJson.flatMap((item) => collectDocMindOutputFileUrls(item)).slice(0, 3))];
   const outputs: unknown[] = [];
-  for (const url of urls) {
+  for (const [outputIndex, url] of urls.entries()) {
     try {
-      const response = await fetch(url);
+      const { response, text } = await readAliyunDocMindOutputSafely(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const text = await response.text();
       outputs.push(parseJsonMaybe(text));
     } catch (error) {
-      console.error("aliyun-docmind-customs-output-file-read-failed", {
-        message: ocrErrorText(error),
-      });
+      logServerError("aliyun-docmind-customs-output-file-read-failed", error, { outputIndex });
     }
   }
   return outputs;
@@ -225,13 +224,6 @@ export function throwDocMindCustomsEmptyError(params: {
   items: CustomsDeclarationItemFields[];
   parsedJson: unknown;
 }) {
-  const rawJson = buildDocMindCustomsRawJson(
-    params.submitRawJson,
-    params.statusRawJson,
-    params.resultRawJson,
-    params.taskId,
-    params.data,
-  );
   const error = codedError("文档智能未返回可用的报关单结构化字段。", 422, "ALIYUN_DOCMIND_CUSTOMS_EMPTY");
   error.details = {
     source: "ALIYUN_DOCMIND_TRADE_DOCUMENT_CUSTOMS",
@@ -240,22 +232,18 @@ export function throwDocMindCustomsEmptyError(params: {
     parser: "CUSTOMS_DECLARATION_DOCMIND",
     taskId: params.taskId,
     textLength: params.text.length,
-    textPreview: params.text.slice(0, 4000),
     dataType: Array.isArray(params.data) ? "array" : typeof params.data,
     dataKeys: safeObjectKeys(params.data),
     statusCount: params.statusRawJson.length,
-    extractedFields: params.structuredFields,
+    extractedFieldKeys: safeObjectKeys(params.structuredFields),
     itemsCount: params.items.length,
-    parsedJson: params.parsedJson,
-    rawJsonPreview: jsonPreview(rawJson),
+    parsedDataKeys: safeObjectKeys(params.parsedJson),
   };
   throw error;
 }
 
 export function customsDiagnosticResultFromError(fileName: string, error: unknown) {
   const details = ocrErrorDetails(error);
-  const parsedJson = isPlainRecord(details.parsedJson) ? details.parsedJson : {};
-  const extractedFields = isPlainRecord(details.extractedFields) ? details.extractedFields : {};
   return {
     fileName,
     source: normalizeFieldValue(details.source) || "ALIYUN_DOCMIND_TRADE_DOCUMENT_CUSTOMS",
@@ -270,23 +258,30 @@ export function customsDiagnosticResultFromError(fileName: string, error: unknow
     docMindErrorMessage: ocrErrorText(error),
     fallbackUsed: false,
     fields: {
-      customsDeclarationNo: parsedJson.customsDeclarationNo || extractedFields.customsDeclarationNo || "",
-      customsDeclarationDate: parsedJson.customsDeclarationDate || extractedFields.customsDeclarationDate || "",
-      exportDate: parsedJson.exportDate || extractedFields.exportDate || "",
-      tradeTerm: parsedJson.tradeTerm || extractedFields.tradeTerm || "",
-      currency: parsedJson.currency || extractedFields.currency || "",
-      totalAmount: parsedJson.totalAmount || extractedFields.totalAmount || "",
+      customsDeclarationNo: "",
+      customsDeclarationDate: "",
+      exportDate: "",
+      tradeTerm: "",
+      currency: "",
+      totalAmount: "",
     },
     itemsCount: parseNumberText(details.itemsCount),
     itemsPreview: [],
-    extractedFields,
-    parsedJson,
-    rawJsonPreview: normalizeFieldValue(details.rawJsonPreview) || jsonPreview({
+    extractedFields: {},
+    parsedJson: {},
+    rawJsonPreview: jsonPreview({
       error: {
         code: (error as { code?: unknown } | null)?.code || "",
         message: ocrErrorText(error),
       },
-      details,
+      metadata: {
+        source: details.source,
+        apiName: details.apiName,
+        textLength: details.textLength,
+        dataType: details.dataType,
+        dataKeys: details.dataKeys,
+        itemsCount: details.itemsCount,
+      },
     }),
   };
 }

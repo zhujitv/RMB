@@ -90,10 +90,20 @@ cp .env.example .env.local
 ### 必填配置
 
 ```env
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require"
-CRON_SECRET="use-a-long-random-secret"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require&uselibpqcompat=true"
+APP_URL="https://your-production-domain.example.com"
+CRON_SECRET=""
+SETTINGS_ENCRYPTION_KEY=""
+SETTINGS_ENCRYPTION_KEY_ID="primary-v1"
+SETTINGS_ENCRYPTION_PREVIOUS_KEYS=""
 BCRYPT_COST="12"
 ```
+
+执行 `openssl rand -hex 32` 生成 `SETTINGS_ENCRYPTION_KEY`。密钥轮换时更新
+`SETTINGS_ENCRYPTION_KEY_ID`，并暂时把旧密钥以
+`{"old-key-id":"base64-or-hex-key"}` 的 JSON 格式配置到
+`SETTINGS_ENCRYPTION_PREVIOUS_KEYS`，确认历史设置完成自动重加密后再移除旧密钥。
+再独立执行一次 `openssl rand -hex 32` 生成 `CRON_SECRET`，两个密钥不能复用。
 
 ### 首次初始化管理员
 
@@ -153,17 +163,21 @@ API_RATE_LIMIT_WINDOW_MS="60000"
 API_RATE_LIMIT_READ_LIMIT="1000"
 API_RATE_LIMIT_WRITE_LIMIT="300"
 API_RATE_LIMIT_UPLOAD_LIMIT="60"
+API_RATE_LIMIT_MEMORY_MAX_BUCKETS="20000"
 ```
 
-如果部署为多实例生产环境，建议配置 Upstash Redis：
+如果部署为多实例生产环境，必须配置 Upstash Redis：
 
 ```env
 UPSTASH_REDIS_REST_URL=""
 UPSTASH_REDIS_REST_TOKEN=""
 RATE_LIMIT_NAMESPACE="nextwood"
+RATE_LIMIT_REDIS_TIMEOUT_MS="1500"
+API_RATE_LIMIT_REGISTRATION_WINDOW_MS="900000"
+API_RATE_LIMIT_REGISTRATION_LIMIT="5"
 ```
 
-未配置 Redis 时，系统会使用内存限流兜底。
+本地未配置 Redis 时，系统会使用内存限流兜底；Vercel Production 构建会要求配置分布式 Redis。
 
 ### 可选第三方接口
 
@@ -174,6 +188,14 @@ RATE_LIMIT_NAMESPACE="nextwood"
 - Webhook Secret
 
 这些通常在系统设置页面维护。若有服务端环境变量要求，以 `.env.example` 和系统设置页面为准。
+
+阿里云接口默认只允许官方 HTTPS 域名。只有在确认自定义域名可信时，才使用以下逗号分隔白名单：
+
+```env
+ALIYUN_OCR_ALLOWED_HOSTS=""
+ALIYUN_DOCMIND_ENDPOINT_ALLOWED_HOSTS=""
+ALIYUN_DOCMIND_OUTPUT_ALLOWED_HOSTS=""
+```
 
 ## 6. 初始化数据库
 
@@ -262,13 +284,13 @@ Vercel 构建命令使用项目默认配置：
 npm run build
 ```
 
-如果希望生产部署时自动执行数据库迁移，可将构建命令调整为：
+只有在受保护、确认已备份的发布步骤中，才可以显式执行：
 
 ```bash
 npm run build:release
 ```
 
-更稳妥的方式是：
+禁止把 `build:release` 配成 Preview 或普通 Vercel Build Command，避免构建失败时数据库已经被修改。推荐流程是：
 
 1. 先手动备份数据库。
 2. 手动执行迁移。

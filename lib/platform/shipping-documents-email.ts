@@ -1,4 +1,5 @@
-import { codedError, isPlainRecord } from "./shared";
+import { codedError } from "./shared";
+import { assertResendResponseOk, resendRequestSignal } from "./resend-email-security";
 import { type EmailAttachment, type SendShippingDocumentsEmailInput } from "./shipping-documents-shared";
 
 function resendMailConfig() {
@@ -38,12 +39,7 @@ export async function sendShippingDocumentsEmail({ recipientEmails, ccEmails, at
       text: body,
       attachments: resendAttachmentPayload(attachments),
     }),
+    signal: resendRequestSignal(),
   });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as unknown;
-    const errorData = isPlainRecord(data) ? data : {};
-    const nestedError = isPlainRecord(errorData.error) ? errorData.error : {};
-    const reason = errorData.message || nestedError.message || errorData.error || `HTTP ${response.status}`;
-    throw codedError(`Resend 邮件发送失败：${reason}`, response.status, "RESEND_SEND_FAILED");
-  }
+  await assertResendResponseOk(response);
 }

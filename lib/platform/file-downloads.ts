@@ -41,8 +41,6 @@ type ManagedFileBodyResult = {
     fileUrl: string;
     fileName: string;
     mimeType: string;
-    storageKey: string;
-    bucket: string;
     uploadedAt: unknown;
     uploadedBy: unknown;
     binding: ManagedFileBinding;
@@ -64,9 +62,6 @@ type SerializedDocumentLike = {
   originalName?: string | null;
   mimeType?: string | null;
   fileUrl?: string | null;
-  storageKey?: string | null;
-  bucket?: string | null;
-  r2Bucket?: string | null;
   uploadedAt?: unknown;
   uploadedBy?: unknown;
 };
@@ -92,8 +87,6 @@ function orderDocumentMetadata(document: SerializedDocumentLike = {}) {
     fileUrl: String(document.fileUrl || ""),
     fileName: managedOrderDocumentFileName(document),
     mimeType,
-    storageKey: String(document.storageKey || ""),
-    bucket: String(document.bucket || document.r2Bucket || ""),
     uploadedAt: document.uploadedAt || null,
     uploadedBy: document.uploadedBy || null,
     binding: {
@@ -115,8 +108,6 @@ function supplierTemplateMetadata(requestId: string, template: SupplierTemplateL
     fileUrl: "",
     fileName: template.fileName || "factory-document-template.xlsx",
     mimeType,
-    storageKey: "",
-    bucket: "",
     uploadedAt: null,
     uploadedBy: null,
     binding: {

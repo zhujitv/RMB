@@ -6,6 +6,7 @@ import {
 } from "./shared-constants";
 import { COMMON_SIGNATURE, NOTIFICATION_TYPES } from "./notification-definition-types";
 import type { NotificationTypeDefinition } from "./notification-definition-types";
+import { SECURITY_NOTIFICATION_TYPE_DEFINITIONS } from "./notification-security-definitions";
 
 export * from "./notification-definition-types";
 
@@ -35,6 +36,7 @@ export const NOTIFICATION_TYPE_DEFINITIONS: NotificationTypeDefinition[] = [
       { key: "verifyUrl", label: "邮箱验证链接", required: true },
     ],
   },
+  ...SECURITY_NOTIFICATION_TYPE_DEFINITIONS,
   {
     type: NOTIFICATION_TYPES.SHIPPING_DOCUMENTS,
     name: "清关资料通知",

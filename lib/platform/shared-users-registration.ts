@@ -2,10 +2,17 @@ import crypto from "node:crypto";
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../password-policy";
-import { codedError, logServerError, requireText, requireValidEmail } from "./shared-base-utils";
+import { codedError, logServerError } from "./shared-base-utils";
 import { runNonCriticalTask } from "./shared-constants";
 import { writeAudit, writeAuthAudit } from "./shared-audit";
 import { hashPassword } from "./shared-auth-password";
+import {
+  authPassword,
+  requireAuthEmail,
+  requireAuthName,
+  trustedApplicationOrigin,
+  verificationTokenInput,
+} from "./shared-auth-input";
 import { NOTIFICATION_TEMPLATE_TYPES, sendNotificationEmail } from "./notification-engine";
 import { ensureDefaultUsers } from "./shared-users-bootstrap";
 import {
@@ -24,11 +31,16 @@ export function assertPasswordPolicy(password: unknown) {
 
 export function requestOriginFromAuditRequest(request: AuditRequestLike) {
   const rawUrl = String((request as { url?: string } | null | undefined)?.url || "");
-  try {
-    return new URL(rawUrl).origin;
-  } catch {
-    return process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || process.env.APP_BASE_URL || "";
-  }
+  return trustedApplicationOrigin(rawUrl);
+}
+
+function registrationResponse(email: string, name: string) {
+  return {
+    email,
+    name,
+    approvalStatus: "PENDING",
+    emailVerified: false,
+  };
 }
 
 export function verificationTokenHash(token: unknown) {
@@ -55,10 +67,9 @@ async function createEmailVerificationToken(userId: string) {
   return { token, idempotencyKey: `email-verification-${row.id}` };
 }
 
-async function sendEmailVerification(request: AuditRequestLike, user: { id: string; name?: string | null; email: string }) {
+async function sendEmailVerification(origin: string, user: { id: string; name?: string | null; email: string }) {
   const { token, idempotencyKey } = await createEmailVerificationToken(user.id);
-  const origin = requestOriginFromAuditRequest(request);
-  const verifyUrl = `${origin || ""}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+  const verifyUrl = `${origin}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
   const delivery = await sendNotificationEmail({
     type: NOTIFICATION_TEMPLATE_TYPES.USER_EMAIL_VERIFICATION,
     recipientEmails: [user.email],
@@ -78,8 +89,7 @@ async function sendEmailVerification(request: AuditRequestLike, user: { id: stri
 }
 
 export async function verifyRegistrationEmail(token: unknown, request: AuditRequestLike = null) {
-  if (!String(token || "").trim()) throw codedError("邮箱验证链接无效。", 400, "EMAIL_VERIFICATION_TOKEN_INVALID");
-  const tokenHash = verificationTokenHash(token);
+  const tokenHash = verificationTokenHash(verificationTokenInput(token));
   const row = await prisma.emailVerificationToken.findUnique({
     where: { tokenHash },
     include: { user: { select: USER_PUBLIC_SELECT } },
@@ -117,10 +127,10 @@ export async function verifyRegistrationEmail(token: unknown, request: AuditRequ
 
 export async function registerUser(request: AuditRequestLike, input: UserInput = {}) {
   await ensureDefaultUsers();
-  const name = requireText(input.name, "姓名");
-  const email = requireValidEmail(input.email, "邮箱");
-  const password = String(input.password || "");
-  const confirmPassword = String(input.confirmPassword || input.passwordConfirm || "");
+  const name = requireAuthName(input.name);
+  const email = requireAuthEmail(input.email);
+  const password = authPassword(input.password);
+  const confirmPassword = authPassword(input.confirmPassword || input.passwordConfirm, "确认密码");
   if (!confirmPassword || confirmPassword !== password) {
     throw codedError("两次输入的密码不一致。", 400, "PASSWORD_CONFIRM_MISMATCH");
   }
@@ -129,26 +139,41 @@ export async function registerUser(request: AuditRequestLike, input: UserInput =
     where: { email: { equals: email, mode: "insensitive" } },
   });
   if (duplicate) {
-    throw codedError("该邮箱已注册，请直接登录或联系管理员。", 409, "EMAIL_ALREADY_EXISTS");
+    await runNonCriticalTask("重复注册申请安全审计写入", () => writeAuthAudit(request, {
+      action: "注册申请已接收",
+      success: true,
+      reason: "registration_received",
+      loginIdHash: crypto.createHash("sha256").update(email).digest("hex").slice(0, 16),
+    }));
+    return registrationResponse(email, name);
   }
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      passwordHash: hashPassword(password),
-      role: "业务员",
-      avatarInitials: resolveAvatarInitials(input, name),
-      customPermissions: Prisma.JsonNull,
-      mustChangePassword: false,
-      passwordPolicyPassed: true,
-      emailVerified: false,
-      emailVerifiedAt: null,
-      approvalStatus: "PENDING",
-      isActive: false,
-    },
-  });
+  const verificationOrigin = requestOriginFromAuditRequest(request);
+  let user;
   try {
-    await sendEmailVerification(request, user);
+    user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash: hashPassword(password),
+        role: "业务员",
+        avatarInitials: resolveAvatarInitials(input, name),
+        customPermissions: Prisma.JsonNull,
+        mustChangePassword: false,
+        passwordPolicyPassed: true,
+        emailVerified: false,
+        emailVerifiedAt: null,
+        approvalStatus: "PENDING",
+        isActive: false,
+      },
+    });
+  } catch (error: unknown) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return registrationResponse(email, name);
+    }
+    throw error;
+  }
+  try {
+    await sendEmailVerification(verificationOrigin, user);
   } catch (error: unknown) {
     logServerError("email verification send failed", error, { userId: user.id });
     await prisma.user.delete({ where: { id: user.id } }).catch((deleteError: unknown) => {
@@ -163,5 +188,5 @@ export async function registerUser(request: AuditRequestLike, input: UserInput =
     approvalStatus: user.approvalStatus,
     emailVerified: user.emailVerified,
   }));
-  return { id: user.id, email: user.email, name: user.name, approvalStatus: user.approvalStatus, emailVerified: user.emailVerified };
+  return registrationResponse(email, name);
 }

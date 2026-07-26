@@ -18,6 +18,9 @@ export type FileAssetClient = {
     upsert(args: Prisma.FileAssetUpsertArgs): Promise<FileAsset>;
     updateMany(args: Prisma.FileAssetUpdateManyArgs): Promise<Prisma.BatchPayload>;
   };
+  notificationOutbox: {
+    upsert(args: Prisma.NotificationOutboxUpsertArgs): Promise<unknown>;
+  };
 };
 
 export type OrderDocumentAssetLike = {

@@ -145,8 +145,13 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
     });
   } catch (error: unknown) {
     await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
-    const message = error instanceof Error ? error.message : "未知错误";
-    throw codedError(`数据库写入失败：${message}`, 500, "DATABASE_WRITE_FAILED");
+    logServerError("订单单证数据库写入失败", error, {
+      orderId: order.id,
+      documentType,
+      supplierId: resolvedSupplierId || "",
+      costId: cost?.id || "",
+    });
+    throw codedError("数据库写入失败，请稍后重试。", 500, "DATABASE_WRITE_FAILED");
   }
   if (documentType === "EXPORT_INVOICE") {
     try {

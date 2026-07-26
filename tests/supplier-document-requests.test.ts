@@ -173,7 +173,7 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierRequestListRoute, /costId: String\(formData\.get\("costId"\) \|\| ""\)/);
   assert.match(supplierRequestListRoute, /SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES/);
   assert.match(supplierRequestListRoute, /8 \* 1024 \* 1024/);
-  assert.match(supplierRequestListRoute, /content-length/);
+  assert.match(supplierRequestListRoute, /assertMultipartRequestWithinLimit\(request/);
   assert.match(supplierRequestListRoute, /SUPPLIER_DOCUMENT_FORM_PARSE_FAILED/);
   assert.match(supplierRequestListRoute, /回传表格读取失败，请确认文件小于 4MB/);
   assert.match(supplierRequestListRoute, /DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE/);

@@ -11,3 +11,10 @@ export {
   upsertFileAssetForPaymentVoucher,
   upsertFileAssetForSupplierRequestTemplate,
 } from "./file-asset-operations";
+export {
+  DEFAULT_FILE_STORAGE_SOFT_DELETE_RETENTION_DAYS,
+  FILE_STORAGE_DELETE_MAX_ATTEMPTS,
+  FILE_STORAGE_DELETE_OUTBOX_TYPE,
+  enqueueFileStorageDeletion,
+  processFileStorageDeletionOutbox,
+} from "./file-storage-deletion-outbox";

@@ -24,17 +24,18 @@ import {
   normalizeCurrencyCode,
 } from "./ocr-integration-parsing";
 import {
+  aliyunDocMindEndpoint,
   createAliyunDocMindClient,
   createAliyunOcrClient,
   rasterizeFirstPdfPageForOcr,
 } from "./ocr-integration-clients";
+import { assertAliyunDocMindEndpointSafe } from "./outbound-request-security";
 import {
   buildDocMindCustomsRawJson,
   collectDocMindText,
   docMindResponseError,
   findDocMindTaskId,
   getAliyunDocMindParserResult,
-  jsonPreview,
   safeObjectKeys,
   throwDocMindCustomsEmptyError,
 } from "./ocr-integration-docmind";
@@ -61,13 +62,11 @@ export function throwAliyunCustomsStructureEmptyError(params: {
     apiName: "ALIYUN_RECOGNIZE_DOCUMENT_STRUCTURE",
     parser: "CUSTOMS_DECLARATION_DOCUMENT_STRUCTURE",
     textLength: params.text.length,
-    textPreview: params.text.slice(0, 4000),
     dataType: Array.isArray(params.data) ? "array" : typeof params.data,
     dataKeys: safeObjectKeys(params.data),
-    extractedFields: params.structuredFields,
+    extractedFieldKeys: safeObjectKeys(params.structuredFields),
     itemsCount: params.items.length,
-    parsedJson: params.parsedJson,
-    rawJsonPreview: jsonPreview(buildAliyunCustomsStructureRawJson(params.rawJson, params.data)),
+    parsedDataKeys: safeObjectKeys(params.parsedJson),
   };
   throw error;
 }
@@ -151,6 +150,7 @@ export async function recognizeAliyunCustomsDeclarationWithDocMind(
   if (!fileUrl) {
     throw codedError("文档智能报关单识别需要可下载的文件 URL。", 400, "ALIYUN_DOCMIND_FILE_URL_REQUIRED");
   }
+  await assertAliyunDocMindEndpointSafe(aliyunDocMindEndpoint());
   const client = createAliyunDocMindClient(customsOcrSettings(settings));
   const response = await client.ayncTradeDocumentPackageExtractSmartApp(new AyncTradeDocumentPackageExtractSmartAppRequest({
     fileUrl,

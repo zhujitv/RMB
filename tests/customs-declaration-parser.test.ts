@@ -221,7 +221,10 @@ test("parser source does not reference bundled fixture documents", async () => {
   ];
 
   forbidden.forEach((pattern) => assert.equal(source.toLowerCase().includes(pattern), false));
-  assert.match(source, /import\(["']pdf2json["']\)/);
+  assert.match(source, /createRequire\(import\.meta\.url\)\.resolve\("pdf2json"\)/);
+  assert.match(source, /new Worker\(PDF_TEXT_WORKER_SOURCE/);
+  assert.match(source, /await worker\.terminate\(\)/);
+  assert.match(source, /resourceLimits:/);
   assert.match(packageJson, /"pdf2json"/);
   assert.doesNotMatch(packageJson, /"pdf-parse"/);
   assert.doesNotMatch(source, /pdf-parse|pdfjs-dist|DOMMatrix|getScreenshot|render\(/);

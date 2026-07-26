@@ -98,7 +98,7 @@ test("OCR integration keeps invoice and logistics OCR without supplier return OC
   assert.match(service, /recognizeInvoice\(new RecognizeInvoiceRequest/);
   assert.match(service, /ALIYUN_RECOGNIZE_INVOICE/);
   assert.match(service, /recognizeLogisticsInvoiceWithOcr/);
-  assert.match(service, /return recognizeAliyunVatInvoice\(fileBuffer, settings\)/);
+  assert.match(service, /return recognizeAliyunVatInvoice\(fileBuffer, settings, \{ signal: options\.signal \}\)/);
   assert.doesNotMatch(service, /recognizeSupplierDocumentWithOcr/);
   assert.doesNotMatch(service, /recognizeAliyunSupplierContract/);
   assert.doesNotMatch(service, /const source = options\.url \? \{ url: options\.url \} : \{ body: Readable\.from\(buffer\) \}/);
@@ -119,8 +119,9 @@ test("Aliyun OCR requests retry and log provider diagnostics before surfacing fa
   assert.match(service, /aliyun-ocr-request-failed/);
   assert.match(service, /requestId/);
   assert.match(service, /httpStatus/);
-  assert.match(service, /responseBody/);
   assert.match(service, /errorMessage/);
+  assert.match(service, /fetchAliyunOcrApi/);
+  assert.doesNotMatch(service, /responseBody:\s*diagnostics\.responseBody/);
   assert.match(service, /ALIYUN_OCR_SERVICE_UNAVAILABLE/);
   assert.match(service, /checkAliyunOcrConnectivity/);
   assert.match(service, /scheduleAliyunOcrStartupHealthCheck/);
@@ -473,7 +474,7 @@ test("OCR center diagnostics remain controlled by OCR settings while tax refund 
   assert.match(service, /pdfRasterized: Boolean\(rasterized\)/);
   assert.match(packageJson, /"pdfjs-dist"/);
   assert.match(packageJson, /"@napi-rs\/canvas"/);
-  assert.match(nextConfig, /serverExternalPackages: \["@napi-rs\/canvas", "geoip-lite", "pdfjs-dist"\]/);
+  assert.match(nextConfig, /serverExternalPackages: \["@napi-rs\/canvas", "geoip-lite", "pdf2json", "pdfjs-dist"\]/);
   assert.match(service, /let structuredError: unknown = null/);
   assert.match(service, /recognizeAliyunCustomsDeclarationWithDocumentStructure\(buffer, effectiveSettings, options\)/);
   assert.match(service, /recognizeAliyunCustomsDeclarationWithDocMind\(effectiveSettings, options\)/);
@@ -498,6 +499,7 @@ test("OCR center diagnostics remain controlled by OCR settings while tax refund 
   assert.match(service, /throwDocMindCustomsEmptyError/);
   assert.match(service, /customsDiagnosticResultFromError/);
   assert.match(service, /rawJsonPreview/);
+  assert.doesNotMatch(service, /textPreview:\s*params\.text/);
   assert.match(service, /ALIYUN_DOCMIND_CUSTOMS_EMPTY/);
   assert.match(service, /ALIYUN_DOCMIND_RESULT_TIMEOUT/);
   assert.match(service, /recognizeAliyunCustomsDeclaration/);

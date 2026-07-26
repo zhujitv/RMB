@@ -1,6 +1,7 @@
 import type { FileAsset } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { managedPreviewableMimeType, type ManagedFileBinding } from "./file-center";
+import { enqueueFileStorageDeletion } from "./file-storage-deletion-outbox";
 import {
   activeFileAssetWhere,
   orderDocumentAssetData,
@@ -63,7 +64,11 @@ export async function softDeleteFileAssetBySource(
   deletedAt = new Date(),
 ) {
   if (!sourceTable || !sourceId || !fileRole) return { count: 0 };
-  return client.fileAsset.updateMany({
+  const activeAsset = await client.fileAsset.findFirst({
+    where: activeFileAssetWhere(sourceTable, sourceId, fileRole),
+    orderBy: [{ updatedAt: "desc" }],
+  });
+  const deleted = await client.fileAsset.updateMany({
     where: {
       sourceTable,
       sourceId,
@@ -75,6 +80,15 @@ export async function softDeleteFileAssetBySource(
       deletedAt,
     },
   });
+  if (deleted.count && activeAsset?.storageKey) {
+    await enqueueFileStorageDeletion(client, {
+      storageKey: activeAsset.storageKey,
+      sourceTable,
+      sourceId,
+      fileRole,
+    });
+  }
+  return deleted;
 }
 
 export function applyFileAssetToOrderDocument<T extends OrderDocumentAssetLike>(document: T, asset: FileAsset | null): T {
@@ -116,8 +130,6 @@ export function mergeFileAssetMetadata<T extends ManagedMetadataLike>(metadata: 
     originalFileName: asset.originalFileName || metadata.originalFileName || "",
     mimeType,
     fileSize: asset.fileSize ?? metadata.fileSize ?? 0,
-    storageKey: asset.storageKey || metadata.storageKey || "",
-    bucket: asset.bucket || metadata.bucket || "",
     uploadedAt: asset.uploadedAt || metadata.uploadedAt || null,
     binding,
     previewKind: managedPreviewableMimeType(mimeType),

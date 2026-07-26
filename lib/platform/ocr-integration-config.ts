@@ -1,6 +1,7 @@
 import { parseCustomsDeclarationDetailText } from "../customs-declaration-parser";
 import { DEFAULT_OCR_INTEGRATION_SETTINGS } from "./shared-constants";
-import { codedError, isPlainRecord, nonEmpty, num } from "./shared-base-utils";
+import { codedError, isPlainRecord, nonEmpty, num, redactSensitiveText } from "./shared-base-utils";
+import { normalizeAliyunOcrApiUrl } from "./outbound-request-security";
 
 export type OcrFeatureKey = "customsDeclaration" | "invoiceText" | "logisticsInvoice";
 export type CustomsDeclarationRecognitionMode = "AUTO" | "STRICT" | "MANUAL";
@@ -80,17 +81,7 @@ export function cleanCustomsDeclarationMode(value: unknown, input: OcrIntegratio
 }
 
 export function cleanOptionalUrl(value: unknown, fallback: string) {
-  const text = nonEmpty(value || fallback);
-  try {
-    const url = new URL(text);
-    if (!["http:", "https:"].includes(url.protocol)) {
-      throw codedError("OCR API 地址只支持 http 或 https", 400, "VALIDATION_INVALID_URL");
-    }
-    return url.toString().replace(/\/+$/, "");
-  } catch (error) {
-    if ((error as { status?: number } | null)?.status) throw error;
-    throw codedError("OCR API 地址格式错误", 400, "VALIDATION_INVALID_URL");
-  }
+  return normalizeAliyunOcrApiUrl(value, fallback);
 }
 
 export function cleanTimeoutMs(value: unknown) {
@@ -106,7 +97,7 @@ export function customsOcrSettings(settings: ReturnType<typeof normalizeOcrInteg
 }
 
 export function ocrErrorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error || "");
+  return redactSensitiveText(error instanceof Error ? error.message : String(error || ""), 500);
 }
 
 export function ocrErrorDetails(error: unknown) {

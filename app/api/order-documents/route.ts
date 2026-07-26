@@ -10,6 +10,7 @@ import {
 } from "../../../lib/platform-db";
 
 import { requireApiActor } from "../../../lib/api-route-guard";
+import { assertMultipartRequestWithinLimit } from "../../../lib/platform/upload-request-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
   let file: File | null = null;
   try {
     actor = await requireApiActor(request);
+    assertMultipartRequestWithinLimit(request);
     const formData = await request.formData();
     const candidate = formData.get("file");
     orderId = String(formData.get("orderId") || "").trim();
@@ -94,7 +96,7 @@ function logUploadFailure({ actor, orderId, documentType, file, error }: UploadF
 function uploadError(error: ErrorLike, fallback = "上传订单单证失败") {
   const isProduction = process.env.NODE_ENV === "production";
   const status = error?.status || 500;
-  const message = isProduction && status >= 500 && !error?.expose ? fallback : (error?.message || fallback);
+  const message = isProduction && status >= 500 ? fallback : (error?.message || fallback);
   return NextResponse.json({
     success: false,
     message,

@@ -680,8 +680,12 @@ React 工作台中的系统设置已完成旧版显性差异补齐，并已通�
 Vercel 需要配置：
 
 ```bash
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require"
-CRON_SECRET="use-a-long-random-secret"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require&uselibpqcompat=true"
+APP_URL="https://your-production-domain.example.com"
+CRON_SECRET=""
+SETTINGS_ENCRYPTION_KEY=""
+SETTINGS_ENCRYPTION_KEY_ID="primary-v1"
+SETTINGS_ENCRYPTION_PREVIOUS_KEYS=""
 BCRYPT_COST="12"
 REMINDER_WEBHOOK_URL=""
 
@@ -706,6 +710,16 @@ RATE_LIMIT_REDIS_REST_URL=""
 RATE_LIMIT_REDIS_REST_TOKEN=""
 RATE_LIMIT_NAMESPACE="nextwood"
 ```
+
+用 `openssl rand -hex 32` 生成 `SETTINGS_ENCRYPTION_KEY`。轮换密钥时先更换
+`SETTINGS_ENCRYPTION_KEY_ID`，并把旧密钥以 JSON 对象放入
+`SETTINGS_ENCRYPTION_PREVIOUS_KEYS`；系统读取旧配置后会自动用新密钥重加密。
+
+阿里云 OCR / 文档智能默认只允许官方 HTTPS 域名。确需使用自定义域名时，才配置逗号分隔的
+`ALIYUN_OCR_ALLOWED_HOSTS`、`ALIYUN_DOCMIND_ENDPOINT_ALLOWED_HOSTS` 或
+`ALIYUN_DOCMIND_OUTPUT_ALLOWED_HOSTS`。
+
+另行执行一次 `openssl rand -hex 32` 生成 `CRON_SECRET`，不要与设置加密密钥复用，也不要保留示例占位值。
 
 生产环境 CSP 默认不允许浏览器连接或加载任意外部 `https:` 资源。如确实需要外链资源，例如外部 Logo CDN 或独立 PDF 查看域名，请显式配置白名单：
 
@@ -745,7 +759,7 @@ RESEND_EMAIL_ENDPOINT=https://api.resend.com/emails
 
 `RESEND_EMAIL_ENDPOINT` 可留空，默认使用 Resend 官方接口。若未配置 `RESEND_API_KEY` 或发件邮箱，系统会阻止邮件发送并保存明确失败原因。
 
-统一 API 限流默认使用进程内存。多实例生产环境建议配置 Upstash Redis：
+统一 API 限流在本地开发时可使用进程内存。多实例生产环境必须配置 Upstash Redis：
 
 ```text
 UPSTASH_REDIS_REST_URL=
@@ -758,6 +772,10 @@ UPSTASH_REDIS_REST_TOKEN=
 RATE_LIMIT_REDIS_REST_URL=
 RATE_LIMIT_REDIS_REST_TOKEN=
 RATE_LIMIT_NAMESPACE=nextwood
+RATE_LIMIT_REDIS_TIMEOUT_MS=1500
+API_RATE_LIMIT_MEMORY_MAX_BUCKETS=20000
+API_RATE_LIMIT_REGISTRATION_WINDOW_MS=900000
+API_RATE_LIMIT_REGISTRATION_LIMIT=5
 ```
 
 ### 文件服务器配置
@@ -967,6 +985,8 @@ git push origin main
 ## 安全注意事项
 
 - 不要将 `.env` 提交到 GitHub。
+- 远程 PostgreSQL 必须启用 TLS；禁止使用 `sslmode=disable/allow/prefer`。代理或自签证书环境使用 `sslmode=require&uselibpqcompat=true` 保持加密兼容；具备可信 CA 和匹配域名时优先使用 `sslmode=verify-full`。
+- `SETTINGS_ENCRYPTION_KEY` 必须是独立的 32 字节随机密钥，不能与数据库或登录密码复用。
 - 不要公开 R2 Access Key 和 Secret Key。
 - 上传文件只保存 R2 Key，下载时后端生成短期签名 URL。
 - 文件资产统一写入 `file_assets`，用于跨模块预览、下载、软删除和后续文件治理。
