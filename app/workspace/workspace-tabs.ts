@@ -107,13 +107,17 @@ export function createWorkspaceTab({
   focus?: WorkspaceTabFocusInput;
 }): WorkspaceTab {
   const view = workspaceBaseView(menuKey);
+  const normalizedFocus = createWorkspaceTabFocus(focus);
+  const activatedFocus = hasWorkspaceTabFocus(normalizedFocus) && !normalizedFocus.token
+    ? { ...normalizedFocus, token: Date.now() }
+    : normalizedFocus;
   return {
     id,
     menuKey,
     title: title?.trim() || workspaceMenuTitle(menuKey),
     view,
     contextKey: `${view}:${menuKey}`,
-    focus: createWorkspaceTabFocus(focus),
+    focus: activatedFocus,
     pinned: menuKey === "welcome",
     closable: menuKey !== "welcome",
     dirty: false,

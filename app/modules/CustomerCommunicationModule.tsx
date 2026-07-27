@@ -95,12 +95,13 @@ export function CustomerCommunicationModule({
   }, []);
 
   useEffect(() => {
-    if (!initialOpenToken) return;
-    setKeyword(initialKeyword);
-    void loadRows(1, initialKeyword).then((nextRows) => {
+    const focusedKeyword = initialKeyword.trim();
+    if (!initialOpenToken || (!initialOrderId && !focusedKeyword)) return;
+    setKeyword(focusedKeyword);
+    void loadRows(1, focusedKeyword).then((nextRows) => {
       const row = initialOrderId
         ? nextRows.find((item) => item.id === initialOrderId)
-        : nextRows.find((item) => (item.orderNo || "").includes(initialKeyword));
+        : nextRows.find((item) => (item.orderNo || "").includes(focusedKeyword));
       if (row) void openDetail(row.id);
     });
   }, [initialOpenToken, initialKeyword, initialOrderId]);

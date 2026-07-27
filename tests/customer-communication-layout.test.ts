@@ -30,6 +30,17 @@ const customerCommunicationUnmarkRoute = readFileSync("app/api/customer-communic
 const prismaSchema = readPrismaSchemaSource();
 const manualMarkMigration = readFileSync("prisma/migrations/20260707133000_customer_communication_manual_mark/migration.sql", "utf8");
 
+test("customer communication ignores empty automatic-open targets", () => {
+  assert.match(
+    customerCommunicationModule,
+    /if \(!initialOpenToken \|\| \(!initialOrderId && !focusedKeyword\)\) return;/,
+  );
+  assert.doesNotMatch(
+    customerCommunicationModule,
+    /includes\(initialKeyword\)/,
+  );
+});
+
 test("workspace layout uses fixed chrome with main content scrolling", () => {
   const htmlBlock = cssBlock(globalsCss, "html");
   const bodyBlock = cssBlock(globalsCss, "body");

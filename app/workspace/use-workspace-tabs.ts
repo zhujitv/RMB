@@ -52,7 +52,7 @@ export function useWorkspaceTabs({ allowedMenuKeys }: { allowedMenuKeys: Set<str
       id: `workspace:${menuKey}:${Date.now().toString(36)}:${tabSequenceRef.current}`,
       menuKey,
       title,
-      focus: { ...focus, token: focus.token || Date.now() },
+      focus,
     });
   }, []);
 

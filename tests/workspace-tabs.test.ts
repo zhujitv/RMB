@@ -39,6 +39,18 @@ test("workspace tabs keep home pinned and reuse an opened module list", () => {
   assert.equal(workspaceTabsReducer(reused, { type: "close", tabId: WORKSPACE_HOME_TAB_ID }), reused);
 });
 
+test("blank workspace tabs never receive an activation token", () => {
+  const blankList = createWorkspaceTab({ id: "communication:list", menuKey: "customerCommunication" });
+  const focusedDetail = createWorkspaceTab({
+    id: "communication:detail",
+    menuKey: "customerCommunication",
+    focus: { orderId: "order-1" },
+  });
+
+  assert.equal(blankList.focus.token, 0);
+  assert.ok(focusedDetail.focus.token > 0);
+});
+
 test("turning a list into a detail keeps a separate list tab and closes back to it", () => {
   const orders = createWorkspaceTab({ id: "orders:detail", menuKey: "orders" });
   const listFallback = { ...createWorkspaceTab({ id: "orders:list", menuKey: "orders" }), autoFallbackFor: orders.id };
