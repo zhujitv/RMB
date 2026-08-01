@@ -122,3 +122,13 @@ test("registration and upload retain their dedicated compatibility buckets", () 
   assert.match(upload, /^api:upload:/);
   assert.match(write, /^api:write:/);
 });
+
+test("WeChat Official Account callback uses an isolated webhook bucket", () => {
+  const weChatGet = apiRateLimitKey(request("/api/wechat/official-account/callback"));
+  const weChatPost = apiRateLimitKey(request("/api/wechat/official-account/callback", "POST"));
+  const ordinaryWrite = apiRateLimitKey(request("/api/orders", "POST"));
+
+  assert.match(weChatGet, /^api:wechat-webhook:/);
+  assert.match(weChatPost, /^api:wechat-webhook:/);
+  assert.notEqual(weChatPost, ordinaryWrite);
+});

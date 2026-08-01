@@ -704,12 +704,24 @@ RESEND_API_KEY=""
 RESEND_FROM=""
 RESEND_EMAIL_ENDPOINT=""
 
+WECHAT_OFFICIAL_APP_ID=""
+WECHAT_OFFICIAL_TOKEN=""
+WECHAT_OFFICIAL_ENCODING_AES_KEY=""
+
 UPSTASH_REDIS_REST_URL=""
 UPSTASH_REDIS_REST_TOKEN=""
 RATE_LIMIT_REDIS_REST_URL=""
 RATE_LIMIT_REDIS_REST_TOKEN=""
 RATE_LIMIT_NAMESPACE="nextwood"
 ```
+
+微信公众号消息推送使用以下服务器地址：
+
+```text
+https://www.nextwood.net/api/wechat/official-account/callback
+```
+
+公众号后台与 Vercel Production 环境必须使用同一组 Token 和 EncodingAESKey，并选择“安全模式”和 XML。三项都只配置在服务器环境变量中；其中 Token 和 EncodingAESKey 属于秘密，禁止提交真实值或使用 `NEXT_PUBLIC_` 前缀。首次 GET 校验只验证 Token；安全模式 POST 还会解密消息并核对 AppID。当前回调只完成可信接入与 `success` 确认，不会把公众号消息写入业务数据库。
 
 用 `openssl rand -hex 32` 生成 `SETTINGS_ENCRYPTION_KEY`。轮换密钥时先更换
 `SETTINGS_ENCRYPTION_KEY_ID`，并把旧密钥以 JSON 对象放入
@@ -737,6 +749,7 @@ API_RATE_LIMIT_WINDOW_MS=60000
 API_RATE_LIMIT_READ_LIMIT=1000
 API_RATE_LIMIT_WRITE_LIMIT=300
 API_RATE_LIMIT_UPLOAD_LIMIT=60
+API_RATE_LIMIT_WECHAT_WEBHOOK_LIMIT=3000
 ```
 
 也兼容以下 R2 变量名：

@@ -23,6 +23,9 @@ const SECURITY_ENV_KEYS = [
   "CI",
   "NODE_ENV",
   "npm_lifecycle_event",
+  "WECHAT_OFFICIAL_APP_ID",
+  "WECHAT_OFFICIAL_TOKEN",
+  "WECHAT_OFFICIAL_ENCODING_AES_KEY",
 ] as const;
 
 function runSecurityEnvironmentCheck(overrides: Record<string, string> = {}) {
@@ -115,4 +118,22 @@ test("non-deployment CI builds require an explicit preview mode", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /skipped/);
+});
+
+test("partial WeChat Official Account configuration fails closed in production", () => {
+  const partial = runSecurityEnvironmentCheck({
+    ...validProductionEnvironment,
+    WECHAT_OFFICIAL_TOKEN: "testToken123",
+  });
+  assert.equal(partial.status, 1);
+  assert.match(partial.stderr, /WECHAT_OFFICIAL_APP_ID/);
+  assert.match(partial.stderr, /WECHAT_OFFICIAL_ENCODING_AES_KEY/);
+
+  const complete = runSecurityEnvironmentCheck({
+    ...validProductionEnvironment,
+    WECHAT_OFFICIAL_APP_ID: "wx1234567890abcdef",
+    WECHAT_OFFICIAL_TOKEN: "testToken123",
+    WECHAT_OFFICIAL_ENCODING_AES_KEY: Buffer.alloc(32, 7).toString("base64").slice(0, 43),
+  });
+  assert.equal(complete.status, 0, complete.stderr);
 });

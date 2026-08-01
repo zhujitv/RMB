@@ -8,6 +8,7 @@ const PUBLIC_API_ROUTES = new Set([
   "app/api/auth/verify-email/route.ts",
   "app/api/company-profile/route.ts",
   "app/api/shipsgo/webhook/route.ts",
+  "app/api/wechat/official-account/callback/route.ts",
   "app/api/cron/exchange-rates/route.ts",
   "app/api/cron/shipsgo-sync/route.ts",
 ]);
