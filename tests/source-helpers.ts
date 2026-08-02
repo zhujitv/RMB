@@ -66,7 +66,7 @@ const SETTINGS_MODULE_FILES = [
   "app/modules/settings/settings-table.tsx",
   "app/modules/settings/settings-home-grid.tsx",
   "app/modules/settings/settings-view-constants.ts",
-  "app/modules/settings/shipsgo-integration-settings-card.tsx",
+  "app/modules/settings/freightower-integration-settings-card.tsx",
   "app/modules/settings/user-edit-panel.tsx",
 ];
 

@@ -1,6 +1,10 @@
 import { codedError } from "./shared-base-utils";
 import type { NotificationAttachment } from "./notification-definitions";
-import { assertResendResponseOk, resendRequestSignal } from "./resend-email-security";
+import {
+  assertResendResponseOk,
+  resendIdempotencyHeaderValue,
+  resendRequestSignal,
+} from "./resend-email-security";
 
 export function notificationMailConfig() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -37,12 +41,13 @@ export async function sendResendEmail({
   idempotencyKey?: string | null;
 }) {
   const { apiKey, from, endpoint } = notificationMailConfig();
+  const idempotencyHeader = resendIdempotencyHeaderValue(idempotencyKey);
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      ...(idempotencyHeader ? { "Idempotency-Key": idempotencyHeader } : {}),
     },
     body: JSON.stringify({
       from,

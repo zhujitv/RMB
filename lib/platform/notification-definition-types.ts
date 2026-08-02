@@ -67,4 +67,18 @@ export const NOTIFICATION_TYPES = {
   FREIGHTOWER_TRACKING_UPDATE: "FREIGHTOWER_TRACKING_UPDATE",
 } as const;
 
+export const BILINGUAL_TRACKING_NOTIFICATION_TYPES = new Set<string>([
+  NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
+]);
+
+export function logisticsEmailSubjectIsEnglish(value: unknown) {
+  return /^[\x20-\x7e]+$/.test(String(value || ""));
+}
+
+export function logisticsEmailBodyIsBilingual(value: unknown) {
+  const text = String(value || "").replace(/\{[a-zA-Z][a-zA-Z0-9_]*\}/g, "");
+  const englishWords = text.match(/\b[A-Za-z]{3,}\b/g) || [];
+  return englishWords.length >= 4 && /[\u3400-\u9fff]/u.test(text);
+}
+
 export const COMMON_SIGNATURE = "NEXTWOOD 供应链协同平台";

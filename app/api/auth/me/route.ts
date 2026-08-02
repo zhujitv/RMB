@@ -32,6 +32,9 @@ function authInitErrorCode(error: ErrorLike) {
   const message = String(error.message || "");
   if (error.status === 401) return "AUTH-UNAUTHENTICATED";
   if (error.status === 403 && !code) return "PERMISSION_DENIED";
+  if (code === "P2037" || /too many (?:database )?connections|too many clients/i.test(message)) {
+    return "AUTH-DB-POOL-EXHAUSTED";
+  }
   if (code === "P1001" || /Can't reach database server|database .*connect|ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(message)) {
     return "AUTH-DB-CONNECTION";
   }
@@ -49,7 +52,8 @@ function authInitErrorCode(error: ErrorLike) {
 function authInitErrorMessage(code: string, error: ErrorLike) {
   const isProduction = process.env.NODE_ENV === "production";
   const originalMessage = String(error.message || "账户初始化失败");
-  if (code === "AUTH-DB-CONNECTION") return "数据库连接失败，请检查 DATABASE_URL 和本地 PostgreSQL 状态。";
+  if (code === "AUTH-DB-POOL-EXHAUSTED") return "数据库连接繁忙，请稍后重试。";
+  if (code === "AUTH-DB-CONNECTION") return "数据库暂时无法连接，请稍后重试或联系管理员。";
   if (code === "AUTH-DB-SCHEMA") return "权限数据结构异常，请执行 Prisma migrate / db push。";
   if (!isProduction) {
     return `${originalMessage}（错误代码：${code}）`;
@@ -67,7 +71,7 @@ function authInitErrorMessage(code: string, error: ErrorLike) {
 function classifyAuthInitError(error: unknown) {
   const typedError = (error || {}) as ErrorLike;
   const code = authInitErrorCode(typedError);
-  const status = typedError.status || (code.startsWith("AUTH-DB") || code === "AUTH-001" ? 500 : 403);
+  const status = typedError.status || (code === "AUTH-DB-POOL-EXHAUSTED" ? 503 : code.startsWith("AUTH-DB") || code === "AUTH-001" ? 500 : 403);
   const message = authInitErrorMessage(code, typedError);
   const classified = codedError(message, status, code);
   classified.details = {

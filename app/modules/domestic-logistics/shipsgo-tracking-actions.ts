@@ -40,7 +40,7 @@ export function createShipsgoTrackingActions(context: DomesticLogisticsActionsCo
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>("/api/shipsgo/ocean-trackings", {
+      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>("/api/freightower/ocean-trackings", {
         method: "POST",
         body: JSON.stringify({
           orderId: row.id,
@@ -63,7 +63,7 @@ export function createShipsgoTrackingActions(context: DomesticLogisticsActionsCo
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(trackingId)}/sync`, {
+      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>(`/api/freightower/ocean-trackings/${encodeURIComponent(trackingId)}/sync`, {
         method: "POST",
       });
       if (result.success !== true || !result.tracking) throw new Error(result.message || "同步海运跟踪失败");
@@ -85,7 +85,7 @@ export function createShipsgoTrackingActions(context: DomesticLogisticsActionsCo
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>("/api/shipsgo/ocean-trackings/recover", {
+      const result = await apiJson<{ success?: boolean; tracking?: ShipsgoTrackingRow; message?: string }>("/api/freightower/ocean-trackings/recover", {
         method: "POST",
         body: JSON.stringify({
           orderId: row.id,
@@ -120,7 +120,7 @@ export function createShipsgoTrackingActions(context: DomesticLogisticsActionsCo
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(tracking.id)}`, {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/freightower/ocean-trackings/${encodeURIComponent(tracking.id)}`, {
         method: "DELETE",
       });
       if (result.success !== true) throw new Error(result.message || "删除海运跟踪失败");

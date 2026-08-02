@@ -54,8 +54,8 @@ function fallback(value: unknown, emptyText = "接口未返回") {
   return clean(value) || emptyText;
 }
 
-export function providerLabel(tracking?: Pick<ShipsgoTracking, "provider"> | null) {
-  return clean(tracking?.provider).toUpperCase() === "FREIGHTOWER" ? "飞驼可视" : "大掌柜";
+export function providerLabel(_tracking?: Pick<ShipsgoTracking, "provider"> | null) {
+  return "飞驼可视";
 }
 
 export function formatDateTime(value: unknown) {
@@ -101,7 +101,7 @@ export function containers(tracking: ShipsgoTracking) {
 }
 
 export async function fetchTracking(trackingId: string) {
-  const response = await fetch(`/api/shipsgo/ocean-trackings/${encodeURIComponent(trackingId)}`, {
+  const response = await fetch(`/api/freightower/ocean-trackings/${encodeURIComponent(trackingId)}`, {
     credentials: "include",
     cache: "no-store",
   });

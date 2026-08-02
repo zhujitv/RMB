@@ -76,16 +76,13 @@ export const DEFAULT_LOGISTICS_INVOICE_VALIDATION_RULES = {
 export const SHIPSGO_INTEGRATION_SETTING_KEY = "shipsgo_integration";
 export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
   enabled: false,
-  activeProvider: "SHIPSGO",
-  apiBaseUrl: "https://api.shipsgo.com",
-  apiKey: "",
-  shipsgoEnabled: true,
-  freightowerEnabled: false,
+  activeProvider: "FREIGHTOWER",
+  freightowerEnabled: true,
   freightowerApiBaseUrl: "https://openapi.freightower.com",
+  freightowerApiKey: "",
   freightowerClientId: "",
-  freightowerSecret: "",
-  freightowerMapKey: "",
-  freightowerWebhookSecret: "",
+  freightowerIframeKey: "",
+  freightowerWebhookAccessSecret: "",
   freightowerDefaultCarrierCode: "AUTO",
   freightowerDefaultPortCode: "",
   freightowerDefaultIsExport: "",
@@ -94,13 +91,11 @@ export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
   oceanTrackingEnabled: true,
   airTrackingEnabled: false,
   manualSyncEnabled: true,
-  autoSyncEnabled: false,
+  autoSyncEnabled: true,
   dailySyncTime: "02:00",
   webhookEnabled: false,
-  webhookSecret: "",
   liveMapEnabled: false,
   customerPushEnabled: false,
-  creditWarningThreshold: 20,
 };
 export const COMMISSION_FORMULA_SETTING_KEY = "commission_formula";
 export const COMMISSION_FORMULA_SOURCES = ["ARRIVED_PAYMENTS_CNY", "FOB_CNY", "EXPECTED_GROSS_PROFIT_CNY", "REALIZED_GROSS_PROFIT_CNY"];

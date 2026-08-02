@@ -174,7 +174,7 @@ async function loadTab(tab = activeTab, page = activePagination.page || 1, nextF
         return;
       }
       if (tab === "shipsgoIntegration") {
-        const shipsgoResult = await apiJson<{ settings: ShipsgoIntegrationSettings }>("/api/settings/shipsgo");
+        const shipsgoResult = await apiJson<{ settings: ShipsgoIntegrationSettings }>("/api/settings/freightower");
         const settings = shipsgoResult.settings || {};
         setShipsgoIntegrationSettings(settings);
         setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(settings));

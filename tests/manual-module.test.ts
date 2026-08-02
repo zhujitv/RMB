@@ -49,14 +49,15 @@ test("manual explains unified logistics cost entry and review flow", () => {
   assert.match(manualModule, /海运费、ENS费、保险费及所有 USD 费用归入海运费发票/);
 });
 
-test("manual explains transport monitor and Da Zhang Gui tracking rules", () => {
+test("manual explains transport monitor and Freightower tracking rules", () => {
   assert.match(manualModule, /title: "运输监控"/);
   assert.match(manualModule, /默认打开全屏监控视图/);
-  assert.match(manualModule, /在途总票数、即将到港、ETA 已过期、同步失败、今日已同步和关联柜号数/);
-  assert.match(manualModule, /只同步本地已有的大掌柜 Tracking ID，不会创建新的跟踪/);
+  assert.match(manualModule, /在途总票数、甩柜预警、即将到港、ETA 已过期、同步失败、今日已同步和关联柜号数/);
+  assert.match(manualModule, /WDUMP、DUMPING 和 DUMP/);
+  assert.match(manualModule, /通过飞驼可视重新查询提单号或柜号/);
   assert.match(manualModule, /管理员可查看全部海运跟踪；业务员可查看自己负责订单；物流供应商可全局查看系统内物流信息/);
   assert.match(manualModule, /产品供应商不可见/);
-  assert.match(manualModule, /一张 Master B\/L 在系统生命周期内只创建一次大掌柜 Tracking/);
+  assert.match(manualModule, /一张 Master B\/L 在系统生命周期内只创建一次飞驼可视 Tracking/);
   assert.match(manualModule, /后台页面优先显示中文船公司、港口、状态和跟踪方式/);
 });
 
@@ -99,8 +100,9 @@ test("manual explains company profile and system branding settings", () => {
   assert.match(manualModule, /登录页品牌、工作台侧边栏、首页欢迎语、Logo 和页脚版权/);
   assert.match(manualModule, /产品供应商资料回传权限/);
   assert.match(manualModule, /物流费用开票通知模板、收件邮箱读取顺序、额外抄送邮箱/);
-  assert.match(manualModule, /大掌柜接口开关、API Key、Webhook Secret、海运跟踪、手动同步、每日自动同步/);
-  assert.match(manualModule, /大掌柜关闭后，物流信息和运输监控不显示相关创建、同步和查看入口/);
+  assert.match(manualModule, /飞驼可视 API Key、海运跟踪、手动同步、地图入口和甩柜实时预警，并可直接测试 API Key 连接/);
+  assert.match(manualModule, /https:\/\/www\.nextwood\.net\/api\/freightower\/webhook/);
+  assert.match(manualModule, /飞驼可视关闭后，物流信息和运输监控不显示相关创建、同步和查看入口/);
 });
 
 test("manual covers the complete workspace application map", () => {
@@ -123,6 +125,6 @@ test("manual explains report center and account security workflow", () => {
   assert.match(manualModule, /客户名称支持客户全称和客户简称模糊查询/);
   assert.match(manualModule, /新用户注册后需先完成邮箱验证，再由管理员审核通过/);
   assert.match(manualModule, /最近 10 次登录记录/);
-  assert.match(manualModule, /物流供应商仅可查看分配订单、提交物流费用并上传发票，不允许创建或删除大掌柜 Tracking/);
+  assert.match(manualModule, /物流供应商仅可查看分配订单、提交物流费用并上传发票，不允许创建或删除飞驼可视 Tracking/);
   assert.match(manualModule, /产品供应商仅可查看资料回传任务并上传工厂采购合同、增值税发票/);
 });

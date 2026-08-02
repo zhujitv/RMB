@@ -16,24 +16,6 @@ function validEncryptionKey(value) {
   }
 }
 
-function validWeChatOfficialToken(value) {
-  return /^[A-Za-z0-9]{3,32}$/.test(String(value || "").trim());
-}
-
-function validWeChatOfficialEncodingAesKey(value) {
-  const text = String(value || "").trim();
-  if (!/^[A-Za-z0-9+/]{43}$/.test(text)) return false;
-  try {
-    return Buffer.from(`${text}=`, "base64").byteLength === 32;
-  } catch {
-    return false;
-  }
-}
-
-function validWeChatOfficialAppId(value) {
-  return /^wx[a-f0-9]{16}$/i.test(String(value || "").trim());
-}
-
 function hasDistributedRateLimit() {
   const pairs = [
     [process.env.RATE_LIMIT_REDIS_REST_URL, process.env.RATE_LIMIT_REDIS_REST_TOKEN],
@@ -109,22 +91,6 @@ if (strictProduction && !hasCanonicalOrigin()) {
 }
 if (strictProduction && process.env.EXPOSE_ERROR_DETAILS === "true") {
   failures.push("生产环境禁止启用 EXPOSE_ERROR_DETAILS");
-}
-const weChatOfficialConfigured = [
-  process.env.WECHAT_OFFICIAL_APP_ID,
-  process.env.WECHAT_OFFICIAL_TOKEN,
-  process.env.WECHAT_OFFICIAL_ENCODING_AES_KEY,
-].some((value) => String(value || "").trim());
-if (strictProduction && weChatOfficialConfigured) {
-  if (!validWeChatOfficialAppId(process.env.WECHAT_OFFICIAL_APP_ID)) {
-    failures.push("微信公众号接入已配置时，WECHAT_OFFICIAL_APP_ID 必须是有效 AppID");
-  }
-  if (!validWeChatOfficialToken(process.env.WECHAT_OFFICIAL_TOKEN)) {
-    failures.push("微信公众号接入已配置时，WECHAT_OFFICIAL_TOKEN 必须是 3-32 位英文或数字");
-  }
-  if (!validWeChatOfficialEncodingAesKey(process.env.WECHAT_OFFICIAL_ENCODING_AES_KEY)) {
-    failures.push("微信公众号接入已配置时，WECHAT_OFFICIAL_ENCODING_AES_KEY 必须是 43 位有效密钥");
-  }
 }
 
 if (failures.length) {

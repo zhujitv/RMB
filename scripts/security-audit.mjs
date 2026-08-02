@@ -7,10 +7,12 @@ const PUBLIC_API_ROUTES = new Set([
   "app/api/auth/register/route.ts",
   "app/api/auth/verify-email/route.ts",
   "app/api/company-profile/route.ts",
-  "app/api/shipsgo/webhook/route.ts",
-  "app/api/wechat/official-account/callback/route.ts",
+  "app/api/freightower/webhook/route.ts",
+  // WeChat redirects users here without the ERP session cookie. The handler is
+  // authenticated by a single-use, hashed `reserved` nonce plus scene/template checks.
+  "app/api/wechat-official/subscription/callback/route.ts",
   "app/api/cron/exchange-rates/route.ts",
-  "app/api/cron/shipsgo-sync/route.ts",
+  "app/api/cron/freightower-sync/route.ts",
 ]);
 const AUTH_PATTERNS = [
   /\brequireApiActor\b/,

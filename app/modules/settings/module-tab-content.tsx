@@ -5,7 +5,7 @@ import {
   ExchangeSettingsCard,
   NotificationTemplateSettingsCard,
   OcrIntegrationSettingsCard,
-  ShipsgoIntegrationSettingsCard,
+  FreightowerIntegrationSettingsCard,
 } from "./settings-cards";
 import {
   commissionFormulaFormFromSettings,
@@ -19,10 +19,13 @@ import { SettingsHomeGrid } from "./settings-home-grid";
 import { SettingsTableContent } from "./module-edit-panels";
 import type { useSettingsController } from "./use-settings-controller";
 import type { OcrValidationRulesDraft } from "./ocr-integration-settings-card";
+import { WechatOfficialSettingsCard } from "./wechat-official-settings-card";
 
 type SettingsController = ReturnType<typeof useSettingsController> & {
   ocrValidationRulesDraft: OcrValidationRulesDraft;
   confirmDiscardCurrentSettings: () => boolean;
+  setWechatSettingsDirty: (dirty: boolean) => void;
+  setWechatSettingsBusy: (busy: boolean) => void;
 };
 
 export function SettingsModuleTabContent({ settings }: { settings: SettingsController }) {
@@ -88,6 +91,8 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     setOcrIntegrationMessage,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
+    setWechatSettingsDirty,
+    setWechatSettingsBusy,
   } = settings;
 
   if (activeTab === "home") return <SettingsHomeGrid onSelect={selectTab} />;
@@ -207,19 +212,25 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
   }
   if (activeTab === "shipsgoIntegration") {
     return (
-      <ShipsgoIntegrationSettingsCard
-        settings={shipsgoIntegrationSettings}
-        form={shipsgoIntegrationForm}
-        loading={loading && !shipsgoIntegrationSettings}
-        saving={shipsgoIntegrationSaving}
-        message={shipsgoIntegrationMessage}
-        onChange={setShipsgoIntegrationForm}
-        onReset={() => {
-          setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(shipsgoIntegrationSettings));
-          setShipsgoIntegrationMessage("");
-        }}
-        onSubmit={saveShipsgoIntegrationSettings}
-      />
+      <>
+        <FreightowerIntegrationSettingsCard
+          settings={shipsgoIntegrationSettings}
+          form={shipsgoIntegrationForm}
+          loading={loading && !shipsgoIntegrationSettings}
+          saving={shipsgoIntegrationSaving}
+          message={shipsgoIntegrationMessage}
+          onChange={setShipsgoIntegrationForm}
+          onReset={() => {
+            setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(shipsgoIntegrationSettings));
+            setShipsgoIntegrationMessage("");
+          }}
+          onSubmit={saveShipsgoIntegrationSettings}
+        />
+        <WechatOfficialSettingsCard
+          onDirtyChange={setWechatSettingsDirty}
+          onBusyChange={setWechatSettingsBusy}
+        />
+      </>
     );
   }
   return <SettingsTableContent settings={settings} />;

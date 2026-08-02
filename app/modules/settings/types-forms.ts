@@ -40,21 +40,15 @@ export type NotificationTemplateForm = {
 
 export type ShipsgoIntegrationForm = {
   enabled: boolean;
-  activeProvider: string;
-  apiBaseUrl: string;
-  apiKey: string;
-  apiKeyConfigured: boolean;
-  shipsgoEnabled: boolean;
-  freightowerEnabled: boolean;
   freightowerApiBaseUrl: string;
+  freightowerApiKey: string;
+  freightowerApiKeyConfigured: boolean;
   freightowerClientId: string;
   freightowerClientIdConfigured: boolean;
-  freightowerSecret: string;
-  freightowerSecretConfigured: boolean;
-  freightowerMapKey: string;
-  freightowerMapKeyConfigured: boolean;
-  freightowerWebhookSecret: string;
-  freightowerWebhookSecretConfigured: boolean;
+  freightowerIframeKey: string;
+  freightowerIframeKeyConfigured: boolean;
+  freightowerWebhookAccessSecret: string;
+  freightowerWebhookAccessSecretConfigured: boolean;
   freightowerDefaultCarrierCode: string;
   freightowerDefaultPortCode: string;
   freightowerDefaultIsExport: string;
@@ -66,11 +60,8 @@ export type ShipsgoIntegrationForm = {
   autoSyncEnabled: boolean;
   dailySyncTime: string;
   webhookEnabled: boolean;
-  webhookSecret: string;
-  webhookSecretConfigured: boolean;
   liveMapEnabled: boolean;
   customerPushEnabled: boolean;
-  creditWarningThreshold: string;
 };
 
 export type OcrIntegrationForm = {

@@ -20,6 +20,8 @@ import {
   type JsonRecord,
   type NotificationAttachment,
   type NotificationTypeDefinition,
+  logisticsEmailBodyIsBilingual,
+  logisticsEmailSubjectIsEnglish,
   NOTIFICATION_TYPE_DEFINITIONS,
   NOTIFICATION_TYPES,
 } from "./notification-definitions";
@@ -210,6 +212,14 @@ function legacyLogisticsTemplateSyncData(existing: JsonRecord, definition: Notif
   return update;
 }
 
+function legacyFreightowerTemplateSyncData(existing: JsonRecord, definition: NotificationTypeDefinition) {
+  if (definition.type !== NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE) return {};
+  const update: JsonRecord = {};
+  if (!logisticsEmailSubjectIsEnglish(existing.subjectTemplate)) update.subjectTemplate = definition.subjectTemplate;
+  if (!logisticsEmailBodyIsBilingual(existing.bodyTemplate)) update.bodyTemplate = definition.bodyTemplate;
+  return update;
+}
+
 export async function ensureNotificationTemplate(type: unknown) {
   const definition = definitionByType(type);
   if (!definition) throw codedError("未知邮件通知类型。", 400, "NOTIFICATION_TYPE_INVALID");
@@ -217,7 +227,10 @@ export async function ensureNotificationTemplate(type: unknown) {
   if (existing) {
     const existingRecord = existing as unknown as JsonRecord;
     const metadata: JsonRecord = templateMetadataNeedsSync(existingRecord, definition) ? templateMetadataSyncData(definition) : {};
-    const legacySync = legacyLogisticsTemplateSyncData(existingRecord, definition);
+    const legacySync = {
+      ...legacyLogisticsTemplateSyncData(existingRecord, definition),
+      ...legacyFreightowerTemplateSyncData(existingRecord, definition),
+    };
     if (!Object.keys(metadata).length && !Object.keys(legacySync).length) return existing;
     return prisma.notificationTemplate.update({
       where: { id: existing.id },

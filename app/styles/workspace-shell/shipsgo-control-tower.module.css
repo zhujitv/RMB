@@ -24,6 +24,7 @@
 .controlTowerNodeOverdue { composes: controlTowerNodeOverdue from "./control-tower-header-stats.module.css"; }
 .controlTowerNodeDone { composes: controlTowerNodeDone from "./control-tower-header-stats.module.css"; }
 .controlTowerNodeFailed { composes: controlTowerNodeFailed from "./control-tower-header-stats.module.css"; }
+.controlTowerNodeAlert { composes: controlTowerNodeAlert from "./control-tower-alerts.module.css"; }
 .controlTowerTooltip { composes: controlTowerTooltip from "./control-tower-header-stats.module.css"; }
 .controlTowerDetailPanel { composes: controlTowerDetailPanel from "./control-tower-header-stats.module.css"; }
 .controlTowerStatusStack { composes: controlTowerStatusStack from "./control-tower-header-stats.module.css"; }
@@ -41,6 +42,9 @@
 .shipsgoContainerBlock { composes: shipsgoContainerBlock from "./control-tower-filters-map.module.css"; }
 .shipsgoContainerTags { composes: shipsgoContainerTags from "./control-tower-filters-map.module.css"; }
 .shipsgoSyncMessage { composes: shipsgoSyncMessage from "./control-tower-filters-map.module.css"; }
+.shipsgoAlertBanner { composes: shipsgoAlertBanner from "./control-tower-alerts.module.css"; }
+.shipsgoAlertBannerHeader { composes: shipsgoAlertBannerHeader from "./control-tower-alerts.module.css"; }
+.shipsgoAlertList { composes: shipsgoAlertList from "./control-tower-alerts.module.css"; }
 .shipsgoTrackingActions { composes: shipsgoTrackingActions from "./control-tower-filters-map.module.css"; }
 .shipsgoTimelinePanel { composes: shipsgoTimelinePanel from "./control-tower-filters-map.module.css"; }
 .shipsgoTimelineState { composes: shipsgoTimelineState from "./control-tower-filters-map.module.css"; }
@@ -48,6 +52,8 @@
 .shipsgoTimelineList { composes: shipsgoTimelineList from "./control-tower-filters-map.module.css"; }
 .shipsgoTimelineItem { composes: shipsgoTimelineItem from "./control-tower-filters-map.module.css"; }
 .shipsgoTimelineDot { composes: shipsgoTimelineDot from "./control-tower-filters-map.module.css"; }
+.shipsgoTimelineWarningContent { composes: shipsgoTimelineWarningContent from "./control-tower-alerts.module.css"; }
+.shipsgoTimelineWarningDot { composes: shipsgoTimelineWarningDot from "./control-tower-alerts.module.css"; }
 .shipsgoTimelineContent { composes: shipsgoTimelineContent from "./control-tower-filters-map.module.css"; }
 .shipsgoTimelineHeader { composes: shipsgoTimelineHeader from "./control-tower-filters-map.module.css"; }
 .shipsgoMapDrawer { composes: shipsgoMapDrawer from "./control-tower-filters-map.module.css"; }

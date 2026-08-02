@@ -8,7 +8,7 @@ export type AccountSettingsProps = {
   onPasswordChanged: (message: string) => void;
 };
 
-export type AccountTab = "profile" | "security" | "logins" | "preferences";
+export type AccountTab = "profile" | "security" | "logins" | "preferences" | "wechat";
 
 export type ProfileResponse = {
   success: boolean;
@@ -48,6 +48,7 @@ export const ACCOUNT_TABS: Array<{ key: AccountTab; label: string }> = [
   { key: "security", label: "账户安全" },
   { key: "logins", label: "登录记录" },
   { key: "preferences", label: "偏好设置" },
+  { key: "wechat", label: "微信通知" },
 ];
 
 export const HOME_OPTIONS = [

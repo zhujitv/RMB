@@ -21,7 +21,7 @@ import {
   customerCommunicationOrderAccessWhere,
   customsDocumentsConfirmed,
   errorMessage,
-  hasSentAutoShippingNotification,
+  hasSentShippingNotification,
   hasShippingDocument,
   latestShippingNotification,
   loadOrderForManualShippingNotification,
@@ -35,31 +35,14 @@ import {
   type ActorLike,
   type AuditRequestLike,
   type ManualShippingEmailInput,
-  type NotificationRecordOptions,
-  type ShippingBundle,
   type ShippingOrderLike,
 } from "./shipping-documents-shared";
-
-async function notificationRecordData(order: ShippingOrderLike, bundle: ShippingBundle, recipientEmails: string[], ccEmails: string[], sendMode: string, sendStatus: string, errorMessage = "", options: NotificationRecordOptions = {}) {
-  const commercialInvoice = bundle.items.find((item) => item.typeKey === "commercialInvoice")?.document || null;
-  return {
-    orderId: order.id || "",
-    customerId: order.customerId || "",
-    invoiceId: commercialInvoice?.id || null,
-    sentById: options.sentById || null,
-    recipientEmails,
-    ccEmails,
-    documentTypes: options.documentTypes || bundle.documentTypes,
-    attachmentFileIds: bundle.documents.flatMap((document) => (document.id ? [document.id] : [])),
-    sendStatus,
-    sendMode,
-    emailLanguage: options.emailLanguage || null,
-    emailSubject: options.emailSubject || null,
-    emailBody: options.emailBody || null,
-    errorMessage: errorMessage || null,
-    sentAt: ["sent", "SUCCESS"].includes(sendStatus) ? new Date() : null,
-  };
-}
+import {
+  claimManualShippingNotification,
+  manualSendFingerprint,
+  manualSendIdempotencyKey,
+} from "./shipping-documents-deduplication";
+import { shippingNotificationRecordData } from "./shipping-documents-records";
 
 async function upsertAutoShippingNotification(order: ShippingOrderLike, data: Parameters<typeof prisma.shippingDocumentNotification.create>[0]["data"]) {
   const existing = latestShippingNotification({
@@ -92,13 +75,13 @@ async function attemptShippingDocumentsNotification(request: AuditRequestLike, a
   if (!manual) {
     if (!customer.enableAutoShippingDocsNotification) return serializeOrder(order);
     if (!customsDocumentsConfirmed(order)) return serializeOrder(order);
-    if (hasSentAutoShippingNotification(order)) return serializeOrder(order);
+    if (hasSentShippingNotification(order)) return serializeOrder(order);
   }
   const bundle = shippingDocumentBundle(order);
   const recipientEmails = shippingRecipientEmails(customer);
   const ccEmails = parseEmailList(customer.shippingDocsCcEmails || []);
   const missingLabels = bundle.missing.map((item) => item.label);
-  const baseData = await notificationRecordData(order, bundle, recipientEmails, ccEmails, sendMode, "pending");
+  const baseData = shippingNotificationRecordData(order, bundle, recipientEmails, ccEmails, sendMode, "pending");
 
   if (!recipientEmails.length) {
     const message = "清关资料接收邮箱未配置，未发送。";
@@ -139,13 +122,13 @@ async function attemptShippingDocumentsNotification(request: AuditRequestLike, a
       variables: template.variables,
       subjectOverride: template.subject,
       bodyOverride: template.body,
-      idempotencyKey: row.id,
+      idempotencyKey: `shipping-docs:auto:${order.id}`,
       relatedEntityType: "shipping_document_notifications",
       relatedEntityId: row.id || "",
       relatedOrderId: order.id || "",
       context: { sendMode, documentTypes: bundle.documentTypes, language: template.language },
     });
-    if (delivery.skipped || delivery.sent !== true) {
+    if (delivery.sent !== true) {
       throw codedError(delivery.error || "清关资料通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
     }
     const sent = await prisma.shippingDocumentNotification.update({
@@ -204,7 +187,7 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
   if (!emailInput.recipientEmails.length) {
     throw codedError("收件邮箱不能为空。", 400, "SHIPPING_RECIPIENT_REQUIRED");
   }
-  const baseData = await notificationRecordData(
+  const baseData = shippingNotificationRecordData(
     order,
     bundle,
     emailInput.recipientEmails,
@@ -220,7 +203,23 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
       documentTypes: bundle.items.filter((item) => item.document).map((item) => item.typeKey),
     },
   );
-  const row = await prisma.shippingDocumentNotification.create({ data: baseData });
+  const fingerprint = manualSendFingerprint({
+    recipientEmails: emailInput.recipientEmails,
+    ccEmails: emailInput.ccEmails,
+    emailSubject: emailInput.subject,
+    emailBody: emailInput.body,
+    attachmentFileIds: baseData.attachmentFileIds,
+  });
+  const claimed = await claimManualShippingNotification(order.id || orderId, baseData, fingerprint);
+  if (claimed.duplicate) {
+    if (["sent", "SUCCESS"].includes(claimed.duplicate.sendStatus)) {
+      return serializeOrder(await loadOrderForManualShippingNotification(orderId, actor));
+    }
+    throw codedError("相同的清关资料邮件正在发送，请勿重复提交。", 409, "SHIPPING_EMAIL_SEND_IN_PROGRESS");
+  }
+  const row = claimed.row;
+  if (!row) throw codedError("清关资料发送任务创建失败。", 500, "SHIPPING_EMAIL_SEND_CLAIM_FAILED");
+  const idempotencyKey = manualSendIdempotencyKey(order.id || orderId, input);
   try {
     const attachments = await Promise.all(bundle.items.filter(hasShippingDocument).map(async (item) => ({
       filename: standardFilenameForDocument(item.document, order),
@@ -235,13 +234,13 @@ export async function sendManualShippingDocumentsNotification(request: AuditRequ
       variables: emailInput.variables,
       subjectOverride: emailInput.subject,
       bodyOverride: emailInput.body,
-      idempotencyKey: row.id,
+      idempotencyKey,
       relatedEntityType: "shipping_document_notifications",
       relatedEntityId: row.id || "",
       relatedOrderId: order.id || "",
       context: { sendMode: "manual", documentTypes: bundle.documentTypes, language: emailInput.language },
     });
-    if (delivery.skipped || delivery.sent !== true) {
+    if (delivery.sent !== true) {
       throw codedError(delivery.error || "清关资料通知模板已停用，未发送。", 409, "NOTIFICATION_TEMPLATE_DISABLED");
     }
     const sent = await prisma.shippingDocumentNotification.update({

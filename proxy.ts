@@ -91,23 +91,14 @@ function isBlockedBot(userAgent = "") {
   return BLOCKED_BOT_PATTERNS.some((pattern) => pattern.test(userAgent));
 }
 
-function rateLimitResponse(
-  rateLimit: { limit: number; remaining: number; resetAt: number },
-  contentSecurityPolicy: string,
-  plainText = false,
-) {
+function rateLimitResponse(rateLimit: { limit: number; remaining: number; resetAt: number }, contentSecurityPolicy: string) {
   const retryAfterSeconds = Math.max(1, Math.ceil((rateLimit.resetAt - Date.now()) / 1000));
-  const response = plainText
-    ? new NextResponse("Too Many Requests", {
-        status: 429,
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      })
-    : NextResponse.json({
-        success: false,
-        error: "请求过于频繁，请稍后重试。",
-        message: "请求过于频繁，请稍后重试。",
-        code: "API_RATE_LIMITED",
-      }, { status: 429 });
+  const response = NextResponse.json({
+    success: false,
+    error: "请求过于频繁，请稍后重试。",
+    message: "请求过于频繁，请稍后重试。",
+    code: "API_RATE_LIMITED",
+  }, { status: 429 });
   response.headers.set("Retry-After", String(retryAfterSeconds));
   response.headers.set("X-RateLimit-Limit", String(rateLimit.limit));
   response.headers.set("X-RateLimit-Remaining", String(rateLimit.remaining));
@@ -153,11 +144,7 @@ export async function proxy(request: NextRequest) {
   }
   const apiRateLimit = await checkApiRateLimit(request);
   if (!apiRateLimit.allowed) {
-    return rateLimitResponse(
-      apiRateLimit,
-      contentSecurityPolicy,
-      request.nextUrl.pathname === "/api/wechat/official-account/callback",
-    );
+    return rateLimitResponse(apiRateLimit, contentSecurityPolicy);
   }
 
   if (request.nextUrl.pathname === "/workspace" || request.nextUrl.pathname === "/index.html") {

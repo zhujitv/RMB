@@ -5,8 +5,11 @@ import { assertRead, assertWrite } from "./shared-access";
 import { writeAudit } from "./shared-audit";
 import {
   TEXT_LIMITS,
+  BILINGUAL_TRACKING_NOTIFICATION_TYPES,
   NOTIFICATION_TYPE_DEFINITIONS,
   NOTIFICATION_TYPES,
+  logisticsEmailBodyIsBilingual,
+  logisticsEmailSubjectIsEnglish,
   type ActorLike,
   type AuditRequestLike,
   type JsonRecord,
@@ -140,16 +143,26 @@ export async function saveNotificationCenterTemplate(request: AuditRequestLike, 
     : isPlainRecord(data.extraConfig)
     ? data.extraConfig
     : current.extraConfig;
+  const subjectTemplate = editable
+    ? cleanTemplateText(data.subjectTemplate, String(current.subjectTemplate || ""), TEXT_LIMITS.subject)
+    : String(current.subjectTemplate || "");
+  const bodyTemplate = editable
+    ? cleanTemplateText(data.bodyTemplate, String(current.bodyTemplate || ""), TEXT_LIMITS.body)
+    : String(current.bodyTemplate || "");
+  if (BILINGUAL_TRACKING_NOTIFICATION_TYPES.has(type)) {
+    if (!logisticsEmailSubjectIsEnglish(subjectTemplate)) {
+      throw codedError("物流通知邮件标题必须使用英文。", 400, "LOGISTICS_EMAIL_SUBJECT_ENGLISH_REQUIRED");
+    }
+    if (!logisticsEmailBodyIsBilingual(bodyTemplate)) {
+      throw codedError("物流通知邮件正文必须同时包含英文和中文。", 400, "LOGISTICS_EMAIL_BODY_BILINGUAL_REQUIRED");
+    }
+  }
   const next = await prisma.notificationTemplate.update({
     where: { type },
     data: {
       enabled: definition.securitySensitive ? true : data.enabled !== false,
-      subjectTemplate: editable
-        ? cleanTemplateText(data.subjectTemplate, String(current.subjectTemplate || ""), TEXT_LIMITS.subject)
-        : String(current.subjectTemplate || ""),
-      bodyTemplate: editable
-        ? cleanTemplateText(data.bodyTemplate, String(current.bodyTemplate || ""), TEXT_LIMITS.body)
-        : String(current.bodyTemplate || ""),
+      subjectTemplate,
+      bodyTemplate,
       ccEmails: jsonOrNull(definition.securitySensitive
         ? []
         : requireValidEmailList(data.ccEmails || [], "通知抄送邮箱")),

@@ -142,6 +142,18 @@ export function NotificationTemplateSettingsCard({
         </section>
       ) : null}
 
+      {currentForm.type === "FREIGHTOWER_TRACKING_UPDATE" ? (
+        <section className={styles.documentGroupCard}>
+          <strong>物流变化触发与收件人</strong>
+          <div className={styles.quickCreateMeta}>
+            <span>飞驼可视 API 查询到新的运输节点、状态变化或甩柜预警后自动发送。</span>
+            <span>默认收件人：所有已启用且已审批的管理员，以及该订单的业务员。</span>
+            <span>管理员与业务员邮箱重复时自动合并，只发送一次。</span>
+            <span>相同运输节点使用幂等键去重，不会重复发送。</span>
+          </div>
+        </section>
+      ) : null}
+
       <section className={styles.documentGroupCard}>
         <strong>抄送设置</strong>
         <UiSwitch

@@ -69,6 +69,7 @@ export function WorkspaceShell() {
     if (!parsed) return false;
     const path = parsed.pathname.replace(/^\/+/, "");
     const keyword = parsed.searchParams.get("keyword") || fallbackOrderNo;
+    if (path === "account") return Boolean(openWorkspaceMenu("account"));
     if (path === "orders") return Boolean(openWorkspaceMenu("orders", { keyword }));
     if (path === "payments") return Boolean(openWorkspaceMenu("payments", { keyword }));
     if (path === "costs") return Boolean(openWorkspaceMenu("costs", { keyword }));

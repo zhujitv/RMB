@@ -65,6 +65,7 @@ export function ControlTowerPresentation({
 
       <div className={styles.controlTowerStats}>
         <ControlTowerStatCard label="在途总票数" value={stats.inTransitCount} tone="blue" />
+        <ControlTowerStatCard label="甩柜预警" value={stats.dumpingWarningCount} tone="red" />
         <ControlTowerStatCard label="即将到港" value={stats.soonArrivingCount} tone="orange" />
         <ControlTowerStatCard label="ETA 已过期" value={stats.etaOverdueCount} tone="red" />
         <ControlTowerStatCard label="同步失败" value={stats.syncFailedCount} tone="rose" />
@@ -85,6 +86,7 @@ export function ControlTowerPresentation({
             <option value="已离港">已离港</option>
             <option value="已到港">已到港</option>
             <option value="待更新">待更新</option>
+            <option value="甩柜预警">甩柜预警</option>
             <option value="同步失败">同步失败</option>
           </select>
           <input type="date" value={filters.etaStart} onChange={(event) => setFilterValue("etaStart", event.target.value)} aria-label="ETA 开始日期" />

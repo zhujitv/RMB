@@ -180,8 +180,10 @@ export function latestShippingNotification(order: ShippingOrderLike = {}) {
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0] || null;
 }
 
-export function hasSentAutoShippingNotification(order: ShippingOrderLike = {}) {
-  return (order.shippingDocumentNotifications || []).some((item) => item.sendMode === "auto" && item.sendStatus === "sent");
+export function hasSentShippingNotification(order: ShippingOrderLike = {}) {
+  return (order.shippingDocumentNotifications || []).some((item) => (
+    item.sendStatus === "sent" || item.sendStatus === "SUCCESS"
+  ));
 }
 
 export function customsDocumentsConfirmed(order: ShippingOrderLike = {}) {

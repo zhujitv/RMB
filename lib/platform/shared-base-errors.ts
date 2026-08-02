@@ -215,6 +215,13 @@ function prismaInfrastructureError(error: unknown) {
   const typedError = (error || {}) as AppError & { meta?: unknown };
   const code = String(typedError.code || "");
   const message = String(typedError.message || "");
+  if (code === "P2037" || /too many (?:database )?connections|too many clients/i.test(message)) {
+    return {
+      status: 503,
+      code: "PRISMA_DATABASE_POOL_EXHAUSTED",
+      message: "数据库连接繁忙，请稍后重试。",
+    };
+  }
   if (
     code === "P1001"
     || /Can't reach database server|database .*connect|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|Connection terminated|connect ECONNREFUSED/i.test(message)
@@ -222,7 +229,7 @@ function prismaInfrastructureError(error: unknown) {
     return {
       status: 500,
       code: "PRISMA_DATABASE_CONNECTION_FAILED",
-      message: "数据库连接失败，请检查 DATABASE_URL 和本地 PostgreSQL 状态。",
+      message: "数据库暂时无法连接，请稍后重试或联系管理员。",
     };
   }
   if (

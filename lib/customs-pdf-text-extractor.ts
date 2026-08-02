@@ -1,6 +1,3 @@
-process.env.PDF2JSON_DISABLE_LOGS ||= "1";
-
-import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
 import { normalizePdfText, parserError, type PdfParseOptions } from "./customs-declaration-parser-shared.ts";
 
@@ -10,48 +7,51 @@ export const MAX_CUSTOMS_PDF_TEXT_ITEMS = 100_000;
 export const MAX_CUSTOMS_PDF_TEXT_CHARS = 2_000_000;
 export const DEFAULT_CUSTOMS_PDF_PARSE_TIMEOUT_MS = 15_000;
 
-const pdf2JsonModulePath = createRequire(import.meta.url).resolve("pdf2json");
+const pdfJsModuleSpecifier = ["pdfjs-dist", "legacy", "build", "pdf.mjs"].join("/");
+const pdfJsWorkerModuleSpecifier = ["pdfjs-dist", "legacy", "build", "pdf.worker.mjs"].join("/");
+const runtimeRequire = process
+  .getBuiltinModule("node:module")
+  .createRequire(import.meta.url);
+const pdfJsModulePath = runtimeRequire.resolve(pdfJsModuleSpecifier);
+const pdfJsWorkerModulePath = runtimeRequire.resolve(pdfJsWorkerModuleSpecifier);
 
 const PDF_TEXT_WORKER_SOURCE = String.raw`
 "use strict";
 const { parentPort, workerData } = require("node:worker_threads");
-process.env.PDF2JSON_DISABLE_LOGS = "1";
-let parser;
+const { pathToFileURL } = require("node:url");
+let loadingTask;
 let settled = false;
 
-function decodeRun(value = "") {
-  try { return decodeURIComponent(value); } catch { return value; }
-}
-
-function lineText(texts = []) {
-  const sorted = texts.slice().sort((left, right) => (
-    Number(left.y || 0) - Number(right.y || 0)
-    || Number(left.x || 0) - Number(right.x || 0)
+function pageText(items = []) {
+  const textItems = items.filter((item) => item && typeof item.str === "string" && item.str.trim());
+  const naturalText = textItems.map((item) => item.str).join(" ");
+  const sorted = textItems.slice().sort((left, right) => (
+    Number(right.transform?.[5] || 0) - Number(left.transform?.[5] || 0)
+    || Number(left.transform?.[4] || 0) - Number(right.transform?.[4] || 0)
   ));
   const lines = [];
   let currentY = null;
-  let currentLine = "";
+  let currentLine = [];
   for (const item of sorted) {
-    const y = Number(item.y || 0);
-    const text = (item.R || []).map((run) => decodeRun(run.T || "")).join("");
-    if (!text) continue;
-    if (currentY === null || Math.abs(y - currentY) <= 0.35) {
-      currentLine += text;
+    const y = Number(item.transform?.[5] || 0);
+    const text = item.str.trim();
+    if (currentY === null || Math.abs(y - currentY) <= 2) {
+      currentLine.push(text);
       currentY = currentY === null ? y : currentY;
     } else {
-      if (currentLine.trim()) lines.push(currentLine.trim());
-      currentLine = text;
+      if (currentLine.length) lines.push(currentLine.join(" "));
+      currentLine = [text];
       currentY = y;
     }
   }
-  if (currentLine.trim()) lines.push(currentLine.trim());
-  return lines.join("\n");
+  if (currentLine.length) lines.push(currentLine.join(" "));
+  const structuredText = lines.join("\n");
+  return naturalText === structuredText ? naturalText : [naturalText, structuredText].filter(Boolean).join("\n");
 }
 
 function finish(message) {
   if (settled) return;
   settled = true;
-  try { parser?.destroy?.(); } catch {}
   parentPort.postMessage(message);
   parentPort.close();
 }
@@ -60,40 +60,51 @@ function fail(message, status = 422, code = "CUSTOMS_PDF_TEXT_EXTRACT_FAILED") {
   finish({ ok: false, error: { message: String(message || "PDF文本提取失败"), status, code } });
 }
 
-try {
-  const loaded = require(workerData.modulePath);
-  const PDFParser = loaded.default || loaded.PDFParser || loaded;
-  if (typeof PDFParser !== "function") throw new Error("pdf2json 未导出可用的 PDFParser 构造器。");
-  parser = new PDFParser(null, true);
-  parser.on("pdfParser_dataError", (error) => {
-    const source = error instanceof Error ? error : error?.parserError;
-    fail(source?.message || "PDF文本提取失败");
-  });
-  parser.on("pdfParser_dataReady", (data = {}) => {
-    const pages = Array.isArray(data.Pages) ? data.Pages : [];
-    if (pages.length > workerData.maxPages) {
+async function run() {
+  try {
+    globalThis.pdfjsWorker = await import(pathToFileURL(workerData.workerModulePath).href);
+    const pdfjs = await import(pathToFileURL(workerData.modulePath).href);
+    if (typeof pdfjs.getDocument !== "function") throw new Error("PDF.js 未导出可用的 getDocument 方法。");
+    loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(workerData.pdfData),
+      disableFontFace: true,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
+    const pdf = await loadingTask.promise;
+    const pageCount = Number(pdf?.numPages || 0);
+    if (pageCount > workerData.maxPages) {
       fail("PDF 页数超过安全识别上限，请拆分后重新上传。", 422, "CUSTOMS_PDF_PAGE_LIMIT_EXCEEDED");
       return;
     }
-    const itemCount = pages.reduce((sum, page) => sum + (Array.isArray(page.Texts) ? page.Texts.length : 0), 0);
-    if (itemCount > workerData.maxTextItems) {
-      fail("PDF 内容过于复杂，无法安全自动识别，请手工填写报关信息。", 422, "CUSTOMS_PDF_COMPLEXITY_LIMIT_EXCEEDED");
-      return;
-    }
-    const rawText = typeof parser.getRawTextContent === "function" ? parser.getRawTextContent() : "";
-    const structuredText = pages.map((page) => lineText(page.Texts || [])).join("\n\n");
-    const text = [rawText, structuredText].filter(Boolean).join("\n");
-    if (text.length > workerData.maxTextChars) {
-      fail("PDF 文本内容超过安全识别上限，请手工填写报关信息。", 422, "CUSTOMS_PDF_TEXT_LIMIT_EXCEEDED");
-      return;
+    let itemCount = 0;
+    let text = "";
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const items = Array.isArray(content?.items) ? content.items : [];
+      itemCount += items.length;
+      if (itemCount > workerData.maxTextItems) {
+        fail("PDF 内容过于复杂，无法安全自动识别，请手工填写报关信息。", 422, "CUSTOMS_PDF_COMPLEXITY_LIMIT_EXCEEDED");
+        return;
+      }
+      const extracted = pageText(items);
+      text += (text && extracted ? "\n\n" : "") + extracted;
+      if (text.length > workerData.maxTextChars) {
+        fail("PDF 文本内容超过安全识别上限，请手工填写报关信息。", 422, "CUSTOMS_PDF_TEXT_LIMIT_EXCEEDED");
+        return;
+      }
+      page.cleanup?.();
     }
     finish({ ok: true, text });
-  });
-  const pdfData = Buffer.from(workerData.pdfData);
-  parser.parseBuffer(pdfData, 0);
-} catch (error) {
-  fail(error?.message || "PDF文本提取失败");
+  } catch (error) {
+    fail(error?.message || "PDF文本提取失败");
+  } finally {
+    try { await loadingTask?.destroy?.(); } catch {}
+  }
 }
+
+void run();
 `;
 
 type WorkerResult = {
@@ -153,7 +164,8 @@ async function extractPdfTextInWorker(pdfData: Buffer, options: PdfParseOptions)
         execArgv: [],
         name: "customs-pdf-text-parser",
         workerData: {
-          modulePath: pdf2JsonModulePath,
+          modulePath: pdfJsModulePath,
+          workerModulePath: pdfJsWorkerModulePath,
           pdfData: transferredPdf,
           maxPages,
           maxTextItems,

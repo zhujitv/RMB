@@ -7,7 +7,6 @@ const DEFAULTS = {
   readLimit: 1000,
   writeLimit: 300,
   uploadLimit: 60,
-  weChatWebhookLimit: 3000,
   registrationWindowMs: 15 * 60_000,
   registrationLimit: 5,
   memoryMaxBuckets: 20_000,
@@ -27,7 +26,6 @@ function rateLimitConfig() {
     readLimit: positiveIntegerFromEnv("API_RATE_LIMIT_READ_LIMIT", DEFAULTS.readLimit),
     writeLimit: positiveIntegerFromEnv("API_RATE_LIMIT_WRITE_LIMIT", DEFAULTS.writeLimit),
     uploadLimit: positiveIntegerFromEnv("API_RATE_LIMIT_UPLOAD_LIMIT", DEFAULTS.uploadLimit),
-    weChatWebhookLimit: positiveIntegerFromEnv("API_RATE_LIMIT_WECHAT_WEBHOOK_LIMIT", DEFAULTS.weChatWebhookLimit),
     registrationWindowMs: positiveIntegerFromEnv("API_RATE_LIMIT_REGISTRATION_WINDOW_MS", DEFAULTS.registrationWindowMs),
     registrationLimit: positiveIntegerFromEnv("API_RATE_LIMIT_REGISTRATION_LIMIT", DEFAULTS.registrationLimit),
     memoryMaxBuckets: positiveIntegerFromEnv("API_RATE_LIMIT_MEMORY_MAX_BUCKETS", DEFAULTS.memoryMaxBuckets),
@@ -79,10 +77,6 @@ function isRegistrationRequest(request: NextRequest) {
   return request.method.toUpperCase() === "POST" && request.nextUrl.pathname === "/api/auth/register";
 }
 
-function isWeChatOfficialAccountWebhookRequest(request: NextRequest) {
-  return request.nextUrl.pathname === "/api/wechat/official-account/callback";
-}
-
 function identity(request: NextRequest) {
   // This layer cannot authenticate cookies. A network identity prevents a
   // forged session token from creating unlimited fresh rate-limit buckets.
@@ -92,13 +86,11 @@ function identity(request: NextRequest) {
 export function apiRateLimitKey(request: NextRequest) {
   const requestClass = isRegistrationRequest(request)
     ? "registration"
-    : isWeChatOfficialAccountWebhookRequest(request)
-      ? "wechat-webhook"
-      : isUploadRequest(request)
-        ? "upload"
-        : isUnsafeMethod(request.method)
-          ? "write"
-          : "read";
+    : isUploadRequest(request)
+      ? "upload"
+      : isUnsafeMethod(request.method)
+        ? "write"
+        : "read";
   return [
     "api",
     requestClass,
@@ -110,9 +102,6 @@ function requestLimit(request: NextRequest) {
   const config = rateLimitConfig();
   if (isRegistrationRequest(request)) {
     return { limit: config.registrationLimit, windowMs: config.registrationWindowMs };
-  }
-  if (isWeChatOfficialAccountWebhookRequest(request)) {
-    return { limit: config.weChatWebhookLimit, windowMs: config.windowMs };
   }
   return {
     limit: isUploadRequest(request) ? config.uploadLimit : isUnsafeMethod(request.method) ? config.writeLimit : config.readLimit,
