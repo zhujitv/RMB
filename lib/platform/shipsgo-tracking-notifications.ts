@@ -7,6 +7,7 @@ import { NOTIFICATION_TYPES } from "./notification-definitions";
 import { enabledAdminEmails, templateValue, uniqueEmails } from "./notification-helpers";
 import { sendNotificationEmail } from "./notification-send";
 import { enqueueWechatOfficialNotifications } from "./wechat-official-notifications";
+import { enqueueWechatMiniNotifications } from "./wechat-mini-notifications";
 import { FREIGHTOWER_PROVIDER } from "./shipsgo-tracking-utils";
 
 const notificationUserSelect = {
@@ -147,7 +148,7 @@ export async function notifyFreightowerTrackingUpdate(trackingId: string) {
   const eventText = templateValue(dumpingAlertText || portEvent?.description || tracking.lastEvent);
   const trackingUrl = `${appBaseUrl()}/tracking-map?trackingId=${encodeURIComponent(tracking.id)}`;
 
-  await enqueueWechatOfficialNotifications({
+  const officialNotification = enqueueWechatOfficialNotifications({
     userIds: recipientUserIds,
     idempotencyKey: `freightower-tracking-update:${latestEventKey}`,
     title: dumpingAlert || portDumping ? "物流甩柜预警" : "物流状态更新",
@@ -162,6 +163,26 @@ export async function notifyFreightowerTrackingUpdate(trackingId: string) {
       message: error instanceof Error ? error.message : "unknown",
     });
   });
+
+  const miniNotification = enqueueWechatMiniNotifications({
+    userIds: recipientUserIds,
+    idempotencyKey: `freightower-tracking-update:${latestEventKey}`,
+    orderNo,
+    statusText,
+    eventText,
+    eventTimeText: displayDateTime(dumpingAlert?.time || portEvent?.time || tracking.lastEventAt || tracking.lastSyncedAt || tracking.lastSyncTime),
+    page: `pages/tracking-detail/index?id=${encodeURIComponent(tracking.id)}`,
+    relatedEntityType: "shipsgo_tracking",
+    relatedEntityId: tracking.id,
+    relatedOrderId: tracking.orderId,
+  }).catch((error: unknown) => {
+    console.error("wechat-mini-tracking-notification-enqueue-failed", {
+      trackingId: tracking.id,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  });
+
+  await Promise.all([officialNotification, miniNotification]);
 
   if (finalRecipientEmails.length) await sendNotificationEmail({
     type: NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,

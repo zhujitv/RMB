@@ -1,0 +1,168 @@
+model WechatOfficialBinding {
+  id              String    @id @default(cuid())
+  userId          String    @unique @map("user_id")
+  openId          String    @unique @map("open_id")
+  enabled         Boolean   @default(true)
+  lastConfirmedAt DateTime? @map("last_confirmed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([enabled])
+  @@map("wechat_official_bindings")
+}
+
+model WechatOfficialSubscription {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  tokenHash   String    @unique @map("token_hash")
+  openId      String?   @map("open_id")
+  templateId  String    @map("template_id")
+  scene       Int
+  status      String    @default("PENDING")
+  expiresAt   DateTime  @map("expires_at")
+  confirmedAt DateTime? @map("confirmed_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delivery WechatOfficialDelivery?
+
+  @@index([userId, status, createdAt])
+  @@index([status, expiresAt])
+  @@index([openId])
+  @@map("wechat_official_subscriptions")
+}
+
+model WechatOfficialDelivery {
+  id                 String    @id @default(cuid())
+  userId             String    @map("user_id")
+  subscriptionId     String    @unique @map("subscription_id")
+  idempotencyKey     String    @unique @map("idempotency_key")
+  status             String    @default("pending")
+  title              String
+  content            String
+  url                String?
+  relatedEntityType  String?   @map("related_entity_type")
+  relatedEntityId    String?   @map("related_entity_id")
+  relatedOrderId     String?   @map("related_order_id")
+  attempts           Int       @default(0)
+  scheduledAt        DateTime  @default(now()) @map("scheduled_at")
+  providerAcceptedAt DateTime? @map("provider_accepted_at")
+  outcomeUnknownAt   DateTime? @map("outcome_unknown_at")
+  sentAt             DateTime? @map("sent_at")
+  failedAt           DateTime? @map("failed_at")
+  lastError          String?   @map("last_error")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  user         User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription WechatOfficialSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([status, scheduledAt])
+  @@index([userId, createdAt])
+  @@index([relatedOrderId])
+  @@index([relatedEntityType, relatedEntityId])
+  @@map("wechat_official_deliveries")
+}
+
+model WechatMiniBinding {
+  id          String    @id @default(cuid())
+  userId      String    @unique @map("user_id")
+  openId      String    @unique @map("open_id")
+  unionId     String?   @map("union_id")
+  enabled     Boolean   @default(true)
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user     User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions WechatMiniSession[]
+  grants   WechatMiniSubscriptionGrant[]
+
+  @@index([enabled])
+  @@index([unionId])
+  @@map("wechat_mini_bindings")
+}
+
+model WechatMiniSession {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  bindingId  String    @map("binding_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  binding WechatMiniBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([bindingId])
+  @@index([revokedAt])
+  @@map("wechat_mini_sessions")
+}
+
+model WechatMiniSubscriptionGrant {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  bindingId  String    @map("binding_id")
+  openId     String    @map("open_id")
+  templateId String    @map("template_id")
+  status     String    @default("AVAILABLE")
+  grantedAt  DateTime  @default(now()) @map("granted_at")
+  reservedAt DateTime? @map("reserved_at")
+  consumedAt DateTime? @map("consumed_at")
+  expiresAt  DateTime? @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  binding  WechatMiniBinding  @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  delivery WechatMiniDelivery?
+
+  @@index([userId, templateId, status, grantedAt])
+  @@index([bindingId])
+  @@index([status, expiresAt])
+  @@map("wechat_mini_subscription_grants")
+}
+
+model WechatMiniDelivery {
+  id                 String    @id @default(cuid())
+  userId             String    @map("user_id")
+  grantId            String    @unique @map("grant_id")
+  idempotencyKey     String    @unique @map("idempotency_key")
+  status             String    @default("pending")
+  page                String?
+  orderNo             String   @map("order_no")
+  statusText          String   @map("status_text")
+  eventTimeText       String   @map("event_time_text")
+  eventText           String   @map("event_text")
+  relatedEntityType  String?   @map("related_entity_type")
+  relatedEntityId    String?   @map("related_entity_id")
+  relatedOrderId     String?   @map("related_order_id")
+  attempts           Int       @default(0)
+  scheduledAt        DateTime  @default(now()) @map("scheduled_at")
+  providerAcceptedAt DateTime? @map("provider_accepted_at")
+  outcomeUnknownAt   DateTime? @map("outcome_unknown_at")
+  sentAt             DateTime? @map("sent_at")
+  failedAt           DateTime? @map("failed_at")
+  lastError          String?   @map("last_error")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  user  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grant WechatMiniSubscriptionGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
+
+  @@index([status, scheduledAt])
+  @@index([userId, createdAt])
+  @@index([relatedOrderId])
+  @@index([relatedEntityType, relatedEntityId])
+  @@map("wechat_mini_deliveries")
+}

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   CommissionFormulaSettingsCard,
   BusinessEntitySettingsCard,
@@ -20,6 +21,7 @@ import { SettingsTableContent } from "./module-edit-panels";
 import type { useSettingsController } from "./use-settings-controller";
 import type { OcrValidationRulesDraft } from "./ocr-integration-settings-card";
 import { WechatOfficialSettingsCard } from "./wechat-official-settings-card";
+import { WechatMiniSettingsCard } from "./wechat-mini-settings-card";
 
 type SettingsController = ReturnType<typeof useSettingsController> & {
   ocrValidationRulesDraft: OcrValidationRulesDraft;
@@ -94,6 +96,18 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     setWechatSettingsDirty,
     setWechatSettingsBusy,
   } = settings;
+  const [wechatOfficialDirty, setWechatOfficialDirty] = useState(false);
+  const [wechatOfficialBusy, setWechatOfficialBusy] = useState(false);
+  const [wechatMiniDirty, setWechatMiniDirty] = useState(false);
+  const [wechatMiniBusy, setWechatMiniBusy] = useState(false);
+
+  useEffect(() => {
+    setWechatSettingsDirty(wechatOfficialDirty || wechatMiniDirty);
+  }, [setWechatSettingsDirty, wechatMiniDirty, wechatOfficialDirty]);
+
+  useEffect(() => {
+    setWechatSettingsBusy(wechatOfficialBusy || wechatMiniBusy);
+  }, [setWechatSettingsBusy, wechatMiniBusy, wechatOfficialBusy]);
 
   if (activeTab === "home") return <SettingsHomeGrid onSelect={selectTab} />;
   if (activeTab === "companyProfile") {
@@ -227,8 +241,12 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
           onSubmit={saveShipsgoIntegrationSettings}
         />
         <WechatOfficialSettingsCard
-          onDirtyChange={setWechatSettingsDirty}
-          onBusyChange={setWechatSettingsBusy}
+          onDirtyChange={setWechatOfficialDirty}
+          onBusyChange={setWechatOfficialBusy}
+        />
+        <WechatMiniSettingsCard
+          onDirtyChange={setWechatMiniDirty}
+          onBusyChange={setWechatMiniBusy}
         />
       </>
     );

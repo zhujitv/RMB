@@ -1,0 +1,15 @@
+{
+  "description": "NEXTWOOD 内部物流跟踪小程序",
+  "miniprogramRoot": "./",
+  "projectname": "nextwood-logistics",
+  "appid": "touristappid",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "compileHotReLoad": true,
+    "postcss": true,
+    "minified": true
+  },
+  "compileType": "miniprogram"
+}

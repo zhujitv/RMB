@@ -1,0 +1,15 @@
+<view class="login-page">
+  <view class="brand">
+    <view class="brand-mark">N</view>
+    <view class="brand-name">NEXTWOOD</view>
+    <view class="brand-sub">内部物流跟踪</view>
+  </view>
+  <view class="login-card">
+    <view class="title">员工登录</view>
+    <view class="hint">使用与网页系统相同的邮箱和密码，首次登录会绑定当前微信。</view>
+    <input class="input" type="text" placeholder="公司邮箱" value="{{email}}" bindinput="onEmail" />
+    <input class="input" password placeholder="系统密码" value="{{password}}" bindinput="onPassword" />
+    <button class="button" loading="{{loading}}" disabled="{{loading}}" bindtap="login">登录并绑定微信</button>
+    <view class="security">账号权限与网页端一致 · 不保存明文密码</view>
+  </view>
+</view>

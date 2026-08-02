@@ -6,6 +6,9 @@ const PUBLIC_API_ROUTES = new Set([
   "app/api/auth/logout/route.ts",
   "app/api/auth/register/route.ts",
   "app/api/auth/verify-email/route.ts",
+  // Mini-program login cannot use the ERP cookie. It requires a short-lived WeChat
+  // login code, verified ERP credentials, account-state checks and login rate limiting.
+  "app/api/wechat-mini/auth/login/route.ts",
   "app/api/company-profile/route.ts",
   "app/api/freightower/webhook/route.ts",
   // WeChat redirects users here without the ERP session cookie. The handler is
@@ -23,6 +26,7 @@ const AUTH_PATTERNS = [
   /\bwithApiWrite\b/,
   /\breportGetHandler\b/,
   /\bassertCronSecret\b/,
+  /\brequireWechatMiniActor\b/,
 ];
 const DANGEROUS_PATTERNS = [
   { pattern: /dangerouslySetInnerHTML/, label: "dangerouslySetInnerHTML" },

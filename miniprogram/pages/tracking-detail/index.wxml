@@ -1,0 +1,26 @@
+<view class="page" wx:if="{{tracking}}">
+  <view class="detail-head">
+    <view class="muted small">运输状态</view>
+    <view class="main-status">{{tracking.hasDumpingWarning ? '甩柜预警' : (tracking.currentStatus || tracking.statusLabel || tracking.status || '运输中')}}</view>
+    <view class="route">{{tracking.originName || '-'}} <text>→</text> {{tracking.destinationName || '-'}}</view>
+  </view>
+  <view class="card info">
+    <view class="info-row"><text>提单号</text><text>{{tracking.masterBlNo || tracking.bookingNumber || '-'}}</text></view>
+    <view class="info-row"><text>集装箱</text><text>{{containerText || '-'}}</text></view>
+    <view class="info-row"><text>船名</text><text>{{tracking.vesselName || '未返回'}}</text></view>
+    <view class="info-row"><text>航次</text><text>{{tracking.voyage || '未返回'}}</text></view>
+    <view class="info-row"><text>预计到港</text><text>{{etaText || '-'}}</text></view>
+  </view>
+  <view class="section-title">运输节点时间轴</view>
+  <view class="card timeline" wx:if="{{timeline.length}}">
+    <view class="event" wx:for="{{timeline}}" wx:key="index">
+      <view class="rail"><view class="dot {{index === 0 ? 'active' : ''}}"></view><view class="stick" wx:if="{{index < timeline.length - 1}}"></view></view>
+      <view class="event-body">
+        <view class="event-title">{{item.description || item.status || '物流节点'}}</view>
+        <view class="event-meta">{{item.timeText || '-'}} · {{item.location || '地点未返回'}}</view>
+        <view class="event-vessel" wx:if="{{item.vesselName || item.voyage}}">{{item.vesselName || ''}} {{item.voyage || ''}}</view>
+      </view>
+    </view>
+  </view>
+  <view class="empty" wx:else>物流节点尚未返回</view>
+</view>
