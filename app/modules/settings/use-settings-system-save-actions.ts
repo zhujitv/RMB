@@ -192,13 +192,10 @@ function selectNotificationTemplate(type: string) {
     setShipsgoIntegrationMessage("");
     try {
       const result = await apiJson<{ success?: boolean; settings?: ShipsgoIntegrationSettings; message?: string }>(
-        "/api/settings/shipsgo",
+        "/api/settings/freightower",
         {
           method: "PATCH",
-          body: JSON.stringify({
-            ...shipsgoIntegrationForm,
-            creditWarningThreshold: Number(shipsgoIntegrationForm.creditWarningThreshold || 0),
-          }),
+          body: JSON.stringify(shipsgoIntegrationForm),
         },
       );
       if (result.success !== true) throw new Error(result.message || "物流接口设置保存失败");

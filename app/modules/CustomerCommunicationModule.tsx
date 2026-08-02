@@ -40,6 +40,8 @@ export function CustomerCommunicationModule({
   const [detailError, setDetailError] = useState("");
   const [mailForm, setMailForm] = useState<MailForm | null>(null);
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const sendRequestIdRef = useRef("");
   const listRequestRef = useRef(0);
   const {
     manualMarkDialog,
@@ -131,6 +133,7 @@ export function CustomerCommunicationModule({
   }
 
   async function openDetail(orderId: string) {
+    sendRequestIdRef.current = "";
     setDetailOrderId(orderId);
     setDetail(null);
     setMailForm(null);
@@ -148,7 +151,8 @@ export function CustomerCommunicationModule({
   }
 
   function closeDetail() {
-    if (sending) return;
+    if (sendingRef.current) return;
+    sendRequestIdRef.current = "";
     setDetailOrderId("");
     setDetail(null);
     setMailForm(null);
@@ -172,14 +176,17 @@ export function CustomerCommunicationModule({
 
   async function sendClearanceDocuments(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!detailOrderId || !mailForm) return;
+    if (sendingRef.current || !detailOrderId || !mailForm) return;
     if (activeMissingLabels.length) {
       setDetailError(`附件缺失，不能发送：${activeMissingLabels.join("、")}`);
       return;
     }
+    sendingRef.current = true;
     setSending(true);
     setDetailError("");
     setNotice("");
+    const requestId = sendRequestIdRef.current || globalThis.crypto.randomUUID();
+    sendRequestIdRef.current = requestId;
     try {
       const result = await apiJson<{ success?: boolean; message?: string; detail?: CommunicationDetail }>(
         `/api/customer-communications/${encodeURIComponent(detailOrderId)}`,
@@ -187,6 +194,7 @@ export function CustomerCommunicationModule({
           method: "PATCH",
           body: JSON.stringify({
             action: "sendCustomsClearanceDocs",
+            requestId,
             recipientEmails: mailForm.recipientEmails,
             ccEmails: mailForm.ccEmails,
             emailLanguage: mailForm.emailLanguage,
@@ -200,11 +208,13 @@ export function CustomerCommunicationModule({
       setDetail(nextDetail);
       setMailForm(formFromDraft(nextDetail.draft || null));
       setNotice(result.message || "清关资料已发送");
+      sendRequestIdRef.current = "";
       void loadRows(page, keyword);
     } catch (sendError) {
       const message = sendError instanceof ApiRequestError || sendError instanceof Error ? sendError.message : "清关资料发送失败";
       setDetailError(message);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }

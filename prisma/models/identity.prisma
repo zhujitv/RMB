@@ -71,6 +71,9 @@ model User {
   createdShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingCreatedBy")
   updatedShipsgoTrackings                ShipsgoTracking[]              @relation("ShipsgoTrackingUpdatedBy")
   todoReminderLogs                       TodoReminderLog[]              @relation("TodoReminderLogOwner")
+  wechatOfficialBinding                  WechatOfficialBinding?
+  wechatOfficialSubscriptions            WechatOfficialSubscription[]
+  wechatOfficialDeliveries               WechatOfficialDelivery[]
 
   @@index([supplierId])
   @@index([approvalStatus])

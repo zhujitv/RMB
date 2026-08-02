@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   nextConfig,
@@ -250,6 +251,20 @@ test("login service errors do not expose deployment diagnostics to unauthenticat
     loginRoute,
     /logSecurityEvent\("login failed", \{[^}]*email/,
   );
+});
+
+test("database connections are bounded for serverless production instances", () => {
+  const prismaSource = filesUnder("lib")
+    .filter((file) => file.endsWith("/prisma.ts") || file === "lib/prisma.ts")
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
+  assert.match(prismaSource, /DATABASE_POOL_MAX/);
+  assert.match(prismaSource, /process\.env\.NODE_ENV === "production" \? 2 : 10/);
+  assert.match(prismaSource, /max: databasePoolMax/);
+  assert.match(prismaSource, /idleTimeoutMillis: 5_000/);
+  assert.match(prismaSource, /maxLifetimeSeconds: 300/);
+  assert.match(prismaSource, /allowExitOnIdle: true/);
+  assert.match(prismaSource, /globalForPrisma\.prisma = prisma/);
 });
 
 test("api errors explain logistics expense billing schema mismatches", () => {

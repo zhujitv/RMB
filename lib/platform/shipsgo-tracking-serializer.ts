@@ -1,7 +1,8 @@
 import { nonEmpty } from "./shared-base-utils";
+import { extractFreightowerAlerts, freightowerAlertText } from "./freightower-alerts";
+import { extractFreightowerPortTimeline } from "./freightower-port-events";
+import { mapFreightowerShipmentPayload } from "./freightower-mapping";
 import { uniqueStrings } from "./shipsgo-tracking-utils";
-import { extractShipmentPayload } from "./shipsgo-tracking-mapping-helpers";
-import { mapShipsgoShipmentPayload } from "./shipsgo-tracking-mapper";
 import { extractShipsgoTimeline } from "./shipsgo-tracking-timeline";
 
 export function serializeShipsgoTracking(row: {
@@ -38,16 +39,47 @@ export function serializeShipsgoTracking(row: {
   containers?: { containerNo?: string | null }[] | null;
   rawPayload?: unknown;
   rawResponse?: unknown;
+  portTrackingStatus?: string | null;
+  portTrackingMessage?: string | null;
+  portCode?: string | null;
+  portDirection?: string | null;
+  portLastCheckedAt?: Date | string | null;
+  portLastSyncedAt?: Date | string | null;
+  portRawResponse?: unknown;
 }) {
   const rawSource = row.rawResponse ?? row.rawPayload ?? null;
-  const rawShipment = rawSource ? extractShipmentPayload(rawSource) : {};
-  const rawFallback = Object.keys(rawShipment).length ? mapShipsgoShipmentPayload(rawShipment) : null;
-  const providerLabel = row.provider === "FREIGHTOWER" ? "飞驼可视" : "大掌櫃";
-  const timeline = rawSource ? extractShipsgoTimeline(rawSource).map((event) => ({
+  const mappedContext = rawSource ? mapFreightowerShipmentPayload(rawSource) : null;
+  const providerLabel = "飞驼可视";
+  const portTimeline = row.portRawResponse ? extractFreightowerPortTimeline(row.portRawResponse) : [];
+  const portAlerts = portTimeline.filter((event) => event.isWarning).map((event) => ({
+    code: event.eventCode,
+    category: event.eventCategory,
+    title: event.isDumpingWarning ? "甩柜预警" : "港区异常预警",
+    description: event.description,
+    time: event.time,
+    location: event.location,
+    containerNo: "",
+    severity: event.isDumpingWarning ? "critical" as const : "warning" as const,
+    isDumping: event.isDumpingWarning,
+    active: true,
+    source: "status" as const,
+  }));
+  const alerts = [...(rawSource ? extractFreightowerAlerts(rawSource) : []), ...portAlerts];
+  const activeAlerts = alerts.filter((alert) => alert.active !== false);
+  const dumpingAlerts = activeAlerts.filter((alert) => alert.isDumping);
+  const latestDumpingAlert = dumpingAlerts[0] || null;
+  const comprehensiveTimeline = rawSource ? extractShipsgoTimeline(rawSource).map((event) => ({
     ...event,
-    source: event.source === "大掌櫃" ? providerLabel : event.source,
+    vesselName: event.vesselName || row.vesselName || "",
+    voyage: event.voyage || row.voyage || "",
   })) : [];
-  const fallbackTimeline = !timeline.length && row.lastEvent ? [{
+  const timeline = mergeTimeline(comprehensiveTimeline, portTimeline.map((event) => ({
+    ...event,
+    vesselName: event.vesselName || row.vesselName || "",
+    voyage: event.voyage || row.voyage || "",
+  })));
+  const isAwaitingProviderData = String(row.syncStatus || "").toUpperCase() === "SUBSCRIBED";
+  const fallbackTimeline = !timeline.length && !isAwaitingProviderData && row.lastEvent ? [{
     time: dateTimeText(row.lastEventAt),
     location: row.originName || row.destinationName || "",
     description: row.lastEvent,
@@ -58,20 +90,19 @@ export function serializeShipsgoTracking(row: {
   const containerNumbers = uniqueStrings([
     row.containerNumber || "",
     ...((row.containers || []).map((container) => container.containerNo || "")),
-    ...(rawFallback?.containerNumbers || []),
   ]);
-  const status = row.currentStatus || row.status || rawFallback?.currentStatus || rawFallback?.status || "UNKNOWN";
-  const masterBlNo = row.masterBlNo || row.bookingNumber || rawFallback?.masterBlNo || rawFallback?.bookingNumber || "";
+  const status = row.currentStatus || row.status || "UNKNOWN";
+  const masterBlNo = row.masterBlNo || row.bookingNumber || "";
   return {
     id: row.id,
     orderId: row.orderId,
     provider: row.provider,
     mode: row.mode,
-    shipsgoShipmentId: row.shipsgoShipmentId || rawFallback?.shipsgoShipmentId || "",
+    shipsgoShipmentId: row.shipsgoShipmentId || "",
     masterBlNo,
     reference: row.reference || "",
-    carrierScac: row.carrierScac || rawFallback?.carrierScac || "",
-    carrierName: row.carrierName || rawFallback?.carrierName || "",
+    carrierScac: row.carrierScac || "",
+    carrierName: row.carrierName || "",
     bookingNumber: row.bookingNumber || masterBlNo,
     containerNumber: containerNumbers[0] || "",
     containerNumbers,
@@ -80,27 +111,54 @@ export function serializeShipsgoTracking(row: {
     statusLabel: shipsgoStatusLabel(status),
     syncStatus: row.syncStatus || "NOT_SYNCED",
     syncMessage: row.syncMessage || "",
-    originName: row.originName || rawFallback?.originName || "",
-    originPortName: row.originName || rawFallback?.originName || "",
-    originPortCode: rawFallback?.originPortCode || "",
-    destinationName: row.destinationName || rawFallback?.destinationName || "",
-    destinationPortName: row.destinationName || rawFallback?.destinationName || "",
-    destinationPortCode: rawFallback?.destinationPortCode || "",
-    dateOfLoading: dateText(row.dateOfLoading || rawFallback?.dateOfLoading),
-    dateOfDischarge: dateText(row.dateOfDischarge || rawFallback?.dateOfDischarge),
-    predictedDischargeDate: dateText(row.predictedDischargeDate || rawFallback?.predictedDischargeDate),
-    eta: dateText(row.eta || row.predictedDischargeDate || row.dateOfDischarge || rawFallback?.eta),
-    vesselName: row.vesselName || rawFallback?.vesselName || "",
-    voyage: row.voyage || rawFallback?.voyage || "",
-    mapUrl: row.mapUrl || rawFallback?.mapUrl || "",
-    lastEvent: row.lastEvent || rawFallback?.lastEvent || "",
-    lastEventAt: dateTimeText(row.lastEventAt || rawFallback?.lastEventAt),
+    originName: row.originName || "",
+    originPortName: row.originName || "",
+    originPortCode: mappedContext?.originPortCode || (row.portDirection !== "I" ? row.portCode || "" : ""),
+    destinationName: row.destinationName || "",
+    destinationPortName: row.destinationName || "",
+    destinationPortCode: mappedContext?.destinationPortCode || (row.portDirection === "I" ? row.portCode || "" : ""),
+    dateOfLoading: dateText(row.dateOfLoading),
+    dateOfDischarge: dateText(row.dateOfDischarge),
+    predictedDischargeDate: dateText(row.predictedDischargeDate),
+    eta: dateText(row.eta || row.predictedDischargeDate || row.dateOfDischarge),
+    vesselName: row.vesselName || "",
+    voyage: row.voyage || "",
+    mapUrl: row.mapUrl || "",
+    lastEvent: row.lastEvent || "",
+    lastEventAt: dateTimeText(row.lastEventAt),
     lastCheckedAt: dateTimeText(row.lastCheckedAt),
     lastSyncedAt: dateTimeText(row.lastSyncTime || row.lastSyncedAt),
     lastSyncTime: dateTimeText(row.lastSyncTime || row.lastSyncedAt),
     updatedAt: dateTimeText(row.updatedAt),
+    portTrackingStatus: row.portTrackingStatus || "NOT_SUBSCRIBED",
+    portTrackingMessage: row.portTrackingMessage || "",
+    portCode: row.portCode || "",
+    portDirection: row.portDirection || "",
+    portLastCheckedAt: dateTimeText(row.portLastCheckedAt),
+    portLastSyncedAt: dateTimeText(row.portLastSyncedAt),
+    portEventCount: portTimeline.length,
+    alerts,
+    alertCount: activeAlerts.length,
+    hasDumpingWarning: dumpingAlerts.length > 0,
+    dumpingWarning: freightowerAlertText(latestDumpingAlert),
+    dumpingWarningAt: latestDumpingAlert?.time || "",
     timeline: timeline.length ? timeline : fallbackTimeline,
   };
+}
+
+function mergeTimeline<T extends { time?: string; location?: string; description?: string; vesselName?: string; voyage?: string }>(...groups: T[][]) {
+  const seen = new Set<string>();
+  return groups.flat().filter((event) => {
+    const key = `${event.time || ""}|${event.location || ""}|${event.description || ""}|${event.vesselName || ""}|${event.voyage || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((left, right) => {
+    if (!left.time && !right.time) return 0;
+    if (!left.time) return 1;
+    if (!right.time) return -1;
+    return new Date(left.time).getTime() - new Date(right.time).getTime();
+  });
 }
 
 export type ShipsgoTrackingDto = ReturnType<typeof serializeShipsgoTracking>;

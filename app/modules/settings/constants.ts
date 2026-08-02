@@ -140,21 +140,15 @@ export const DEFAULT_NOTIFICATION_TEMPLATE_FORM: NotificationTemplateForm = {
 };
 export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   enabled: false,
-  activeProvider: "SHIPSGO",
-  apiBaseUrl: "https://api.shipsgo.com",
-  apiKey: "",
-  apiKeyConfigured: false,
-  shipsgoEnabled: true,
-  freightowerEnabled: false,
-  freightowerApiBaseUrl: "http://openapi.freightower.com",
+  freightowerApiBaseUrl: "https://openapi.freightower.com",
+  freightowerApiKey: "",
+  freightowerApiKeyConfigured: false,
   freightowerClientId: "",
   freightowerClientIdConfigured: false,
-  freightowerSecret: "",
-  freightowerSecretConfigured: false,
-  freightowerMapKey: "",
-  freightowerMapKeyConfigured: false,
-  freightowerWebhookSecret: "",
-  freightowerWebhookSecretConfigured: false,
+  freightowerIframeKey: "",
+  freightowerIframeKeyConfigured: false,
+  freightowerWebhookAccessSecret: "",
+  freightowerWebhookAccessSecretConfigured: false,
   freightowerDefaultCarrierCode: "AUTO",
   freightowerDefaultPortCode: "",
   freightowerDefaultIsExport: "",
@@ -163,14 +157,11 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   oceanTrackingEnabled: true,
   airTrackingEnabled: false,
   manualSyncEnabled: true,
-  autoSyncEnabled: false,
+  autoSyncEnabled: true,
   dailySyncTime: "02:00",
   webhookEnabled: false,
-  webhookSecret: "",
-  webhookSecretConfigured: false,
   liveMapEnabled: false,
   customerPushEnabled: false,
-  creditWarningThreshold: "20",
 };
 export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
   enabled: false,
@@ -212,47 +203,23 @@ export const SHIPSGO_FEATURE_OPTIONS = [
     description: "按提单号、柜号创建第三方海运跟踪任务。",
   },
   {
-    key: "airTrackingEnabled",
-    label: "空运货物跟踪",
-    description: "预留空运 AWB 跟踪能力，开启后前台显示空运入口。",
-  },
-  {
     key: "manualSyncEnabled",
     label: "手动同步",
     description: "允许在物流页面手动刷新海运跟踪状态。",
-  },
-  {
-    key: "autoSyncEnabled",
-    label: "每日自动同步",
-    description: "按配置时间每日拉取状态更新。",
-  },
-  {
-    key: "webhookEnabled",
-    label: "Webhook 推送",
-    description: "允许接收第三方状态变更推送。",
   },
   {
     key: "liveMapEnabled",
     label: "地图入口",
     description: "开启后前台显示当前接口返回的原始地图链接。",
   },
-  {
-    key: "customerPushEnabled",
-    label: "客户自动推送",
-    description: "状态更新后可扩展为邮件推送客户。",
-  },
 ] satisfies Array<{
   key: keyof Pick<
     ShipsgoIntegrationForm,
-    "oceanTrackingEnabled" | "airTrackingEnabled" | "manualSyncEnabled" | "autoSyncEnabled" | "webhookEnabled" | "liveMapEnabled" | "customerPushEnabled"
+    "oceanTrackingEnabled" | "manualSyncEnabled" | "liveMapEnabled"
   >;
   label: string;
   description: string;
 }>;
-export const TRACKING_PROVIDER_OPTIONS = [
-  { value: "SHIPSGO", label: "ShipsGo", description: "保留现有大掌柜 / ShipsGo 海运跟踪接口。" },
-  { value: "FREIGHTOWER", label: "飞驼可视", description: "使用飞驼可视集装箱综合跟踪、预警推送和可视化地图。" },
-];
 export const FREIGHTOWER_LANG_OPTIONS = [
   { value: "zh", label: "中文" },
   { value: "en", label: "英文" },

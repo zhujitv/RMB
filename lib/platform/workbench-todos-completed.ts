@@ -242,7 +242,7 @@ export async function completedTodayTodos(context: WorkbenchTodoContext, now = n
           shipsgoTrackingAccessWhere(actor),
           {
             deletedAt: null,
-            provider: "SHIPSGO",
+            provider: "FREIGHTOWER",
             mode: "OCEAN",
             lastSyncTime: { gte: today, lt: tomorrow },
           },

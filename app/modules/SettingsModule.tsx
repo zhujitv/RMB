@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { SettingsModuleProps } from "./settings/types";
 import { SettingsModuleView } from "./settings/module-view";
 import { useSettingsController } from "./settings/use-settings-controller";
@@ -31,6 +32,8 @@ function sameForm(left: unknown, right: unknown) {
 
 export function SettingsModule(props: SettingsModuleProps = {}) {
   const settings = useSettingsController(props);
+  const [wechatSettingsDirty, setWechatSettingsDirty] = useState(false);
+  const [wechatSettingsBusy, setWechatSettingsBusy] = useState(false);
   const ocrValidationRulesDraft = useOcrValidationRulesDraft(settings.activeTab === "ocrIntegration");
   const activeTabLabel = SETTINGS_TABS.find((tab) => tab.key === settings.activeTab)?.label || "系统设置";
   const activeCustomer = settings.customers.find((row) => row.id === settings.customerForm?.id);
@@ -38,7 +41,8 @@ export function SettingsModule(props: SettingsModuleProps = {}) {
   const activeBusinessEntity = settings.businessEntities.find((row) => row.id === settings.businessEntityForm?.id);
   const activeUser = settings.users.find((row) => row.id === settings.userForm?.id);
   const settingsFormDirty = Boolean(
-    (settings.companyProfileForm && !sameForm(settings.companyProfileForm, companyProfileFormFromSettings(settings.companyProfileSettings)))
+    wechatSettingsDirty
+    || (settings.companyProfileForm && !sameForm(settings.companyProfileForm, companyProfileFormFromSettings(settings.companyProfileSettings)))
     || (settings.exchangeForm && !sameForm(settings.exchangeForm, exchangeFormFromSettings(settings.exchangeSettings)))
     || (settings.commissionFormulaForm && !sameForm(settings.commissionFormulaForm, commissionFormulaFormFromSettings(settings.commissionFormulaSettings)))
     || (settings.notificationTemplateForm && !sameForm(settings.notificationTemplateForm, notificationTemplateFormFromSettings(settings.notificationTemplateSettings, settings.selectedNotificationTemplateType)))
@@ -60,7 +64,8 @@ export function SettingsModule(props: SettingsModuleProps = {}) {
     || settings.ocrIntegrationSaving
     || settings.shipsgoIntegrationSaving
     || settings.exchangeRefreshing
-    || Boolean(settings.forceDeletingRejectedUserId);
+    || Boolean(settings.forceDeletingRejectedUserId)
+    || wechatSettingsBusy;
   const activeEntityEditorDirty = settings.activeTab === "customers"
     ? Boolean(settings.customerForm && !sameForm(settings.customerForm, activeCustomer ? customerFormFromRow(activeCustomer) : emptyCustomerForm()))
     : settings.activeTab === "suppliers"
@@ -76,7 +81,10 @@ export function SettingsModule(props: SettingsModuleProps = {}) {
     || (settings.activeTab === "commissionFormula" && Boolean(settings.commissionFormulaForm && !sameForm(settings.commissionFormulaForm, commissionFormulaFormFromSettings(settings.commissionFormulaSettings))))
     || (settings.activeTab === "notificationTemplates" && Boolean(settings.notificationTemplateForm && !sameForm(settings.notificationTemplateForm, notificationTemplateFormFromSettings(settings.notificationTemplateSettings, settings.selectedNotificationTemplateType))))
     || (settings.activeTab === "ocrIntegration" && Boolean(settings.ocrIntegrationForm && !sameForm(settings.ocrIntegrationForm, ocrIntegrationFormFromSettings(settings.ocrIntegrationSettings))))
-    || (settings.activeTab === "shipsgoIntegration" && Boolean(settings.shipsgoIntegrationForm && !sameForm(settings.shipsgoIntegrationForm, shipsgoIntegrationFormFromSettings(settings.shipsgoIntegrationSettings))));
+    || (settings.activeTab === "shipsgoIntegration" && (
+      wechatSettingsDirty
+      || Boolean(settings.shipsgoIntegrationForm && !sameForm(settings.shipsgoIntegrationForm, shipsgoIntegrationFormFromSettings(settings.shipsgoIntegrationSettings)))
+    ));
   const editorKey = settings.activeTab === "customers" && settings.customerForm
     ? `customer:${settings.customerForm.id || "new"}`
     : settings.activeTab === "suppliers" && settings.supplierForm
@@ -109,6 +117,8 @@ export function SettingsModule(props: SettingsModuleProps = {}) {
       {...settings}
       ocrValidationRulesDraft={ocrValidationRulesDraft}
       confirmDiscardCurrentSettings={confirmDiscardCurrentSettings}
+      setWechatSettingsDirty={setWechatSettingsDirty}
+      setWechatSettingsBusy={setWechatSettingsBusy}
     />
   );
 }

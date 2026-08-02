@@ -9,7 +9,7 @@ import {
 } from "./masters-access";
 import { orderSalespersonOwnershipWhere } from "./order-access";
 import { serializeShipsgoTracking, type ShipsgoTrackingDto } from "./shipsgo-tracking-mapping";
-import { cleanInputText, FREIGHTOWER_PROVIDER, OCEAN_MODE, SHIPSGO_PROVIDER, type ShipsgoActor, type ShipsgoQueryLike } from "./shipsgo-tracking-utils";
+import { cleanInputText, FREIGHTOWER_PROVIDER, OCEAN_MODE, type ShipsgoActor, type ShipsgoQueryLike } from "./shipsgo-tracking-utils";
 
 function controlTowerQueryValue(query: ShipsgoQueryLike, key: string, limit = 128) {
   return cleanInputText(query?.get(key), limit);
@@ -68,7 +68,9 @@ function latestShipsgoTimelineEvent(timeline: ShipsgoTrackingDto["timeline"] = [
 
 function trackingSignalExists(tracking: ShipsgoTrackingDto) {
   return Boolean(
-    tracking.eta
+    tracking.hasDumpingWarning
+    || tracking.alertCount
+    || tracking.eta
     || tracking.predictedDischargeDate
     || tracking.dateOfDischarge
     || tracking.lastEvent
@@ -171,6 +173,7 @@ function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTrac
   const isSoonArriving = etaMs != null && etaMs >= todayMs && etaMs - todayMs <= sevenDaysMs && !isCompleted;
   const isSyncStale = !isCompleted && (lastSyncMs == null || now.getTime() - lastSyncMs > 24 * 60 * 60 * 1000);
   const alertLabels = [
+    tracking.hasDumpingWarning ? "甩柜预警" : "",
     isSyncFailed ? "同步失败" : "",
     isEtaOverdue ? "ETA 已过期" : "",
     isSoonArriving ? "即将到港" : "",
@@ -204,36 +207,45 @@ export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, 
   assertRead(actor, "domesticLogistics");
   const includeCompleted = boolQueryValue(query, "includeCompleted") === true;
   const orderAccessWhere = controlTowerOrderAccessWhere(actor);
-  const rows = await prisma.shipsgoTracking.findMany({
-    where: {
-      provider: { in: [SHIPSGO_PROVIDER, FREIGHTOWER_PROVIDER] },
-      mode: OCEAN_MODE,
-      deletedAt: null,
-      shipsgoShipmentId: { not: null },
-      order: { is: orderAccessWhere },
-    },
-    include: {
-      containers: {
-        select: { containerNo: true },
-        orderBy: [{ containerNo: "asc" }],
+  async function loadTrackingPage(afterId?: string) {
+    return prisma.shipsgoTracking.findMany({
+      where: {
+        provider: FREIGHTOWER_PROVIDER,
+        mode: OCEAN_MODE,
+        deletedAt: null,
+        shipsgoShipmentId: { not: null },
+        order: { is: orderAccessWhere },
       },
-      order: {
-        select: {
-          id: true,
-          orderNo: true,
-          blNo: true,
-          salespersonUserId: true,
-          customerNameSnapshot: true,
-          isArchived: true,
-          businessEntity: { select: { isDefault: true } },
-          customer: { select: { name: true, shortName: true, salespersonUserId: true } },
-          logisticsSuppliers: { select: { supplierId: true } },
+      include: {
+        containers: {
+          select: { containerNo: true },
+          orderBy: [{ containerNo: "asc" }],
+        },
+        order: {
+          select: {
+            id: true,
+            orderNo: true,
+            blNo: true,
+            salespersonUserId: true,
+            customerNameSnapshot: true,
+            isArchived: true,
+            businessEntity: { select: { isDefault: true } },
+            customer: { select: { name: true, shortName: true, salespersonUserId: true } },
+            logisticsSuppliers: { select: { supplierId: true } },
+          },
         },
       },
-    },
-    orderBy: [{ eta: "asc" }, { lastSyncTime: "desc" }, { updatedAt: "desc" }],
-    take: 300,
-  });
+      orderBy: { id: "asc" },
+      take: 300,
+      ...(afterId ? { cursor: { id: afterId }, skip: 1 } : {}),
+    });
+  }
+  let page = await loadTrackingPage();
+  const rows = [...page];
+  while (page.length === 300) {
+    page = await loadTrackingPage(page[page.length - 1]?.id);
+    rows.push(...page);
+  }
   const now = new Date();
   const mappedRows = rows
     .filter((row) => canAccessDomesticLogisticsOrder(actor, row.order))
@@ -242,6 +254,7 @@ export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, 
     .filter((row) => includeCompleted || !row.isCompleted)
     .filter((row) => trackingMatchesQuery(row, query))
     .sort((a, b) => {
+      if (a.hasDumpingWarning !== b.hasDumpingWarning) return a.hasDumpingWarning ? -1 : 1;
       if (a.isSyncFailed !== b.isSyncFailed) return a.isSyncFailed ? -1 : 1;
       if (a.orderIsArchived !== b.orderIsArchived) return a.orderIsArchived ? 1 : -1;
       const aEta = trackingDateMs(a.eta);
@@ -257,6 +270,7 @@ export async function listShipsgoControlTowerTrackings(query: ShipsgoQueryLike, 
     rows: mappedRows,
     stats: {
       inTransitCount: mappedRows.filter((row) => !row.isCompleted).length,
+      dumpingWarningCount: mappedRows.filter((row) => row.hasDumpingWarning).length,
       soonArrivingCount: mappedRows.filter((row) => row.isSoonArriving).length,
       etaOverdueCount: mappedRows.filter((row) => row.isEtaOverdue).length,
       syncFailedCount: mappedRows.filter((row) => row.isSyncFailed).length,

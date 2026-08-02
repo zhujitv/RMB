@@ -62,7 +62,7 @@ export function ShipsgoControlTowerView({
     setError("");
     try {
       const params = controlTowerSearchParams(nextFilters);
-      const result = await apiJson<ShipsgoControlTowerResponse>(`/api/shipsgo/ocean-trackings/control-tower?${params}`);
+      const result = await apiJson<ShipsgoControlTowerResponse>(`/api/freightower/ocean-trackings/control-tower?${params}`);
       if (result.success === false) throw new Error(result.message || "读取运输监控失败");
       if (requestId !== loadRequestRef.current) return;
       setRows(Array.isArray(result.rows) ? result.rows : []);
@@ -142,7 +142,7 @@ export function ShipsgoControlTowerView({
     setError("");
     setNotice("");
     try {
-      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/shipsgo/ocean-trackings/${encodeURIComponent(row.id)}/sync`, {
+      const result = await apiJson<{ success?: boolean; message?: string }>(`/api/freightower/ocean-trackings/${encodeURIComponent(row.id)}/sync`, {
         method: "POST",
       });
       if (result.success === false) throw new Error(result.message || "同步海运跟踪失败");
@@ -158,7 +158,16 @@ export function ShipsgoControlTowerView({
   }
 
   function toggleTimeline(row: ShipsgoControlTowerRow) {
-    setExpandedId((current) => current === row.id ? "" : row.id);
+    const isExpanding = expandedId !== row.id;
+    setExpandedId(isExpanding ? row.id : "");
+    if (
+      isExpanding
+      && /SUBSCRIBED|NOT_SYNCED|PENDING/.test(String(row.syncStatus || "").toUpperCase())
+      && features.manualSyncEnabled
+      && canManage
+    ) {
+      void syncTracking(row);
+    }
   }
 
   return (

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   codedError,
   isPlainRecord,
@@ -10,6 +11,11 @@ import {
 
 const DEFAULT_RESEND_TIMEOUT_MS = 10_000;
 const RESEND_ERROR_RESPONSE_MAX_BYTES = 256 * 1024;
+
+export function resendIdempotencyHeaderValue(value: string | null | undefined) {
+  if (!value) return "";
+  return `nextwood-${createHash("sha256").update(value, "utf8").digest("hex")}`;
+}
 
 export function resendRequestSignal() {
   const configured = Number(process.env.RESEND_SEND_TIMEOUT_MS || DEFAULT_RESEND_TIMEOUT_MS);

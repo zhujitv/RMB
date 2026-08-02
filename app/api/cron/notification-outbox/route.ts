@@ -6,7 +6,9 @@ import {
   logServerError,
   ok,
   processFileStorageDeletionOutbox,
+  processFailedFreightowerNotificationOutbox,
   processLogisticsInvoiceNotificationOutbox,
+  processWechatOfficialNotificationOutbox,
   writeAudit,
 } from "../../../../lib/platform-db";
 
@@ -17,11 +19,13 @@ export const maxDuration = 300;
 export async function GET(request: NextRequest) {
   try {
     assertCronSecret(request);
-    const [notifications, fileDeletions] = await Promise.all([
+    const [notifications, trackingNotifications, wechatNotifications, fileDeletions] = await Promise.all([
       processLogisticsInvoiceNotificationOutbox({ limit: 8 }),
+      processFailedFreightowerNotificationOutbox({ limit: 8 }),
+      processWechatOfficialNotificationOutbox({ limit: 8 }),
       processFileStorageDeletionOutbox(20),
     ]);
-    const result = { notifications, fileDeletions };
+    const result = { notifications, trackingNotifications, wechatNotifications, fileDeletions };
     const actor = await getCronActor();
     if (actor) {
       void writeAudit(

@@ -1,69 +1,69 @@
 model ReceivableOrder {
-  id                             String           @id @default(cuid())
-  orderNo                        String           @map("order_no")
-  blNo                           String?          @map("bl_no")
-  customerId                     String           @map("customer_id")
-  customerNameSnapshot           String           @map("customer_name_snapshot")
-  businessEntityId               String?          @map("business_entity_id")
-  businessEntityNameSnapshot     String?          @map("business_entity_name_snapshot")
-  salespersonUserId              String?          @map("salesperson_user_id")
-  salespersonCommissionRate      Decimal          @default(0) @map("salesperson_commission_rate") @db.Decimal(8, 2)
-  commissionStatus               String           @default("未结算") @map("commission_status")
-  commissionSettledById          String?          @map("commission_settled_by")
-  commissionSettledAt            DateTime?        @map("commission_settled_at")
-  commissionSettlementRemark     String?          @map("commission_settlement_remark")
-  country                        String?
-  currency                       String
-  exchangeRate                   Decimal          @map("exchange_rate") @db.Decimal(18, 6)
-  exchangeRateDate               DateTime?        @map("exchange_rate_date") @db.Date
-  exchangeRateSource             String?          @map("exchange_rate_source")
-  exchangeRateType               String?          @map("exchange_rate_type")
-  receivableAmount               Decimal          @map("receivable_amount") @db.Decimal(18, 2)
-  receivableAmountCny            Decimal          @map("receivable_amount_cny") @db.Decimal(18, 2)
-  estimatedReceivableAmount      Decimal          @map("estimated_receivable_amount") @db.Decimal(18, 2)
-  estimatedReceivableAmountCny   Decimal          @map("estimated_receivable_amount_cny") @db.Decimal(18, 2)
-  actualShipmentAmount           Decimal?         @map("actual_shipment_amount") @db.Decimal(18, 2)
-  actualShipmentAmountCny        Decimal?         @map("actual_shipment_amount_cny") @db.Decimal(18, 2)
-  actualShipmentDate             DateTime?        @map("actual_shipment_date") @db.Date
-  finalReceivableAmount          Decimal          @map("final_receivable_amount") @db.Decimal(18, 2)
-  finalReceivableAmountCny       Decimal          @map("final_receivable_amount_cny") @db.Decimal(18, 2)
-  tradeTerm                      String           @default("FOB") @map("trade_term")
-  paymentTerm                    String           @default("OA账期") @map("payment_term")
-  paymentTermType                PaymentTermType? @map("payment_term_type")
-  depositRatio                   Decimal?         @map("deposit_ratio") @db.Decimal(8, 4)
-  expectedPaymentDate            DateTime?        @map("expected_payment_date") @db.Date
-  expectedArrivalDate            DateTime?        @map("expected_arrival_date") @db.Date
-  expectedShipmentDate           DateTime?        @map("expected_shipment_date") @db.Date
-  blDate                         DateTime?        @map("bl_date") @db.Date
-  paymentInstallments            Json?            @map("payment_installments")
-  taxRefundStatus                String           @default("NOT_READY") @map("tax_refund_status")
-  taxRefundCompleteness          Json?            @map("tax_refund_completeness")
-  taxRefundCompletenessUpdatedAt DateTime?        @map("tax_refund_completeness_updated_at")
-  taxRefundOverallCompleteness   Int?             @map("tax_refund_overall_completeness")
-  taxRefundCompletenessIssuesSummary String?      @map("tax_refund_completeness_issues_summary") @db.Text
-  taxArchived                    Boolean          @default(false) @map("tax_archived")
-  isArchived                     Boolean          @default(false) @map("is_archived")
-  taxRefundArchivedById          String?          @map("tax_refund_archived_by")
-  taxRefundArchivedAt            DateTime?        @map("tax_refund_archived_at")
-  taxRefundArchiveRemark         String?          @map("tax_refund_archive_remark")
-  taxSubmittedById               String?          @map("tax_submitted_by")
-  taxSubmittedAt                 DateTime?        @map("tax_submitted_at")
-  customsDeclarationNo           String?          @map("customs_declaration_no")
-  customsDeclarationDate         DateTime?        @map("customs_declaration_date") @db.Date
-  customsParsedAt                DateTime?        @map("customs_parsed_at")
-  customsParseStatus             String?          @map("customs_parse_status")
-  customsParseMessage            String?          @map("customs_parse_message")
-  customsDeclarationParseSource  String?          @map("customs_declaration_parse_source")
-  creditDays                     Int?             @map("credit_days")
-  dueDate                        DateTime?        @map("due_date") @db.Date
-  reminderDays                   Int              @default(7) @map("reminder_days")
-  status                         String           @default("草稿")
-  remark                         String?
-  createdById                    String?          @map("created_by")
-  updatedById                    String?          @map("updated_by")
-  createdAt                      DateTime         @default(now()) @map("created_at")
-  updatedAt                      DateTime         @updatedAt @map("updated_at")
-  deletedAt                      DateTime?        @map("deleted_at")
+  id                                 String           @id @default(cuid())
+  orderNo                            String           @map("order_no")
+  blNo                               String?          @map("bl_no")
+  customerId                         String           @map("customer_id")
+  customerNameSnapshot               String           @map("customer_name_snapshot")
+  businessEntityId                   String?          @map("business_entity_id")
+  businessEntityNameSnapshot         String?          @map("business_entity_name_snapshot")
+  salespersonUserId                  String?          @map("salesperson_user_id")
+  salespersonCommissionRate          Decimal          @default(0) @map("salesperson_commission_rate") @db.Decimal(8, 2)
+  commissionStatus                   String           @default("未结算") @map("commission_status")
+  commissionSettledById              String?          @map("commission_settled_by")
+  commissionSettledAt                DateTime?        @map("commission_settled_at")
+  commissionSettlementRemark         String?          @map("commission_settlement_remark")
+  country                            String?
+  currency                           String
+  exchangeRate                       Decimal          @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate                   DateTime?        @map("exchange_rate_date") @db.Date
+  exchangeRateSource                 String?          @map("exchange_rate_source")
+  exchangeRateType                   String?          @map("exchange_rate_type")
+  receivableAmount                   Decimal          @map("receivable_amount") @db.Decimal(18, 2)
+  receivableAmountCny                Decimal          @map("receivable_amount_cny") @db.Decimal(18, 2)
+  estimatedReceivableAmount          Decimal          @map("estimated_receivable_amount") @db.Decimal(18, 2)
+  estimatedReceivableAmountCny       Decimal          @map("estimated_receivable_amount_cny") @db.Decimal(18, 2)
+  actualShipmentAmount               Decimal?         @map("actual_shipment_amount") @db.Decimal(18, 2)
+  actualShipmentAmountCny            Decimal?         @map("actual_shipment_amount_cny") @db.Decimal(18, 2)
+  actualShipmentDate                 DateTime?        @map("actual_shipment_date") @db.Date
+  finalReceivableAmount              Decimal          @map("final_receivable_amount") @db.Decimal(18, 2)
+  finalReceivableAmountCny           Decimal          @map("final_receivable_amount_cny") @db.Decimal(18, 2)
+  tradeTerm                          String           @default("FOB") @map("trade_term")
+  paymentTerm                        String           @default("OA账期") @map("payment_term")
+  paymentTermType                    PaymentTermType? @map("payment_term_type")
+  depositRatio                       Decimal?         @map("deposit_ratio") @db.Decimal(8, 4)
+  expectedPaymentDate                DateTime?        @map("expected_payment_date") @db.Date
+  expectedArrivalDate                DateTime?        @map("expected_arrival_date") @db.Date
+  expectedShipmentDate               DateTime?        @map("expected_shipment_date") @db.Date
+  blDate                             DateTime?        @map("bl_date") @db.Date
+  paymentInstallments                Json?            @map("payment_installments")
+  taxRefundStatus                    String           @default("NOT_READY") @map("tax_refund_status")
+  taxRefundCompleteness              Json?            @map("tax_refund_completeness")
+  taxRefundCompletenessUpdatedAt     DateTime?        @map("tax_refund_completeness_updated_at")
+  taxRefundOverallCompleteness       Int?             @map("tax_refund_overall_completeness")
+  taxRefundCompletenessIssuesSummary String?          @map("tax_refund_completeness_issues_summary") @db.Text
+  taxArchived                        Boolean          @default(false) @map("tax_archived")
+  isArchived                         Boolean          @default(false) @map("is_archived")
+  taxRefundArchivedById              String?          @map("tax_refund_archived_by")
+  taxRefundArchivedAt                DateTime?        @map("tax_refund_archived_at")
+  taxRefundArchiveRemark             String?          @map("tax_refund_archive_remark")
+  taxSubmittedById                   String?          @map("tax_submitted_by")
+  taxSubmittedAt                     DateTime?        @map("tax_submitted_at")
+  customsDeclarationNo               String?          @map("customs_declaration_no")
+  customsDeclarationDate             DateTime?        @map("customs_declaration_date") @db.Date
+  customsParsedAt                    DateTime?        @map("customs_parsed_at")
+  customsParseStatus                 String?          @map("customs_parse_status")
+  customsParseMessage                String?          @map("customs_parse_message")
+  customsDeclarationParseSource      String?          @map("customs_declaration_parse_source")
+  creditDays                         Int?             @map("credit_days")
+  dueDate                            DateTime?        @map("due_date") @db.Date
+  reminderDays                       Int              @default(7) @map("reminder_days")
+  status                             String           @default("草稿")
+  remark                             String?
+  createdById                        String?          @map("created_by")
+  updatedById                        String?          @map("updated_by")
+  createdAt                          DateTime         @default(now()) @map("created_at")
+  updatedAt                          DateTime         @updatedAt @map("updated_at")
+  deletedAt                          DateTime?        @map("deleted_at")
 
   customer                      Customer                       @relation(fields: [customerId], references: [id])
   businessEntity                BusinessEntity?                @relation(fields: [businessEntityId], references: [id])

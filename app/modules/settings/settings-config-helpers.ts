@@ -82,21 +82,15 @@ export function notificationTemplateFormFromSettings(settings: NotificationTempl
 export function shipsgoIntegrationFormFromSettings(settings: ShipsgoIntegrationSettings | null): ShipsgoIntegrationForm {
   return {
     enabled: settings?.enabled === true,
-    activeProvider: stringSetting(settings, "activeProvider", DEFAULT_SHIPSGO_INTEGRATION_FORM.activeProvider),
-    apiBaseUrl: stringSetting(settings, "apiBaseUrl", DEFAULT_SHIPSGO_INTEGRATION_FORM.apiBaseUrl),
-    apiKey: "",
-    apiKeyConfigured: settings?.apiKeyConfigured === true,
-    shipsgoEnabled: settings?.shipsgoEnabled !== false,
-    freightowerEnabled: settings?.freightowerEnabled === true,
     freightowerApiBaseUrl: stringSetting(settings, "freightowerApiBaseUrl", DEFAULT_SHIPSGO_INTEGRATION_FORM.freightowerApiBaseUrl),
+    freightowerApiKey: "",
+    freightowerApiKeyConfigured: settings?.freightowerApiKeyConfigured === true,
     freightowerClientId: "",
     freightowerClientIdConfigured: settings?.freightowerClientIdConfigured === true,
-    freightowerSecret: "",
-    freightowerSecretConfigured: settings?.freightowerSecretConfigured === true,
-    freightowerMapKey: "",
-    freightowerMapKeyConfigured: settings?.freightowerMapKeyConfigured === true,
-    freightowerWebhookSecret: "",
-    freightowerWebhookSecretConfigured: settings?.freightowerWebhookSecretConfigured === true,
+    freightowerIframeKey: "",
+    freightowerIframeKeyConfigured: settings?.freightowerIframeKeyConfigured === true,
+    freightowerWebhookAccessSecret: "",
+    freightowerWebhookAccessSecretConfigured: settings?.freightowerWebhookAccessSecretConfigured === true,
     freightowerDefaultCarrierCode: stringSetting(settings, "freightowerDefaultCarrierCode", DEFAULT_SHIPSGO_INTEGRATION_FORM.freightowerDefaultCarrierCode),
     freightowerDefaultPortCode: stringSetting(settings, "freightowerDefaultPortCode", DEFAULT_SHIPSGO_INTEGRATION_FORM.freightowerDefaultPortCode),
     freightowerDefaultIsExport: stringSetting(settings, "freightowerDefaultIsExport", DEFAULT_SHIPSGO_INTEGRATION_FORM.freightowerDefaultIsExport),
@@ -108,11 +102,8 @@ export function shipsgoIntegrationFormFromSettings(settings: ShipsgoIntegrationS
     autoSyncEnabled: settings?.autoSyncEnabled === true,
     dailySyncTime: stringSetting(settings, "dailySyncTime", DEFAULT_SHIPSGO_INTEGRATION_FORM.dailySyncTime),
     webhookEnabled: settings?.webhookEnabled === true,
-    webhookSecret: "",
-    webhookSecretConfigured: settings?.webhookSecretConfigured === true,
     liveMapEnabled: settings?.liveMapEnabled === true,
     customerPushEnabled: settings?.customerPushEnabled === true,
-    creditWarningThreshold: String(settings?.creditWarningThreshold ?? DEFAULT_SHIPSGO_INTEGRATION_FORM.creditWarningThreshold),
   };
 }
 
@@ -149,10 +140,14 @@ export function notificationTemplatePreview(form: NotificationTemplateForm) {
       ? form.recipientConfig.recipientEmailFields as string[]
       : [];
   const uploadUrl = String(extraConfig.uploadUrl || "https://www.nextwood.net");
-  const recipientLabels = recipientEmailFields
+  const configuredRecipientLabels = recipientEmailFields
     .map((value) => NOTIFICATION_RECIPIENT_EMAIL_OPTIONS.find((item) => item.value === value)?.label || "")
     .filter(Boolean)
-    .join("、") || "按业务规则解析";
+    .join("、");
+  const recipientLabels = configuredRecipientLabels
+    || (form.type === "FREIGHTOWER_TRACKING_UPDATE"
+      ? "已启用的管理员和订单业务员"
+      : "按业务规则解析");
   const extraCcText = form.ccEmails
     .split(/[\n,;；]+/g)
     .map((item) => item.trim())
@@ -213,6 +208,13 @@ export function notificationTemplatePreview(form: NotificationTemplateForm) {
     dueAt: "2026-07-01 23:59",
     overdueDays: "6",
     actionUrl: "https://www.nextwood.net/workbench",
+    containerNo: "TLLU1234567",
+    statusText: "甩柜预警 / 航行中",
+    eventText: "原计划船期发生变化，请确认后续船名航次",
+    eventTime: "2026-07-31 16:20",
+    eta: "2026-08-18 09:00",
+    vesselVoyage: "ONE TRIUMPH / 123E",
+    trackingUrl: "https://www.nextwood.net/tracking-map?trackingId=example",
   };
   const subject = applyNotificationTemplate(form.subjectTemplate, variables);
   const body = applyNotificationTemplate(form.bodyTemplate, variables);

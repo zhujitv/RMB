@@ -101,7 +101,7 @@ test("E2E permission: logistics supplier only sees assigned logistics work and i
     "app/api/domestic-logistics/route.ts",
     "app/api/logistics-costs/route.ts",
     "app/api/logistics-costs/review/route.ts",
-    "app/api/shipsgo/ocean-trackings/control-tower/route.ts",
+    "app/api/freightower/ocean-trackings/control-tower/route.ts",
   ]) {
     assertApiRouteUsesUnifiedAuth(route);
   }

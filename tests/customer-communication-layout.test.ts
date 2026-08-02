@@ -19,6 +19,10 @@ const workspaceTabsCss = readFileSync("app/styles/workspace-shell/workspace-tabs
 const tableCss = readCssModuleGraphSource("app/styles/workspace-shell/manual-table.module.css");
 const customerCommunicationService = readCustomerCommunicationServiceSource();
 const shippingDocumentsService = readShippingDocumentsSource();
+const shippingDocumentsCore = readFileSync("lib/platform/shipping-documents-core.ts", "utf8");
+const shippingDocumentsNotifications = readFileSync("lib/platform/shipping-documents-notifications.ts", "utf8");
+const shippingDocumentsDeduplication = readFileSync("lib/platform/shipping-documents-deduplication.ts", "utf8");
+const notificationSend = readFileSync("lib/platform/notification-send.ts", "utf8");
 const customerCommunicationModule = readCustomerCommunicationModuleSource();
 const customerCommunicationDrawer = readFileSync("app/modules/customer-communication-drawer.tsx", "utf8");
 const customerCommunicationTypes = readFileSync("app/modules/customer-communication-types.ts", "utf8");
@@ -39,6 +43,19 @@ test("customer communication ignores empty automatic-open targets", () => {
     customerCommunicationModule,
     /includes\(initialKeyword\)/,
   );
+});
+
+test("customer communication prevents duplicate manual and automatic emails", () => {
+  assert.match(customerCommunicationModule, /const sendingRef = useRef\(false\)/);
+  assert.match(customerCommunicationModule, /if \(sendingRef\.current \|\| !detailOrderId \|\| !mailForm\) return/);
+  assert.match(customerCommunicationModule, /\n\s*requestId,\n/);
+  assert.match(shippingDocumentsCore, /export function hasSentShippingNotification/);
+  assert.match(shippingDocumentsCore, /item\.sendStatus === "sent" \|\| item\.sendStatus === "SUCCESS"/);
+  assert.match(shippingDocumentsDeduplication, /pg_advisory_xact_lock/);
+  assert.match(shippingDocumentsDeduplication, /MANUAL_SEND_DUPLICATE_WINDOW_MS/);
+  assert.match(shippingDocumentsNotifications, /shipping-docs:auto:/);
+  assert.match(shippingDocumentsDeduplication, /shipping-docs:manual:/);
+  assert.match(notificationSend, /\["pending", "sending"\]\.includes\(existing\.status\)/);
 });
 
 test("workspace layout uses fixed chrome with main content scrolling", () => {

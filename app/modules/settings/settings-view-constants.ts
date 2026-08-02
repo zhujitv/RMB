@@ -7,7 +7,7 @@ export const SETTINGS_HOME_CARDS: Array<{ tab: SettingsTabKey; title: string; de
   { tab: "suppliers", title: "供应商资料", description: "供应商管理", icon: "供" },
   { tab: "users", title: "用户与权限", description: "角色权限", icon: "权" },
   { tab: "ocrIntegration", title: "OCR识别", description: "OCR 服务配置", icon: "OCR" },
-  { tab: "shipsgoIntegration", title: "物流接口", description: "ShipsGo、飞驼可视", icon: "船" },
+  { tab: "shipsgoIntegration", title: "物流接口", description: "飞驼可视海运跟踪", icon: "船" },
   { tab: "notificationTemplates", title: "通知模板", description: "邮件模板", icon: "邮" },
   { tab: "exchangeRates", title: "汇率设置", description: "汇率", icon: "汇" },
   { tab: "commissionFormula", title: "提成公式", description: "提成计算", icon: "提" },

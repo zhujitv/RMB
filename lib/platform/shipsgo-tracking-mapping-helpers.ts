@@ -19,6 +19,8 @@ export function extractShipmentPayload(data: unknown): ShipsgoShipmentPayload {
   return firstRecord(
     data.shipment,
     data.Shipment,
+    isPlainRecord(data.data) ? data.data.result : null,
+    isPlainRecord(data.result) ? data.result : null,
     data.data,
     firstArrayRecord(data.data),
     firstArrayRecord(data.shipments),

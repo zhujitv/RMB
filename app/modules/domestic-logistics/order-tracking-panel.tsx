@@ -43,13 +43,12 @@ export function ShipsgoOrderTrackingPanel({
   const recoverBusy = busyKey === `${row.id}:shipsgo:recover`;
   const masterBlNo = defaultShipsgoMasterBl(row);
   const localContainerNo = (row.domesticLogisticsInfo?.transportItems || []).map((item) => String(item.containerNo || "").trim()).find(Boolean) || "";
-  const isFreightowerActive = features.activeProvider === "FREIGHTOWER";
-  const missingTrackingTarget = isFreightowerActive ? !masterBlNo && !localContainerNo : !masterBlNo;
+  const missingTrackingTarget = !masterBlNo && !localContainerNo;
   const canCreate = canManage && Boolean(features.oceanTrackingEnabled);
-  const activeProviderLabel = features.providerLabel || "物流接口";
+  const activeProviderLabel = "飞驼可视";
 
-  function trackingProviderLabel(tracking?: ShipsgoTrackingRow) {
-    return String(tracking?.provider || "").toUpperCase() === "FREIGHTOWER" ? "飞驼可视" : "大掌柜";
+  function trackingProviderLabel() {
+    return "飞驼可视";
   }
 
   useEffect(() => {
@@ -69,7 +68,7 @@ export function ShipsgoOrderTrackingPanel({
   async function submitCreateTracking() {
     setCreateError("");
     if (missingTrackingTarget) {
-      setCreateError(isFreightowerActive ? "请先在物流信息中录入提单号或柜号后再开始追踪" : "请先在物流信息中录入提单号后再开始追踪");
+      setCreateError("请先在物流信息中录入提单号或柜号后再开始追踪");
       return;
     }
     try {
@@ -85,6 +84,10 @@ export function ShipsgoOrderTrackingPanel({
     return Array.isArray(tracking.timeline) ? tracking.timeline : [];
   }
 
+  function trackingNeedsRefresh(tracking: ShipsgoTrackingRow) {
+    return /SUBSCRIBED|NOT_SYNCED|PENDING/.test(String(tracking.syncStatus || "").toUpperCase());
+  }
+
   async function toggleTimeline(tracking: ShipsgoTrackingRow) {
     setTimelineErrors((current) => ({ ...current, [tracking.id]: "" }));
     if (expandedTimelineId === tracking.id) {
@@ -95,11 +98,11 @@ export function ShipsgoOrderTrackingPanel({
     if (!tracking.shipsgoShipmentId) {
       setTimelineErrors((current) => ({
         ...current,
-        [tracking.id]: `本地未保存${trackingProviderLabel(tracking)}跟踪ID，请先同步已有跟踪。`,
+        [tracking.id]: `本地未保存${trackingProviderLabel()}跟踪ID，请先同步已有跟踪。`,
       }));
       return;
     }
-    if (shipsgoTimelineEvents(tracking).length) return;
+    if (shipsgoTimelineEvents(tracking).length && !trackingNeedsRefresh(tracking)) return;
     if (!canManage) {
       setTimelineErrors((current) => ({
         ...current,
@@ -111,7 +114,7 @@ export function ShipsgoOrderTrackingPanel({
     try {
       await onSync(tracking.id);
     } catch (error) {
-      const message = error instanceof Error ? error.message : `同步${trackingProviderLabel(tracking)}跟踪失败`;
+      const message = error instanceof Error ? error.message : `同步${trackingProviderLabel()}跟踪失败`;
       console.error("读取运输状态失败", error);
       setTimelineErrors((current) => ({
         ...current,
@@ -127,7 +130,7 @@ export function ShipsgoOrderTrackingPanel({
     try {
       await onSync(tracking.id);
     } catch (error) {
-      const message = error instanceof Error ? error.message : `同步${trackingProviderLabel(tracking)}跟踪失败`;
+      const message = error instanceof Error ? error.message : `同步${trackingProviderLabel()}跟踪失败`;
       console.error("同步运输状态失败", error);
       if (expandedTimelineId === tracking.id) {
         setTimelineErrors((current) => ({
@@ -172,8 +175,8 @@ export function ShipsgoOrderTrackingPanel({
       {canCreate && !hasTracking ? (
         <div className={styles.reportFilterGrid} onClick={(event) => event.stopPropagation()}>
           <label>
-            {isFreightowerActive ? "提单号 / 柜号" : "Master B/L（提单号）"}
-            <strong>{masterBlNo || localContainerNo || (isFreightowerActive ? "请先在物流信息中录入提单号或柜号后再开始追踪" : "请先在物流信息中录入提单号后再开始追踪")}</strong>
+            提单号 / 柜号
+            <strong>{masterBlNo || localContainerNo || "请先在物流信息中录入提单号或柜号后再开始追踪"}</strong>
           </label>
           {showCarrierInput ? (
             <label>

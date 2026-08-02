@@ -112,12 +112,12 @@ model OrderCost {
   updatedAt                DateTime  @updatedAt @map("updated_at")
   deletedAt                DateTime? @map("deleted_at")
 
-  order                     ReceivableOrder   @relation(fields: [orderId], references: [id])
-  supplier                  Supplier?         @relation(fields: [supplierId], references: [id])
-  createdBy                 User?             @relation("CostsCreated", fields: [createdById], references: [id])
-  updatedBy                 User?             @relation("CostsUpdated", fields: [updatedById], references: [id])
+  order                     ReceivableOrder           @relation(fields: [orderId], references: [id])
+  supplier                  Supplier?                 @relation(fields: [supplierId], references: [id])
+  createdBy                 User?                     @relation("CostsCreated", fields: [createdById], references: [id])
+  updatedBy                 User?                     @relation("CostsUpdated", fields: [updatedById], references: [id])
   documents                 OrderDocument[]
-  generatedLogisticsExpense LogisticsExpense? @relation("LogisticsExpenseGeneratedCost")
+  generatedLogisticsExpense LogisticsExpense?         @relation("LogisticsExpenseGeneratedCost")
   supplierDocumentRequests  SupplierDocumentRequest[]
 
   @@unique([sourceType, sourceId], map: "order_costs_source_unique")

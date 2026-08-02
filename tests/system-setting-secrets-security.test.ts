@@ -156,7 +156,7 @@ test("outbound timeout signal preserves caller cancellation and enforces its dea
 
 test("integration persistence and outbound fetches are wired to the security helpers", () => {
   const ocrSettings = readFileSync("lib/platform/ocr-integration-settings.ts", "utf8");
-  const shipsgoSettings = readFileSync("lib/platform/shipsgo-integration.ts", "utf8");
+  const shipsgoSettings = readFileSync("lib/platform/freightower-integration.ts", "utf8");
   const ocrReliability = readFileSync("lib/platform/ocr-integration-reliability.ts", "utf8");
   const docMind = readFileSync("lib/platform/ocr-integration-docmind.ts", "utf8");
   const outbound = readFileSync("lib/platform/outbound-request-security.ts", "utf8");
@@ -164,7 +164,7 @@ test("integration persistence and outbound fetches are wired to the security hel
   const exchangeFetchers = readFileSync("lib/platform/shared-exchange-fetchers.ts", "utf8");
   const resendSecurity = readFileSync("lib/platform/resend-email-security.ts", "utf8");
   assert.match(ocrSettings, /encryptSystemSettingSecrets\(value, OCR_INTEGRATION_SETTING_KEY, OCR_SECRET_FIELDS\)/);
-  assert.match(shipsgoSettings, /encryptSystemSettingSecrets\(value, SHIPSGO_INTEGRATION_SETTING_KEY, SHIPSGO_SECRET_FIELDS\)/);
+  assert.match(shipsgoSettings, /encryptSystemSettingSecrets\(value, SHIPSGO_INTEGRATION_SETTING_KEY, FREIGHTOWER_SECRET_FIELDS\)/);
   assert.match(ocrReliability, /fetchAliyunOcrApi/);
   assert.match(docMind, /readAliyunDocMindOutputSafely/);
   assert.match(outbound, /redirect: "error"/);

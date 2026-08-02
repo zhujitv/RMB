@@ -5,8 +5,37 @@ import { readCustomsDeclarationParserSource } from "./source-helpers.ts";
 import {
   normalizeCustomsDate,
   parseCustomsDeclarationDetailText,
+  parseCustomsDeclarationPdfBuffer,
   parseCustomsDeclarationText,
 } from "../lib/customs-declaration-parser.ts";
+
+function createTextPdf(lines: string[]) {
+  const escapePdfText = (value: string) => value.replace(/([\\()])/g, "\\$1");
+  const stream = lines
+    .map((line, index) => `${index ? "0 -20 Td " : ""}(${escapePdfText(line)}) Tj`)
+    .join(" ");
+  const content = `BT /F1 12 Tf 72 720 Td ${stream} ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets[index + 1] = Buffer.byteLength(pdf);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let index = 1; index <= objects.length; index += 1) {
+    pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(pdf);
+}
 
 test("parses declaration number and declaration date near explicit labels", () => {
   const result = parseCustomsDeclarationText(`
@@ -47,6 +76,19 @@ test("parses English declaration number and declaration date labels", () => {
     Customs Declaration No. 223120260002528894
     Declaration Date 2026/06/17
   `);
+
+  assert.equal(result.customsDeclarationNo, "223120260002528894");
+  assert.equal(result.customsDeclarationDate, "2026-06-17");
+  assert.equal(result.customsDeclarationParseStatus, "SUCCESS");
+});
+
+test("extracts declaration fields from an uploaded text PDF", async () => {
+  const pdf = createTextPdf([
+    "Customs Declaration No. 223120260002528894",
+    "Declaration Date 2026/06/17",
+  ]);
+
+  const result = await parseCustomsDeclarationPdfBuffer(pdf, { requireText: true });
 
   assert.equal(result.customsDeclarationNo, "223120260002528894");
   assert.equal(result.customsDeclarationDate, "2026-06-17");
@@ -221,12 +263,19 @@ test("parser source does not reference bundled fixture documents", async () => {
   ];
 
   forbidden.forEach((pattern) => assert.equal(source.toLowerCase().includes(pattern), false));
-  assert.match(source, /createRequire\(import\.meta\.url\)\.resolve\("pdf2json"\)/);
+  assert.match(source, /\["pdfjs-dist", "legacy", "build", "pdf\.mjs"\]\.join\("\/"\)/);
+  assert.match(source, /\["pdfjs-dist", "legacy", "build", "pdf\.worker\.mjs"\]\.join\("\/"\)/);
+  assert.match(source, /getBuiltinModule\("node:module"\)/);
+  assert.match(source, /\.createRequire\(import\.meta\.url\)/);
+  assert.match(source, /runtimeRequire\.resolve\(pdfJsModuleSpecifier\)/);
+  assert.match(source, /runtimeRequire\.resolve\(pdfJsWorkerModuleSpecifier\)/);
+  assert.match(source, /globalThis\.pdfjsWorker = await import/);
   assert.match(source, /new Worker\(PDF_TEXT_WORKER_SOURCE/);
   assert.match(source, /await worker\.terminate\(\)/);
   assert.match(source, /resourceLimits:/);
-  assert.match(packageJson, /"pdf2json"/);
+  assert.match(packageJson, /"pdfjs-dist"/);
+  assert.doesNotMatch(packageJson, /"pdf2json"/);
   assert.doesNotMatch(packageJson, /"pdf-parse"/);
-  assert.doesNotMatch(source, /pdf-parse|pdfjs-dist|DOMMatrix|getScreenshot|render\(/);
-  assert.match(source, /parseBuffer\(pdfData, 0\)/);
+  assert.doesNotMatch(source, /pdf-parse|DOMMatrix|getScreenshot|render\(/);
+  assert.match(source, /getTextContent\(\)/);
 });

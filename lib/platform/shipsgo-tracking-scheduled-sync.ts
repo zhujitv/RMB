@@ -2,47 +2,56 @@ import { prisma } from "../prisma";
 import { assertWrite } from "./shared-auth";
 import { runNonCriticalTask } from "./shared-constants";
 import { writeAudit } from "./shared-audit";
-import { getShipsgoIntegrationSettings } from "./shipsgo-integration";
+import { getShipsgoIntegrationSettings } from "./freightower-integration";
 import {
   createFreightowerPayloadFromTracking,
   freightowerApiRequest,
   mapFreightowerShipmentPayload,
-  trackingDataFromFreightowerMappedShipment,
+  trackingUpdateFromFreightowerMappedShipment,
 } from "./freightower-tracking";
-import {
-  extractShipmentPayload,
-  mapShipsgoShipmentPayload,
-  trackingDataFromMappedShipment,
-} from "./shipsgo-tracking-mapping";
 import {
   FREIGHTOWER_PROVIDER,
   OCEAN_MODE,
-  SHIPSGO_PROVIDER,
   actorId,
   assertActiveOceanTrackingEnabled,
-  shipsgoApiRequest,
   type ShipsgoActor,
 } from "./shipsgo-tracking-utils";
 import { replaceShipsgoTrackingContainers, type AuditRequestLike } from "./shipsgo-tracking-service-shared";
+import {
+  hasFreightowerTrackingNotificationChange,
+  hasFreightowerPortTrackingNotificationChange,
+  notifyFreightowerTrackingUpdate,
+} from "./shipsgo-tracking-notifications";
+import { syncFreightowerPortTracking } from "./freightower-port-tracking";
 
 export async function syncDueShipsgoOceanTrackings(request: AuditRequestLike, actor: ShipsgoActor, options: { limit?: number; now?: Date } = {}) {
   assertWrite(actor, "domesticLogistics");
   const settings = await getShipsgoIntegrationSettings();
-  const provider = assertActiveOceanTrackingEnabled(settings);
+  assertActiveOceanTrackingEnabled(settings);
+  if (!settings.autoSyncEnabled) {
+    return {
+      success: true,
+      skipped: true,
+      message: "飞驼可视自动同步尚未启用，本次任务已跳过。",
+      total: 0,
+      successCount: 0,
+      failedCount: 0,
+      results: [],
+    };
+  }
   const now = options.now || new Date();
-  const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const subscribedCutoff = new Date(now.getTime() - 30 * 60 * 1000);
+  const regularCutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
   const limit = Math.max(1, Math.min(100, Math.trunc(options.limit || 50)));
   const rows = await prisma.shipsgoTracking.findMany({
     where: {
-      provider,
+      provider: FREIGHTOWER_PROVIDER,
       mode: OCEAN_MODE,
       deletedAt: null,
-      ...(provider === SHIPSGO_PROVIDER ? { shipsgoShipmentId: { not: null } } : {}),
       OR: [
         { lastSyncTime: null },
-        { lastSyncTime: { lt: cutoff } },
-        { lastSyncedAt: null },
-        { lastSyncedAt: { lt: cutoff } },
+        { syncStatus: "SUBSCRIBED", lastSyncTime: { lt: subscribedCutoff } },
+        { syncStatus: { not: "SUBSCRIBED" }, lastSyncTime: { lt: regularCutoff } },
       ],
     },
     orderBy: [{ lastSyncTime: "asc" }, { lastSyncedAt: "asc" }, { updatedAt: "asc" }],
@@ -51,35 +60,50 @@ export async function syncDueShipsgoOceanTrackings(request: AuditRequestLike, ac
   const results: Array<{ id: string; ok: boolean; message: string }> = [];
   for (const row of rows) {
     try {
-      const mapped = provider === FREIGHTOWER_PROVIDER
-        ? mapFreightowerShipmentPayload(
-          await freightowerApiRequest<unknown>(settings, "/application/v1/query", createFreightowerPayloadFromTracking(row, settings)),
-          settings,
-        )
-        : mapShipsgoShipmentPayload(extractShipmentPayload(
-          (await shipsgoApiRequest<unknown>(settings, `/ocean/shipments/${encodeURIComponent(row.shipsgoShipmentId || "")}`)).data,
-        ));
-      const trackingData = provider === FREIGHTOWER_PROVIDER
-        ? trackingDataFromFreightowerMappedShipment(mapped as ReturnType<typeof mapFreightowerShipmentPayload>)
-        : trackingDataFromMappedShipment(mapped as ReturnType<typeof mapShipsgoShipmentPayload>);
+      const mapped = mapFreightowerShipmentPayload(
+        await freightowerApiRequest<unknown>(settings, "/application/v1/query", createFreightowerPayloadFromTracking(row, settings)),
+        settings,
+      );
+      const hasFreshTrackingData = mapped.syncStatus !== "SUBSCRIBED";
+      const trackingData = trackingUpdateFromFreightowerMappedShipment(
+        mapped,
+        row.rawResponse ?? row.rawPayload,
+      );
       const savedBase = await prisma.shipsgoTracking.update({
         where: { id: row.id },
         data: {
           ...trackingData,
           masterBlNo: mapped.masterBlNo || row.masterBlNo || row.bookingNumber,
           containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || row.containerNumber,
-          eta: mapped.eta,
-          currentStatus: mapped.currentStatus,
-          syncStatus: "SYNCED",
-          syncMessage: "",
           lastCheckedAt: now,
-          lastSyncedAt: now,
+          ...(hasFreshTrackingData ? { lastSyncedAt: now } : {}),
           lastSyncTime: now,
           updatedById: actorId(actor) || null,
         },
       });
-      await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
-      results.push({ id: row.id, ok: true, message: "同步成功" });
+      if (hasFreshTrackingData) {
+        await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
+      }
+      const portSaved = await runNonCriticalTask(
+        "飞驼可视中国港区定时同步",
+        () => syncFreightowerPortTracking(savedBase.id, settings),
+        { context: { provider: FREIGHTOWER_PROVIDER, trackingId: savedBase.id, orderId: savedBase.orderId } },
+      );
+      if (
+        (hasFreshTrackingData && hasFreightowerTrackingNotificationChange(row, savedBase))
+        || Boolean(portSaved && hasFreightowerPortTrackingNotificationChange(row, portSaved))
+      ) {
+        await runNonCriticalTask(
+          "飞驼可视定时同步邮件通知",
+          () => notifyFreightowerTrackingUpdate(savedBase.id),
+          { context: { provider: FREIGHTOWER_PROVIDER, trackingId: savedBase.id, orderId: savedBase.orderId } },
+        );
+      }
+      results.push({
+        id: row.id,
+        ok: true,
+        message: hasFreshTrackingData ? "同步成功" : mapped.syncMessage,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "同步失败";
       await prisma.shipsgoTracking.update({
@@ -95,14 +119,14 @@ export async function syncDueShipsgoOceanTrackings(request: AuditRequestLike, ac
       results.push({ id: row.id, ok: false, message });
     }
   }
-  await runNonCriticalTask("大掌櫃定时同步日志写入", () => writeAudit(
+  await runNonCriticalTask("飞驼可视定时同步日志写入", () => writeAudit(
     request,
     actor,
-    "定时同步大掌櫃海运跟踪",
+    "定时同步飞驼可视海运跟踪",
     "shipsgo_trackings",
     "cron",
     null,
-    { provider, total: rows.length, success: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length },
+    { provider: FREIGHTOWER_PROVIDER, total: rows.length, success: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length },
   ));
   return {
     success: true,

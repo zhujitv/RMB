@@ -474,7 +474,9 @@ test("OCR center diagnostics remain controlled by OCR settings while tax refund 
   assert.match(service, /pdfRasterized: Boolean\(rasterized\)/);
   assert.match(packageJson, /"pdfjs-dist"/);
   assert.match(packageJson, /"@napi-rs\/canvas"/);
-  assert.match(nextConfig, /serverExternalPackages: \["@napi-rs\/canvas", "geoip-lite", "pdf2json", "pdfjs-dist"\]/);
+  assert.match(nextConfig, /serverExternalPackages: \["@napi-rs\/canvas", "geoip-lite", "pdfjs-dist"\]/);
+  assert.match(nextConfig, /outputFileTracingIncludes:/);
+  assert.match(nextConfig, /pdfjs-dist\/legacy\/build\/pdf\.worker\.mjs/);
   assert.match(service, /let structuredError: unknown = null/);
   assert.match(service, /recognizeAliyunCustomsDeclarationWithDocumentStructure\(buffer, effectiveSettings, options\)/);
   assert.match(service, /recognizeAliyunCustomsDeclarationWithDocMind\(effectiveSettings, options\)/);

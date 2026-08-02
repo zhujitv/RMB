@@ -2,6 +2,7 @@ import { formatShipsgoPortForLocale, formatShipsgoStatusForLocale } from "../../
 import { formatDateTime } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
 import { ShipsgoMapAction } from "./control-tower";
+import { FreightowerDumpingAlertBanner } from "./control-tower-components";
 import type { ShipsgoFeatureFlags, ShipsgoTrackingRow } from "./model";
 import {
   shipsgoCarrierText,
@@ -15,12 +16,22 @@ import {
   shouldShowShipsgoRecover,
 } from "./shipsgo-format";
 
-function trackingProviderLabel(tracking?: ShipsgoTrackingRow) {
-  return String(tracking?.provider || "").toUpperCase() === "FREIGHTOWER" ? "飞驼可视" : "大掌柜";
+function trackingProviderLabel() {
+  return "飞驼可视";
 }
 
 function shipsgoTimelineEvents(tracking: ShipsgoTrackingRow) {
   return Array.isArray(tracking.timeline) ? tracking.timeline : [];
+}
+
+function portTrackingLabel(tracking: ShipsgoTrackingRow) {
+  const status = String(tracking.portTrackingStatus || "NOT_SUBSCRIBED").toUpperCase();
+  if (status === "SYNCED") return `已同步${tracking.portEventCount ? `（${tracking.portEventCount} 个节点）` : ""}`;
+  if (status === "SUBSCRIBED") return "已订阅，等待港区节点";
+  if (status === "PERMISSION_REQUIRED") return "待开通权限";
+  if (status === "WAITING_PORT_CODE") return "等待起运港代码";
+  if (status === "SYNC_FAILED") return "同步失败";
+  return "待订阅";
 }
 
 export function ShipsgoTrackingCard({
@@ -62,7 +73,7 @@ export function ShipsgoTrackingCard({
   const timelineLoading = loadingTimeline || syncBusy && timelineExpanded && !shipsgoTimelineEvents(tracking).length;
   const timelineError = error || "";
   const timelineEvents = shipsgoTimelineEvents(tracking);
-  const providerLabel = trackingProviderLabel(tracking);
+  const providerLabel = trackingProviderLabel();
   return (
     <article className={styles.shipsgoTrackingCard} key={tracking.id}>
       <div className={styles.shipsgoTrackingSummary}>
@@ -111,7 +122,15 @@ export function ShipsgoTrackingCard({
         </div>
       </div>
 
+      <FreightowerDumpingAlertBanner tracking={tracking} />
+
       {tracking.syncMessage ? <span className={styles.shipsgoSyncMessage}>同步提示：{tracking.syncMessage}</span> : null}
+      <span className={styles.shipsgoSyncMessage}>
+        中国港区：{portTrackingLabel(tracking)}
+        {tracking.portCode ? ` ｜ 港口 ${tracking.portCode}` : ""}
+        {tracking.portLastSyncedAt ? ` ｜ 更新于 ${formatDateTime(tracking.portLastSyncedAt)}` : ""}
+        {tracking.portTrackingMessage ? ` ｜ ${tracking.portTrackingMessage}` : ""}
+      </span>
       <div className={styles.shipsgoTrackingActions}>
         {features.manualSyncEnabled && canManage ? (
           <button
@@ -147,7 +166,7 @@ export function ShipsgoTrackingCard({
               void onRecover();
             }}
           >
-            {recoverBusy ? "同步中..." : `从${providerLabel}同步已有跟踪`}
+            {recoverBusy ? "同步中..." : "从飞驼可视同步已有跟踪"}
           </button>
         ) : null}
         {canDelete ? (
@@ -175,8 +194,8 @@ export function ShipsgoTrackingCard({
             <div className={styles.shipsgoTimelineList}>
               {timelineEvents.map((event, index) => (
                 <div className={styles.shipsgoTimelineItem} key={`${event.time || "no-time"}-${event.location || "no-location"}-${index}`}>
-                  <div className={styles.shipsgoTimelineDot} aria-hidden="true" />
-                  <div className={styles.shipsgoTimelineContent}>
+                  <div className={`${styles.shipsgoTimelineDot} ${event.isWarning ? styles.shipsgoTimelineWarningDot : ""}`} aria-hidden="true" />
+                  <div className={`${styles.shipsgoTimelineContent} ${event.isWarning ? styles.shipsgoTimelineWarningContent : ""}`}>
                     <div className={styles.shipsgoTimelineHeader}>
                       <strong>{event.time ? formatDateTime(event.time) : "时间未返回"}</strong>
                       <span>数据来源：{event.source || providerLabel}</span>

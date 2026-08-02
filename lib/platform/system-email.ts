@@ -1,5 +1,9 @@
 import { codedError } from "./shared-base-utils";
-import { assertResendResponseOk, resendRequestSignal } from "./resend-email-security";
+import {
+  assertResendResponseOk,
+  resendIdempotencyHeaderValue,
+  resendRequestSignal,
+} from "./resend-email-security";
 
 type SendSystemEmailInput = {
   recipientEmails: string[];
@@ -21,12 +25,13 @@ function resendMailConfig() {
 
 export async function sendSystemEmail({ recipientEmails, ccEmails = [], subject, body, idempotencyKey }: SendSystemEmailInput) {
   const { apiKey, from, endpoint } = resendMailConfig();
+  const idempotencyHeader = resendIdempotencyHeaderValue(idempotencyKey);
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      ...(idempotencyHeader ? { "Idempotency-Key": idempotencyHeader } : {}),
     },
     body: JSON.stringify({
       from,

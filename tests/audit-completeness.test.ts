@@ -124,10 +124,10 @@ test("logistics bill, supplier document and ocean tracking workflows write audit
   assertAudit(supplierDocuments, "删除资料回传任务", "supplier_document_requests");
   assertAudit(supplierDocuments, "供应商上传回传资料", "order_documents");
   assertAudit(supplierDocuments, "下载供应商合同样本", "supplier_document_requests");
-  assertAudit(shipsgoTracking, "创建大掌櫃海运跟踪", "shipsgo_trackings");
-  assertAudit(shipsgoTracking, "同步大掌櫃海运跟踪", "shipsgo_trackings");
-  assertAudit(shipsgoTracking, "补同步大掌櫃已有跟踪", "shipsgo_trackings");
-  assertAudit(shipsgoTracking, "定时同步大掌櫃海运跟踪", "shipsgo_trackings");
+  assertAudit(shipsgoTracking, "创建飞驼可视海运跟踪", "shipsgo_trackings");
+  assertAudit(shipsgoTracking, "同步飞驼可视海运跟踪", "shipsgo_trackings");
+  assertAudit(shipsgoTracking, "同步飞驼可视已有跟踪", "shipsgo_trackings");
+  assertAudit(shipsgoTracking, "定时同步飞驼可视海运跟踪", "shipsgo_trackings");
 });
 
 test("system settings and security audit guardrails cover audit logging", () => {

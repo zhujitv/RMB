@@ -82,6 +82,7 @@ export function isExwTradeTerm(value: string | null | undefined) {
 }
 export const EMPTY_SHIPSGO_CONTROL_TOWER_STATS: ShipsgoControlTowerStats = {
   inTransitCount: 0,
+  dumpingWarningCount: 0,
   soonArrivingCount: 0,
   etaOverdueCount: 0,
   syncFailedCount: 0,

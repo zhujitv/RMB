@@ -89,6 +89,20 @@ export async function listOceanTrackingTodos(context: WorkbenchTodoContext) {
       trackingId: row.id,
       keyword: order.orderNo,
     });
+    if (row.hasDumpingWarning) {
+      todos.push(todoForOrder({
+        id: `container-dumping-alert-${row.id}`,
+        type: "CONTAINER_TRACKING_EXCEPTION",
+        title: "甩柜预警",
+        module: "运输监控",
+        order,
+        context,
+        dueAt: row.dumpingWarningAt || row.lastEventAt || new Date(),
+        href,
+        owner,
+        updatedAt: row.updatedAt,
+      }));
+    }
     if (row.isEtaOverdue) {
       todos.push(todoForOrder({
         id: `eta-arrival-${row.id}`,

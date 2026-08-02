@@ -7,7 +7,6 @@ import { canAccessDomesticLogisticsOrder } from "./masters-access";
 import {
   FREIGHTOWER_PROVIDER,
   OCEAN_MODE,
-  SHIPSGO_PROVIDER,
   actorId,
   assertShipsgoTrackingDeleteAccess,
   cleanInputText,
@@ -35,9 +34,9 @@ export async function getTrackingForActor(id: string, actor: ShipsgoActor) {
       },
     },
   });
-  if (!tracking) throw codedError("大掌櫃跟踪记录不存在。", 404, "SHIPSGO_TRACKING_NOT_FOUND");
+  if (!tracking) throw codedError("物流跟踪记录不存在。", 404, "FREIGHTOWER_TRACKING_NOT_FOUND");
   if (!canAccessDomesticLogisticsOrder(actor, tracking.order)) {
-    throw codedError("无权限访问该大掌櫃跟踪记录。", 403, "PERMISSION_DENIED");
+    throw codedError("无权限访问该物流跟踪记录。", 403, "PERMISSION_DENIED");
   }
   return tracking;
 }
@@ -45,10 +44,10 @@ export async function getTrackingForActor(id: string, actor: ShipsgoActor) {
 export async function getShipsgoOceanTracking(actor: ShipsgoActor, trackingId: unknown) {
   assertRead(actor, "domesticLogistics");
   const id = cleanInputText(trackingId, 80);
-  if (!id) throw codedError("请选择需要查看的大掌櫃跟踪记录。", 400, "SHIPSGO_TRACKING_REQUIRED");
+  if (!id) throw codedError("请选择需要查看的物流跟踪记录。", 400, "FREIGHTOWER_TRACKING_REQUIRED");
   const allowedTracking = await getTrackingForActor(id, actor);
   const tracking = await loadShipsgoTrackingWithContainers(allowedTracking.id);
-  if (!tracking) throw codedError("大掌櫃跟踪记录不存在。", 404, "SHIPSGO_TRACKING_NOT_FOUND");
+  if (!tracking) throw codedError("物流跟踪记录不存在。", 404, "FREIGHTOWER_TRACKING_NOT_FOUND");
   return { tracking: serializeShipsgoTracking(tracking) };
 }
 
@@ -56,7 +55,7 @@ export async function deleteShipsgoOceanTracking(request: AuditRequestLike, acto
   assertWrite(actor, "domesticLogistics");
   assertShipsgoTrackingDeleteAccess(actor);
   const id = cleanInputText(trackingId, 80);
-  if (!id) throw codedError("请选择需要删除的大掌櫃跟踪记录。", 400, "SHIPSGO_TRACKING_REQUIRED");
+  if (!id) throw codedError("请选择需要删除的物流跟踪记录。", 400, "FREIGHTOWER_TRACKING_REQUIRED");
   const before = await getTrackingForActor(id, actor);
   const now = new Date();
   const saved = await prisma.shipsgoTracking.update({
@@ -66,10 +65,10 @@ export async function deleteShipsgoOceanTracking(request: AuditRequestLike, acto
       updatedById: actorId(actor) || null,
     },
   });
-  await runNonCriticalTask("大掌櫃跟踪删除日志写入", () => writeAudit(
+  await runNonCriticalTask("飞驼可视跟踪删除日志写入", () => writeAudit(
     request,
     actor,
-    "删除大掌櫃海运跟踪",
+    "删除飞驼可视海运跟踪",
     "shipsgo_trackings",
     saved.id,
     {
@@ -80,17 +79,17 @@ export async function deleteShipsgoOceanTracking(request: AuditRequestLike, acto
     },
     { deletedAt: saved.deletedAt },
   ));
-  return { id: saved.id, message: "大掌櫃跟踪已删除。" };
+  return { id: saved.id, message: "飞驼可视跟踪已删除。" };
 }
 
 export async function findShipsgoOceanTrackingByContainerNo(actor: ShipsgoActor, containerNoInput: unknown) {
   const containerNo = safeContainerNumber(containerNoInput);
-  if (!containerNo) throw codedError("请输入正确的柜号，例如 MSKU1234567。", 400, "SHIPSGO_INVALID_CONTAINER");
+  if (!containerNo) throw codedError("请输入正确的柜号，例如 MSKU1234567。", 400, "FREIGHTOWER_INVALID_CONTAINER");
   const row = await prisma.shipsgoTrackingContainer.findFirst({
     where: {
       containerNo,
       tracking: {
-        provider: { in: [SHIPSGO_PROVIDER, FREIGHTOWER_PROVIDER] },
+        provider: FREIGHTOWER_PROVIDER,
         mode: OCEAN_MODE,
         deletedAt: null,
       },
@@ -117,10 +116,10 @@ export async function findShipsgoOceanTrackingByContainerNo(actor: ShipsgoActor,
     orderBy: [{ createdAt: "desc" }],
   });
   if (!row) {
-    throw codedError("本地未找到该柜号对应的大掌櫃跟踪，请管理员先同步已有提单跟踪。", 404, "SHIPSGO_CONTAINER_NOT_FOUND");
+    throw codedError("本地未找到该柜号对应的物流跟踪，请管理员先从飞驼可视同步。", 404, "FREIGHTOWER_CONTAINER_NOT_FOUND");
   }
   if (!canAccessDomesticLogisticsOrder(actor, row.tracking.order)) {
-    throw codedError("无权限访问该柜号对应的大掌櫃跟踪。", 403, "PERMISSION_DENIED");
+    throw codedError("无权限访问该柜号对应的物流跟踪。", 403, "PERMISSION_DENIED");
   }
-  return { tracking: serializeShipsgoTracking(row.tracking), message: "已从本地柜号关联返回大掌櫃跟踪。" };
+  return { tracking: serializeShipsgoTracking(row.tracking), message: "已返回该柜号关联的物流跟踪。" };
 }

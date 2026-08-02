@@ -1,5 +1,9 @@
 import { codedError } from "./shared";
-import { assertResendResponseOk, resendRequestSignal } from "./resend-email-security";
+import {
+  assertResendResponseOk,
+  resendIdempotencyHeaderValue,
+  resendRequestSignal,
+} from "./resend-email-security";
 import { type EmailAttachment, type SendShippingDocumentsEmailInput } from "./shipping-documents-shared";
 
 function resendMailConfig() {
@@ -24,12 +28,15 @@ function resendAttachmentPayload(attachments: EmailAttachment[] = []) {
 
 export async function sendShippingDocumentsEmail({ recipientEmails, ccEmails, attachments, subject, body, notificationId }: SendShippingDocumentsEmailInput) {
   const { apiKey, from, endpoint } = resendMailConfig();
+  const idempotencyHeader = resendIdempotencyHeaderValue(
+    notificationId ? `shipping-docs-${notificationId}` : null,
+  );
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      ...(notificationId ? { "Idempotency-Key": `shipping-docs-${notificationId}` } : {}),
+      ...(idempotencyHeader ? { "Idempotency-Key": idempotencyHeader } : {}),
     },
     body: JSON.stringify({
       from,

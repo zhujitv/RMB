@@ -66,7 +66,25 @@ export type ShipsgoTimelineEvent = {
   description?: string;
   vesselName?: string;
   voyage?: string;
+  eventCode?: string;
+  eventCategory?: string;
+  isWarning?: boolean;
+  isDumpingWarning?: boolean;
   source?: string;
+};
+
+export type FreightowerTrackingAlert = {
+  code?: string;
+  category?: string;
+  title?: string;
+  description?: string;
+  time?: string;
+  location?: string;
+  containerNo?: string;
+  severity?: "critical" | "warning";
+  isDumping?: boolean;
+  active?: boolean;
+  source?: "warning" | "status";
 };
 
 export type ShipsgoTrackingRow = {
@@ -106,6 +124,18 @@ export type ShipsgoTrackingRow = {
   lastSyncedAt?: string;
   lastSyncTime?: string;
   updatedAt?: string;
+  portTrackingStatus?: string;
+  portTrackingMessage?: string;
+  portCode?: string;
+  portDirection?: string;
+  portLastCheckedAt?: string;
+  portLastSyncedAt?: string;
+  portEventCount?: number;
+  alerts?: FreightowerTrackingAlert[];
+  alertCount?: number;
+  hasDumpingWarning?: boolean;
+  dumpingWarning?: string;
+  dumpingWarningAt?: string;
   timeline?: ShipsgoTimelineEvent[];
 };
 
@@ -177,6 +207,7 @@ export type DomesticLogisticsResponse = {
 
 export type ShipsgoControlTowerStats = {
   inTransitCount: number;
+  dumpingWarningCount: number;
   soonArrivingCount: number;
   etaOverdueCount: number;
   syncFailedCount: number;

@@ -44,6 +44,7 @@ export function controlTowerSearchParams(filters: ShipsgoControlTowerFilters) {
 }
 
 export function controlTowerStatusText(row: ShipsgoControlTowerRow) {
+  if (row.hasDumpingWarning) return "甩柜预警";
   if (row.isSyncFailed) return "同步失败";
   if (row.isEtaOverdue) return "ETA 已过期";
   if (row.isSoonArriving) return "即将到港";
@@ -51,6 +52,7 @@ export function controlTowerStatusText(row: ShipsgoControlTowerRow) {
 }
 
 export function controlTowerStatusClass(row: ShipsgoControlTowerRow) {
+  if (row.hasDumpingWarning) return styles.statusDanger;
   if (row.isSyncFailed) return styles.statusDanger;
   if (row.isEtaOverdue) return styles.statusDanger;
   if (row.isSoonArriving) return styles.statusWarning;
@@ -59,6 +61,7 @@ export function controlTowerStatusClass(row: ShipsgoControlTowerRow) {
 }
 
 export function controlTowerNodeClass(row: ShipsgoControlTowerRow) {
+  if (row.hasDumpingWarning) return styles.controlTowerNodeAlert;
   if (row.isSyncFailed) return styles.controlTowerNodeFailed;
   if (row.isEtaOverdue) return styles.controlTowerNodeOverdue;
   if (row.isSoonArriving) return styles.controlTowerNodeSoon;
@@ -67,7 +70,7 @@ export function controlTowerNodeClass(row: ShipsgoControlTowerRow) {
 }
 
 export function controlTowerAlertClass(label: string) {
-  if (label.includes("失败") || label.includes("过期")) return styles.controlTowerAlertDanger;
+  if (label.includes("甩柜") || label.includes("失败") || label.includes("过期")) return styles.controlTowerAlertDanger;
   if (label.includes("即将")) return styles.controlTowerAlertWarning;
   return styles.controlTowerAlertMuted;
 }
@@ -76,13 +79,37 @@ function controlTowerTimelineEvents(row: ShipsgoTrackingRow) {
   return Array.isArray(row.timeline) ? row.timeline : [];
 }
 
-function trackingProviderLabel(row: ShipsgoTrackingRow) {
-  return String(row.provider || "").toUpperCase() === "FREIGHTOWER" ? "飞驼可视" : "大掌柜";
+function trackingProviderLabel() {
+  return "飞驼可视";
+}
+
+export function FreightowerDumpingAlertBanner({ tracking }: { tracking: ShipsgoTrackingRow }) {
+  const alerts = (tracking.alerts || []).filter((alert) => alert.isDumping && alert.active !== false);
+  if (!alerts.length) return null;
+  return (
+    <div className={styles.shipsgoAlertBanner} role="alert" aria-live="assertive">
+      <div className={styles.shipsgoAlertBannerHeader}>
+        <strong>甩柜预警</strong>
+        <span>{alerts.length} 条</span>
+      </div>
+      <div className={styles.shipsgoAlertList}>
+        {alerts.slice(0, 3).map((alert, index) => (
+          <div key={`${alert.code || "DUMP"}-${alert.time || "no-time"}-${alert.containerNo || index}`}>
+            <strong>{alert.title || "甩柜预警"}</strong>
+            <span>{alert.description || "飞驼检测到起运港甩柜风险，请及时确认后续船名航次。"}</span>
+            <small>
+              {[alert.containerNo, alert.location, alert.time ? formatDateTime(alert.time) : ""].filter(Boolean).join(" ｜ ") || "详细信息待飞驼返回"}
+            </small>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function ControlTowerTimeline({ row }: { row: ShipsgoControlTowerRow }) {
   const events = controlTowerTimelineEvents(row);
-  const providerLabel = trackingProviderLabel(row);
+  const providerLabel = trackingProviderLabel();
   return (
     <div className={styles.shipsgoTimelinePanel}>
       <strong>运输节点时间轴</strong>
@@ -90,8 +117,8 @@ export function ControlTowerTimeline({ row }: { row: ShipsgoControlTowerRow }) {
         <div className={styles.shipsgoTimelineList}>
           {events.map((event, index) => (
             <div className={styles.shipsgoTimelineItem} key={`${event.time || "no-time"}-${event.location || "no-location"}-${index}`}>
-              <div className={styles.shipsgoTimelineDot} aria-hidden="true" />
-              <div className={styles.shipsgoTimelineContent}>
+              <div className={`${styles.shipsgoTimelineDot} ${event.isWarning ? styles.shipsgoTimelineWarningDot : ""}`} aria-hidden="true" />
+              <div className={`${styles.shipsgoTimelineContent} ${event.isWarning ? styles.shipsgoTimelineWarningContent : ""}`}>
                 <div className={styles.shipsgoTimelineHeader}>
                   <strong>{event.time ? formatDateTime(event.time) : "时间未返回"}</strong>
 	                  <span>数据来源：{event.source || providerLabel}</span>
@@ -120,7 +147,8 @@ export function ControlTowerTooltip({ row }: { row: ShipsgoControlTowerRow }) {
       <span>船公司：{shipsgoCarrierText(row)}</span>
       <span>船名航次：{shipsgoVesselVoyage(row)}</span>
       <span>当前状态：{controlTowerStatusText(row)}</span>
-	      <span>当前节点：{row.latestNodeDescription || `${trackingProviderLabel(row)}暂未返回运输节点`}</span>
+      {row.dumpingWarning ? <span>甩柜预警：{row.dumpingWarning}</span> : null}
+      <span>当前节点：{row.latestNodeDescription || `${trackingProviderLabel()}暂未返回运输节点`}</span>
       <span>节点时间：{row.latestNodeTime ? formatDateTime(row.latestNodeTime) : "未返回"}</span>
       <span>起运港：{shipsgoPortText(row.originPortName || row.originName, row.originPortCode)}</span>
       <span>目的港：{shipsgoPortText(row.destinationPortName || row.destinationName, row.destinationPortCode)}</span>
@@ -164,6 +192,7 @@ export function ControlTowerDetailPanel({
           <span key={containerNo}>{containerNo}</span>
         )) : <span>未返回</span>}
       </div>
+      <FreightowerDumpingAlertBanner tracking={row} />
       <ControlTowerTimeline row={row} />
       <div className={styles.controlTowerRowActions}>
         {features.manualSyncEnabled && canManage ? (

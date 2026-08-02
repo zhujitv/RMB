@@ -1,9 +1,10 @@
 import { isPlainRecord } from "./shared-base-utils";
+import { isFreightowerDumpingEvent } from "./freightower-alerts";
+import { parseFreightowerDate } from "./freightower-dates";
 import {
   arrayAt,
   arrayByKeys,
   collectArraysByKeys,
-  dateByKeys,
   portName,
   recordAt,
   textAt,
@@ -12,7 +13,7 @@ import {
 } from "./shipsgo-tracking-mapping-helpers";
 
 function shipsgoEventDate(event: unknown) {
-  return dateByKeys(event, [
+  return parseFreightowerDate(textByKeys(event, [
     "timestamp",
     "time",
     "date",
@@ -27,7 +28,7 @@ function shipsgoEventDate(event: unknown) {
     "estimated_date",
     "plannedDate",
     "planned_date",
-  ]);
+  ]), textByKeys(event, ["portTimeZone", "port_time_zone", "timezone", "timeZone"]));
 }
 
 function shipsgoEventLocation(event: unknown) {
@@ -75,17 +76,20 @@ function shipsgoEventDescription(event: unknown) {
 function shipsgoEventVessel(event: unknown) {
   const vessel = recordAt(event, "vessel");
   return textAt(vessel, "name")
+    || textAt(event, "vslName")
     || textAt(event, "vesselName")
     || textAt(event, "vessel_name")
-    || textByKeys(event, ["vesselName", "vessel_name"]);
+    || textAt(event, "vessel")
+    || textByKeys(event, ["vslName", "vesselName", "vessel_name", "vessel"]);
 }
 
 function shipsgoEventVoyage(event: unknown) {
-  return textAt(event, "voyage")
+  return textAt(event, "voy")
+    || textAt(event, "voyage")
     || textAt(event, "voyageNo")
     || textAt(event, "voyage_no")
     || textAt(event, "voyageNumber")
-    || textByKeys(event, ["voyageNo", "voyage_no", "voyageNumber", "voyage"]);
+    || textByKeys(event, ["voy", "voyageNo", "voyage_no", "voyageNumber", "voyage"]);
 }
 
 export function extractShipsgoTimeline(payload: unknown) {
@@ -104,7 +108,6 @@ export function extractShipsgoTimeline(payload: unknown) {
     "tracking_events",
     "milestones",
     "movements",
-    "places",
   ]);
   const containers = arrayAt(shipment, "containers").concat(arrayByKeys(shipment, ["containerList", "container_list"]));
   for (const container of containers) {
@@ -125,13 +128,21 @@ export function extractShipsgoTimeline(payload: unknown) {
       const description = shipsgoEventDescription(event) || "运输节点";
       const vesselName = shipsgoEventVessel(event);
       const voyage = shipsgoEventVoyage(event);
+      const eventCode = textAt(event, "eventCode").toUpperCase();
+      const eventCategory = textAt(event, "eventCategory").toUpperCase();
+      const isDumpingWarning = isFreightowerDumpingEvent(event);
+      const isWarning = isDumpingWarning || eventCode.startsWith("W");
       return {
         time: time ? time.toISOString() : "",
         location,
         description,
         vesselName,
         voyage,
-        source: "大掌櫃",
+        eventCode,
+        eventCategory,
+        isWarning,
+        isDumpingWarning,
+        source: "飞驼可视",
       };
     })
     .filter((event) => event.time || event.location || event.description !== "运输节点")
