@@ -37,11 +37,19 @@ export type WechatMiniMessage = {
   eventText: string;
 };
 
+function normalizeTemplateDate(value: string) {
+  const match = value.match(/(\d{4})[年./-](\d{1,2})[月./-](\d{1,2})/);
+  if (!match) return value.slice(0, 15);
+  return `${match[1]}年${Number(match[2])}月${Number(match[3])}日`;
+}
+
 function templateFieldValue(field: string, value: string) {
   const text = nonEmpty(value);
-  if (/^phrase/i.test(field)) return text.slice(0, 5);
-  if (/^thing/i.test(field)) return text.slice(0, 20);
-  if (/^(character_string|number)/i.test(field)) return text.slice(0, 32);
+  const type = field.replace(/\d+$/, "").toLowerCase();
+  if (type === "date") return normalizeTemplateDate(text);
+  if (type === "phrase" || type === "short_thing") return text.slice(0, 5);
+  if (type === "thing") return text.slice(0, 20);
+  if (type === "character_string" || type === "number") return text.slice(0, 32);
   return text.slice(0, 32);
 }
 
