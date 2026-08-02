@@ -10,7 +10,13 @@ const secureConnectionString = secureDatabaseUrl(databaseUrl);
 const configuredPoolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "", 10);
 const databasePoolMax = Number.isInteger(configuredPoolMax) && configuredPoolMax >= 1 && configuredPoolMax <= 10
   ? configuredPoolMax
-  : process.env.NODE_ENV === "production" ? 2 : 10;
+  : 2;
+const configuredConnectionTimeoutMs = Number.parseInt(process.env.DATABASE_CONNECTION_TIMEOUT_MS || "", 10);
+const databaseConnectionTimeoutMs = Number.isInteger(configuredConnectionTimeoutMs)
+  && configuredConnectionTimeoutMs >= 5_000
+  && configuredConnectionTimeoutMs <= 60_000
+  ? configuredConnectionTimeoutMs
+  : 30_000;
 
 const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
@@ -23,8 +29,8 @@ export const prisma =
       connectionString: secureConnectionString,
       max: databasePoolMax,
       min: 0,
-      connectionTimeoutMillis: 5_000,
-      idleTimeoutMillis: 5_000,
+      connectionTimeoutMillis: databaseConnectionTimeoutMs,
+      idleTimeoutMillis: 60_000,
       maxLifetimeSeconds: 300,
       allowExitOnIdle: true,
       application_name: "nextwood-vercel",
