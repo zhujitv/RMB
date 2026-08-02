@@ -11,7 +11,7 @@
     "dev": "next dev",
     "build:app": "node scripts/run-with-env.mjs node scripts/security-env-check.mjs && node scripts/run-with-env.mjs prisma generate && next build",
     "build:release": "node scripts/run-with-env.mjs prisma migrate deploy && npm run build:app",
-    "build": "npm run build:app",
+    "build": "node scripts/vercel-release-build.mjs",
     "lint": "node --experimental-strip-types --check proxy.ts && node --check next.config.mjs && node --experimental-strip-types --check lib/platform-db.ts && node --experimental-strip-types --check lib/prisma.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
