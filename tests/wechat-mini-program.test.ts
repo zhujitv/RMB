@@ -97,6 +97,21 @@ test("原生小程序包含登录、概览、物流、时间轴和个人中心",
   assert.match(miniRuntime, /https:\/\/www\.nextwood\.net\/api\/wechat-mini/);
 });
 
+test("小程序设置接受微信官方带下划线的订阅模板字段", async () => {
+  process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/test";
+  const { normalizeWechatMiniSettings } = await jiti.import<typeof import("../lib/platform/wechat-mini-config.ts")>("../lib/platform/wechat-mini-config.ts");
+  const settings = normalizeWechatMiniSettings({
+    orderField: "character_string9",
+    statusField: "short_thing11",
+    eventTimeField: "date1",
+    eventField: "thing12",
+  });
+  assert.equal(settings.orderField, "character_string9");
+  assert.equal(settings.statusField, "short_thing11");
+  assert.equal(settings.eventTimeField, "date1");
+  assert.equal(settings.eventField, "thing12");
+});
+
 test("小程序 provider 会交换 code、缓存 Token 并发送指定模板字段", async () => {
   process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/test";
   const { createWechatMiniProvider } = await jiti.import<typeof import("../lib/platform/wechat-mini-provider.ts")>("../lib/platform/wechat-mini-provider.ts");
@@ -107,10 +122,10 @@ test("小程序 provider 会交换 code、缓存 Token 并发送指定模板字�
       appId: "wx1234567890123456",
       appSecret: "secret",
       trackingTemplateId: "template_123456",
-      orderField: "thing1",
-      statusField: "phrase2",
-      eventTimeField: "time3",
-      eventField: "thing4",
+      orderField: "character_string9",
+      statusField: "short_thing11",
+      eventTimeField: "date1",
+      eventField: "thing12",
     }),
     fetchImpl: async (url, init) => {
       calls.push({ url: String(url), body: init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {} });
@@ -125,12 +140,16 @@ test("小程序 provider 会交换 code、缓存 Token 并发送指定模板字�
     templateId: "template_123456",
     page: "pages/tracking-detail/index?id=tracking-1",
     orderNo: "PO24-4",
-    statusText: "运输中",
+    statusText: "运输状态已发生变化",
     eventTimeText: "2026-08-02 15:30",
     eventText: "已装船",
   });
   assert.equal(calls.filter((call) => call.url.includes("stable_token")).length, 1);
   const send = calls.find((call) => call.url.includes("message/subscribe/send"));
   assert.equal(send?.body.touser, "openid-1");
-  assert.equal((send?.body.data as Record<string, { value: string }>).thing1.value, "PO24-4");
+  const data = send?.body.data as Record<string, { value: string }>;
+  assert.equal(data.character_string9.value, "PO24-4");
+  assert.equal(data.short_thing11.value, "运输状态已");
+  assert.equal(data.date1.value, "2026年8月2日");
+  assert.equal(data.thing12.value, "已装船");
 });

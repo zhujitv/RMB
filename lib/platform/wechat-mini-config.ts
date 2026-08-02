@@ -45,7 +45,7 @@ function cleanTemplateId(value: unknown) {
 
 function cleanField(value: unknown, fallback: string) {
   const field = cleanText(value, 32) || fallback;
-  if (!/^[a-zA-Z]+\d+$/.test(field)) {
+  if (!/^[a-zA-Z]+(?:_[a-zA-Z]+)*\d+$/.test(field)) {
     throw codedError("订阅模板字段名格式不正确", 400, "WECHAT_MINI_TEMPLATE_FIELD_INVALID");
   }
   return field;
