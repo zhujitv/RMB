@@ -1,0 +1,4 @@
+{
+  "desc": "NEXTWOOD 内部物流小程序不参与微信搜索",
+  "rules": [{ "action": "disallow", "page": "*" }]
+}

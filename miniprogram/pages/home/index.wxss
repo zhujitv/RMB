@@ -1,0 +1,16 @@
+.hero { background: linear-gradient(135deg, #11382b, #1d6d4f); color: #fff; padding: 36rpx 32rpx 90rpx; margin: -28rpx -28rpx 0; }
+.eyebrow { font-size: 20rpx; letter-spacing: 3rpx; opacity: .65; }
+.welcome { font-size: 37rpx; font-weight: 650; margin-top: 20rpx; line-height: 1.35; }
+.updated { font-size: 22rpx; opacity: .65; margin-top: 16rpx; }
+.stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16rpx; margin-top: -55rpx; margin-bottom: 24rpx; position: relative; }
+.stat { background: #fff; border-radius: 20rpx; padding: 25rpx; box-shadow: 0 10rpx 30rpx rgba(13, 59, 42, .09); }
+.stat .number { font-size: 48rpx; font-weight: 700; }
+.stat .label { color: #75847e; font-size: 24rpx; margin-top: 4rpx; }
+.stat.warn .number { color: #c25a1c; }
+.card-title { font-size: 30rpx; font-weight: 650; }
+.small { font-size: 23rpx; margin-top: 9rpx; }
+.bell { width: 58rpx; height: 58rpx; border-radius: 50%; background: #e7f4ee; color: #14744f; display: flex; align-items: center; justify-content: center; }
+.subscribe-button { margin-top: 25rpx; }
+.note { color: #8a9892; font-size: 21rpx; line-height: 1.55; margin-top: 14rpx; }
+.action { display: flex; align-items: center; justify-content: space-between; }
+.arrow { font-size: 55rpx; color: #8da097; }

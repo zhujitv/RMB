@@ -1,0 +1,13 @@
+<view class="page">
+  <view class="profile-card">
+    <view class="avatar">{{initial}}</view>
+    <view><view class="name">{{user.name || '-'}}</view><view class="muted">{{user.email || '-'}}</view><view class="tag">{{user.role || '员工'}}</view></view>
+  </view>
+  <view class="card">
+    <view class="row item"><text>微信提醒可用次数</text><text class="primary">{{subscription.availableGrantCount || 0}}</text></view>
+    <view class="row item"><text>账号状态</text><text>已绑定</text></view>
+    <view class="row item"><text>数据权限</text><text>与网页端一致</text></view>
+  </view>
+  <button class="button ghost" bindtap="logout">退出登录</button>
+  <view class="foot">微信公众号功能继续保留，小程序为独立内部应用。</view>
+</view>
