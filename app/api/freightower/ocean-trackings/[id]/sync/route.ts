@@ -3,6 +3,8 @@ import { apiError, ok, syncShipsgoOceanTracking } from "../../../../../../lib/pl
 import { requireApiActor } from "../../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {

@@ -167,7 +167,11 @@ function buildShipsgoControlTowerRow(row: Parameters<typeof serializeShipsgoTrac
   const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
   const lastSyncMs = trackingDateMs(tracking.lastSyncTime || tracking.lastSyncedAt);
   const statusValue = tracking.currentStatus || tracking.status || tracking.statusLabel;
-  const isSyncFailed = /FAIL|ERROR/.test(nonEmpty(tracking.syncStatus).toUpperCase());
+  const isSyncFailed = /FAIL|ERROR/.test([
+    tracking.syncStatus,
+    tracking.portTrackingStatus,
+    tracking.customsTrackingStatus,
+  ].map((value) => nonEmpty(value).toUpperCase()).join(" "));
   const isCompleted = isShipsgoCompletedStatus(statusValue);
   const isEtaOverdue = etaMs != null && etaMs < todayMs && !isCompleted;
   const isSoonArriving = etaMs != null && etaMs >= todayMs && etaMs - todayMs <= sevenDaysMs && !isCompleted;

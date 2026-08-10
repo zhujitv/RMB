@@ -19,6 +19,12 @@ const miniApp = readFileSync("miniprogram/app.json", "utf8");
 const miniRuntime = readFileSync("miniprogram/app.js", "utf8");
 const miniHome = readFileSync("miniprogram/pages/home/index.js", "utf8");
 const miniApi = readFileSync("miniprogram/utils/api.js", "utf8");
+const miniTrackingDetailRoute = readFileSync("app/api/wechat-mini/trackings/[id]/route.ts", "utf8");
+const miniMapSessionRoute = readFileSync("app/api/wechat-mini/map-session/route.ts", "utf8");
+const miniMapPage = readFileSync("app/wechat-mini/tracking-map/page.tsx", "utf8");
+const miniMapBootstrap = readFileSync("app/wechat-mini/tracking-map/map-session-bootstrap.tsx", "utf8");
+const miniTrackingDetail = readFileSync("miniprogram/pages/tracking-detail/index.js", "utf8");
+const miniTrackingMap = readFileSync("miniprogram/pages/tracking-map/index.js", "utf8");
 const schema = readPrismaSchemaSource();
 
 test("小程序与公众号使用独立配置且服务端不回传 AppSecret", () => {
@@ -37,6 +43,9 @@ test("小程序登录绑定微信但仅保存哈希会话令牌", () => {
   assert.match(auth, /tokenHash: sessionTokenHash\(token\)/);
   assert.match(auth, /WECHAT_MINI_ALREADY_BOUND/);
   assert.match(auth, /mustChangePassword \|\| !user\.passwordPolicyPassed/);
+  assert.match(auth, /previousBinding\.openId !== identity\.openId/);
+  assert.match(auth, /bindingId: previousBinding\.id, revokedAt: null/);
+  assert.match(auth, /status: "REVOKED"/);
   assert.doesNotMatch(auth, /session_key|sessionKey/);
 });
 
@@ -89,12 +98,32 @@ test("原生小程序包含登录、概览、物流、时间轴和个人中心",
     "miniprogram/pages/home/index.wxml",
     "miniprogram/pages/trackings/index.wxml",
     "miniprogram/pages/tracking-detail/index.wxml",
+    "miniprogram/pages/tracking-map/index.wxml",
     "miniprogram/pages/profile/index.wxml",
   ]) assert.equal(existsSync(file), true, file);
   assert.match(miniApp, /pages\/tracking-detail\/index/);
+  assert.match(miniApp, /pages\/tracking-map\/index/);
   assert.match(miniHome, /wx\.requestSubscribeMessage/);
   assert.match(miniApi, /Authorization: `Bearer \$\{token\}`/);
   assert.match(miniRuntime, /https:\/\/www\.nextwood\.net\/api\/wechat-mini/);
+});
+
+test("小程序地图复用飞驼地图并通过短时服务端会话保护访问", () => {
+  assert.match(miniTrackingDetail, /tracking\.hasMap/);
+  assert.match(miniTrackingDetail, /pages\/tracking-map\/index/);
+  assert.match(miniTrackingMap, /\/wechat-mini\/tracking-map\?trackingId=/);
+  assert.match(miniTrackingMap, /#token=/);
+  assert.match(miniMapBootstrap, /history\.replaceState/);
+  assert.match(miniMapBootstrap, /\/api\/wechat-mini\/map-session/);
+  assert.match(miniMapSessionRoute, /requireWechatMiniActor\(request\)/);
+  assert.match(miniMapSessionRoute, /getShipsgoOceanTracking\(actor, body\.trackingId\)/);
+  assert.match(miniMapSessionRoute, /httpOnly: true/);
+  assert.match(miniMapSessionRoute, /maxAge: MAP_SESSION_SECONDS/);
+  assert.match(miniMapPage, /requireWechatMiniActorToken\(token\)/);
+  assert.match(miniMapPage, /url\.hostname === "i\.saas\.freightower\.com"/);
+  assert.match(miniMapPage, /referrerPolicy="no-referrer"/);
+  assert.match(miniTrackingDetailRoute, /const \{ mapUrl, \.\.\.safeTracking \} = tracking/);
+  assert.match(miniTrackingDetailRoute, /hasMap: Boolean\(mapUrl\)/);
 });
 
 test("小程序设置接受微信官方带下划线的订阅模板字段", async () => {

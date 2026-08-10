@@ -34,6 +34,18 @@ function portTrackingLabel(tracking: ShipsgoTrackingRow) {
   return "待订阅";
 }
 
+function customsTrackingLabel(tracking: ShipsgoTrackingRow) {
+  const status = String(tracking.customsTrackingStatus || "NOT_QUERIED").toUpperCase();
+  if (status === "SYNCED") return `已同步${tracking.customsEventCount ? `（${tracking.customsEventCount} 个节点）` : ""}`;
+  if (status === "SUBSCRIBED") return "已查询，等待海关节点";
+  if (status === "PERMISSION_REQUIRED") return "待开通权限";
+  if (status === "CREDENTIAL_REQUIRED") return "待配置 Client ID 和 API Secret";
+  if (status === "DISABLED") return "未启用";
+  if (status === "WAITING_CONTEXT") return "等待提单号或进出口方向";
+  if (status === "SYNC_FAILED") return "同步失败";
+  return "待查询";
+}
+
 export function ShipsgoTrackingCard({
   tracking,
   features,
@@ -131,6 +143,14 @@ export function ShipsgoTrackingCard({
         {tracking.portLastSyncedAt ? ` ｜ 更新于 ${formatDateTime(tracking.portLastSyncedAt)}` : ""}
         {tracking.portTrackingMessage ? ` ｜ ${tracking.portTrackingMessage}` : ""}
       </span>
+      {features.customsTrackingEnabled || Boolean(tracking.customsEventCount) ? (
+        <span className={styles.shipsgoSyncMessage}>
+          中国海关：{customsTrackingLabel(tracking)}
+          {tracking.customsDirection ? ` ｜ ${tracking.customsDirection === "I" ? "进口" : "出口"}` : ""}
+          {tracking.customsLastSyncedAt ? ` ｜ 更新于 ${formatDateTime(tracking.customsLastSyncedAt)}` : ""}
+          {tracking.customsTrackingMessage ? ` ｜ ${tracking.customsTrackingMessage}` : ""}
+        </span>
+      ) : null}
       <div className={styles.shipsgoTrackingActions}>
         {features.manualSyncEnabled && canManage ? (
           <button

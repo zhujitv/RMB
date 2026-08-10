@@ -2,41 +2,45 @@ import type { Prisma, ShipsgoTracking } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { freightowerApiGet, freightowerApiRequest } from "./freightower-api";
 import { mapFreightowerShipmentPayload } from "./freightower-mapping";
-import { extractFreightowerPortTimeline } from "./freightower-port-events";
-import { isPlainRecord, nonEmpty, type AppError } from "./shared-base-utils";
+import {
+  extractFreightowerPortTimeline,
+  freightowerPortResponseState,
+  mergeFreightowerPortResponses,
+} from "./freightower-port-events";
+import {
+  normalizeFreightowerPortBusinessNumber,
+  normalizeFreightowerPortCode,
+  resolveFreightowerPortContext,
+} from "./freightower-port-query";
+import { codedError, isPlainRecord, nonEmpty, type AppError } from "./shared-base-utils";
 import type { ShipsgoSettings } from "./shipsgo-tracking-utils";
+import { hasFreightowerPortTrackingNotificationChange } from "./freightower-notification-events";
+import {
+  FREIGHTOWER_NOTIFICATION_PORT,
+  markFreightowerNotificationPending,
+} from "./freightower-notification-pending";
+import { freightowerPortAlerts } from "./freightower-supplemental-alerts";
 
 const PORT_PERMISSION_RETRY_MS = 24 * 60 * 60 * 1000;
 const PORT_SUBSCRIBE_PATH = "/terminal/port/event/subscribe";
 const PORT_QUERY_PATH = "/terminal/port/event/shipment";
 
-function cleanPortCode(value: unknown) {
-  const code = nonEmpty(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return /^[A-Z]{2}[A-Z0-9]{3}$/.test(code) ? code : "";
-}
-
 function portBusinessNumber(tracking: ShipsgoTracking) {
-  return nonEmpty(tracking.masterBlNo || tracking.bookingNumber || tracking.containerNumber)
-    .toUpperCase()
-    .replace(/[^A-Z0-9-]/g, "")
-    .slice(0, 80);
+  return normalizeFreightowerPortBusinessNumber(
+    tracking.masterBlNo || tracking.bookingNumber || tracking.containerNumber,
+  );
 }
 
 function portContextFromTracking(tracking: ShipsgoTracking, settings: ShipsgoSettings) {
-  if (tracking.portCode) {
-    return { portCode: cleanPortCode(tracking.portCode), direction: tracking.portDirection === "I" ? "I" : "E" };
-  }
   const mapped = mapFreightowerShipmentPayload(tracking.rawResponse ?? tracking.rawPayload, settings);
-  const origin = cleanPortCode(mapped.originPortCode);
-  const destination = cleanPortCode(mapped.destinationPortCode);
-  const configured = settings.freightowerDefaultIsExport;
-  const direction = configured === "I" || configured === "E"
-    ? configured
-    : origin.startsWith("CN") ? "E" : destination.startsWith("CN") ? "I" : "E";
-  const portCode = cleanPortCode(
-    direction === "I" ? destination : origin || settings.freightowerDefaultPortCode,
-  );
-  return { portCode, direction };
+  return resolveFreightowerPortContext({
+    storedPort: tracking.portCode,
+    storedDirection: tracking.portDirection,
+    origin: mapped.originPortCode,
+    destination: mapped.destinationPortCode,
+    defaultPort: settings.freightowerDefaultPortCode,
+    defaultDirection: settings.freightowerDefaultIsExport,
+  });
 }
 
 function subscriptionIdFromResponse(payload: unknown) {
@@ -54,18 +58,83 @@ function shouldDeferPermissionRetry(tracking: ShipsgoTracking, force: boolean) {
     && Date.now() - tracking.portLastCheckedAt.getTime() < PORT_PERMISSION_RETRY_MS;
 }
 
-async function savePortFailure(trackingId: string, error: unknown) {
+function samePortSubscriptionContext(
+  tracking: ShipsgoTracking,
+  businessNumber: string,
+  portCode: string,
+  direction: string,
+) {
+  const storedBusinessNumber = normalizeFreightowerPortBusinessNumber(tracking.portBusinessNumber);
+  const storedPortMatches = normalizeFreightowerPortCode(tracking.portCode) === portCode;
+  const storedDirectionMatches = nonEmpty(tracking.portDirection).toUpperCase() === direction;
+  const legacySubscriptionContext = !storedBusinessNumber
+    && Boolean(nonEmpty(tracking.portSubscriptionId))
+    && storedPortMatches
+    && storedDirectionMatches;
+  return (
+    storedBusinessNumber === businessNumber || legacySubscriptionContext
+  ) && storedPortMatches && storedDirectionMatches;
+}
+
+function portRequestContextMatches(
+  tracking: ShipsgoTracking,
+  settings: ShipsgoSettings,
+  expectedBusinessNumber: string,
+  expectedPortCode: string,
+  expectedDirection: string,
+) {
+  const latestContext = portContextFromTracking(tracking, settings);
+  return portBusinessNumber(tracking) === expectedBusinessNumber
+    && latestContext.portCode === expectedPortCode
+    && latestContext.direction === expectedDirection;
+}
+
+async function savePortFailure(
+  tracking: ShipsgoTracking,
+  settings: ShipsgoSettings,
+  error: unknown,
+  expectedBusinessNumber: string,
+  expectedPortCode: string,
+  expectedDirection: string,
+  requestStartedAt: Date,
+  subscriptionId: string,
+) {
   const typed = error as AppError;
   const permissionRequired = typed.code === "FREIGHTOWER_PORT_PERMISSION_REQUIRED";
-  return prisma.shipsgoTracking.update({
-    where: { id: trackingId },
-    data: {
-      portTrackingStatus: permissionRequired ? "PERMISSION_REQUIRED" : "SYNC_FAILED",
-      portTrackingMessage: permissionRequired
-        ? "中国港区跟踪尚未授权，请联系飞驼开通该产品权限。"
-        : String(typed.message || "中国港区跟踪同步失败。").slice(0, 500),
-      portLastCheckedAt: new Date(),
-    },
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "shipsgo_trackings" WHERE "id" = ${tracking.id} FOR UPDATE
+    `;
+    if (!locked.length) return null;
+    const latest = await tx.shipsgoTracking.findUnique({ where: { id: tracking.id } });
+    if (!latest) return null;
+    if (!portRequestContextMatches(
+      latest,
+      settings,
+      expectedBusinessNumber,
+      expectedPortCode,
+      expectedDirection,
+    )) return latest;
+    if (latest.portLastCheckedAt
+      && latest.portLastCheckedAt.getTime() >= requestStartedAt.getTime()) {
+      return latest;
+    }
+    return tx.shipsgoTracking.update({
+      where: { id: tracking.id },
+      data: {
+        portTrackingStatus: permissionRequired ? "PERMISSION_REQUIRED" : "SYNC_FAILED",
+        portTrackingMessage: permissionRequired
+          ? "中国港区跟踪尚未授权，请联系飞驼开通该产品权限。"
+          : String(typed.message || "中国港区跟踪同步失败。").slice(0, 500),
+        ...(subscriptionId ? {
+          portSubscriptionId: subscriptionId,
+          portBusinessNumber: expectedBusinessNumber,
+          portCode: expectedPortCode,
+          portDirection: expectedDirection,
+        } : {}),
+        portLastCheckedAt: new Date(),
+      },
+    });
   });
 }
 
@@ -95,8 +164,15 @@ export async function syncFreightowerPortTracking(
       },
     });
   }
+  const requestStartedAt = new Date();
+  const sameSubscriptionContext = samePortSubscriptionContext(
+    tracking,
+    businessNumber,
+    portCode,
+    direction,
+  );
+  let subscriptionId = sameSubscriptionContext ? nonEmpty(tracking.portSubscriptionId) : "";
   try {
-    let subscriptionId = nonEmpty(tracking.portSubscriptionId);
     if (!subscriptionId) {
       const subscribed = await freightowerApiRequest<unknown>(settings, PORT_SUBSCRIBE_PATH, {
         businessNumber,
@@ -105,35 +181,95 @@ export async function syncFreightowerPortTracking(
       });
       subscriptionId = subscriptionIdFromResponse(subscribed);
       if (!subscriptionId) throw new Error("飞驼港区订阅成功，但未返回 subscriptionId。");
-      await prisma.shipsgoTracking.update({
-        where: { id: tracking.id },
-        data: {
-          portTrackingStatus: "SUBSCRIBED",
-          portTrackingMessage: "中国港区跟踪已订阅，正在读取港区节点。",
-          portSubscriptionId: subscriptionId,
-          portCode,
-          portDirection: direction,
-          portLastCheckedAt: new Date(),
-        },
-      });
     }
     const response = await freightowerApiGet<unknown>(settings, PORT_QUERY_PATH, { subscriptionId });
-    const now = new Date();
-    const eventCount = extractFreightowerPortTimeline(response).length;
-    return prisma.shipsgoTracking.update({
-      where: { id: tracking.id },
-      data: {
-        portTrackingStatus: eventCount ? "SYNCED" : "SUBSCRIBED",
-        portTrackingMessage: eventCount ? `中国港区已同步 ${eventCount} 个节点。` : "中国港区已订阅，飞驼暂未返回港区节点。",
-        portSubscriptionId: subscriptionId,
+    const responseState = freightowerPortResponseState(response);
+    if (!responseState.accepted) {
+      throw codedError(
+        responseState.message || "飞驼中国港区跟踪返回失败。",
+        400,
+        "FREIGHTOWER_PORT_RESPONSE_ERROR",
+      );
+    }
+    const responseEventCount = responseState.eventCount;
+    return prisma.$transaction(async (tx) => {
+      // Keep the provider request outside the transaction and serialize only the
+      // final context check, merge, and write for this tracking row.
+      const locked = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "shipsgo_trackings" WHERE "id" = ${tracking.id} FOR UPDATE
+      `;
+      if (!locked.length) return null;
+      const latestTracking = await tx.shipsgoTracking.findUnique({ where: { id: tracking.id } });
+      if (!latestTracking) return null;
+      if (!portRequestContextMatches(
+        latestTracking,
+        settings,
+        businessNumber,
         portCode,
-        portDirection: direction,
-        portLastCheckedAt: now,
-        portLastSyncedAt: now,
-        portRawResponse: response as Prisma.InputJsonValue,
-      },
+        direction,
+      )) return latestTracking;
+      const latestSameSubscriptionContext = samePortSubscriptionContext(
+        latestTracking,
+        businessNumber,
+        portCode,
+        direction,
+      );
+      const previousEventCount = extractFreightowerPortTimeline(latestTracking.portRawResponse).length;
+      const newerWriteCompleted = Boolean(
+        latestTracking.portLastCheckedAt
+        && latestTracking.portLastCheckedAt.getTime() >= requestStartedAt.getTime(),
+      );
+      const mergedResponse = latestSameSubscriptionContext
+        ? newerWriteCompleted
+          ? mergeFreightowerPortResponses(response, latestTracking.portRawResponse)
+          : mergeFreightowerPortResponses(latestTracking.portRawResponse, response)
+        : response;
+      const eventCount = extractFreightowerPortTimeline(mergedResponse).length;
+      const preservePreviousEvents = latestSameSubscriptionContext
+        && responseEventCount === 0
+        && previousEventCount > 0;
+      const now = new Date();
+      const saved = await tx.shipsgoTracking.update({
+        where: { id: tracking.id },
+        data: {
+          portTrackingStatus: eventCount || preservePreviousEvents ? "SYNCED" : "SUBSCRIBED",
+          portTrackingMessage: preservePreviousEvents
+            ? `本次未返回新节点，已保留 ${previousEventCount} 个历史港区节点。`
+            : eventCount
+              ? `中国港区已同步 ${eventCount} 个节点。`
+              : "中国港区已订阅，飞驼暂未返回港区节点。",
+          portSubscriptionId: latestSameSubscriptionContext
+            ? nonEmpty(latestTracking.portSubscriptionId) || subscriptionId
+            : subscriptionId,
+          portBusinessNumber: businessNumber,
+          portCode,
+          portDirection: direction,
+          portLastCheckedAt: now,
+          portLastSyncedAt: responseEventCount ? now : latestTracking.portLastSyncedAt,
+          portRawResponse: mergedResponse as Prisma.InputJsonValue,
+        },
+      });
+      const initialActiveWarning = latestTracking.portRawResponse == null
+        && freightowerPortAlerts(extractFreightowerPortTimeline(saved.portRawResponse))
+          .some((alert) => alert.active);
+      if (initialActiveWarning || (
+        latestTracking.portRawResponse != null
+        && hasFreightowerPortTrackingNotificationChange(latestTracking, saved)
+      )) {
+        await markFreightowerNotificationPending(tx, tracking.id, FREIGHTOWER_NOTIFICATION_PORT);
+      }
+      return saved;
     });
   } catch (error) {
-    return savePortFailure(tracking.id, error);
+    return savePortFailure(
+      tracking,
+      settings,
+      error,
+      businessNumber,
+      portCode,
+      direction,
+      requestStartedAt,
+      subscriptionId,
+    );
   }
 }

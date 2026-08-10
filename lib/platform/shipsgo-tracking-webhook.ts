@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import type { Prisma, ShipsgoTracking } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { codedError, isPlainRecord } from "./shared-base-utils";
-import { runNonCriticalTask } from "./shared-constants";
 import { getShipsgoIntegrationSettings } from "./freightower-integration";
 import {
   assertFreightowerOceanEnabled,
@@ -24,8 +23,16 @@ import {
 } from "./webhook-replay-guard";
 import {
   hasFreightowerTrackingNotificationChange,
-  notifyFreightowerTrackingUpdate,
 } from "./shipsgo-tracking-notifications";
+import {
+  claimFreightowerTrackingSyncLease,
+  releaseFreightowerTrackingSyncLease,
+} from "./shipsgo-tracking-sync-lease";
+import {
+  FREIGHTOWER_NOTIFICATION_COMPREHENSIVE,
+  markFreightowerNotificationPending,
+  reconcileFreightowerTrackingNotification,
+} from "./freightower-notification-pending";
 
 const UNSIGNED_REQUERY_THROTTLE_MS = 30_000;
 
@@ -115,6 +122,7 @@ export async function handleShipsgoWebhook(rawBody: string, _signature: unknown,
     if (replay.processed) return { success: true, ignored: true, message: "重复推送已忽略。" };
     throw codedError("相同推送正在处理中，请稍后重试。", 409, "WEBHOOK_DELIVERY_IN_PROGRESS");
   }
+  const syncLeases: Array<{ trackingId: string; token: string }> = [];
   try {
     const now = new Date();
     const eligibleTargets = signatureVerified
@@ -124,7 +132,23 @@ export async function handleShipsgoWebhook(rawBody: string, _signature: unknown,
       await completeWebhookReplayClaim(replay.key, "freightower");
       return { success: true, ignored: true, message: "相同物流刚刚完成回查，本次通知已合并。" };
     }
-    const prepared = await Promise.all(eligibleTargets.map(async (target) => {
+    const leasedTargets: ShipsgoTracking[] = [];
+    for (const target of eligibleTargets) {
+      const token = await claimFreightowerTrackingSyncLease(target.id);
+      if (!token) continue;
+      syncLeases.push({ trackingId: target.id, token });
+      const current = await prisma.shipsgoTracking.findUnique({ where: { id: target.id } });
+      if (current && !current.deletedAt) leasedTargets.push(current);
+    }
+    if (!leasedTargets.length) {
+      await completeWebhookReplayClaim(replay.key, "freightower");
+      return { success: true, ignored: true, message: "对应物流正在同步，本次推送已合并。" };
+    }
+    for (const target of leasedTargets) {
+      const leaseToken = syncLeases.find((lease) => lease.trackingId === target.id)?.token;
+      if (leaseToken) await reconcileFreightowerTrackingNotification(target.id, { leaseToken });
+    }
+    const prepared = await Promise.all(leasedTargets.map(async (target) => {
       const fullResponse = await freightowerApiRequest<unknown>(
         settings,
         "/application/v1/query",
@@ -137,7 +161,6 @@ export async function handleShipsgoWebhook(rawBody: string, _signature: unknown,
       return { target, mapped };
     }));
 
-    const changedIds: string[] = [];
     const savedIds = await prisma.$transaction(async (tx) => {
       const ids: string[] = [];
       for (const { target, mapped } of prepared) {
@@ -158,7 +181,13 @@ export async function handleShipsgoWebhook(rawBody: string, _signature: unknown,
             skipDuplicates: true,
           });
         }
-        if (hasFreshTrackingData && hasFreightowerTrackingNotificationChange(target, saved)) changedIds.push(saved.id);
+        if (hasFreshTrackingData && hasFreightowerTrackingNotificationChange(target, saved)) {
+          await markFreightowerNotificationPending(
+            tx,
+            saved.id,
+            FREIGHTOWER_NOTIFICATION_COMPREHENSIVE,
+          );
+        }
         ids.push(saved.id);
       }
       return ids;
@@ -166,11 +195,12 @@ export async function handleShipsgoWebhook(rawBody: string, _signature: unknown,
     const savedTrackings = (await Promise.all(savedIds.map((id) => loadShipsgoTrackingWithContainers(id))))
       .filter((tracking): tracking is NonNullable<typeof tracking> => Boolean(tracking));
     if (savedTrackings.length !== savedIds.length) throw codedError("飞驼可视推送同步保存失败。", 500, "FREIGHTOWER_TRACKING_SAVE_FAILED");
-    await Promise.all(changedIds.map((id) => runNonCriticalTask(
-      "飞驼可视跟踪推送邮件通知",
-      () => notifyFreightowerTrackingUpdate(id),
-      { context: { provider: FREIGHTOWER_PROVIDER, trackingId: id } },
-    )));
+    await Promise.all(savedIds.map((id) => {
+      const leaseToken = syncLeases.find((lease) => lease.trackingId === id)?.token;
+      return leaseToken
+        ? reconcileFreightowerTrackingNotification(id, { leaseToken })
+        : Promise.resolve({ processed: false, skipped: "locked" as const });
+    }));
     await completeWebhookReplayClaim(replay.key, "freightower");
     const serialized = savedTrackings.map((tracking) => serializeShipsgoTracking(tracking));
     return {
@@ -184,5 +214,14 @@ export async function handleShipsgoWebhook(rawBody: string, _signature: unknown,
   } catch (error) {
     await releaseWebhookReplayClaim(replay.key);
     throw error;
+  } finally {
+    await Promise.all(syncLeases.map(({ trackingId, token }) => (
+      releaseFreightowerTrackingSyncLease(trackingId, token).catch((error: unknown) => {
+        console.error("freightower-webhook-sync-lease-release-failed", {
+          trackingId,
+          message: error instanceof Error ? error.message : "unknown",
+        });
+      })
+    )));
   }
 }

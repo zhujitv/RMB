@@ -11,6 +11,19 @@
     <view class="info-row"><text>航次</text><text>{{tracking.voyage || '未返回'}}</text></view>
     <view class="info-row"><text>预计到港</text><text>{{etaText || '-'}}</text></view>
   </view>
+  <view class="card map-card">
+    <view>
+      <view class="map-title">飞驼可视运输地图</view>
+      <view class="map-desc">查看船舶位置、航线轨迹和港口信息</view>
+    </view>
+    <button class="button map-button {{tracking.hasMap ? '' : 'disabled'}}" bindtap="openMap" disabled="{{!tracking.hasMap}}">
+      {{tracking.hasMap ? '查看地图' : '地图暂未返回'}}
+    </button>
+  </view>
+  <view class="card info customs-info" wx:if="{{tracking.customsTrackingEnabled || tracking.customsEventCount}}">
+    <view class="info-row"><text>中国海关跟踪</text><text>{{customsStatusText}}</text></view>
+    <view class="info-row" wx:if="{{tracking.customsTrackingMessage}}"><text>同步说明</text><text>{{tracking.customsTrackingMessage}}</text></view>
+  </view>
   <view class="section-title">运输节点时间轴</view>
   <view class="card timeline" wx:if="{{timeline.length}}">
     <view class="event" wx:for="{{timeline}}" wx:key="index">
@@ -18,6 +31,7 @@
       <view class="event-body">
         <view class="event-title">{{item.description || item.status || '物流节点'}}</view>
         <view class="event-meta">{{item.timeText || '-'}} · {{item.location || '地点未返回'}}</view>
+        <view class="event-source" wx:if="{{item.source}}">{{item.source}}</view>
         <view class="event-vessel" wx:if="{{item.vesselName || item.voyage}}">{{item.vesselName || ''}} {{item.voyage || ''}}</view>
       </view>
     </view>

@@ -145,6 +145,8 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   freightowerApiKeyConfigured: false,
   freightowerClientId: "",
   freightowerClientIdConfigured: false,
+  freightowerApiSecret: "",
+  freightowerApiSecretConfigured: false,
   freightowerIframeKey: "",
   freightowerIframeKeyConfigured: false,
   freightowerWebhookAccessSecret: "",
@@ -155,6 +157,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   freightowerDefaultLang: "zh",
   freightowerHiddenReference: false,
   oceanTrackingEnabled: true,
+  customsTrackingEnabled: false,
   airTrackingEnabled: false,
   manualSyncEnabled: true,
   autoSyncEnabled: true,
@@ -203,6 +206,11 @@ export const SHIPSGO_FEATURE_OPTIONS = [
     description: "按提单号、柜号创建第三方海运跟踪任务。",
   },
   {
+    key: "customsTrackingEnabled",
+    label: "中国海关提单号跟踪",
+    description: "通过飞驼官方 Token 接口查询中国海关节点；默认关闭，完成凭据配置后再启用。",
+  },
+  {
     key: "manualSyncEnabled",
     label: "手动同步",
     description: "允许在物流页面手动刷新海运跟踪状态。",
@@ -215,7 +223,7 @@ export const SHIPSGO_FEATURE_OPTIONS = [
 ] satisfies Array<{
   key: keyof Pick<
     ShipsgoIntegrationForm,
-    "oceanTrackingEnabled" | "manualSyncEnabled" | "liveMapEnabled"
+    "oceanTrackingEnabled" | "customsTrackingEnabled" | "manualSyncEnabled" | "liveMapEnabled"
   >;
   label: string;
   description: string;

@@ -63,7 +63,7 @@ export function FreightowerIntegrationSettingsCard({
       const result = await apiJson<{ success?: boolean; message?: string }>("/api/settings/freightower/test", {
         method: "POST",
         body: JSON.stringify(currentForm),
-        timeoutMs: 20000,
+        timeoutMs: 45000,
       });
       if (result.success !== true) throw new Error(result.message || "连接测试失败");
       setConnectionMessage(result.message || "连接成功，飞驼 API Key 直连认证正常。");
@@ -77,7 +77,7 @@ export function FreightowerIntegrationSettingsCard({
   return (
     <SettingsPage
       title="物流接口"
-      description="使用飞驼 API Key 直连查询接口，提供网页端海运跟踪、甩柜预警、手动同步和地图功能。"
+      description="综合物流继续使用 API Key 直连；中国海关提单号跟踪按飞驼官方文档使用 Client ID 和 Secret 获取 Token。"
       status={<SettingsStatusTag tone={statusTone}>{statusLabel}</SettingsStatusTag>}
       onSubmit={onSubmit}
       actions={(

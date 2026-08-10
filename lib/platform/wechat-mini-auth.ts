@@ -8,8 +8,9 @@ import { requestIp } from "./shared-auth-request";
 import { exchangeWechatMiniLoginCode } from "./wechat-mini-provider";
 
 const SESSION_DAYS = 30;
+export const WECHAT_MINI_MAP_COOKIE_NAME = "nextwood_wechat_mini_map";
 
-function bearerToken(request: NextRequest) {
+export function wechatMiniBearerToken(request: NextRequest) {
   const header = nonEmpty(request.headers.get("authorization"));
   const match = header.match(/^Bearer\s+([A-Za-z0-9_-]{32,256})$/i);
   return match?.[1] || "";
@@ -43,6 +44,21 @@ export async function loginWechatMini(request: NextRequest, input: Record<string
   const token = randomToken();
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const binding = await prisma.$transaction(async (tx) => {
+    const previousBinding = await tx.wechatMiniBinding.findUnique({ where: { userId: user.id } });
+    if (previousBinding && previousBinding.openId !== identity.openId) {
+      const revokedAt = new Date();
+      await tx.wechatMiniSession.updateMany({
+        where: { bindingId: previousBinding.id, revokedAt: null },
+        data: { revokedAt },
+      });
+      await tx.wechatMiniSubscriptionGrant.updateMany({
+        where: {
+          bindingId: previousBinding.id,
+          status: { in: ["AVAILABLE", "RESERVED"] },
+        },
+        data: { status: "REVOKED" },
+      });
+    }
     const saved = await tx.wechatMiniBinding.upsert({
       where: { userId: user.id },
       update: { openId: identity.openId, unionId: identity.unionId, enabled: true, lastLoginAt: new Date() },
@@ -78,9 +94,9 @@ export async function loginWechatMini(request: NextRequest, input: Record<string
   };
 }
 
-export async function requireWechatMiniActor(request: NextRequest) {
-  const token = bearerToken(request);
-  if (!token) throw codedError("请先登录小程序", 401, "WECHAT_MINI_UNAUTHENTICATED");
+export async function requireWechatMiniActorToken(tokenInput: unknown) {
+  const token = nonEmpty(tokenInput);
+  if (!/^[A-Za-z0-9_-]{32,256}$/.test(token)) throw codedError("请先登录小程序", 401, "WECHAT_MINI_UNAUTHENTICATED");
   const session = await prisma.wechatMiniSession.findFirst({
     where: {
       tokenHash: sessionTokenHash(token),
@@ -110,8 +126,12 @@ export async function requireWechatMiniActor(request: NextRequest) {
   return { ...session.user, bindingId: session.binding.id, openId: session.binding.openId, miniSessionId: session.id };
 }
 
+export async function requireWechatMiniActor(request: NextRequest) {
+  return requireWechatMiniActorToken(wechatMiniBearerToken(request));
+}
+
 export async function logoutWechatMini(request: NextRequest) {
-  const token = bearerToken(request);
+  const token = wechatMiniBearerToken(request);
   if (!token) return;
   await prisma.wechatMiniSession.updateMany({
     where: { tokenHash: sessionTokenHash(token), revokedAt: null },
