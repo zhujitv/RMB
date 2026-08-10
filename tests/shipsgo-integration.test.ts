@@ -381,6 +381,7 @@ test("Freightower creation is idempotent per order and provider", () => {
   assert.match(createService, /lockShipsgoTrackingCreation/);
   assert.match(recoveryService, /lockShipsgoTrackingCreation/);
   assert.match(trackingServiceShared, /pg_advisory_xact_lock/);
+  assert.match(trackingServiceShared, /pg_advisory_xact_lock[\s\S]*::text AS "locked"/);
   assert.match(freightowerSyncLeaseMigration, /shipsgo_trackings_provider_shipment_unique/);
   assert.match(freightowerSyncLeaseMigration, /"deleted_at" IS NULL/);
   assert.match(createService, /replaceShipsgoTrackingContainers\(savedBase\.id, mapped\.containerNumbers\)/);
