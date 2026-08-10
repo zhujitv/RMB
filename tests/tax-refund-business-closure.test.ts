@@ -150,6 +150,36 @@ test("tax refund closure blocks a paid bill whose cost payment was not synchroni
   assert.deepEqual(summary.blockers[0].reasons, ["成本付款状态未同步（当前：待支付）"]);
 });
 
+test("tax refund closure accepts a historical paid cost whose redundant paid flag was not populated", () => {
+  const summary = analyzeTaxRefundLogisticsClosure([
+    settledRow({
+      cost: {
+        ...settledRow().cost!,
+        paymentStatus: "已支付",
+        paid: false,
+        paymentDate: "2026-07-10",
+      },
+    }),
+  ]);
+  assert.equal(summary.complete, true);
+  assert.deepEqual(summary.blockers, []);
+});
+
+test("tax refund closure still blocks a paid status without a payment date", () => {
+  const summary = analyzeTaxRefundLogisticsClosure([
+    settledRow({
+      cost: {
+        ...settledRow().cost!,
+        paymentStatus: "已支付",
+        paid: false,
+        paymentDate: null,
+      },
+    }),
+  ]);
+  assert.equal(summary.complete, false);
+  assert.deepEqual(summary.blockers[0].reasons, ["成本付款状态未同步（当前：已支付）"]);
+});
+
 test("tax refund closure blocks a logistics cost with an invalid source link", () => {
   const summary = analyzeTaxRefundLogisticsClosure([
     settledRow({

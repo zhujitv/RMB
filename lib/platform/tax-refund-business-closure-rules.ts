@@ -180,7 +180,12 @@ export function analyzeTaxRefundLogisticsClosure(rows: TaxRefundLogisticsClosure
       if (paymentStatus === "已付款") {
         const costPaymentStatus = normalizeCostPaymentStatus(cost.paymentStatus);
         const paymentDateMatches = !row.bill?.paymentDate || dateKey(cost.paymentDate) === dateKey(row.bill.paymentDate);
-        if (costPaymentStatus !== "已支付" || cost.paid !== true || !paymentDateMatches) {
+        // Historical logistics payments already used paymentStatus + paymentDate as
+        // the authoritative ledger fields. Some older rows did not also populate
+        // the redundant `paid` boolean, so do not reject an otherwise consistent
+        // fully-paid record solely because that compatibility flag is false.
+        const costPaymentRecorded = costPaymentStatus === "已支付" && Boolean(dateKey(cost.paymentDate));
+        if (!costPaymentRecorded || !paymentDateMatches) {
           reasons.push(`成本付款状态未同步（当前：${costPaymentStatus}）`);
         }
       }
