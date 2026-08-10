@@ -1,6 +1,6 @@
 import type { Prisma, ShipsgoTracking } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
-import { freightowerTokenApiGet } from "./freightower-token-api";
+import { freightowerApiGet } from "./freightower-api";
 import {
   extractFreightowerCustomsTimeline,
   freightowerCustomsResponseState,
@@ -103,12 +103,12 @@ export async function syncFreightowerCustomsTracking(
   if (shouldDeferPermissionRetry(tracking, options.force === true)) return tracking;
   const billNo = customsBillNumber(tracking);
   if (!settings.customsTrackingEnabled) return tracking;
-  if (!settings.freightowerClientId || !settings.freightowerApiSecret) {
+  if (!settings.freightowerApiKey) {
     return prisma.shipsgoTracking.update({
       where: { id: tracking.id },
       data: {
         customsTrackingStatus: "CREDENTIAL_REQUIRED",
-        customsTrackingMessage: "请在物流设置中填写飞驼 Client ID 和 API Secret。",
+        customsTrackingMessage: "请在物流设置中填写飞驼 API Key。",
         customsLastCheckedAt: new Date(),
       },
     });
@@ -129,7 +129,7 @@ export async function syncFreightowerCustomsTracking(
   }
   const requestStartedAt = new Date();
   try {
-    const response = await freightowerTokenApiGet<unknown>(settings, CUSTOMS_QUERY_PATH, {
+    const response = await freightowerApiGet<unknown>(settings, CUSTOMS_QUERY_PATH, {
       blno: billNo,
       ieid: direction,
     });

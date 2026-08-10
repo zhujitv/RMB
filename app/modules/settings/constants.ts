@@ -158,7 +158,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   freightowerDefaultLang: "zh",
   freightowerHiddenReference: false,
   oceanTrackingEnabled: true,
-  customsTrackingEnabled: false,
+  customsTrackingEnabled: true,
   airTrackingEnabled: false,
   manualSyncEnabled: true,
   autoSyncEnabled: true,
@@ -209,7 +209,7 @@ export const SHIPSGO_FEATURE_OPTIONS = [
   {
     key: "customsTrackingEnabled",
     label: "中国海关提单号跟踪",
-    description: "通过飞驼官方 Token 接口查询中国海关节点；默认关闭，完成凭据配置后再启用。",
+    description: "使用飞驼 API Key 直连查询中国海关节点；无数据时保持订阅并等待后续更新。",
   },
   {
     key: "manualSyncEnabled",

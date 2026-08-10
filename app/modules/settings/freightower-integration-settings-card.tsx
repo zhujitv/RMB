@@ -77,7 +77,7 @@ export function FreightowerIntegrationSettingsCard({
   return (
     <SettingsPage
       title="物流接口"
-      description="综合物流继续使用 API Key 直连；中国海关提单号跟踪按飞驼官方文档使用 Client ID 和 Secret 获取 Token。"
+      description="综合物流、中国港区和中国海关提单号跟踪统一使用 API Key 直连。"
       status={<SettingsStatusTag tone={statusTone}>{statusLabel}</SettingsStatusTag>}
       onSubmit={onSubmit}
       actions={(

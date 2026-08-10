@@ -45,7 +45,7 @@ model ShipsgoTracking {
   portLastCheckedAt      DateTime? @map("port_last_checked_at")
   portLastSyncedAt       DateTime? @map("port_last_synced_at")
   portRawResponse        Json?     @map("port_raw_response")
-  customsTrackingStatus  String    @default("DISABLED") @map("customs_tracking_status")
+  customsTrackingStatus  String    @default("NOT_QUERIED") @map("customs_tracking_status")
   customsTrackingMessage String?   @map("customs_tracking_message")
   customsBillNumber      String?   @map("customs_bill_number")
   customsDirection       String?   @map("customs_direction")

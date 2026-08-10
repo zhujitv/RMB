@@ -91,7 +91,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
   freightowerDefaultLang: "zh",
   freightowerHiddenReference: false,
   oceanTrackingEnabled: true,
-  customsTrackingEnabled: false,
+  customsTrackingEnabled: true,
   airTrackingEnabled: false,
   manualSyncEnabled: true,
   autoSyncEnabled: true,

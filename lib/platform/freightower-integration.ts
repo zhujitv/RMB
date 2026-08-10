@@ -11,7 +11,6 @@ import { writeAudit } from "./shared-audit";
 import { decryptSystemSettingSecrets, encryptSystemSettingSecrets } from "./system-setting-secrets";
 import { readSystemSettingWithEncryptedSecrets } from "./system-setting-secret-migration";
 import { testFreightowerConnection } from "./freightower-api";
-import { testFreightowerTokenConnection } from "./freightower-token-api";
 import {
   cleanFreightowerSecret,
   FREIGHTOWER_SECRET_FIELDS,
@@ -98,15 +97,7 @@ export async function testShipsgoIntegrationConnection(actor: SettingsActor, inp
     freightowerClientId: cleanFreightowerSecret(data.freightowerClientId, 128) || current.freightowerClientId,
     freightowerApiSecret: cleanFreightowerSecret(data.freightowerApiSecret) || current.freightowerApiSecret,
   });
-  if (!candidate.customsTrackingEnabled) return testFreightowerConnection(candidate);
-  const [directResult, tokenResult] = await Promise.all([
-    testFreightowerConnection(candidate),
-    testFreightowerTokenConnection(candidate),
-  ]);
-  return {
-    success: true,
-    message: `${directResult.message} ${tokenResult.message}`,
-  };
+  return testFreightowerConnection(candidate);
 }
 
 export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, actor: SettingsActor, input: unknown = {}) {
@@ -125,13 +116,6 @@ export async function saveShipsgoIntegrationSettings(request: AuditRequestLike, 
   });
   if (value.enabled && !value.freightowerApiKey) {
     throw codedError("启用飞驼可视前请填写 API Key", 400, "FREIGHTOWER_CREDENTIAL_REQUIRED");
-  }
-  if (value.customsTrackingEnabled && (!value.freightowerClientId || !value.freightowerApiSecret)) {
-    throw codedError(
-      "启用中国海关跟踪前请填写 Client ID 和 API Secret",
-      400,
-      "FREIGHTOWER_CUSTOMS_CREDENTIAL_REQUIRED",
-    );
   }
   if (value.liveMapEnabled && (!value.freightowerClientId || !value.freightowerIframeKey)) {
     throw codedError("启用可视化地图前请先填写 Client ID 和 iframe Key", 400, "FREIGHTOWER_IFRAME_KEY_REQUIRED");
