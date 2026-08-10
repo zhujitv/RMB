@@ -15,9 +15,9 @@ function secretPlaceholder(configured: boolean, emptyText: string) {
 export function FreightowerSettingsCard({ form, onChange }: FreightowerSettingsCardProps) {
   return (
     <SettingsCard title="飞驼可视接口" icon="航">
-      <SettingsSection title="1. API Key 直连认证">
+      <SettingsSection title="1. API Key 直连认证（综合物流与中国海关）">
         <div className={styles.settingsFieldGrid}>
-          <SettingsField label="API Key" tooltip="直接用于 Authorization: Bearer API_KEY，不再获取 Token。">
+          <SettingsField label="API Key" tooltip="综合物流、中国港区和中国海关查询统一使用 Authorization: Bearer API_KEY，不再获取 Token。">
             <SecretField
               value={form.freightowerApiKey}
               onChange={(value) => onChange("freightowerApiKey", value)}
@@ -27,27 +27,15 @@ export function FreightowerSettingsCard({ form, onChange }: FreightowerSettingsC
         </div>
       </SettingsSection>
 
-      <SettingsSection title="2. 中国海关 Token 认证（可选）">
+      <SettingsSection title="2. 网页地图（可选）">
         <div className={styles.settingsFieldGrid}>
-          <SettingsField label="Client ID" tooltip="用于按飞驼官方文档获取中国海关接口 Token，同时可用于生成网页地图地址。">
+          <SettingsField label="Client ID" tooltip="仅用于生成飞驼网页地图地址；中国海关查询不需要填写。">
             <SecretField
               value={form.freightowerClientId}
               onChange={(value) => onChange("freightowerClientId", value)}
               placeholder={secretPlaceholder(form.freightowerClientIdConfigured, "请输入飞驼 Client ID")}
             />
           </SettingsField>
-          <SettingsField label="API Secret" tooltip="与 Client ID 配套，仅在服务端换取短期 Token；不是 API Key，也不会返回给浏览器。">
-            <SecretField
-              value={form.freightowerApiSecret}
-              onChange={(value) => onChange("freightowerApiSecret", value)}
-              placeholder={secretPlaceholder(form.freightowerApiSecretConfigured, "请输入飞驼 API Secret")}
-            />
-          </SettingsField>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="3. 网页地图（可选）">
-        <div className={styles.settingsFieldGrid}>
           <SettingsField label="Iframe Key" tooltip="仅用于海运可视化 iframe，不是查询接口的 API Key。">
             <SecretField
               value={form.freightowerIframeKey}
@@ -58,7 +46,7 @@ export function FreightowerSettingsCard({ form, onChange }: FreightowerSettingsC
         </div>
       </SettingsSection>
 
-      <SettingsSection title="4. 跟踪更新与预警推送（Webhook）">
+      <SettingsSection title="3. 跟踪更新与预警推送（Webhook）">
         <div className={styles.settingsFieldGrid}>
           <SettingsSwitch
             label="启用跟踪更新与甩柜预警"

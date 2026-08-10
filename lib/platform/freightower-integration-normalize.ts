@@ -194,7 +194,7 @@ export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
     freightowerDefaultLang: cleanFreightowerLang(input.freightowerDefaultLang),
     freightowerHiddenReference: input.freightowerHiddenReference === true,
     oceanTrackingEnabled: input.oceanTrackingEnabled !== false,
-    customsTrackingEnabled: input.customsTrackingEnabled === true,
+    customsTrackingEnabled: input.customsTrackingEnabled !== false,
     airTrackingEnabled: false,
     manualSyncEnabled: input.manualSyncEnabled !== false,
     autoSyncEnabled: true,

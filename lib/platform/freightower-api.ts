@@ -205,12 +205,15 @@ export async function freightowerApiGet<T>(
   const { response, data } = await executeFreightowerApiRequest(settings, requestPath, undefined, "GET");
   const statusCode = responseStatusCode(data);
   if (!response.ok || !isFreightowerAcceptedStatus(statusCode)) {
-    const isPortPermissionDenied = path.startsWith("/terminal/")
+    const isTerminalPermissionDenied = path.startsWith("/terminal/")
       && (statusCode === "40300" || response.status === 403);
+    const permissionCode = path.startsWith("/terminal/cn/customs/")
+      ? "FREIGHTOWER_CUSTOMS_PERMISSION_REQUIRED"
+      : "FREIGHTOWER_PORT_PERMISSION_REQUIRED";
     throw codedError(
       freightowerApiErrorMessage(path, response.status, data),
       freightowerClientErrorStatus(response.status, data),
-      isPortPermissionDenied ? "FREIGHTOWER_PORT_PERMISSION_REQUIRED" : "FREIGHTOWER_API_ERROR",
+      isTerminalPermissionDenied ? permissionCode : "FREIGHTOWER_API_ERROR",
     );
   }
   return data as T;

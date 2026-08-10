@@ -39,7 +39,7 @@ function customsTrackingLabel(tracking: ShipsgoTrackingRow) {
   if (status === "SYNCED") return `已同步${tracking.customsEventCount ? `（${tracking.customsEventCount} 个节点）` : ""}`;
   if (status === "SUBSCRIBED") return "已查询，等待海关节点";
   if (status === "PERMISSION_REQUIRED") return "待开通权限";
-  if (status === "CREDENTIAL_REQUIRED") return "待配置 Client ID 和 API Secret";
+  if (status === "CREDENTIAL_REQUIRED") return "待配置 API Key";
   if (status === "DISABLED") return "未启用";
   if (status === "WAITING_CONTEXT") return "等待提单号或进出口方向";
   if (status === "SYNC_FAILED") return "同步失败";

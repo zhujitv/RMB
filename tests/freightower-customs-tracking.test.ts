@@ -29,15 +29,11 @@ const {
   freightowerCustomsEventHasActiveAlert,
 } = await jiti.import<typeof import("../lib/platform/freightower-supplemental-alerts.ts")>("../lib/platform/freightower-supplemental-alerts.ts");
 const {
-  freightowerAccessTokenFromPayload,
-} = await jiti.import<typeof import("../lib/platform/freightower-token.ts")>("../lib/platform/freightower-token.ts");
-const {
-  freightowerTokenApiGet,
-} = await jiti.import<typeof import("../lib/platform/freightower-token-api.ts")>("../lib/platform/freightower-token-api.ts");
+  freightowerApiGet,
+} = await jiti.import<typeof import("../lib/platform/freightower-api.ts")>("../lib/platform/freightower-api.ts");
 
 const customsSource = readFileSync("lib/platform/freightower-customs-tracking.ts", "utf8");
 const apiSource = readFileSync("lib/platform/freightower-api.ts", "utf8");
-const tokenApiSource = readFileSync("lib/platform/freightower-token-api.ts", "utf8");
 const createSource = readFileSync("lib/platform/shipsgo-tracking-create.ts", "utf8");
 const syncSource = readFileSync("lib/platform/shipsgo-tracking-sync-operation.ts", "utf8");
 const recoverySource = readFileSync("lib/platform/shipsgo-tracking-recovery.ts", "utf8");
@@ -51,6 +47,7 @@ const miniDetail = readFileSync("miniprogram/pages/tracking-detail/index.wxml", 
 const schema = readPrismaSchemaSource();
 const migration = readFileSync("prisma/migrations/20260804100000_freightower_customs_tracking/migration.sql", "utf8");
 const contextMigration = readFileSync("prisma/migrations/20260804110000_freightower_supplemental_context/migration.sql", "utf8");
+const apiKeyMigration = readFileSync("prisma/migrations/20260810170000_customs_api_key_direct/migration.sql", "utf8");
 
 const officialPayload = {
   statusCode: 20000,
@@ -99,30 +96,19 @@ test("China customs bill-of-lading events normalize official response nodes", ()
   assert.equal(warning?.active, false);
 });
 
-test("China customs tracking uses the official Token GET with bill number and direction", () => {
+test("China customs tracking uses direct API Key GET with bill number and direction", () => {
   assert.match(customsSource, /"\/terminal\/cn\/customs\/getBlnoDeclare"/);
-  assert.match(customsSource, /freightowerTokenApiGet<unknown>/);
+  assert.match(customsSource, /freightowerApiGet<unknown>/);
   assert.match(customsSource, /blno: billNo/);
   assert.match(customsSource, /ieid: direction/);
   assert.match(customsSource, /!settings\.customsTrackingEnabled/);
-  assert.match(tokenApiSource, /"\/auth\/api\/token"/);
-  assert.match(tokenApiSource, /clientId: settings\.freightowerClientId, secret: settings\.freightowerApiSecret/);
-  assert.match(tokenApiSource, /statusCode === "40100" \|\| response\.status === 401/);
-  assert.match(tokenApiSource, /statusCode === "20000" \|\| statusCode === "20001"/);
-  assert.match(tokenApiSource, /FREIGHTOWER_CUSTOMS_PERMISSION_REQUIRED/);
+  assert.match(customsSource, /!settings\.freightowerApiKey/);
+  assert.doesNotMatch(customsSource, /freightowerTokenApiGet|freightowerClientId|freightowerApiSecret/);
+  assert.match(apiSource, /path\.startsWith\("\/terminal\/cn\/customs\/"\)/);
+  assert.match(apiSource, /FREIGHTOWER_CUSTOMS_PERMISSION_REQUIRED/);
   assert.match(apiSource, /FREIGHTOWER_REQUEST_INTERVAL_MS = 175/);
   assert.match(apiSource, /response\.status === 429 \|\| responseStatusCode\(data\) === "42900"/);
   assert.match(apiSource, /retry-after/);
-  assert.match(readFileSync("lib/platform/freightower-token.ts", "utf8"), /data\.expires_in \?\? root\.expires_in/);
-  assert.deepEqual(freightowerAccessTokenFromPayload({
-    statusCode: 20000,
-    data: { access_token: "nested-token", expires_in: "4386" },
-  }), { accessToken: "nested-token", expiresIn: 4386 });
-  assert.deepEqual(freightowerAccessTokenFromPayload({
-    statusCode: 20000,
-    access_token: "top-level-token",
-    expires_in: 7200,
-  }), { accessToken: "top-level-token", expiresIn: 7200 });
   assert.equal(normalizeFreightowerCustomsBillNumber(" medu/abc-123 "), "MEDU/ABC-123");
   assert.deepEqual(resolveFreightowerCustomsContext({
     origin: "CNSHA",
@@ -139,37 +125,15 @@ test("China customs tracking uses the official Token GET with bill number and di
   }), { direction: "E", hasChinaPort: false });
 });
 
-test("customs Token client refreshes once after HTTP 401 and retries one rate limit response", async () => {
+test("customs direct client sends the API Key and accepts the waiting-for-data response", async () => {
   const originalFetch = globalThis.fetch;
-  const calls: Array<{ url: string; authorization: string; body: string }> = [];
-  let step = 0;
+  const calls: Array<{ url: string; authorization: string }> = [];
   globalThis.fetch = (async (input, init) => {
-    const url = String(input);
     calls.push({
-      url,
+      url: String(input),
       authorization: new Headers(init?.headers).get("authorization") || "",
-      body: String(init?.body || ""),
     });
-    step += 1;
-    if (step === 1 || step === 3) {
-      return new Response(JSON.stringify({
-        statusCode: 20000,
-        data: { access_token: step === 1 ? "token-one" : "token-two", expires_in: 3600 },
-      }), { status: 200, headers: { "content-type": "application/json" } });
-    }
-    if (step === 2) {
-      return new Response(JSON.stringify({ message: "token invalid" }), {
-        status: 401,
-        headers: { "content-type": "application/json" },
-      });
-    }
-    if (step === 4) {
-      return new Response(JSON.stringify({ statusCode: 42900, message: "rate limited" }), {
-        status: 429,
-        headers: { "content-type": "application/json", "retry-after": "0" },
-      });
-    }
-    return new Response(JSON.stringify({ statusCode: 20000, data: { success: true, status: 0, data: {} } }), {
+    return new Response(JSON.stringify({ statusCode: 20001, message: "无数据", data: {} }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -177,58 +141,20 @@ test("customs Token client refreshes once after HTTP 401 and retries one rate li
   try {
     const settings = {
       freightowerApiBaseUrl: "https://openapi.freightower.com",
-      freightowerApiKey: "direct-api-key-not-used-here",
-      freightowerClientId: "client-id",
-      freightowerApiSecret: "secret-value",
-    } as Parameters<typeof freightowerTokenApiGet>[0];
-    const result = await freightowerTokenApiGet<Record<string, unknown>>(
+      freightowerApiKey: "direct-api-key",
+    } as Parameters<typeof freightowerApiGet>[0];
+    const result = await freightowerApiGet<Record<string, unknown>>(
       settings,
       "/terminal/cn/customs/getBlnoDeclare",
       { blno: "TEST/BL-1", ieid: "E" },
     );
-    assert.equal(result.statusCode, 20000);
+    assert.equal(result.statusCode, 20001);
   } finally {
     globalThis.fetch = originalFetch;
   }
-  assert.equal(calls.length, 5);
-  assert.deepEqual(JSON.parse(calls[0]?.body || "{}"), { clientId: "client-id", secret: "secret-value" });
-  assert.equal(calls[0]?.authorization, "");
-  assert.match(calls[1]?.url || "", /blno=TEST%2FBL-1&ieid=E/);
-  assert.equal(calls[1]?.authorization, "Bearer token-one");
-  assert.equal(calls[3]?.authorization, "Bearer token-two");
-  assert.equal(calls[4]?.authorization, "Bearer token-two");
-});
-
-test("customs Token client rejects HTTP 200 responses without an explicit business success code", async () => {
-  const originalFetch = globalThis.fetch;
-  let step = 0;
-  globalThis.fetch = (async () => {
-    step += 1;
-    if (step === 1) {
-      return new Response(JSON.stringify({
-        statusCode: 20000,
-        data: { access_token: "strict-token", expires_in: 3600 },
-      }), { status: 200, headers: { "content-type": "application/json" } });
-    }
-    return new Response("<html>gateway response</html>", {
-      status: 200,
-      headers: { "content-type": "text/html" },
-    });
-  }) as typeof fetch;
-  try {
-    await assert.rejects(() => freightowerTokenApiGet(
-      {
-        freightowerApiBaseUrl: "https://openapi.freightower.com",
-        freightowerClientId: "strict-client",
-        freightowerApiSecret: "strict-secret",
-      } as Parameters<typeof freightowerTokenApiGet>[0],
-      "/terminal/cn/customs/getBlnoDeclare",
-      { blno: "STRICT-BL", ieid: "E" },
-    ), /飞驼可视请求失败/);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-  assert.equal(step, 2);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]?.url || "", /blno=TEST%2FBL-1&ieid=E/);
+  assert.equal(calls[0]?.authorization, "Bearer direct-api-key");
 });
 
 test("China customs response failures are rejected and empty refreshes retain saved events", () => {
@@ -494,6 +420,12 @@ test("China customs state joins manual, scheduled, web, and mini timelines", () 
   assert.match(migration, /customs_tracking_status/);
   assert.match(contextMigration, /customs_bill_number/);
   assert.match(migration, /DEFAULT 'DISABLED'/);
+  assert.match(schema, /customsTrackingStatus\s+String\s+@default\("NOT_QUERIED"\)/);
+  assert.match(apiKeyMigration, /customsTrackingEnabled/);
+  assert.match(apiKeyMigration, /ALTER COLUMN "customs_tracking_status" SET DEFAULT 'NOT_QUERIED'/);
+  assert.match(apiKeyMigration, /"customs_tracking_status" IN \('DISABLED', 'CREDENTIAL_REQUIRED'\)/);
+  assert.match(apiKeyMigration, /"last_sync_time" = NULL/);
+  assert.doesNotMatch(apiKeyMigration, /"customs_notification_baseline_at"\s*=/);
   assert.match(migration, /customs_notification_baseline_at/);
   assert.match(migration, /SET "customs_notification_baseline_at" = CURRENT_TIMESTAMP/);
   assert.match(syncSource, /syncFreightowerCustomsTracking/);

@@ -33,8 +33,7 @@ const integration = [
 const trackingService = readShipsgoTrackingSource();
 const freightowerService = readFreightowerTrackingSource();
 const freightowerRequest = readFileSync("lib/platform/freightower-api.ts", "utf8");
-const freightowerTokenRequest = readFileSync("lib/platform/freightower-token-api.ts", "utf8");
-const freightowerToken = readFileSync("lib/platform/freightower-token.ts", "utf8");
+const freightowerCustoms = readFileSync("lib/platform/freightower-customs-tracking.ts", "utf8");
 const trackingTimeline = readFileSync("lib/platform/shipsgo-tracking-timeline.ts", "utf8");
 const trackingSerializer = readFileSync("lib/platform/shipsgo-tracking-serializer.ts", "utf8");
 const createService = readFileSync("lib/platform/shipsgo-tracking-create.ts", "utf8");
@@ -90,6 +89,9 @@ test("tracking settings force Freightower as the only provider and keep secrets 
   assert.match(integration, /const directApiKey = cleanFreightowerSecret\(input\.freightowerApiKey/);
   assert.match(integration, /return legacyValue\.length >= 20 \? legacyValue : ""/);
   assert.match(integration, /input\.freightowerIframeKey \|\| input\.freightowerMapKey/);
+  assert.equal(normalizeShipsgoIntegrationSettings({}).customsTrackingEnabled, true);
+  assert.equal(normalizeShipsgoIntegrationSettings({ customsTrackingEnabled: false }).customsTrackingEnabled, false);
+  assert.doesNotMatch(integration, /customsTrackingEnabled && \(!value\.freightowerClientId \|\| !value\.freightowerApiSecret\)/);
 });
 
 test("Freightower settings API supports authenticated read and admin write", () => {
@@ -123,15 +125,13 @@ test("Freightower requests enforce bounded, non-cached outbound access", () => {
   assert.doesNotMatch(freightowerRequest, /FREIGHTOWER_TOKEN_FAILED/);
 });
 
-test("Freightower keeps comprehensive API-key auth separate from customs Token auth", () => {
+test("Freightower uses one direct API-key authorization path for comprehensive and customs tracking", () => {
   assert.match(freightowerRequest, /const requestPath = path/);
   assert.match(freightowerRequest, /options\.bearer \|\| \(options\.anonymous \? "" : settings\.freightowerApiKey\)/);
   assert.match(freightowerRequest, /Authorization: `Bearer \$\{bearer\}`/);
   assert.match(freightowerRequest, /\["20000", "20001", "40000", "40020"\]\.includes\(statusCode\)/);
-  assert.match(freightowerTokenRequest, /"\/auth\/api\/token"/);
-  assert.match(freightowerTokenRequest, /freightowerTokenApiGet/);
-  assert.match(freightowerToken, /access_token/);
-  assert.doesNotMatch(freightowerTokenRequest, /refresh_token/);
+  assert.match(freightowerCustoms, /freightowerApiGet<unknown>/);
+  assert.doesNotMatch(freightowerCustoms, /freightowerTokenApiGet|freightowerClientId|freightowerApiSecret/);
   assert.match(freightowerRequest, /FREIGHTOWER_REQUEST_INTERVAL_MS = 175/);
   assert.match(freightowerRequest, /numericTimestamp >= 1_000_000_000_000/);
   assert.doesNotMatch(freightowerRequest, /FREIGHTOWER_EXCHANGE_PREFIX|X-Auth-|aes-256-cbc|createDecipheriv/);
@@ -266,6 +266,7 @@ test("settings UI focuses on the basic Freightower web workflow", () => {
   assert.match(settingsModule, /label="API Key"/);
   assert.match(settingsModule, /Client ID/);
   assert.match(settingsModule, /Iframe Key/);
+  assert.doesNotMatch(settingsModule, /label="API Secret"|中国海关 Token 认证/);
   assert.match(settingsModule, /跟踪更新与甩柜预警/);
   assert.match(settingsModule, /Webhook Access Secret/);
   assert.match(settingsModule, /freightowerWebhookCallbackUrl/);
