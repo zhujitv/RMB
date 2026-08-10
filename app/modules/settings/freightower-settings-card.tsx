@@ -66,8 +66,14 @@ export function FreightowerSettingsCard({ form, onChange }: FreightowerSettingsC
             checked={form.webhookEnabled}
             onChange={(value) => onChange("webhookEnabled", value)}
           />
-          <SettingsField label="推送回调地址" tooltip="将此完整 HTTPS 地址提交给飞驼配置，不能填写站内相对路径。">
-            <input value="https://www.nextwood.net/api/freightower/webhook" readOnly />
+          <SettingsField label="推送回调地址" tooltip="保存当前完整 HTTPS 地址，再将同一地址提交给飞驼；域名必须已经指向本系统。">
+            <input
+              type="url"
+              value={form.freightowerWebhookCallbackUrl}
+              onChange={(event) => onChange("freightowerWebhookCallbackUrl", event.target.value)}
+              placeholder="https://www.ruscny.com/api/freightower/webhook"
+              required
+            />
           </SettingsField>
           <SettingsField label="Webhook Access Secret（可选）" tooltip="如飞驼提供了签名密钥，请填写以校验 HmacSHA1 并合并即时增量预警；未填写时，推送只会触发 API Key 安全回查。">
             <SecretField

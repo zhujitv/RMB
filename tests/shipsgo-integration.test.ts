@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createJiti } from "jiti";
 import {
   formatShipsgoCarrierForLocale,
   formatShipsgoPortForLocale,
@@ -19,6 +20,11 @@ import {
   readTrackingMapSource,
   readWorkspaceStylesSource,
 } from "./source-helpers.ts";
+
+const jiti = createJiti(import.meta.url);
+const { normalizeShipsgoIntegrationSettings } = await jiti.import<
+  typeof import("../lib/platform/freightower-integration-normalize.ts")
+>("../lib/platform/freightower-integration-normalize.ts");
 
 const integration = [
   readFileSync("lib/platform/freightower-integration.ts", "utf8"),
@@ -262,7 +268,10 @@ test("settings UI focuses on the basic Freightower web workflow", () => {
   assert.match(settingsModule, /Iframe Key/);
   assert.match(settingsModule, /跟踪更新与甩柜预警/);
   assert.match(settingsModule, /Webhook Access Secret/);
-  assert.match(settingsModule, /https:\/\/www\.nextwood\.net\/api\/freightower\/webhook/);
+  assert.match(settingsModule, /freightowerWebhookCallbackUrl/);
+  assert.match(settingsModule, /onChange\("freightowerWebhookCallbackUrl"/);
+  assert.match(settingsModule, /https:\/\/www\.ruscny\.com\/api\/freightower\/webhook/);
+  assert.doesNotMatch(settingsModule, /value="https:\/\/www\.ruscny\.com\/api\/freightower\/webhook" readOnly/);
   assert.match(settingsModule, /未填写时，推送只会触发 API Key 安全回查/);
   assert.doesNotMatch(integration, /FREIGHTOWER_WEBHOOK_SECRET_REQUIRED/);
   assert.match(settingsModule, /测试 API 连接/);
@@ -270,6 +279,32 @@ test("settings UI focuses on the basic Freightower web workflow", () => {
   assert.doesNotMatch(settingsModule, /label="Secret"|\/auth\/api\/token/);
   assert.doesNotMatch(settingsModule, /客户自动推送|每日自动同步|空运货物跟踪/);
   assert.doesNotMatch(settingsModule, /title="ShipsGo 接口"|启用 ShipsGo|当前使用接口|TRACKING_PROVIDER_OPTIONS/);
+});
+
+test("Freightower webhook callback URL is editable and restricted to the public HTTPS route", () => {
+  const defaults = normalizeShipsgoIntegrationSettings({});
+  assert.equal(defaults.freightowerWebhookCallbackUrl, "https://www.ruscny.com/api/freightower/webhook");
+
+  const custom = normalizeShipsgoIntegrationSettings({
+    freightowerWebhookCallbackUrl: "https://TRACKING.EXAMPLE.COM./api/freightower/webhook/",
+  });
+  assert.equal(custom.freightowerWebhookCallbackUrl, "https://tracking.example.com/api/freightower/webhook");
+
+  for (const invalidUrl of [
+    "",
+    "http://www.ruscny.com/api/freightower/webhook",
+    "/api/freightower/webhook",
+    "https://localhost/api/freightower/webhook",
+    "https://127.0.0.1/api/freightower/webhook",
+    "https://user:password@www.ruscny.com/api/freightower/webhook",
+    "https://www.ruscny.com:8443/api/freightower/webhook",
+    "https://www.ruscny.com/another/path",
+    "https://www.ruscny.com/api/freightower/webhook?secret=value",
+    "https://www.ruscny.com/api/freightower/webhook#fragment",
+    `https://www.ruscny.com/api/freightower/webhook/${"x".repeat(2048)}`,
+  ]) {
+    assert.throws(() => normalizeShipsgoIntegrationSettings({ freightowerWebhookCallbackUrl: invalidUrl }));
+  }
 });
 
 test("Freightower connection test validates a stored or unsaved API key without exposing it", () => {

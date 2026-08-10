@@ -49,6 +49,7 @@ export type ShipsgoIntegrationForm = {
   freightowerApiSecretConfigured: boolean;
   freightowerIframeKey: string;
   freightowerIframeKeyConfigured: boolean;
+  freightowerWebhookCallbackUrl: string;
   freightowerWebhookAccessSecret: string;
   freightowerWebhookAccessSecretConfigured: boolean;
   freightowerDefaultCarrierCode: string;
