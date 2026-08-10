@@ -180,6 +180,34 @@ test("tax refund closure still blocks a paid status without a payment date", () 
   assert.deepEqual(summary.blockers[0].reasons, ["成本付款状态未同步（当前：已支付）"]);
 });
 
+test("legacy logistics payment reconciliation only updates exact paid-bill matches", () => {
+  const migration = readFileSync(
+    new URL(
+      "../prisma/migrations/20260810150000_reconcile_legacy_logistics_cost_payments/migration.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /UPDATE "order_costs" AS cost/);
+  assert.match(migration, /"paid" = TRUE/);
+  assert.match(migration, /"paid_at" = bill\."payment_date"/);
+  assert.match(migration, /bill\."audit_status" = '审核通过'/);
+  assert.match(migration, /bill\."payment_status" IN \('已付款', '已支付'\)/);
+  assert.match(migration, /cost\."source_id" = expense\."id"/);
+  assert.match(migration, /cost\."order_id" = expense\."order_id"/);
+  assert.match(migration, /cost\."supplier_id" IS NOT DISTINCT FROM expense\."supplier_id"/);
+  assert.match(migration, /cost\."cost_type" = expense\."cost_type"/);
+  assert.match(migration, /cost\."currency" = expense\."currency"/);
+  assert.match(migration, /cost\."amount" = expense\."amount"/);
+  assert.match(migration, /cost\."amount_cny" = expense\."amount_cny"/);
+  assert.match(migration, /cost\."payment_status" IN \('已支付', '已付款'\)/);
+  assert.match(migration, /cost\."payment_date" = bill\."payment_date"/);
+  const setClause = migration.slice(migration.indexOf("SET"), migration.indexOf("FROM"));
+  assert.doesNotMatch(setClause, /"payment_status"\s*=/);
+  assert.doesNotMatch(setClause, /"payment_date"\s*=/);
+});
+
 test("tax refund closure blocks a logistics cost with an invalid source link", () => {
   const summary = analyzeTaxRefundLogisticsClosure([
     settledRow({
