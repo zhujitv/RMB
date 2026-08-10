@@ -91,6 +91,7 @@ export function shipsgoIntegrationFormFromSettings(settings: ShipsgoIntegrationS
     freightowerApiSecretConfigured: settings?.freightowerApiSecretConfigured === true,
     freightowerIframeKey: "",
     freightowerIframeKeyConfigured: settings?.freightowerIframeKeyConfigured === true,
+    freightowerWebhookCallbackUrl: stringSetting(settings, "freightowerWebhookCallbackUrl", DEFAULT_SHIPSGO_INTEGRATION_FORM.freightowerWebhookCallbackUrl),
     freightowerWebhookAccessSecret: "",
     freightowerWebhookAccessSecretConfigured: settings?.freightowerWebhookAccessSecretConfigured === true,
     freightowerDefaultCarrierCode: stringSetting(settings, "freightowerDefaultCarrierCode", DEFAULT_SHIPSGO_INTEGRATION_FORM.freightowerDefaultCarrierCode),

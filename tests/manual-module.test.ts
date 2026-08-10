@@ -101,7 +101,7 @@ test("manual explains company profile and system branding settings", () => {
   assert.match(manualModule, /产品供应商资料回传权限/);
   assert.match(manualModule, /物流费用开票通知模板、收件邮箱读取顺序、额外抄送邮箱/);
   assert.match(manualModule, /飞驼可视 API Key、海运跟踪、手动同步、地图入口和甩柜实时预警，并可直接测试 API Key 连接/);
-  assert.match(manualModule, /https:\/\/www\.nextwood\.net\/api\/freightower\/webhook/);
+  assert.match(manualModule, /在后台保存完整 HTTPS 回调地址，并将后台显示的同一地址提交给飞驼配置/);
   assert.match(manualModule, /飞驼可视关闭后，物流信息和运输监控不显示相关创建、同步和查看入口/);
 });
 

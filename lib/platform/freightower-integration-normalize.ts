@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { DEFAULT_SHIPSGO_INTEGRATION_SETTINGS } from "./shared-constants";
 import { codedError, isPlainRecord, nonEmpty } from "./shared-base-utils";
 
@@ -8,6 +9,7 @@ type ShipsgoIntegrationInput = {
   freightowerClientId?: unknown;
   freightowerApiSecret?: unknown;
   freightowerIframeKey?: unknown;
+  freightowerWebhookCallbackUrl?: unknown;
   freightowerWebhookAccessSecret?: unknown;
   freightowerSecret?: unknown;
   freightowerAppId?: unknown;
@@ -34,6 +36,7 @@ type ShipsgoIntegrationInput = {
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const FREIGHTOWER_API_HOSTS = new Set(["openapi.freightower.com"]);
+const FREIGHTOWER_WEBHOOK_PATH = "/api/freightower/webhook";
 
 export const FREIGHTOWER_SECRET_FIELDS = [
   "freightowerAppId",
@@ -102,6 +105,48 @@ function cleanProviderApiUrl(value: unknown, fallback: string) {
   }
 }
 
+function cleanWebhookCallbackUrl(value: unknown, fallback: string) {
+  const text = nonEmpty(value === undefined || value === null ? fallback : value);
+  if (!text) {
+    throw codedError("推送回调地址不能为空", 400, "VALIDATION_INVALID_URL");
+  }
+  if (text.length > 2048) {
+    throw codedError("推送回调地址长度不能超过 2048 个字符", 400, "VALIDATION_INVALID_URL");
+  }
+  try {
+    const url = new URL(text);
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+    if (url.protocol !== "https:") {
+      throw codedError("推送回调地址必须使用完整 HTTPS 地址", 400, "VALIDATION_INVALID_URL");
+    }
+    if (
+      url.username
+      || url.password
+      || url.port
+      || isIP(hostname) !== 0
+      || hostname === "localhost"
+      || hostname.endsWith(".localhost")
+      || hostname.endsWith(".local")
+      || !hostname.includes(".")
+    ) {
+      throw codedError("推送回调地址必须使用有效的完整域名", 400, "VALIDATION_INVALID_URL");
+    }
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    if (pathname !== FREIGHTOWER_WEBHOOK_PATH) {
+      throw codedError(`推送回调地址路径必须是 ${FREIGHTOWER_WEBHOOK_PATH}`, 400, "VALIDATION_INVALID_URL");
+    }
+    if (url.search || url.hash) {
+      throw codedError("推送回调地址不能包含查询参数或锚点", 400, "VALIDATION_INVALID_URL");
+    }
+    url.hostname = hostname;
+    url.pathname = FREIGHTOWER_WEBHOOK_PATH;
+    return url.toString();
+  } catch (error) {
+    if ((error as { status?: number } | null)?.status) throw error;
+    throw codedError("推送回调地址格式错误", 400, "VALIDATION_INVALID_URL");
+  }
+}
+
 function cleanProviderCode(value: unknown, fallback = "", limit = 32) {
   return cleanFreightowerSecret(value || fallback, limit).toUpperCase();
 }
@@ -138,6 +183,10 @@ export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
     freightowerClientId: cleanFreightowerSecret(input.freightowerClientId, 128),
     freightowerApiSecret: migratedFreightowerApiSecret(input),
     freightowerIframeKey: cleanFreightowerSecret(input.freightowerIframeKey || input.freightowerMapKey),
+    freightowerWebhookCallbackUrl: cleanWebhookCallbackUrl(
+      input.freightowerWebhookCallbackUrl,
+      DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerWebhookCallbackUrl,
+    ),
     freightowerWebhookAccessSecret: cleanFreightowerSecret(input.freightowerWebhookAccessSecret || input.freightowerWebhookSecret),
     freightowerDefaultCarrierCode: cleanProviderCode(input.freightowerDefaultCarrierCode, DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerDefaultCarrierCode),
     freightowerDefaultPortCode: cleanProviderCode(input.freightowerDefaultPortCode, "", 16),
