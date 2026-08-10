@@ -20,8 +20,9 @@ export async function lockShipsgoTrackingCreation(
 ) {
   // Serialize the final recheck/create for one order and provider. Provider API
   // calls remain outside the transaction, so this lock is held for milliseconds.
-  await tx.$queryRaw<Array<{ locked: null }>>`
-    SELECT pg_advisory_xact_lock(hashtext(${orderId}), hashtext(${`${provider}:${mode}`})) AS "locked"
+  // PostgreSQL returns `void`; cast it because Prisma cannot deserialize that type.
+  await tx.$queryRaw<Array<{ locked: string }>>`
+    SELECT pg_advisory_xact_lock(hashtext(${orderId}), hashtext(${`${provider}:${mode}`}))::text AS "locked"
   `;
 }
 
