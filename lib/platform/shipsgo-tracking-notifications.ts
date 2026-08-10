@@ -1,14 +1,38 @@
-import crypto from "node:crypto";
-import type { ShipsgoTracking } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { freightowerAlertText, latestFreightowerDumpingAlert } from "./freightower-alerts";
-import { latestFreightowerPortEvent } from "./freightower-port-events";
+import { extractFreightowerCustomsTimeline, latestFreightowerCustomsEvent } from "./freightower-customs-events";
+import { maskCustomsDeclarationNumbers } from "./freightower-customs-privacy";
+import {
+  freightowerNotificationSourceEvent,
+  freightowerTrackingNotificationEventKey,
+  type FreightowerNotificationChangeSource,
+  type FreightowerNotificationEvent,
+} from "./freightower-notification-events";
+import { extractFreightowerPortTimeline, latestFreightowerPortEvent } from "./freightower-port-events";
+import {
+  freightowerCustomsEventHasActiveAlert,
+  freightowerPortEventHasActiveAlert,
+} from "./freightower-supplemental-alerts";
 import { NOTIFICATION_TYPES } from "./notification-definitions";
 import { enabledAdminEmails, templateValue, uniqueEmails } from "./notification-helpers";
 import { sendNotificationEmail } from "./notification-send";
 import { enqueueWechatOfficialNotifications } from "./wechat-official-notifications";
 import { enqueueWechatMiniNotifications } from "./wechat-mini-notifications";
 import { FREIGHTOWER_PROVIDER } from "./shipsgo-tracking-utils";
+
+export {
+  freightowerComprehensiveTrackingNotificationEventKey,
+  freightowerCustomsTrackingNotificationEventKey,
+  freightowerChangedNotificationSourceEvent,
+  freightowerNotificationSourceEvent,
+  freightowerPortTrackingNotificationEventKey,
+  freightowerTrackingNotificationEventKey,
+  freightowerSupplementalNotificationChange,
+  freightowerSupplementalNotificationChanges,
+  hasFreightowerCustomsTrackingNotificationChange,
+  hasFreightowerPortTrackingNotificationChange,
+  hasFreightowerTrackingNotificationChange,
+} from "./freightower-notification-events";
 
 const notificationUserSelect = {
   id: true,
@@ -51,54 +75,19 @@ function activeApprovedEmails(users: NotificationUserCandidate[]) {
     .map((user) => user.email));
 }
 
-function dumpingAlertEventKey(alert: NonNullable<ReturnType<typeof latestFreightowerDumpingAlert>>) {
-  return crypto.createHash("sha256").update([
-    alert.code,
-    alert.category,
-    alert.time,
-    alert.containerNo,
-    alert.description,
-  ].join("\0")).digest("hex");
-}
-
-export function freightowerTrackingNotificationEventKey(tracking: ShipsgoTracking) {
-  const dumpingAlert = latestFreightowerDumpingAlert(tracking.rawResponse ?? tracking.rawPayload);
-  return dumpingAlert
-    ? `${tracking.id}:dumping:${dumpingAlertEventKey(dumpingAlert)}`
-    : [
-        tracking.id,
-        tracking.lastEventAt?.toISOString() || "",
-        tracking.currentStatus || tracking.status || tracking.syncStatus,
-        tracking.lastEvent || "",
-        tracking.eta?.toISOString() || "",
-        tracking.vesselName || "",
-        tracking.voyage || "",
-      ].join(":");
-}
-
-export function hasFreightowerTrackingNotificationChange(before: ShipsgoTracking, after: ShipsgoTracking) {
-  return freightowerTrackingNotificationEventKey(before) !== freightowerTrackingNotificationEventKey(after);
-}
-
-export function freightowerPortTrackingNotificationEventKey(tracking: ShipsgoTracking) {
-  const event = latestFreightowerPortEvent(tracking.portRawResponse);
-  return event ? [
-    tracking.id,
-    event.eventCode,
-    event.eventCategory,
-    event.time,
-    event.location,
-    event.description,
-    event.vesselName,
-    event.voyage,
-  ].join(":") : `${tracking.id}:port:none`;
-}
-
-export function hasFreightowerPortTrackingNotificationChange(before: ShipsgoTracking, after: ShipsgoTracking) {
-  return freightowerPortTrackingNotificationEventKey(before) !== freightowerPortTrackingNotificationEventKey(after);
-}
-
-export async function notifyFreightowerTrackingUpdate(trackingId: string) {
+export async function notifyFreightowerTrackingUpdate(
+  trackingId: string,
+  options: {
+    changeSource?: FreightowerNotificationChangeSource;
+    changeEvent?: FreightowerNotificationEvent | null;
+    changeEvents?: Array<{
+      source: Exclude<FreightowerNotificationChangeSource, "comprehensive">;
+      event: FreightowerNotificationEvent | null;
+    }>;
+    comprehensiveChanged?: boolean;
+    trackingEventKey?: string;
+  } = {},
+) {
   const tracking = await prisma.shipsgoTracking.findUnique({
     where: { id: trackingId },
     include: {
@@ -134,34 +123,81 @@ export async function notifyFreightowerTrackingUpdate(trackingId: string) {
       ? tracking.order.salesperson.id
       : "",
   ].filter(Boolean);
-  if (!finalRecipientEmails.length && !recipientUserIds.length) return;
+  if (!finalRecipientEmails.length && !recipientUserIds.length) {
+    return { deliveryKey: options.trackingEventKey || "", terminalSkipped: true };
+  }
   const dumpingAlert = latestFreightowerDumpingAlert(tracking.rawResponse ?? tracking.rawPayload);
-  const dumpingAlertText = freightowerAlertText(dumpingAlert);
   const portEvent = latestFreightowerPortEvent(tracking.portRawResponse);
-  const portDumping = portEvent?.isDumpingWarning === true;
+  const customsEvent = latestFreightowerCustomsEvent(tracking.customsRawResponse);
+  const changedEvents = options.changeEvents?.filter((change) => change.event) || (
+    options.changeEvent && options.changeSource && options.changeSource !== "comprehensive"
+      ? [{ source: options.changeSource, event: options.changeEvent }]
+      : []
+  );
+  const sourceEvent = changedEvents[0]?.event || options.changeEvent || freightowerNotificationSourceEvent(
+    tracking,
+    options.changeSource || "comprehensive",
+  );
+  const portTimeline = extractFreightowerPortTimeline(tracking.portRawResponse);
+  const customsTimeline = extractFreightowerCustomsTimeline(tracking.customsRawResponse);
+  const portDumping = changedEvents.some((change) => (
+    change.source === "port"
+    && change.event?.isDumpingWarning === true
+    && freightowerPortEventHasActiveAlert(portTimeline, change.event)
+  ));
+  const customsWarning = changedEvents.some((change) => (
+    change.source === "customs"
+    && change.event?.isWarning === true
+    && freightowerCustomsEventHasActiveAlert(customsTimeline, change.event)
+  ));
 
-  const latestEventKey = freightowerTrackingNotificationEventKey(tracking);
+  const trackingEventKey = options.trackingEventKey || freightowerTrackingNotificationEventKey(tracking);
+  // The state fingerprint is the idempotency key. Do not append a caller-specific
+  // source list: two overlapping syncs can observe the same final snapshot through
+  // different paths and must still produce only one notification.
+  const latestEventKey = trackingEventKey;
+  const comprehensiveChanged = options.comprehensiveChanged
+    ?? (options.changeSource === "comprehensive" && changedEvents.length === 0);
+  const currentDumpingAlert = comprehensiveChanged ? dumpingAlert : null;
+  const currentDumpingAlertText = freightowerAlertText(currentDumpingAlert);
 
   const orderNo = templateValue(tracking.order.orderNo);
   const blNo = templateValue(tracking.masterBlNo || tracking.order.blNo || tracking.bookingNumber);
-  const statusText = templateValue(dumpingAlert || portDumping ? `甩柜预警 / ${tracking.currentStatus || tracking.status || tracking.syncStatus || "运输异常"}` : tracking.currentStatus || tracking.status || tracking.syncStatus);
-  const eventText = templateValue(dumpingAlertText || portEvent?.description || tracking.lastEvent);
+  const statusText = templateValue(
+    currentDumpingAlert || portDumping
+      ? `甩柜预警 / ${tracking.currentStatus || tracking.status || tracking.syncStatus || "运输异常"}`
+      : customsWarning
+        ? "中国海关异常预警"
+        : tracking.currentStatus || tracking.status || tracking.syncStatus,
+  );
+  const changedEventText = changedEvents.map((change) => {
+    const description = change.source === "customs"
+      ? maskCustomsDeclarationNumbers(change.event?.description || "")
+      : change.event?.description || "";
+    return changedEvents.length > 1
+      ? `${change.source === "customs" ? "中国海关" : "中国港区"}：${description}`
+      : description;
+  }).filter(Boolean).join("；");
+  const singleEventText = options.changeSource === "customs"
+    ? maskCustomsDeclarationNumbers(sourceEvent?.description || "")
+    : sourceEvent?.description || "";
+  const eventText = templateValue(
+    [currentDumpingAlertText, changedEventText].filter(Boolean).join("；")
+      || singleEventText
+      || tracking.lastEvent,
+  );
+  const eventTime = currentDumpingAlert?.time || sourceEvent?.time || tracking.lastEventAt || tracking.lastSyncedAt || tracking.lastSyncTime;
   const trackingUrl = `${appBaseUrl()}/tracking-map?trackingId=${encodeURIComponent(tracking.id)}`;
 
   const officialNotification = enqueueWechatOfficialNotifications({
     userIds: recipientUserIds,
     idempotencyKey: `freightower-tracking-update:${latestEventKey}`,
-    title: dumpingAlert || portDumping ? "物流甩柜预警" : "物流状态更新",
-    content: `订单：${orderNo}；提单：${blNo}；状态：${statusText}；节点：${eventText}；时间：${displayDateTime(dumpingAlert?.time || portEvent?.time || tracking.lastEventAt || tracking.lastSyncedAt || tracking.lastSyncTime)}`,
+    title: currentDumpingAlert || portDumping ? "物流甩柜预警" : customsWarning ? "中国海关异常预警" : "物流状态更新",
+    content: `订单：${orderNo}；提单：${blNo}；状态：${statusText}；节点：${eventText}；时间：${displayDateTime(eventTime)}`,
     url: trackingUrl,
     relatedEntityType: "shipsgo_tracking",
     relatedEntityId: tracking.id,
     relatedOrderId: tracking.orderId,
-  }).catch((error: unknown) => {
-    console.error("wechat-tracking-notification-enqueue-failed", {
-      trackingId: tracking.id,
-      message: error instanceof Error ? error.message : "unknown",
-    });
   });
 
   const miniNotification = enqueueWechatMiniNotifications({
@@ -170,21 +206,19 @@ export async function notifyFreightowerTrackingUpdate(trackingId: string) {
     orderNo,
     statusText,
     eventText,
-    eventTimeText: displayDateTime(dumpingAlert?.time || portEvent?.time || tracking.lastEventAt || tracking.lastSyncedAt || tracking.lastSyncTime),
+    eventTimeText: displayDateTime(eventTime),
     page: `pages/tracking-detail/index?id=${encodeURIComponent(tracking.id)}`,
     relatedEntityType: "shipsgo_tracking",
     relatedEntityId: tracking.id,
     relatedOrderId: tracking.orderId,
-  }).catch((error: unknown) => {
-    console.error("wechat-mini-tracking-notification-enqueue-failed", {
-      trackingId: tracking.id,
-      message: error instanceof Error ? error.message : "unknown",
-    });
   });
 
-  await Promise.all([officialNotification, miniNotification]);
+  const [officialDelivery, miniDelivery] = await Promise.all([officialNotification, miniNotification]);
 
-  if (finalRecipientEmails.length) await sendNotificationEmail({
+  let emailDelivery: Awaited<ReturnType<typeof sendNotificationEmail>> | null = null;
+  if (finalRecipientEmails.length) {
+    try {
+      emailDelivery = await sendNotificationEmail({
     type: NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
     recipientEmails: finalRecipientEmails,
     variables: {
@@ -193,9 +227,12 @@ export async function notifyFreightowerTrackingUpdate(trackingId: string) {
       containerNo: templateValue(tracking.containerNumber || tracking.containers.map((item) => item.containerNo).filter(Boolean).join(", ")),
       statusText,
       eventText,
-      eventTime: displayDateTime(dumpingAlert?.time || portEvent?.time || tracking.lastEventAt || tracking.lastSyncedAt || tracking.lastSyncTime),
+      eventTime: displayDateTime(eventTime),
       eta: displayDateTime(tracking.eta),
-      vesselVoyage: templateValue([portEvent?.vesselName || tracking.vesselName, portEvent?.voyage || tracking.voyage].filter(Boolean).join(" / ")),
+      vesselVoyage: templateValue([
+        sourceEvent?.vesselName || tracking.vesselName,
+        sourceEvent?.voyage || tracking.voyage,
+      ].filter(Boolean).join(" / ")),
       trackingUrl,
     },
     relatedEntityType: "shipsgo_tracking",
@@ -208,8 +245,33 @@ export async function notifyFreightowerTrackingUpdate(trackingId: string) {
       recipientSource: "admins_and_order_salesperson",
       adminRecipientCount: adminEmails.length,
       salespersonRecipientCount: salespersonEmails.length,
-      dumpingWarning: dumpingAlertText || undefined,
+      dumpingWarning: currentDumpingAlertText || undefined,
       portEventSource: portEvent ? "freightower_china_port" : undefined,
+      customsEventSource: customsEvent ? "freightower_china_customs" : undefined,
+      notificationChangeSource: options.changeSource || "comprehensive",
     },
-  });
+      });
+    } catch (error) {
+      // The email sender persists a failed outbox before throwing. Once that row
+      // exists the notification is durable and the cron retry owns delivery.
+      const durableOutbox = await prisma.notificationOutbox.findUnique({
+        where: { idempotencyKey: `freightower-tracking-update:${latestEventKey}` },
+        select: { id: true, status: true },
+      });
+      if (!durableOutbox) throw error;
+      emailDelivery = {
+        sent: false,
+        skipped: false,
+        outboxId: durableOutbox.id,
+        error: error instanceof Error ? error.message : "邮件已进入失败重试队列",
+      };
+    }
+  }
+  return {
+    deliveryKey: latestEventKey,
+    terminalSkipped: false,
+    email: emailDelivery,
+    official: officialDelivery,
+    mini: miniDelivery,
+  };
 }

@@ -15,3 +15,10 @@
 .event-body { flex: 1; padding-left: 12rpx; padding-bottom: 30rpx; }
 .event-title { font-size: 26rpx; font-weight: 600; line-height: 1.45; }
 .event-meta, .event-vessel { color: #819089; font-size: 22rpx; margin-top: 7rpx; }
+.map-card { display: flex; align-items: center; justify-content: space-between; gap: 24rpx; }
+.map-title { color: #183d30; font-size: 28rpx; font-weight: 650; }
+.map-desc { max-width: 390rpx; margin-top: 8rpx; color: #819089; font-size: 22rpx; line-height: 1.5; }
+.map-button { flex: 0 0 190rpx; height: 72rpx; line-height: 72rpx; font-size: 24rpx; }
+.map-button.disabled { background: #e4ebe7; color: #87958e; }
+.customs-info { margin-top: 20rpx; }
+.event-source { color: #718078; font-size: 22rpx; margin-top: 6rpx; }

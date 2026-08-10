@@ -7,6 +7,7 @@ import {
   ok,
   processFileStorageDeletionOutbox,
   processFailedFreightowerNotificationOutbox,
+  processPendingFreightowerTrackingNotifications,
   processLogisticsInvoiceNotificationOutbox,
   processWechatOfficialNotificationOutbox,
   processWechatMiniNotificationOutbox,
@@ -20,6 +21,17 @@ export const maxDuration = 300;
 export async function GET(request: NextRequest) {
   try {
     assertCronSecret(request);
+    // Establish durable tracking outbox rows first. This avoids racing the stale
+    // email retry worker against the same notification key in this cron run.
+    const pendingTrackingNotifications = await processPendingFreightowerTrackingNotifications({ limit: 8 })
+      .catch((error: unknown) => ({
+        scanned: 0,
+        processed: 0,
+        deferred: 0,
+        failed: 1,
+        results: [],
+        error: error instanceof Error ? error.message : "物流待通知队列读取失败",
+      }));
     const [notifications, trackingNotifications, wechatNotifications, wechatMiniNotifications, fileDeletions] = await Promise.all([
       processLogisticsInvoiceNotificationOutbox({ limit: 8 }),
       processFailedFreightowerNotificationOutbox({ limit: 8 }),
@@ -27,7 +39,7 @@ export async function GET(request: NextRequest) {
       processWechatMiniNotificationOutbox({ limit: 8 }),
       processFileStorageDeletionOutbox(20),
     ]);
-    const result = { notifications, trackingNotifications, wechatNotifications, wechatMiniNotifications, fileDeletions };
+    const result = { notifications, pendingTrackingNotifications, trackingNotifications, wechatNotifications, wechatMiniNotifications, fileDeletions };
     const actor = await getCronActor();
     if (actor) {
       void writeAudit(

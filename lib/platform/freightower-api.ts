@@ -1,12 +1,16 @@
 import crypto from "node:crypto";
 import { codedError, isPlainRecord, nonEmpty } from "./shared-base-utils";
-import { timingSafeEqualText } from "./shared-auth";
+import { timingSafeEqualText } from "./shared-auth-password";
 import { recordAt } from "./shipsgo-tracking-mapping-helpers";
 import { safeJsonParse, type ShipsgoSettings } from "./shipsgo-tracking-utils";
 import { createOutboundTimeoutSignal, readResponseTextLimited } from "./outbound-request-security";
 
 const TRACKING_PROVIDER_TIMEOUT_MS = 15000;
 const TRACKING_PROVIDER_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
+const FREIGHTOWER_REQUEST_INTERVAL_MS = 175;
+
+let freightowerRequestGate: Promise<void> = Promise.resolve();
+let freightowerNextRequestAt = 0;
 
 function freightowerApiBaseUrl(settings: ShipsgoSettings) {
   return String(settings.freightowerApiBaseUrl || "https://openapi.freightower.com").replace(/\/+$/, "");
@@ -22,23 +26,39 @@ export function responseMessage(data: unknown) {
   return nonEmpty(data.message || data.alertMessage || recordAt(data, "data").message);
 }
 
-function freightowerApiErrorMessage(path: string, responseStatus: number, data: unknown) {
+export function freightowerApiErrorMessage(
+  path: string,
+  responseStatus: number,
+  data: unknown,
+  credentialKind: "api-key" | "token" = "api-key",
+) {
   const statusCode = responseStatusCode(data);
   if (statusCode === "40101") {
-    return "飞驼可视 API Key 认证失败，请检查 API Key。";
+    return credentialKind === "token"
+      ? "飞驼可视 Client ID 或 API Secret 错误，请检查 Token 凭据。"
+      : "飞驼可视 API Key 认证失败，请检查 API Key。";
   }
   if (statusCode === "40102") {
-    return "飞驼可视 API Key 所属账号已停用，请联系飞驼客服恢复。";
+    return "飞驼可视账号已停用，请联系飞驼客服恢复。";
   }
   if (statusCode === "40103") {
-    return "飞驼可视 API Key 所属账号不存在，请联系飞驼客服确认授权。";
+    return "飞驼可视账号不存在，请联系飞驼客服确认授权。";
   }
   if (statusCode === "40300" || responseStatus === 403) {
-    const product = path.startsWith("/terminal/") ? "中国港区跟踪产品权限" : "集装箱综合跟踪查询权限";
-    return `飞驼可视接口拒绝当前请求：${path} 返回 ${statusCode || responseStatus}。请联系飞驼确认该 API Key 的接口授权、服务器出口 IP 白名单和${product}。`;
+    const product = path.startsWith("/terminal/cn/customs/")
+      ? "中国海关跟踪产品权限"
+      : path.startsWith("/terminal/port/")
+        ? "中国港区跟踪产品权限"
+        : path.startsWith("/terminal/")
+          ? "港区或海关跟踪产品权限"
+          : "集装箱综合跟踪查询权限";
+    const credentialLabel = credentialKind === "token" ? "Client ID/API Secret" : "API Key";
+    return `飞驼可视接口拒绝当前请求：${path} 返回 ${statusCode || responseStatus}。请联系飞驼确认该 ${credentialLabel} 的接口授权、服务器出口 IP 白名单和${product}。`;
   }
   if (statusCode === "40100" || responseStatus === 401) {
-    return "飞驼可视 API Key 无效，请检查 API Key 是否完整并已获得接口授权。";
+    return credentialKind === "token"
+      ? "飞驼可视 Token 无效或已过期，系统已尝试重新获取，请检查 Client ID 和 API Secret。"
+      : "飞驼可视 API Key 无效，请检查 API Key 是否完整并已获得接口授权。";
   }
   if (statusCode === "42900" || responseStatus === 429) {
     return "飞驼可视调用频率超过限制，请稍后重试。";
@@ -48,7 +68,15 @@ function freightowerApiErrorMessage(path: string, responseStatus: number, data: 
   return message ? `${message}${codeSuffix}` : `飞驼可视请求失败${codeSuffix}。`;
 }
 
-function isFreightowerAcceptedStatus(statusCode: string) {
+export function freightowerClientErrorStatus(responseStatus: number, data: unknown) {
+  const statusCode = responseStatusCode(data);
+  // Freightower may return HTTP 500 while the JSON body contains a business
+  // authentication/permission code. Preserve that as a correctable 4xx error.
+  if (/^4\d{4}$/.test(statusCode)) return 400;
+  return responseStatus >= 500 ? 502 : 400;
+}
+
+export function isFreightowerAcceptedStatus(statusCode: string) {
   return !statusCode || statusCode === "20000" || statusCode === "20001";
 }
 
@@ -59,37 +87,74 @@ export function freightowerSubscribedMessage(payload: unknown) {
     : message;
 }
 
-async function executeFreightowerApiRequest(
+export async function executeFreightowerApiRequest(
   settings: ShipsgoSettings,
   path: string,
   body: Record<string, unknown> | undefined,
   method: "GET" | "POST" = "POST",
+  options: { bearer?: string; anonymous?: boolean; credentialKind?: "api-key" | "token" } = {},
 ) {
-  if (!settings.freightowerApiKey) {
+  const bearer = options.bearer || (options.anonymous ? "" : settings.freightowerApiKey);
+  if (!bearer && !options.anonymous) {
     throw codedError("请先填写飞驼 API Key。", 400, "FREIGHTOWER_CREDENTIAL_REQUIRED");
   }
   const requestBody = body ? JSON.stringify(body) : undefined;
-  let response: Response;
-  let text: string;
-  try {
-    response = await fetch(`${freightowerApiBaseUrl(settings)}${path}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${settings.freightowerApiKey}`,
-      },
-      ...(requestBody ? { body: requestBody } : {}),
-      cache: "no-store",
-      redirect: "error",
-      signal: createOutboundTimeoutSignal(TRACKING_PROVIDER_TIMEOUT_MS),
-    });
-    text = await readResponseTextLimited(response, TRACKING_PROVIDER_RESPONSE_MAX_BYTES);
-  } catch {
-    throw codedError(freightowerApiErrorMessage(path, 502, {}), 502, "FREIGHTOWER_API_ERROR");
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let response: Response;
+    let text: string;
+    try {
+      await paceFreightowerRequest();
+      response = await fetch(`${freightowerApiBaseUrl(settings)}${path}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
+        ...(requestBody ? { body: requestBody } : {}),
+        cache: "no-store",
+        redirect: "error",
+        signal: createOutboundTimeoutSignal(TRACKING_PROVIDER_TIMEOUT_MS),
+      });
+      text = await readResponseTextLimited(response, TRACKING_PROVIDER_RESPONSE_MAX_BYTES);
+    } catch {
+      throw codedError(
+        freightowerApiErrorMessage(path, 502, {}, options.credentialKind),
+        502,
+        "FREIGHTOWER_API_ERROR",
+      );
+    }
+    const data = text ? safeJsonParse(text) : {};
+    const limited = response.status === 429 || responseStatusCode(data) === "42900";
+    if (limited && attempt === 0) {
+      await new Promise((resolve) => setTimeout(resolve, freightowerRetryDelayMs(response)));
+      continue;
+    }
+    return { response, data };
   }
-  const data = text ? safeJsonParse(text) : {};
-  return { response, data };
+  throw codedError("飞驼可视调用频率超过限制，请稍后重试。", 429, "FREIGHTOWER_API_ERROR");
+}
+
+function freightowerRetryDelayMs(response: Response) {
+  const retryAfter = String(response.headers.get("retry-after") || "").trim();
+  const seconds = retryAfter ? Number(retryAfter) : Number.NaN;
+  const dateDelay = retryAfter ? Date.parse(retryAfter) - Date.now() : Number.NaN;
+  const requested = Number.isFinite(seconds) && seconds >= 0
+    ? seconds * 1000
+    : Number.isFinite(dateDelay) && dateDelay > 0
+      ? dateDelay
+      : 1000;
+  return Math.max(250, Math.min(10_000, requested));
+}
+
+function paceFreightowerRequest() {
+  const scheduled = freightowerRequestGate.then(async () => {
+    const waitMs = Math.max(0, freightowerNextRequestAt - Date.now());
+    if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    freightowerNextRequestAt = Date.now() + FREIGHTOWER_REQUEST_INTERVAL_MS;
+  });
+  freightowerRequestGate = scheduled.catch(() => undefined);
+  return scheduled;
 }
 
 export async function testFreightowerConnection(settings: ShipsgoSettings) {
@@ -100,7 +165,7 @@ export async function testFreightowerConnection(settings: ShipsgoSettings) {
   if (!authenticationAccepted) {
     throw codedError(
       freightowerApiErrorMessage("/application/v1/query", response.status, data),
-      response.status >= 500 ? 502 : 400,
+      freightowerClientErrorStatus(response.status, data),
       "FREIGHTOWER_API_ERROR",
     );
   }
@@ -123,7 +188,7 @@ export async function freightowerApiRequest<T>(
       && (statusCode === "40300" || response.status === 403);
     throw codedError(
       freightowerApiErrorMessage(requestPath, response.status, data),
-      response.status >= 500 ? 502 : 400,
+      freightowerClientErrorStatus(response.status, data),
       isPortPermissionDenied ? "FREIGHTOWER_PORT_PERMISSION_REQUIRED" : "FREIGHTOWER_API_ERROR",
     );
   }
@@ -144,7 +209,7 @@ export async function freightowerApiGet<T>(
       && (statusCode === "40300" || response.status === 403);
     throw codedError(
       freightowerApiErrorMessage(path, response.status, data),
-      response.status >= 500 ? 502 : 400,
+      freightowerClientErrorStatus(response.status, data),
       isPortPermissionDenied ? "FREIGHTOWER_PORT_PERMISSION_REQUIRED" : "FREIGHTOWER_API_ERROR",
     );
   }

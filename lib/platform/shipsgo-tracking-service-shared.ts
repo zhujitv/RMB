@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import { codedError } from "./shared-base-utils";
 import { canAccessDomesticLogisticsOrder } from "./masters-access";
 import {
@@ -10,6 +11,19 @@ import type { writeAudit } from "./shared-audit";
 
 export type AuditRequestLike = Parameters<typeof writeAudit>[0];
 export type ShipsgoTrackingOrder = Awaited<ReturnType<typeof getShipsgoTrackingOrder>>;
+
+export async function lockShipsgoTrackingCreation(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  provider: string,
+  mode: string,
+) {
+  // Serialize the final recheck/create for one order and provider. Provider API
+  // calls remain outside the transaction, so this lock is held for milliseconds.
+  await tx.$queryRaw<Array<{ locked: null }>>`
+    SELECT pg_advisory_xact_lock(hashtext(${orderId}), hashtext(${`${provider}:${mode}`})) AS "locked"
+  `;
+}
 
 export async function getShipsgoTrackingOrder(orderId: string, actor: ShipsgoActor) {
   const order = await prisma.receivableOrder.findFirst({

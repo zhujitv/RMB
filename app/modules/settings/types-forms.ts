@@ -45,6 +45,8 @@ export type ShipsgoIntegrationForm = {
   freightowerApiKeyConfigured: boolean;
   freightowerClientId: string;
   freightowerClientIdConfigured: boolean;
+  freightowerApiSecret: string;
+  freightowerApiSecretConfigured: boolean;
   freightowerIframeKey: string;
   freightowerIframeKeyConfigured: boolean;
   freightowerWebhookAccessSecret: string;
@@ -55,6 +57,7 @@ export type ShipsgoIntegrationForm = {
   freightowerDefaultLang: string;
   freightowerHiddenReference: boolean;
   oceanTrackingEnabled: boolean;
+  customsTrackingEnabled: boolean;
   airTrackingEnabled: boolean;
   manualSyncEnabled: boolean;
   autoSyncEnabled: boolean;

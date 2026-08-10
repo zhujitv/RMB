@@ -131,6 +131,12 @@ export type ShipsgoTrackingRow = {
   portLastCheckedAt?: string;
   portLastSyncedAt?: string;
   portEventCount?: number;
+  customsTrackingStatus?: string;
+  customsTrackingMessage?: string;
+  customsDirection?: string;
+  customsLastCheckedAt?: string;
+  customsLastSyncedAt?: string;
+  customsEventCount?: number;
   alerts?: FreightowerTrackingAlert[];
   alertCount?: number;
   hasDumpingWarning?: boolean;
@@ -185,6 +191,7 @@ export type ShipsgoFeatureFlags = {
   activeProvider?: string;
   providerLabel?: string;
   oceanTrackingEnabled?: boolean;
+  customsTrackingEnabled?: boolean;
   airTrackingEnabled?: boolean;
   manualSyncEnabled?: boolean;
   autoSyncEnabled?: boolean;

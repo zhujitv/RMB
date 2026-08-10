@@ -2,7 +2,7 @@
   "description": "NEXTWOOD 内部物流跟踪小程序",
   "miniprogramRoot": "./",
   "projectname": "nextwood-logistics",
-  "appid": "touristappid",
+  "appid": "wx1f1d7b39c44c7949",
   "setting": {
     "urlCheck": true,
     "es6": true,

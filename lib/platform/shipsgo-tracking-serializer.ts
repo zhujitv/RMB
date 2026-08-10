@@ -1,6 +1,9 @@
 import { nonEmpty } from "./shared-base-utils";
 import { extractFreightowerAlerts, freightowerAlertText } from "./freightower-alerts";
+import { extractFreightowerCustomsTimeline } from "./freightower-customs-events";
+import { maskCustomsDeclarationNumbers } from "./freightower-customs-privacy";
 import { extractFreightowerPortTimeline } from "./freightower-port-events";
+import { freightowerCustomsAlerts, freightowerPortAlerts } from "./freightower-supplemental-alerts";
 import { mapFreightowerShipmentPayload } from "./freightower-mapping";
 import { uniqueStrings } from "./shipsgo-tracking-utils";
 import { extractShipsgoTimeline } from "./shipsgo-tracking-timeline";
@@ -46,25 +49,43 @@ export function serializeShipsgoTracking(row: {
   portLastCheckedAt?: Date | string | null;
   portLastSyncedAt?: Date | string | null;
   portRawResponse?: unknown;
+  customsTrackingStatus?: string | null;
+  customsTrackingMessage?: string | null;
+  customsDirection?: string | null;
+  customsLastCheckedAt?: Date | string | null;
+  customsLastSyncedAt?: Date | string | null;
+  customsRawResponse?: unknown;
 }) {
   const rawSource = row.rawResponse ?? row.rawPayload ?? null;
   const mappedContext = rawSource ? mapFreightowerShipmentPayload(rawSource) : null;
   const providerLabel = "飞驼可视";
   const portTimeline = row.portRawResponse ? extractFreightowerPortTimeline(row.portRawResponse) : [];
-  const portAlerts = portTimeline.filter((event) => event.isWarning).map((event) => ({
-    code: event.eventCode,
-    category: event.eventCategory,
-    title: event.isDumpingWarning ? "甩柜预警" : "港区异常预警",
-    description: event.description,
+  const customsTimeline = row.customsRawResponse ? extractFreightowerCustomsTimeline(row.customsRawResponse) : [];
+  const clientCustomsTimeline = customsTimeline.map((event) => ({
     time: event.time,
     location: event.location,
-    containerNo: "",
-    severity: event.isDumpingWarning ? "critical" as const : "warning" as const,
-    isDumping: event.isDumpingWarning,
-    active: true,
-    source: "status" as const,
+    description: maskCustomsDeclarationNumbers(event.description),
+    vesselName: event.vesselName || row.vesselName || "",
+    voyage: event.voyage || row.voyage || "",
+    eventCode: event.eventCode,
+    eventCategory: event.eventCategory,
+    isWarning: event.isWarning,
+    isDumpingWarning: event.isDumpingWarning,
+    source: event.source,
   }));
-  const alerts = [...(rawSource ? extractFreightowerAlerts(rawSource) : []), ...portAlerts];
+  const alerts = [
+    ...(rawSource ? extractFreightowerAlerts(rawSource) : []),
+    ...freightowerPortAlerts(portTimeline),
+    ...freightowerCustomsAlerts(customsTimeline).map((alert) => ({
+      ...alert,
+      description: maskCustomsDeclarationNumbers(alert.description),
+    })),
+  ].sort((left, right) => {
+    if (!left.time && !right.time) return 0;
+    if (!left.time) return 1;
+    if (!right.time) return -1;
+    return new Date(right.time).getTime() - new Date(left.time).getTime();
+  });
   const activeAlerts = alerts.filter((alert) => alert.active !== false);
   const dumpingAlerts = activeAlerts.filter((alert) => alert.isDumping);
   const latestDumpingAlert = dumpingAlerts[0] || null;
@@ -73,11 +94,15 @@ export function serializeShipsgoTracking(row: {
     vesselName: event.vesselName || row.vesselName || "",
     voyage: event.voyage || row.voyage || "",
   })) : [];
-  const timeline = mergeTimeline(comprehensiveTimeline, portTimeline.map((event) => ({
-    ...event,
-    vesselName: event.vesselName || row.vesselName || "",
-    voyage: event.voyage || row.voyage || "",
-  })));
+  const timeline = mergeTimeline(
+    comprehensiveTimeline,
+    portTimeline.map((event) => ({
+      ...event,
+      vesselName: event.vesselName || row.vesselName || "",
+      voyage: event.voyage || row.voyage || "",
+    })),
+    clientCustomsTimeline,
+  );
   const isAwaitingProviderData = String(row.syncStatus || "").toUpperCase() === "SUBSCRIBED";
   const fallbackTimeline = !timeline.length && !isAwaitingProviderData && row.lastEvent ? [{
     time: dateTimeText(row.lastEventAt),
@@ -137,6 +162,12 @@ export function serializeShipsgoTracking(row: {
     portLastCheckedAt: dateTimeText(row.portLastCheckedAt),
     portLastSyncedAt: dateTimeText(row.portLastSyncedAt),
     portEventCount: portTimeline.length,
+    customsTrackingStatus: row.customsTrackingStatus || "DISABLED",
+    customsTrackingMessage: row.customsTrackingMessage || "",
+    customsDirection: row.customsDirection || "",
+    customsLastCheckedAt: dateTimeText(row.customsLastCheckedAt),
+    customsLastSyncedAt: dateTimeText(row.customsLastSyncedAt),
+    customsEventCount: customsTimeline.length,
     alerts,
     alertCount: activeAlerts.length,
     hasDumpingWarning: dumpingAlerts.length > 0,

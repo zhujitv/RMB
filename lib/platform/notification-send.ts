@@ -184,12 +184,17 @@ export async function processFailedFreightowerNotificationOutbox(options: { limi
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(20, Math.max(1, Math.trunc(requestedLimit)))
     : 8;
+  const staleAt = new Date(Date.now() - 5 * 60 * 1000);
   const rows = await prisma.notificationOutbox.findMany({
     where: {
       type: "FREIGHTOWER_TRACKING_UPDATE",
-      status: "failed",
       attempts: { lt: FREIGHTOWER_NOTIFICATION_RETRY_MAX_ATTEMPTS },
       scheduledAt: { lte: new Date() },
+      OR: [
+        { status: "failed" },
+        { status: "pending", updatedAt: { lte: staleAt } },
+        { status: "sending", updatedAt: { lte: staleAt } },
+      ],
     },
     orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
     take: limit,

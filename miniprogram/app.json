@@ -3,6 +3,7 @@
     "pages/home/index",
     "pages/trackings/index",
     "pages/tracking-detail/index",
+    "pages/tracking-map/index",
     "pages/profile/index",
     "pages/login/index"
   ],

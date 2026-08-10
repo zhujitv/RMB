@@ -36,6 +36,66 @@ function portShipment(payload: unknown) {
   return Object.keys(shipment).length ? shipment : recordAt(root, "shipment");
 }
 
+export function freightowerPortResponseState(payload: unknown) {
+  const root = isPlainRecord(payload) ? payload : {};
+  const data = recordAt(root, "data");
+  const statusCode = textAt(root, "statusCode");
+  const success = data.success;
+  const explicitlyFailed = success === false || String(success).toLowerCase() === "false";
+  const statusText = textAt(data, "status");
+  const status = statusText === "" ? null : Number(statusText);
+  const hasShipment = Object.keys(portShipment(payload)).length > 0;
+  return {
+    accepted: statusCode === "20001" || (
+      statusCode === "20000"
+      && hasShipment
+      && !explicitlyFailed
+      && (status === null || !Number.isFinite(status) || status === 0)
+    ),
+    message: textAt(data, "message") || textAt(root, "message") || textAt(root, "alertMessage"),
+    eventCount: extractFreightowerPortTimeline(payload).length,
+  };
+}
+
+function mergeRawEvents(previous: unknown[], current: unknown[]) {
+  const events = new Map<string, unknown>();
+  for (const event of [...previous, ...current]) {
+    events.set(JSON.stringify(event), event);
+  }
+  return [...events.values()];
+}
+
+export function mergeFreightowerPortResponses(previous: unknown, current: unknown) {
+  const previousShipment = portShipment(previous);
+  if (!Object.keys(previousShipment).length) return current;
+  const previousRoot = isPlainRecord(previous) ? previous : {};
+  const currentRoot = isPlainRecord(current) ? current : {};
+  const currentData = recordAt(currentRoot, "data");
+  const currentShipment = portShipment(current);
+  const shipment = {
+    ...previousShipment,
+    ...currentShipment,
+    equipmentEvents: mergeRawEvents(
+      arrayAt(previousShipment, "equipmentEvents"),
+      arrayAt(currentShipment, "equipmentEvents"),
+    ),
+    shipmentEvents: mergeRawEvents(
+      arrayAt(previousShipment, "shipmentEvents"),
+      arrayAt(currentShipment, "shipmentEvents"),
+    ),
+    transportEvents: mergeRawEvents(
+      arrayAt(previousShipment, "transportEvents"),
+      arrayAt(currentShipment, "transportEvents"),
+    ),
+  };
+  const previousData = recordAt(previousRoot, "data");
+  const usesDataWrapper = Object.keys(recordAt(currentData, "shipment")).length > 0
+    || Object.keys(recordAt(previousData, "shipment")).length > 0;
+  return usesDataWrapper
+    ? { ...previousRoot, ...currentRoot, data: { ...previousData, ...currentData, shipment } }
+    : { ...previousRoot, ...currentRoot, shipment };
+}
+
 function eventCodes(event: unknown) {
   const call = recordAt(event, "transportCall");
   const candidates = [

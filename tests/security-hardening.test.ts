@@ -172,6 +172,7 @@ test("production CSP external sources require explicit allowlists", () => {
     /img-src 'self' data: blob: https:\/\/assets\.nextwood\.net/,
   );
   assert.doesNotMatch(csp, /frame-src[^;]*https:\/\/embed\.shipsgo\.com/);
+  assert.match(csp, /frame-src[^;]*https:\/\/i\.saas\.freightower\.com/);
   assert.match(csp, /frame-src[\s\S]*https:\/\/viewer\.nextwood\.net/);
 });
 

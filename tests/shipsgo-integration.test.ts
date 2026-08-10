@@ -20,15 +20,21 @@ import {
   readWorkspaceStylesSource,
 } from "./source-helpers.ts";
 
-const integration = readFileSync("lib/platform/freightower-integration.ts", "utf8");
+const integration = [
+  readFileSync("lib/platform/freightower-integration.ts", "utf8"),
+  readFileSync("lib/platform/freightower-integration-normalize.ts", "utf8"),
+].join("\n");
 const trackingService = readShipsgoTrackingSource();
 const freightowerService = readFreightowerTrackingSource();
 const freightowerRequest = readFileSync("lib/platform/freightower-api.ts", "utf8");
+const freightowerTokenRequest = readFileSync("lib/platform/freightower-token-api.ts", "utf8");
+const freightowerToken = readFileSync("lib/platform/freightower-token.ts", "utf8");
 const trackingTimeline = readFileSync("lib/platform/shipsgo-tracking-timeline.ts", "utf8");
 const trackingSerializer = readFileSync("lib/platform/shipsgo-tracking-serializer.ts", "utf8");
 const createService = readFileSync("lib/platform/shipsgo-tracking-create.ts", "utf8");
 const syncService = readFileSync("lib/platform/shipsgo-tracking-sync-operation.ts", "utf8");
 const recoveryService = readFileSync("lib/platform/shipsgo-tracking-recovery.ts", "utf8");
+const trackingServiceShared = readFileSync("lib/platform/shipsgo-tracking-service-shared.ts", "utf8");
 const scheduledService = readFileSync("lib/platform/shipsgo-tracking-scheduled-sync.ts", "utf8");
 const webhookService = readFileSync("lib/platform/shipsgo-tracking-webhook.ts", "utf8");
 const webhookPayload = readFileSync("lib/platform/freightower-webhook-payload.ts", "utf8");
@@ -50,6 +56,12 @@ const schema = readPrismaSchemaSource();
 const freightowerOnlyMigration = readFileSync("prisma/migrations/20260729160000_freightower_only_tracking/migration.sql", "utf8");
 const notifications = readNotificationEngineSource();
 const trackingNotifications = readFileSync("lib/platform/shipsgo-tracking-notifications.ts", "utf8");
+const freightowerNotificationEvents = readFileSync("lib/platform/freightower-notification-events.ts", "utf8");
+const freightowerPendingNotifications = readFileSync("lib/platform/freightower-notification-pending.ts", "utf8");
+const freightowerSyncLease = readFileSync("lib/platform/shipsgo-tracking-sync-lease.ts", "utf8");
+const freightowerSyncLeaseMigration = readFileSync("prisma/migrations/20260810130000_freightower_sync_lease/migration.sql", "utf8");
+const notificationOutboxRoute = readFileSync("app/api/cron/notification-outbox/route.ts", "utf8");
+const notificationSend = readFileSync("lib/platform/notification-send.ts", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
 
 test("tracking settings force Freightower as the only provider and keep secrets private", () => {
@@ -59,15 +71,17 @@ test("tracking settings force Freightower as the only provider and keep secrets 
   assert.match(integration, /FREIGHTOWER_SECRET_FIELDS/);
   assert.match(integration, /freightowerApiKeyConfigured: Boolean\(normalized\.freightowerApiKey\)/);
   assert.match(integration, /freightowerClientIdConfigured: Boolean\(normalized\.freightowerClientId\)/);
+  assert.match(integration, /freightowerApiSecretConfigured: Boolean\(normalized\.freightowerApiSecret\)/);
   assert.match(integration, /freightowerIframeKeyConfigured: Boolean\(normalized\.freightowerIframeKey\)/);
   assert.match(integration, /freightowerWebhookAccessSecretConfigured: Boolean\(normalized\.freightowerWebhookAccessSecret\)/);
   assert.match(integration, /freightowerApiKey: ""/);
   assert.match(integration, /freightowerClientId: ""/);
+  assert.match(integration, /freightowerApiSecret: ""/);
   assert.doesNotMatch(integration, /api\.shipsgo\.com|SHIPSGO_API_HOSTS/);
   assert.match(integration, /assertRead\(actor, "settings"\)/);
   assert.match(integration, /assertWrite\(actor, "settings"\)/);
   assert.match(integration, /prisma\.systemSetting\.upsert/);
-  assert.match(integration, /const directApiKey = cleanSecret\(input\.freightowerApiKey/);
+  assert.match(integration, /const directApiKey = cleanFreightowerSecret\(input\.freightowerApiKey/);
   assert.match(integration, /return legacyValue\.length >= 20 \? legacyValue : ""/);
   assert.match(integration, /input\.freightowerIframeKey \|\| input\.freightowerMapKey/);
 });
@@ -103,12 +117,16 @@ test("Freightower requests enforce bounded, non-cached outbound access", () => {
   assert.doesNotMatch(freightowerRequest, /FREIGHTOWER_TOKEN_FAILED/);
 });
 
-test("Freightower requests use the API key directly as Bearer authorization", () => {
+test("Freightower keeps comprehensive API-key auth separate from customs Token auth", () => {
   assert.match(freightowerRequest, /const requestPath = path/);
-  assert.match(freightowerRequest, /Authorization: `Bearer \$\{settings\.freightowerApiKey\}`/);
-  assert.match(freightowerRequest, /if \(!settings\.freightowerApiKey\)/);
+  assert.match(freightowerRequest, /options\.bearer \|\| \(options\.anonymous \? "" : settings\.freightowerApiKey\)/);
+  assert.match(freightowerRequest, /Authorization: `Bearer \$\{bearer\}`/);
   assert.match(freightowerRequest, /\["20000", "20001", "40000", "40020"\]\.includes\(statusCode\)/);
-  assert.doesNotMatch(freightowerRequest, /\/auth\/api\/token|access_token|refresh_token|freightowerSecret|tokenCache/);
+  assert.match(freightowerTokenRequest, /"\/auth\/api\/token"/);
+  assert.match(freightowerTokenRequest, /freightowerTokenApiGet/);
+  assert.match(freightowerToken, /access_token/);
+  assert.doesNotMatch(freightowerTokenRequest, /refresh_token/);
+  assert.match(freightowerRequest, /FREIGHTOWER_REQUEST_INTERVAL_MS = 175/);
   assert.match(freightowerRequest, /numericTimestamp >= 1_000_000_000_000/);
   assert.doesNotMatch(freightowerRequest, /FREIGHTOWER_EXCHANGE_PREFIX|X-Auth-|aes-256-cbc|createDecipheriv/);
   assert.doesNotMatch(settingsModule, /App ID|App Secret|Data Secret|接口签名凭据|接口认证模式/);
@@ -117,7 +135,8 @@ test("Freightower requests use the API key directly as Bearer authorization", ()
 test("Freightower errors explain authorization failures and subscription state", () => {
   assert.match(freightowerService, /statusCode === "40300"/);
   assert.match(freightowerService, /服务器出口 IP 白名单/);
-  assert.match(freightowerService, /API Key 的接口授权/);
+  assert.match(freightowerService, /credentialLabel.*API Key/);
+  assert.match(freightowerService, /接口授权/);
   assert.match(freightowerService, /集装箱综合跟踪查询权限/);
   assert.match(freightowerService, /statusCode === "20000" \|\| statusCode === "20001"/);
   assert.match(freightowerService, /飞驼暂未返回运输数据，系统将继续自动查询/);
@@ -158,7 +177,7 @@ test("Freightower tracking changes notify enabled admins and the order salespers
   assert.match(webhookService, /verifyFreightowerWebhookSignature/);
   assert.match(webhookService, /claimWebhookReplay\("freightower"/);
   assert.match(webhookService, /completeWebhookReplayClaim\(replay\.key, "freightower"\)/);
-  assert.match(webhookService, /notifyFreightowerTrackingUpdate/);
+  assert.match(webhookService, /reconcileFreightowerTrackingNotification/);
   assert.match(webhookService, /createFreightowerPayloadFromTracking\(target, settings\)/);
   assert.match(webhookService, /mergeFreightowerWebhookPayload\(fullResponse, payload\)/);
   assert.match(webhookService, /signatureVerified && envelope\.hasIncrementalResult/);
@@ -167,18 +186,28 @@ test("Freightower tracking changes notify enabled admins and the order salespers
   assert.match(webhookService, /prisma\.\$transaction\(async \(tx\)/);
   assert.doesNotMatch(webhookService, /shipsgoTracking\.findFirst/);
   assert.match(trackingNotifications, /latestFreightowerDumpingAlert/);
-  assert.match(trackingNotifications, /dumpingWarning: dumpingAlertText/);
-  assert.match(trackingNotifications, /dumpingAlertEventKey\(dumpingAlert\)/);
+  assert.match(trackingNotifications, /dumpingWarning: currentDumpingAlertText/);
+  assert.match(freightowerNotificationEvents, /dumpingAlertEventKey\(dumpingAlert\)/);
   assert.match(trackingNotifications, /activeApprovedEmails\(\[tracking\.order\.salesperson\]\)/);
   assert.match(trackingNotifications, /const adminEmails = await enabledAdminEmails\(\)/);
   assert.match(trackingNotifications, /uniqueEmails\(\[adminEmails, salespersonEmails\]\)/);
   assert.match(trackingNotifications, /recipientSource: "admins_and_order_salesperson"/);
   assert.doesNotMatch(trackingNotifications, /contactEmail: true|shippingDocsEmails: true|customerEmails/);
   assert.doesNotMatch(trackingNotifications, /tracking\.order\.createdBy|tracking\.order\.updatedBy|tracking\.createdBy|tracking\.updatedBy/);
-  assert.match(syncService, /hasFreightowerTrackingNotificationChange\(before, savedBase\)/);
-  assert.match(syncService, /notifyFreightowerTrackingUpdate\(saved\.id\)/);
-  assert.match(scheduledService, /hasFreightowerTrackingNotificationChange\(row, savedBase\)/);
-  assert.match(scheduledService, /notifyFreightowerTrackingUpdate\(savedBase\.id\)/);
+  assert.match(syncService, /hasFreightowerTrackingNotificationChange\(before, saved\)/);
+  assert.match(syncService, /markFreightowerNotificationPending/);
+  assert.match(syncService, /reconcileFreightowerTrackingNotification/);
+  assert.match(scheduledService, /hasFreightowerTrackingNotificationChange\(currentRow, saved\)/);
+  assert.match(scheduledService, /markFreightowerNotificationPending/);
+  assert.match(scheduledService, /reconcileFreightowerTrackingNotification/);
+  assert.match(webhookService, /markFreightowerNotificationPending/);
+  assert.match(freightowerPendingNotifications, /changeSource: changeEvents\[0\]\?\.source \|\| "comprehensive"/);
+  assert.match(freightowerPendingNotifications, /trackingEventKey/);
+  assert.match(freightowerPendingNotifications, /trackingNotificationPendingMask/);
+  assert.match(freightowerPendingNotifications, /trackingNotificationQueuedKey/);
+  assert.match(trackingNotifications, /options\.trackingEventKey \|\| freightowerTrackingNotificationEventKey\(tracking\)/);
+  assert.match(trackingNotifications, /freightowerNotificationSourceEvent/);
+  assert.match(freightowerNotificationEvents, /extractFreightowerCustomsTimeline/);
   assert.match(notifications, /FREIGHTOWER_TRACKING_UPDATE: "FREIGHTOWER_TRACKING_UPDATE"/);
   assert.match(notifications, /name: "飞驼可视运输节点通知"/);
   assert.match(notifications, /subjectTemplate: "\[NEXTWOOD ERP\] Shipment Tracking Update/);
@@ -187,6 +216,41 @@ test("Freightower tracking changes notify enabled admins and the order salespers
   assert.match(notifications, /如当前状态包含“甩柜预警”/);
   assert.match(settingsModule, /物流变化触发与收件人/);
   assert.match(settingsModule, /所有已启用且已审批的管理员，以及该订单的业务员/);
+});
+
+test("Freightower manual, scheduled, and webhook syncs share one database lease", () => {
+  assert.match(schema, /syncLeaseToken/);
+  assert.match(schema, /syncLeaseExpiresAt/);
+  assert.match(freightowerSyncLeaseMigration, /sync_lease_token/);
+  assert.match(freightowerSyncLeaseMigration, /sync_lease_expires_at/);
+  assert.match(freightowerSyncLease, /UPDATE "shipsgo_trackings"/);
+  assert.match(freightowerSyncLease, /"sync_lease_expires_at" <= \$\{now\}/);
+  assert.match(syncService, /claimFreightowerTrackingSyncLease/);
+  assert.match(syncService, /releaseFreightowerTrackingSyncLease/);
+  assert.match(scheduledService, /claimFreightowerTrackingSyncLease/);
+  assert.match(scheduledService, /releaseFreightowerTrackingSyncLease/);
+  assert.match(webhookService, /claimFreightowerTrackingSyncLease/);
+  assert.match(webhookService, /releaseFreightowerTrackingSyncLease/);
+});
+
+test("Freightower tracking notifications persist a durable pending watermark and recover stale sends", () => {
+  for (const field of [
+    "trackingNotificationPendingAt",
+    "trackingNotificationPendingMask",
+    "trackingNotificationQueuedKey",
+  ]) assert.match(schema, new RegExp(field));
+  assert.match(freightowerSyncLeaseMigration, /tracking_notification_pending_at/);
+  assert.match(freightowerSyncLeaseMigration, /tracking_notification_pending_mask/);
+  assert.match(freightowerSyncLeaseMigration, /tracking_notification_queued_key/);
+  assert.match(freightowerPendingNotifications, /tracking_notification_pending_mask" \|/);
+  assert.match(freightowerPendingNotifications, /trackingNotificationPendingMask: pendingMask/);
+  assert.match(freightowerPendingNotifications, /syncLeaseToken: ownedLeaseToken/);
+  assert.match(freightowerPendingNotifications, /syncLeaseExpiresAt: \{ gt: new Date\(\) \}/);
+  assert.match(freightowerPendingNotifications, /skipped: "error"/);
+  assert.match(notificationOutboxRoute, /await processPendingFreightowerTrackingNotifications/);
+  assert.match(notificationOutboxRoute, /物流待通知队列读取失败/);
+  assert.match(notificationSend, /status: "pending", updatedAt: \{ lte: staleAt \}/);
+  assert.match(notificationSend, /status: "sending", updatedAt: \{ lte: staleAt \}/);
 });
 
 test("settings UI focuses on the basic Freightower web workflow", () => {
@@ -279,6 +343,11 @@ test("Freightower creation is idempotent per order and provider", () => {
   assert.match(createService, /if \(existing\)/);
   assert.match(createService, /alreadyExists: true/);
   assert.match(createService, /createFreightowerPayloadFromInput/);
+  assert.match(createService, /lockShipsgoTrackingCreation/);
+  assert.match(recoveryService, /lockShipsgoTrackingCreation/);
+  assert.match(trackingServiceShared, /pg_advisory_xact_lock/);
+  assert.match(freightowerSyncLeaseMigration, /shipsgo_trackings_provider_shipment_unique/);
+  assert.match(freightowerSyncLeaseMigration, /"deleted_at" IS NULL/);
   assert.match(createService, /replaceShipsgoTrackingContainers\(savedBase\.id, mapped\.containerNumbers\)/);
   assert.match(logisticsModule, /开始追踪/);
   assert.match(logisticsModule, /从\$\{activeProviderLabel\}同步已有跟踪/);
@@ -288,6 +357,8 @@ test("Freightower control tower remains read-only and permission scoped", () => 
   assert.match(trackingService, /export async function listShipsgoControlTowerTrackings/);
   assert.match(trackingService, /while \(page\.length === 300\)/);
   assert.match(trackingService, /cursor: \{ id: afterId \}, skip: 1/);
+  assert.match(trackingService, /tracking\.portTrackingStatus/);
+  assert.match(trackingService, /tracking\.customsTrackingStatus/);
   assert.doesNotMatch(controlTowerRoute, /createShipsgoOceanTracking|recoverShipsgoOceanTracking/);
   assert.match(logisticsModule, /\/api\/freightower\/ocean-trackings\/control-tower/);
   assert.match(logisticsModule, /全屏查看/);

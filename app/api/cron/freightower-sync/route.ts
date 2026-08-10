@@ -2,6 +2,8 @@ import type { NextRequest } from "next/server";
 import { apiError, assertCronSecret, getCronActor, ok, syncDueShipsgoOceanTrackings } from "../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 type ErrorWithStatus = Error & { status?: number };
 

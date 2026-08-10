@@ -3,6 +3,8 @@ import { apiError, ok, parseJsonBody, testShipsgoIntegrationConnection } from ".
 import { requireApiActor } from "../../../../../lib/api-route-guard";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {

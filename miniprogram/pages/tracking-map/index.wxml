@@ -1,0 +1,2 @@
+<view class="map-error" wx:if="{{error}}">{{error}}</view>
+<web-view wx:else src="{{src}}" binderror="onWebViewError"></web-view>
