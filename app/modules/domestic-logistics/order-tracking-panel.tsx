@@ -9,6 +9,12 @@ import { ShipsgoTrackingCard } from "./order-tracking-card";
 import {
   defaultShipsgoMasterBl,
 } from "./shipsgo-format";
+import {
+  CHINA_DEPARTURE_PORT_OPTIONS,
+  CUSTOM_CHINA_DEPARTURE_PORT_VALUE,
+  DEFAULT_CHINA_DEPARTURE_PORT_CODE,
+  isCommonChinaDeparturePort,
+} from "./shipsgo-port-options";
 
 export function ShipsgoOrderTrackingPanel({
   row,
@@ -34,7 +40,7 @@ export function ShipsgoOrderTrackingPanel({
   const trackings = row.shipsgoTrackings || [];
   const hasTracking = trackings.length > 0;
   const [carrierScac, setCarrierScac] = useState("");
-  const [portCode, setPortCode] = useState("");
+  const [portCode, setPortCode] = useState(DEFAULT_CHINA_DEPARTURE_PORT_CODE);
   const [showCarrierInput, setShowCarrierInput] = useState(false);
   const [createError, setCreateError] = useState("");
   const [expandedTimelineId, setExpandedTimelineId] = useState("");
@@ -54,7 +60,7 @@ export function ShipsgoOrderTrackingPanel({
 
   useEffect(() => {
     setCarrierScac("");
-    setPortCode("");
+    setPortCode(DEFAULT_CHINA_DEPARTURE_PORT_CODE);
     setShowCarrierInput(false);
     setCreateError("");
     setExpandedTimelineId("");
@@ -71,6 +77,10 @@ export function ShipsgoOrderTrackingPanel({
     setCreateError("");
     if (missingTrackingTarget) {
       setCreateError("请先在物流信息中录入提单号或柜号后再开始追踪");
+      return;
+    }
+    if (!portCode) {
+      setCreateError("请选择中国起运港，或输入其他中国港口代码");
       return;
     }
     try {
@@ -180,14 +190,30 @@ export function ShipsgoOrderTrackingPanel({
             </label>
           ) : null}
           <label>
-            中国起运港代码（港区跟踪）
-            <input
-              value={portCode}
-              onChange={(event) => setPortCode(event.target.value.toUpperCase())}
-              placeholder="例如 CNSHA；已设后台默认值可留空"
-              maxLength={16}
-            />
+            中国起运港（港区跟踪）
+            <select
+              value={isCommonChinaDeparturePort(portCode) ? portCode : CUSTOM_CHINA_DEPARTURE_PORT_VALUE}
+              onChange={(event) => setPortCode(
+                event.target.value === CUSTOM_CHINA_DEPARTURE_PORT_VALUE ? "" : event.target.value,
+              )}
+            >
+              {CHINA_DEPARTURE_PORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+              <option value={CUSTOM_CHINA_DEPARTURE_PORT_VALUE}>其他港口（手动输入）</option>
+            </select>
           </label>
+          {!isCommonChinaDeparturePort(portCode) ? (
+            <label>
+              其他中国港口代码
+              <input
+                value={portCode}
+                onChange={(event) => setPortCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))}
+                placeholder="例如 CNXMN"
+                maxLength={16}
+              />
+            </label>
+          ) : null}
           <span className={styles.infoStrip}>点击后将分别查询海运、中国港区和中国海关；海运不支持该船公司时，港区和海关仍会继续。</span>
           {createError ? (
             <div className={`${styles.inlineError} ${styles.shipsgoCreateError}`} role="alert">

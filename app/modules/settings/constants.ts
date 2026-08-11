@@ -153,7 +153,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   freightowerWebhookAccessSecret: "",
   freightowerWebhookAccessSecretConfigured: false,
   freightowerDefaultCarrierCode: "AUTO",
-  freightowerDefaultPortCode: "",
+  freightowerDefaultPortCode: "CNSHA",
   freightowerDefaultIsExport: "E",
   freightowerDefaultLang: "zh",
   freightowerHiddenReference: false,

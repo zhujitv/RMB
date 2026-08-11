@@ -188,7 +188,11 @@ export function normalizeShipsgoIntegrationSettings(value: unknown = {}) {
     ),
     freightowerWebhookAccessSecret: cleanFreightowerSecret(input.freightowerWebhookAccessSecret || input.freightowerWebhookSecret),
     freightowerDefaultCarrierCode: cleanProviderCode(input.freightowerDefaultCarrierCode, DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerDefaultCarrierCode),
-    freightowerDefaultPortCode: cleanProviderCode(input.freightowerDefaultPortCode, "", 16),
+    freightowerDefaultPortCode: cleanProviderCode(
+      input.freightowerDefaultPortCode,
+      DEFAULT_SHIPSGO_INTEGRATION_SETTINGS.freightowerDefaultPortCode,
+      16,
+    ),
     freightowerDefaultIsExport: cleanFreightowerIsExport(input.freightowerDefaultIsExport),
     freightowerDefaultLang: cleanFreightowerLang(input.freightowerDefaultLang),
     freightowerHiddenReference: input.freightowerHiddenReference === true,
