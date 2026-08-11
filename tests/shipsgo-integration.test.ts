@@ -428,7 +428,7 @@ test("tracking creation keeps port and customs active when comprehensive ocean t
   assert.match(logisticsModule, /请选择中国起运港，或输入其他中国港口代码/);
   assert.match(logisticsModule, /portCode: payload\.portCode \|\| ""/);
   assert.match(logisticsModule, /isExport: "E"/);
-  assert.match(logisticsModule, /海运不支持该船公司时，港区和海关仍会继续/);
+  assert.doesNotMatch(logisticsModule, /点击后将分别查询海运、中国港区和中国海关/);
   assert.doesNotMatch(logisticsModule, /本地未保存.*跟踪ID，请先同步已有跟踪/);
 });
 

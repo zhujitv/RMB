@@ -214,7 +214,6 @@ export function ShipsgoOrderTrackingPanel({
               />
             </label>
           ) : null}
-          <span className={styles.infoStrip}>点击后将分别查询海运、中国港区和中国海关；海运不支持该船公司时，港区和海关仍会继续。</span>
           {createError ? (
             <div className={`${styles.inlineError} ${styles.shipsgoCreateError}`} role="alert">
               {createError}
