@@ -1,7 +1,7 @@
 import { prisma } from "../prisma";
-import { NOTIFICATION_TYPES } from "./notification-definition-types";
 import { templateValue } from "./notification-helpers";
 import { sendNotificationEmail } from "./notification-send";
+export { freightowerTrackingEmailAudiencePolicy } from "./freightower-notification-audience";
 
 type DateValue = Date | string | null | undefined;
 
@@ -36,20 +36,6 @@ function displayDateTime(value: DateValue, locale: "zh" | "en") {
 
 export function freightowerTrackingEventTimeText(value: DateValue) {
   return displayDateTime(value, "zh");
-}
-
-export function freightowerTrackingEmailAudiencePolicy(input: {
-  portRolloverChanged: boolean;
-  customsChanged: boolean;
-}) {
-  return {
-    internalType: input.portRolloverChanged
-      ? NOTIFICATION_TYPES.FREIGHTOWER_PORT_ROLLOVER_ALERT
-      : input.customsChanged
-        ? NOTIFICATION_TYPES.FREIGHTOWER_CUSTOMS_ALERT
-        : NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
-    customerAllowed: !input.portRolloverChanged && !input.customsChanged,
-  };
 }
 
 function displayDate(value: DateValue, locale: "zh" | "en") {

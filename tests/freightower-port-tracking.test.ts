@@ -18,6 +18,11 @@ const {
 const {
   freightowerPortAlerts,
 } = await jiti.import<typeof import("../lib/platform/freightower-supplemental-alerts.ts")>("../lib/platform/freightower-supplemental-alerts.ts");
+const {
+  freightowerPortOperationEventSegment,
+  freightowerPortOperationNotificationTitle,
+  isFreightowerPortOperationEvent,
+} = await jiti.import<typeof import("../lib/platform/freightower-port-notifications.ts")>("../lib/platform/freightower-port-notifications.ts");
 
 const apiSource = readFileSync("lib/platform/freightower-api.ts", "utf8");
 const portSource = readFileSync("lib/platform/freightower-port-tracking.ts", "utf8");
@@ -105,6 +110,18 @@ test("China port events normalize official equipment, release, transport, and du
   assert.equal(extractFreightowerPortTimeline(
     mergeFreightowerPortResponses(officialPayload, partial),
   ).length, 4);
+});
+
+test("China port opening and cut-off events produce stable internal notification labels", () => {
+  const opened = { eventCode: "CYOP", eventCategory: "POTE", time: "2026-08-11T01:00:00.000Z", description: "出口进箱开始" };
+  const openingChanged = { ...opened, time: "2026-08-11T03:00:00.000Z" };
+  const cutOffChanged = { eventCode: "WCYCL", time: "2026-08-11T04:00:00.000Z", description: "截港时间变更" };
+  assert.equal(isFreightowerPortOperationEvent(opened), true);
+  assert.equal(freightowerPortOperationNotificationTitle(opened, [opened]), "港区已开放，可以进箱");
+  assert.equal(freightowerPortOperationNotificationTitle(openingChanged, [opened, openingChanged]), "开港时间变更");
+  assert.equal(freightowerPortOperationNotificationTitle(cutOffChanged), "截港时间变更");
+  assert.match(freightowerPortOperationEventSegment(opened), /^port-operation:[a-f0-9]{64}$/);
+  assert.notEqual(freightowerPortOperationEventSegment(opened), freightowerPortOperationEventSegment(openingChanged));
 });
 
 test("China port tracking uses API-key Bearer GET and POST endpoints with bounded requests", () => {

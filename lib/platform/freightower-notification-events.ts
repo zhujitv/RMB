@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { ShipsgoTracking } from "../generated/prisma/client.js";
-import { latestFreightowerDumpingAlert } from "./freightower-alerts";
+import { extractFreightowerAlerts, latestFreightowerDumpingAlert } from "./freightower-alerts";
 import {
   extractFreightowerCustomsTimeline,
   latestFreightowerCustomsEvent,
@@ -10,6 +10,10 @@ import {
   freightowerCustomsEventHasActiveAlert,
   freightowerPortEventHasActiveAlert,
 } from "./freightower-supplemental-alerts";
+import {
+  freightowerPortOperationEventSegment,
+  isFreightowerPortOperationEvent,
+} from "./freightower-port-notifications";
 
 function dumpingAlertEventKey(alert: NonNullable<ReturnType<typeof latestFreightowerDumpingAlert>>) {
   return crypto.createHash("sha256").update([
@@ -38,8 +42,26 @@ export type FreightowerNotificationEvent = {
   isDumpingWarning: boolean;
 };
 
+export function freightowerComprehensivePortOperationEvent(tracking: ShipsgoTracking) {
+  const alerts = extractFreightowerAlerts(tracking.rawResponse ?? tracking.rawPayload);
+  const alert = alerts.find((item) => isFreightowerPortOperationEvent({ eventCode: item.code }));
+  if (!alert) return null;
+  return {
+    time: alert.time,
+    location: alert.location,
+    description: alert.description || alert.title,
+    vesselName: tracking.vesselName || "",
+    voyage: tracking.voyage || "",
+    eventCode: alert.code,
+    eventCategory: alert.category,
+    isWarning: true,
+    isDumpingWarning: false,
+  } satisfies FreightowerNotificationEvent;
+}
+
 export function freightowerComprehensiveTrackingNotificationEventKey(tracking: ShipsgoTracking) {
   const dumpingAlert = latestFreightowerDumpingAlert(tracking.rawResponse ?? tracking.rawPayload);
+  const portOperationEvent = freightowerComprehensivePortOperationEvent(tracking);
   return dumpingAlert
     ? `${tracking.id}:dumping:${dumpingAlertEventKey(dumpingAlert)}`
     : [
@@ -50,6 +72,7 @@ export function freightowerComprehensiveTrackingNotificationEventKey(tracking: S
         tracking.eta?.toISOString() || "",
         tracking.vesselName || "",
         tracking.voyage || "",
+        freightowerPortOperationEventSegment(portOperationEvent),
       ].join(":");
 }
 
@@ -68,8 +91,9 @@ export function hasFreightowerTrackingNotificationChange(before: ShipsgoTracking
 
 export function freightowerPortTrackingNotificationEventKey(tracking: ShipsgoTracking) {
   const events = extractFreightowerPortTimeline(tracking.portRawResponse);
+  const portOperationEvent = [...events].reverse().find(isFreightowerPortOperationEvent);
   return events.length
-    ? `${tracking.id}:port:${timelineEventKey(events)}`
+    ? `${tracking.id}:port:${timelineEventKey(events)}:${freightowerPortOperationEventSegment(portOperationEvent)}`
     : `${tracking.id}:port:none`;
 }
 

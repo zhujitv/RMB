@@ -39,6 +39,7 @@ const syncSource = readFileSync("lib/platform/shipsgo-tracking-sync-operation.ts
 const recoverySource = readFileSync("lib/platform/shipsgo-tracking-recovery.ts", "utf8");
 const scheduledSource = readFileSync("lib/platform/shipsgo-tracking-scheduled-sync.ts", "utf8");
 const notificationsSource = readFileSync("lib/platform/shipsgo-tracking-notifications.ts", "utf8");
+const notificationCopySource = readFileSync("lib/platform/freightower-notification-copy.ts", "utf8");
 const pendingNotificationSource = readFileSync("lib/platform/freightower-notification-pending.ts", "utf8");
 const cronSource = readFileSync("app/api/cron/freightower-sync/route.ts", "utf8");
 const domesticOpsSource = readFileSync("lib/platform/domestic-logistics-ops-shared.ts", "utf8");
@@ -445,7 +446,7 @@ test("China customs state joins manual, scheduled, web, and mini timelines", () 
   assert.match(serializer, /extractFreightowerCustomsTimeline/);
   assert.match(serializer, /const clientCustomsTimeline = customsTimeline\.map/);
   assert.match(serializer, /maskCustomsDeclarationNumbers/);
-  assert.match(notificationsSource, /maskCustomsDeclarationNumbers/);
+  assert.match(notificationCopySource, /maskCustomsDeclarationNumbers/);
   assert.match(notificationsSource, /changeEvents/);
   assert.match(notificationsSource, /const currentDumpingAlert = comprehensiveChanged \? dumpingAlert : null/);
   assert.doesNotMatch(notificationsSource, /changeSources\.join/);
