@@ -100,6 +100,10 @@ async function processLogisticsInvoiceNotificationOutboxRow(outboxId: string) {
       const skipped = await markOutboxSkipped(outbox, "账单已上传或确认发票，无需再次发送上传提醒。");
       return { ...skipped, claimed: true, expenseIds: rows.map((row) => row.id), supplierName: rows[0]?.supplierNameSnapshot || "" };
     }
+    if (rows[0]?.supplier?.allowLogisticsInvoiceUpload !== true) {
+      const skipped = await markOutboxSkipped(outbox, "供应商未开通物流发票上传权限，不发送开票通知邮件。");
+      return { ...skipped, claimed: true, expenseIds: rows.map((row) => row.id), supplierName: rows[0]?.supplierNameSnapshot || "" };
+    }
     const settings = await getLogisticsInvoiceNotificationSettings();
     if (settings.autoSendOnApproval === false) {
       const skipped = await markOutboxSkipped(outbox, "自动发送开票通知已停用。");

@@ -82,6 +82,10 @@ export function LogisticsExpenseRows({
   const supplierNames = expense.supplierNames?.length
     ? expense.supplierNames
     : [...new Set(drawer.items.map((item) => item.supplierName).filter((name): name is string => Boolean(name)))];
+  const canNotifySupplier = Boolean(
+    expense.supplierAllowLogisticsInvoiceUpload
+    || drawer.items.some((item) => item.supplierAllowLogisticsInvoiceUpload),
+  );
 
   return (
     <SideDetailDrawer
@@ -104,6 +108,7 @@ export function LogisticsExpenseRows({
           canReviewBill={drawer.canReviewBill}
           canSubmitThisBill={drawer.canSubmitThisBill}
           canWithdraw={canWithdraw && !drawer.isVoided}
+          canNotifySupplier={canNotifySupplier}
           hasInvoiceNoticeFailure={drawer.hasInvoiceNoticeFailure}
           hasPendingChanges={drawer.hasPendingChanges}
           shouldShowSubmitBill={drawer.shouldShowSubmitBill}

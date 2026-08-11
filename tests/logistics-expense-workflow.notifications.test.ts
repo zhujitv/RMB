@@ -141,6 +141,17 @@ test("approved logistics expenses notify supplier contacts without coupling emai
 	assert.match(backend, /if \(providerDelivered\)[\s\S]*sent: true[\s\S]*trackingError: message/);
 });
 
+test("backend displays logistics supplier upload access without offering email for disabled access", () => {
+  assert.match(settingsModule, /label: "发票上传"/);
+  assert.match(settingsModule, /row\.allowLogisticsInvoiceUpload \? "已开通" : "未开通"/);
+  assert.doesNotMatch(settingsModule, /未开通 · 需邮件通知/);
+  assert.doesNotMatch(logisticsFeesDetails, /suppliersWithoutInvoiceUpload|未开通后台发票上传权限|发送开票通知邮件/);
+  assert.match(logisticsFeesDetails, /canReview && canNotifySupplier && hasInvoiceNoticeFailure/);
+  assert.match(backend, /expense\.supplier\?\.allowLogisticsInvoiceUpload !== true\) return/);
+  assert.match(backend, /group\.supplier\?\.allowLogisticsInvoiceUpload !== true/);
+  assert.match(logisticsInvoiceNotificationOutboxSource, /未开通物流发票上传权限，不发送开票通知邮件/);
+});
+
 test("settings include configurable logistics invoice notification template", () => {
   assert.match(
     backend,

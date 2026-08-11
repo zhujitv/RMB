@@ -15,6 +15,7 @@ export function LogisticsExpenseBillActions({
   canReviewBill,
   canSubmitThisBill,
   canWithdraw,
+  canNotifySupplier,
   hasInvoiceNoticeFailure,
   hasPendingChanges,
   shouldShowSubmitBill,
@@ -39,6 +40,7 @@ export function LogisticsExpenseBillActions({
   canReviewBill: boolean;
   canSubmitThisBill: boolean;
   canWithdraw: boolean;
+  canNotifySupplier: boolean;
   hasInvoiceNoticeFailure: boolean;
   hasPendingChanges: boolean;
   shouldShowSubmitBill: boolean;
@@ -120,7 +122,7 @@ export function LogisticsExpenseBillActions({
           </button>
         </>
       ) : null}
-      {canReview && hasInvoiceNoticeFailure ? (
+      {canReview && canNotifySupplier && hasInvoiceNoticeFailure ? (
         <button
           className={styles.billAddLineButton}
           type="button"
