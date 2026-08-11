@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import {
   CommissionFormulaSettingsCard,
   BusinessEntitySettingsCard,
@@ -20,14 +19,10 @@ import { SettingsHomeGrid } from "./settings-home-grid";
 import { SettingsTableContent } from "./module-edit-panels";
 import type { useSettingsController } from "./use-settings-controller";
 import type { OcrValidationRulesDraft } from "./ocr-integration-settings-card";
-import { WechatOfficialSettingsCard } from "./wechat-official-settings-card";
-import { WechatMiniSettingsCard } from "./wechat-mini-settings-card";
 
 type SettingsController = ReturnType<typeof useSettingsController> & {
   ocrValidationRulesDraft: OcrValidationRulesDraft;
   confirmDiscardCurrentSettings: () => boolean;
-  setWechatSettingsDirty: (dirty: boolean) => void;
-  setWechatSettingsBusy: (busy: boolean) => void;
 };
 
 export function SettingsModuleTabContent({ settings }: { settings: SettingsController }) {
@@ -93,21 +88,7 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     setOcrIntegrationMessage,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
-    setWechatSettingsDirty,
-    setWechatSettingsBusy,
   } = settings;
-  const [wechatOfficialDirty, setWechatOfficialDirty] = useState(false);
-  const [wechatOfficialBusy, setWechatOfficialBusy] = useState(false);
-  const [wechatMiniDirty, setWechatMiniDirty] = useState(false);
-  const [wechatMiniBusy, setWechatMiniBusy] = useState(false);
-
-  useEffect(() => {
-    setWechatSettingsDirty(wechatOfficialDirty || wechatMiniDirty);
-  }, [setWechatSettingsDirty, wechatMiniDirty, wechatOfficialDirty]);
-
-  useEffect(() => {
-    setWechatSettingsBusy(wechatOfficialBusy || wechatMiniBusy);
-  }, [setWechatSettingsBusy, wechatMiniBusy, wechatOfficialBusy]);
 
   if (activeTab === "home") return <SettingsHomeGrid onSelect={selectTab} />;
   if (activeTab === "companyProfile") {
@@ -239,14 +220,6 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
             setShipsgoIntegrationMessage("");
           }}
           onSubmit={saveShipsgoIntegrationSettings}
-        />
-        <WechatOfficialSettingsCard
-          onDirtyChange={setWechatOfficialDirty}
-          onBusyChange={setWechatOfficialBusy}
-        />
-        <WechatMiniSettingsCard
-          onDirtyChange={setWechatMiniDirty}
-          onBusyChange={setWechatMiniBusy}
         />
       </>
     );

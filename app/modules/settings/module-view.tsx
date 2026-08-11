@@ -9,8 +9,6 @@ import type { OcrValidationRulesDraft } from "./ocr-integration-settings-card";
 type SettingsController = ReturnType<typeof useSettingsController> & {
   ocrValidationRulesDraft: OcrValidationRulesDraft;
   confirmDiscardCurrentSettings: () => boolean;
-  setWechatSettingsDirty: (dirty: boolean) => void;
-  setWechatSettingsBusy: (busy: boolean) => void;
 };
 
 export function SettingsModuleView(settings: SettingsController) {
