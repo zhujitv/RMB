@@ -6,6 +6,9 @@ import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-po
 import styles from "./WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "./types";
 
+const ICP_RECORD_NUMBER = "浙ICP备2026063624号-1";
+const ICP_RECORD_URL = "https://beian.miit.gov.cn/";
+
 type LoginPanelProps = {
   message?: string;
   companyProfile?: CompanyProfileSettings | null;
@@ -145,7 +148,14 @@ export function LoginPanel({
           </section>
         </div>
       ) : null}
-      {footerText ? <footer className={styles.loginFooter}>{footerText}</footer> : null}
+      <footer className={styles.loginFooter}>
+        {footerText ? <span>{footerText}</span> : null}
+        <nav aria-label="网站备案信息">
+          <a href={ICP_RECORD_URL} target="_blank" rel="noopener noreferrer">
+            {ICP_RECORD_NUMBER}
+          </a>
+        </nav>
+      </footer>
     </main>
   );
 }
