@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import { apiJson } from "../api";
+import { DismissibleLayer } from "../components/dismissible-layer";
 import styles from "../WorkspaceShell.module.css";
+import wechatStyles from "./wechat-panel.module.css";
 
 type WechatSubscriptionStatus = {
   available: boolean;
@@ -23,6 +26,8 @@ export function WechatNotificationPanel() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [bindingQrCode, setBindingQrCode] = useState("");
+  const [bindingExpiresAt, setBindingExpiresAt] = useState("");
 
   async function loadStatus() {
     setLoading(true);
@@ -38,22 +43,42 @@ export function WechatNotificationPanel() {
 
   useEffect(() => { void loadStatus(); }, []);
 
+  useEffect(() => {
+    if (!bindingQrCode) return;
+    let active = true;
+    const timer = window.setInterval(() => {
+      void apiJson<{ status?: WechatSubscriptionStatus }>("/api/wechat-official/subscription")
+        .then((result) => {
+          if (!active || !result.status?.binding?.enabled) return;
+          setStatus(result.status);
+          setBindingQrCode("");
+          setBindingExpiresAt("");
+          setMessage("微信公众号绑定成功，可以持续接收物流通知。");
+        })
+        .catch(() => undefined);
+    }, 2_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [bindingQrCode]);
+
   async function subscribe() {
     setBusy(true);
     setMessage("");
     try {
-      const result = await apiJson<{ authorizationUrl?: string }>("/api/wechat-official/subscription", { method: "POST" });
+      const result = await apiJson<{ authorizationUrl?: string; expiresAt?: string }>("/api/wechat-official/subscription", { method: "POST" });
       if (!result.authorizationUrl) throw new Error("系统未生成微信授权地址");
       if (/MicroMessenger/i.test(window.navigator.userAgent)) {
         window.location.assign(result.authorizationUrl);
         return;
       }
-      try {
-        await window.navigator.clipboard.writeText(result.authorizationUrl);
-        setMessage("微信绑定链接已复制。请发送到自己的微信，并在微信内打开完成绑定。");
-      } catch {
-        setMessage("请在微信内打开本系统，再点击“绑定微信公众号”完成绑定。");
-      }
+      const qrCode = await QRCode.toDataURL(result.authorizationUrl, {
+        width: 300,
+        margin: 2,
+        errorCorrectionLevel: "M",
+        color: { dark: "#0f172a", light: "#ffffff" },
+      });
+      setBindingQrCode(qrCode);
+      setBindingExpiresAt(result.expiresAt || "");
+      setMessage("请使用已经关注公司公众号的微信扫码绑定。");
       setBusy(false);
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : "创建微信授权失败");
@@ -101,7 +126,7 @@ export function WechatNotificationPanel() {
       <p className={styles.accountNote}>
         微信绑定一次后即可持续接收物流模板消息；物流变化时默认通知管理员和该订单业务员。陌生关注者无法收到订单信息，只有已登录系统并完成绑定的员工才会进入通知名单。
       </p>
-      <p className={styles.accountNote}>绑定前请先关注公司公众号；电脑端点击后会复制绑定链接，请发送到自己的微信中打开。</p>
+      <p className={styles.accountNote}>绑定前请先关注公司公众号；电脑端点击后直接使用微信扫描二维码，页面会自动确认结果。</p>
       {!status?.available ? <p className={styles.accountNote}>{status?.requirement || "公众号接口尚未启用。"}</p> : null}
       {status?.attentionRequired ? (
         <p className={styles.inlineError}>存在发送结果未知或永久失败的微信通知。系统已停止自动重发，请由管理员核对后让相关用户重新授权。</p>
@@ -115,6 +140,28 @@ export function WechatNotificationPanel() {
           <button className={styles.secondaryButton} type="button" onClick={() => void unlink()} disabled={busy}>停止微信通知</button>
         ) : null}
       </div>
+      {bindingQrCode ? (
+        <DismissibleLayer
+          ariaLabel="绑定微信公众号"
+          overlayClassName={styles.modalOverlay}
+          surfaceClassName={wechatStyles.bindingDialog}
+          onClose={() => { setBindingQrCode(""); setBindingExpiresAt(""); }}
+        >
+          {() => (
+            <>
+              <div className={wechatStyles.bindingHeader}>
+                <div><strong>微信扫码绑定</strong><span>请使用已经关注公司公众号的微信扫一扫</span></div>
+                <button type="button" aria-label="关闭" onClick={() => { setBindingQrCode(""); setBindingExpiresAt(""); }}>×</button>
+              </div>
+              <div className={wechatStyles.qrFrame}>
+                <img src={bindingQrCode} alt="微信公众号绑定二维码" width="300" height="300" />
+              </div>
+              <p>扫码后在微信中确认，当前页面会自动显示绑定成功。</p>
+              <small>二维码约 15 分钟内有效{bindingExpiresAt ? ` · ${new Date(bindingExpiresAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 前完成` : ""}</small>
+            </>
+          )}
+        </DismissibleLayer>
+      ) : null}
     </div>
   );
 }

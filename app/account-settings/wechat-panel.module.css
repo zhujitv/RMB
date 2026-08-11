@@ -1,0 +1,64 @@
+.bindingDialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid #dbeafe;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+  text-align: center;
+}
+
+.bindingHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+}
+
+.bindingHeader div {
+  display: grid;
+  gap: 6px;
+}
+
+.bindingHeader strong {
+  color: #0f172a;
+  font-size: 20px;
+}
+
+.bindingHeader span,
+.bindingDialog p,
+.bindingDialog small {
+  color: #64748b;
+}
+
+.bindingHeader button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.qrFrame {
+  width: fit-content;
+  margin: 22px auto 16px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.qrFrame img {
+  display: block;
+  width: min(300px, calc(100vw - 92px));
+  height: auto;
+}
+
+.bindingDialog p {
+  margin: 0 0 8px;
+  line-height: 1.6;
+}
