@@ -44,7 +44,6 @@ const pendingNotificationSource = readFileSync("lib/platform/freightower-notific
 const cronSource = readFileSync("app/api/cron/freightower-sync/route.ts", "utf8");
 const domesticOpsSource = readFileSync("lib/platform/domestic-logistics-ops-shared.ts", "utf8");
 const serializer = readFileSync("lib/platform/shipsgo-tracking-serializer.ts", "utf8");
-const miniDetail = readFileSync("miniprogram/pages/tracking-detail/index.wxml", "utf8");
 const schema = readPrismaSchemaSource();
 const migration = readFileSync("prisma/migrations/20260804100000_freightower_customs_tracking/migration.sql", "utf8");
 const contextMigration = readFileSync("prisma/migrations/20260804110000_freightower_supplemental_context/migration.sql", "utf8");
@@ -414,7 +413,7 @@ test("an explicit same-time release resolves a customs warning for the same decl
   assert.equal(alerts[0]?.active, false);
 });
 
-test("China customs state joins manual, scheduled, web, and mini timelines", () => {
+test("China customs state joins manual, scheduled, and web timelines", () => {
   for (const field of ["customsTrackingStatus", "customsBillNumber", "customsDirection", "customsNotificationBaselineAt", "customsRawResponse"]) {
     assert.match(schema, new RegExp(field));
   }
@@ -460,6 +459,4 @@ test("China customs state joins manual, scheduled, web, and mini timelines", () 
   for (const field of ["portRawResponse", "customsRawResponse", "customsTrackingStatus"]) {
     assert.match(domesticOpsSource, new RegExp(`${field}: true`));
   }
-  assert.match(miniDetail, /中国海关跟踪/);
-  assert.match(miniDetail, /item\.source/);
 });

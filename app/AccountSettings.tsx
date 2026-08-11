@@ -9,7 +9,6 @@ import { passwordStrength } from "./account-settings/helpers";
 import { type AccountSettingsProps, type AccountTab, type LoginRecord, type LoginRecordsResponse, type PasswordResponse, type ProfileResponse } from "./account-settings/model";
 import { AccountSettingsHeader, AccountSettingsTabs } from "./account-settings/navigation";
 import { ProfilePanel, SecurityPanel } from "./account-settings/panels";
-import { WechatNotificationPanel } from "./account-settings/wechat-panel";
 import { apiJson } from "./api";
 import { initials } from "./utils";
 import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "./workspace/workspace-tab-context";
@@ -39,10 +38,6 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onBefore
   const [loginRecords, setLoginRecords] = useState<LoginRecord[]>([]);
   const [loginRecordsState, setLoginRecordsState] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [loginRecordsMessage, setLoginRecordsMessage] = useState("");
-
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("wechatSubscription")) setTab("wechat");
-  }, []);
 
   useEffect(() => {
     setProfileForm({
@@ -274,7 +269,6 @@ export function AccountSettings({ user, companyProfile, onProfileSaved, onBefore
               onPreferenceChange={(field, value) => setPreferenceForm((current) => ({ ...current, [field]: value }))}
             />
           ) : null}
-          {tab === "wechat" ? <WechatNotificationPanel /> : null}
           {message ? <p className={styles.formMessage}>{message}</p> : null}
         </div>
       </div>

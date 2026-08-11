@@ -21,12 +21,9 @@ import {
   freightowerTrackingEventTimeText,
   freightowerTrackingEmailAudiencePolicy,
   freightowerTrackingEmailVariableSets,
-  freightowerTrackingNotificationUrl,
   sendDurableFreightowerTrackingEmail,
 } from "./freightower-tracking-email-notification";
 import { serializeShipsgoTracking } from "./shipsgo-tracking-serializer";
-import { enqueueWechatOfficialNotifications } from "./wechat-official-notifications";
-import { enqueueWechatMiniNotifications } from "./wechat-mini-notifications";
 import { FREIGHTOWER_PROVIDER } from "./shipsgo-tracking-utils";
 
 export {
@@ -105,17 +102,7 @@ export async function notifyFreightowerTrackingUpdate(
   const internalRecipientSet = new Set(internalRecipientEmails);
   const customerRecipientEmails = uniqueEmails([tracking.order.customer.contactEmail])
     .filter((email) => !internalRecipientSet.has(email));
-  const admins = await prisma.user.findMany({
-    where: { role: "管理员", isActive: true, approvalStatus: "APPROVED", deletedAt: null },
-    select: { id: true },
-  });
-  const recipientUserIds = [
-    ...admins.map((user) => user.id),
-    tracking.order.salesperson?.isActive && tracking.order.salesperson.approvalStatus === "APPROVED"
-      ? tracking.order.salesperson.id
-      : "",
-  ].filter(Boolean);
-  if (!internalRecipientEmails.length && !customerRecipientEmails.length && !recipientUserIds.length) {
+  if (!internalRecipientEmails.length && !customerRecipientEmails.length) {
     return { deliveryKey: options.trackingEventKey || "", terminalSkipped: true };
   }
   const dumpingAlert = latestFreightowerDumpingAlert(tracking.rawResponse ?? tracking.rawPayload);
@@ -158,11 +145,6 @@ export async function notifyFreightowerTrackingUpdate(
 
   const orderNo = templateValue(tracking.order.orderNo);
   const blNo = templateValue(tracking.masterBlNo || tracking.order.blNo || tracking.bookingNumber);
-  const notificationTitle = currentDumpingAlert || portDumping
-    ? "物流甩柜预警"
-    : customsWarning
-      ? "中国海关异常预警"
-      : portOperation.title || "物流状态更新";
   const statusText = templateValue(
     currentDumpingAlert || portDumping
       ? `甩柜预警 / ${tracking.currentStatus || tracking.status || tracking.syncStatus || "运输异常"}`
@@ -182,38 +164,6 @@ export async function notifyFreightowerTrackingUpdate(
   );
   const eventTime = currentDumpingAlert?.time
     || (sourceEvent ? sourceEvent.time : tracking.lastEventAt || tracking.lastSyncedAt || tracking.lastSyncTime);
-  const trackingUrl = freightowerTrackingNotificationUrl(tracking.id);
-
-  const officialNotification = enqueueWechatOfficialNotifications({
-    userIds: recipientUserIds,
-    idempotencyKey: `freightower-tracking-update:${latestEventKey}`,
-    title: notificationTitle,
-    content: `订单：${orderNo}；提单：${blNo}；状态：${statusText}；节点：${eventText}；时间：${freightowerTrackingEventTimeText(eventTime)}`,
-    orderNo,
-    statusText,
-    eventTimeText: freightowerTrackingEventTimeText(eventTime),
-    eventText,
-    url: trackingUrl,
-    relatedEntityType: "shipsgo_tracking",
-    relatedEntityId: tracking.id,
-    relatedOrderId: tracking.orderId,
-  });
-
-  const miniNotification = enqueueWechatMiniNotifications({
-    userIds: recipientUserIds,
-    idempotencyKey: `freightower-tracking-update:${latestEventKey}`,
-    orderNo,
-    statusText,
-    eventText,
-    eventTimeText: freightowerTrackingEventTimeText(eventTime),
-    page: `pages/tracking-detail/index?id=${encodeURIComponent(tracking.id)}`,
-    relatedEntityType: "shipsgo_tracking",
-    relatedEntityId: tracking.id,
-    relatedOrderId: tracking.orderId,
-  });
-
-  const [officialDelivery, miniDelivery] = await Promise.all([officialNotification, miniNotification]);
-
   const warning = Boolean(currentDumpingAlert || portDumping || customsWarning);
   const eventTextEn = currentDumpingAlert
     ? "Container rollover alert"
@@ -294,7 +244,5 @@ export async function notifyFreightowerTrackingUpdate(
     terminalSkipped: false,
     email: emailDelivery,
     customerEmail: customerEmailDelivery,
-    official: officialDelivery,
-    mini: miniDelivery,
   };
 }
