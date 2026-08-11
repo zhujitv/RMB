@@ -6,7 +6,7 @@ export { freightowerTrackingEmailAudiencePolicy } from "./freightower-notificati
 type DateValue = Date | string | null | undefined;
 
 function appBaseUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || process.env.APP_BASE_URL || "https://www.ruscny.com")
+  return (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || process.env.APP_BASE_URL || "https://www.nextwood.net")
     .replace(/\/+$/, "");
 }
 

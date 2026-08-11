@@ -149,7 +149,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   freightowerApiSecretConfigured: false,
   freightowerIframeKey: "",
   freightowerIframeKeyConfigured: false,
-  freightowerWebhookCallbackUrl: "https://www.ruscny.com/api/freightower/webhook",
+  freightowerWebhookCallbackUrl: "https://www.nextwood.net/api/freightower/webhook",
   freightowerWebhookAccessSecret: "",
   freightowerWebhookAccessSecretConfigured: false,
   freightowerDefaultCarrierCode: "AUTO",

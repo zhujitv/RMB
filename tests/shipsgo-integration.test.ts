@@ -295,8 +295,8 @@ test("settings UI focuses on the basic Freightower web workflow", () => {
   assert.match(settingsModule, /Webhook Access Secret/);
   assert.match(settingsModule, /freightowerWebhookCallbackUrl/);
   assert.match(settingsModule, /onChange\("freightowerWebhookCallbackUrl"/);
-  assert.match(settingsModule, /https:\/\/www\.ruscny\.com\/api\/freightower\/webhook/);
-  assert.doesNotMatch(settingsModule, /value="https:\/\/www\.ruscny\.com\/api\/freightower\/webhook" readOnly/);
+  assert.match(settingsModule, /https:\/\/www\.nextwood\.net\/api\/freightower\/webhook/);
+  assert.doesNotMatch(settingsModule, /value="https:\/\/www\.nextwood\.net\/api\/freightower\/webhook" readOnly/);
   assert.match(settingsModule, /未填写时，推送只会触发 API Key 安全回查/);
   assert.doesNotMatch(integration, /FREIGHTOWER_WEBHOOK_SECRET_REQUIRED/);
   assert.match(settingsModule, /测试 API 连接/);
@@ -308,7 +308,7 @@ test("settings UI focuses on the basic Freightower web workflow", () => {
 
 test("Freightower webhook callback URL is editable and restricted to the public HTTPS route", () => {
   const defaults = normalizeShipsgoIntegrationSettings({});
-  assert.equal(defaults.freightowerWebhookCallbackUrl, "https://www.ruscny.com/api/freightower/webhook");
+  assert.equal(defaults.freightowerWebhookCallbackUrl, "https://www.nextwood.net/api/freightower/webhook");
 
   const custom = normalizeShipsgoIntegrationSettings({
     freightowerWebhookCallbackUrl: "https://TRACKING.EXAMPLE.COM./api/freightower/webhook/",

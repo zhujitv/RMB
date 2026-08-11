@@ -64,7 +64,7 @@ export function FreightowerSettingsCard({ form, onChange }: FreightowerSettingsC
               type="url"
               value={form.freightowerWebhookCallbackUrl}
               onChange={(event) => onChange("freightowerWebhookCallbackUrl", event.target.value)}
-              placeholder="https://www.ruscny.com/api/freightower/webhook"
+              placeholder="https://www.nextwood.net/api/freightower/webhook"
               required
             />
           </SettingsField>
