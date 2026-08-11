@@ -16,6 +16,7 @@ const cron = readFileSync("app/api/cron/notification-outbox/route.ts", "utf8");
 const settingsUi = readFileSync("app/modules/settings/wechat-official-settings-card.tsx", "utf8");
 const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const accountUi = readFileSync("app/account-settings/wechat-panel.tsx", "utf8");
+const accountWechatStyles = readFileSync("app/account-settings/wechat-panel.module.css", "utf8");
 const callbackRoute = readFileSync("app/api/wechat-official/subscription/callback/route.ts", "utf8");
 const migration = readFileSync("prisma/migrations/20260802110000_wechat_official_notifications/migration.sql", "utf8");
 const persistentMigration = readFileSync("prisma/migrations/20260812130000_wechat_official_persistent_templates/migration.sql", "utf8");
@@ -113,6 +114,15 @@ test("微信设置独立保存并纳入工作区未保存与忙碌保护", () =>
   assert.match(settingsUi, /disabled=\{saving \|\| testing \|\| dirty/);
   assert.match(settingsModule, /wechatSettingsDirty/);
   assert.match(settingsModule, /wechatSettingsBusy/);
+});
+
+test("电脑端公众号绑定直接显示本地二维码并自动确认结果", () => {
+  assert.match(accountUi, /QRCode\.toDataURL/);
+  assert.match(accountUi, /errorCorrectionLevel: "M"/);
+  assert.match(accountUi, /window\.setInterval/);
+  assert.match(accountUi, /微信公众号绑定成功/);
+  assert.match(accountWechatStyles, /\.qrFrame/);
+  assert.doesNotMatch(accountUi, /clipboard\.writeText/);
 });
 
 test("稳定 Token 并发请求会合并，连接测试也不会强制刷新", async () => {
