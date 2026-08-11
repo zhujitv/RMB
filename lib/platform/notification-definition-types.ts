@@ -44,6 +44,7 @@ export type SendNotificationEmailInput = {
   context?: JsonRecord;
   subjectOverride?: string;
   bodyOverride?: string;
+  htmlOverride?: string;
   ignoreTemplateCc?: boolean;
   ignoreTemplateEnabled?: boolean;
 };
@@ -65,20 +66,33 @@ export const NOTIFICATION_TYPES = {
   SUPPLIER_DOCUMENT_REQUEST: "SUPPLIER_DOCUMENT_REQUEST",
   WORKBENCH_TODO_OVERDUE: "WORKBENCH_TODO_OVERDUE",
   FREIGHTOWER_TRACKING_UPDATE: "FREIGHTOWER_TRACKING_UPDATE",
+  FREIGHTOWER_TRACKING_CUSTOMER_UPDATE: "FREIGHTOWER_TRACKING_CUSTOMER_UPDATE",
+  FREIGHTOWER_PORT_ROLLOVER_ALERT: "FREIGHTOWER_PORT_ROLLOVER_ALERT",
+  FREIGHTOWER_CUSTOMS_ALERT: "FREIGHTOWER_CUSTOMS_ALERT",
 } as const;
 
-export const BILINGUAL_TRACKING_NOTIFICATION_TYPES = new Set<string>([
+export const ENGLISH_TRACKING_NOTIFICATION_TYPES = new Set<string>([
+  NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_CUSTOMER_UPDATE,
+]);
+
+export const CHINESE_TRACKING_NOTIFICATION_TYPES = new Set<string>([
   NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
+  NOTIFICATION_TYPES.FREIGHTOWER_PORT_ROLLOVER_ALERT,
+  NOTIFICATION_TYPES.FREIGHTOWER_CUSTOMS_ALERT,
 ]);
 
 export function logisticsEmailSubjectIsEnglish(value: unknown) {
   return /^[\x20-\x7e]+$/.test(String(value || ""));
 }
 
-export function logisticsEmailBodyIsBilingual(value: unknown) {
+export function logisticsEmailBodyIsEnglish(value: unknown) {
   const text = String(value || "").replace(/\{[a-zA-Z][a-zA-Z0-9_]*\}/g, "");
   const englishWords = text.match(/\b[A-Za-z]{3,}\b/g) || [];
-  return englishWords.length >= 4 && /[\u3400-\u9fff]/u.test(text);
+  return englishWords.length >= 4 && !/[\u3400-\u9fff]/u.test(text);
+}
+
+export function logisticsEmailBodyIsChinese(value: unknown) {
+  return /[\u3400-\u9fff]/u.test(String(value || "").replace(/\{[a-zA-Z][a-zA-Z0-9_]*\}/g, ""));
 }
 
 export const COMMON_SIGNATURE = "NEXTWOOD 供应链协同平台";

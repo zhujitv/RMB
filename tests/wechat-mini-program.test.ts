@@ -72,7 +72,7 @@ test("小程序物流接口复用网页端数据权限和安全序列化", () =>
 test("物流变化同时保留邮件、公众号和小程序三条通知通道", () => {
   assert.match(trackingNotifications, /enqueueWechatOfficialNotifications/);
   assert.match(trackingNotifications, /enqueueWechatMiniNotifications/);
-  assert.match(trackingNotifications, /sendNotificationEmail/);
+  assert.match(trackingNotifications, /sendDurableFreightowerTrackingEmail/);
   assert.match(notifications, /idempotencyKey = `wechat-mini:/);
   assert.match(notifications, /status: "RESERVED"/);
   assert.match(notifications, /status: "CONSUMED"/);

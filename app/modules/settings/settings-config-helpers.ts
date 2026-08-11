@@ -149,9 +149,11 @@ export function notificationTemplatePreview(form: NotificationTemplateForm) {
     .filter(Boolean)
     .join("、");
   const recipientLabels = configuredRecipientLabels
-    || (form.type === "FREIGHTOWER_TRACKING_UPDATE"
+    || (["FREIGHTOWER_TRACKING_UPDATE", "FREIGHTOWER_PORT_ROLLOVER_ALERT", "FREIGHTOWER_CUSTOMS_ALERT"].includes(form.type)
       ? "已启用的管理员和订单业务员"
-      : "按业务规则解析");
+      : form.type === "FREIGHTOWER_TRACKING_CUSTOMER_UPDATE"
+        ? "客户资料中绑定的主联系邮箱"
+        : "按业务规则解析");
   const extraCcText = form.ccEmails
     .split(/[\n,;；]+/g)
     .map((item) => item.trim())

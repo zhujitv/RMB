@@ -5,10 +5,12 @@ import { assertRead, assertWrite } from "./shared-access";
 import { writeAudit } from "./shared-audit";
 import {
   TEXT_LIMITS,
-  BILINGUAL_TRACKING_NOTIFICATION_TYPES,
+  CHINESE_TRACKING_NOTIFICATION_TYPES,
+  ENGLISH_TRACKING_NOTIFICATION_TYPES,
   NOTIFICATION_TYPE_DEFINITIONS,
   NOTIFICATION_TYPES,
-  logisticsEmailBodyIsBilingual,
+  logisticsEmailBodyIsChinese,
+  logisticsEmailBodyIsEnglish,
   logisticsEmailSubjectIsEnglish,
   type ActorLike,
   type AuditRequestLike,
@@ -149,13 +151,16 @@ export async function saveNotificationCenterTemplate(request: AuditRequestLike, 
   const bodyTemplate = editable
     ? cleanTemplateText(data.bodyTemplate, String(current.bodyTemplate || ""), TEXT_LIMITS.body)
     : String(current.bodyTemplate || "");
-  if (BILINGUAL_TRACKING_NOTIFICATION_TYPES.has(type)) {
+  if (ENGLISH_TRACKING_NOTIFICATION_TYPES.has(type)) {
     if (!logisticsEmailSubjectIsEnglish(subjectTemplate)) {
-      throw codedError("物流通知邮件标题必须使用英文。", 400, "LOGISTICS_EMAIL_SUBJECT_ENGLISH_REQUIRED");
+      throw codedError("客户物流通知邮件标题必须使用英文。", 400, "LOGISTICS_EMAIL_SUBJECT_ENGLISH_REQUIRED");
     }
-    if (!logisticsEmailBodyIsBilingual(bodyTemplate)) {
-      throw codedError("物流通知邮件正文必须同时包含英文和中文。", 400, "LOGISTICS_EMAIL_BODY_BILINGUAL_REQUIRED");
+    if (!logisticsEmailBodyIsEnglish(bodyTemplate)) {
+      throw codedError("客户物流通知邮件正文必须使用英文。", 400, "LOGISTICS_EMAIL_BODY_ENGLISH_REQUIRED");
     }
+  }
+  if (CHINESE_TRACKING_NOTIFICATION_TYPES.has(type) && !logisticsEmailBodyIsChinese(bodyTemplate)) {
+    throw codedError("内部物流通知邮件正文必须使用中文。", 400, "LOGISTICS_EMAIL_BODY_CHINESE_REQUIRED");
   }
   const next = await prisma.notificationTemplate.update({
     where: { type },
