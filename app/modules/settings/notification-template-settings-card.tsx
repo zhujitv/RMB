@@ -40,9 +40,11 @@ export function NotificationTemplateSettingsCard({
   const logs = notificationDeliveryLogs(settings);
   const currentForm = form || notificationTemplateFormFromSettings(settings, selectedType);
   const isPortAlertTemplate = currentForm.type === "FREIGHTOWER_PORT_ROLLOVER_ALERT";
+  const isPortOperationTemplate = currentForm.type === "FREIGHTOWER_PORT_OPERATION_ALERT";
   const isCustomsAlertTemplate = currentForm.type === "FREIGHTOWER_CUSTOMS_ALERT";
   const isInternalTrackingTemplate = currentForm.type === "FREIGHTOWER_TRACKING_UPDATE"
     || isPortAlertTemplate
+    || isPortOperationTemplate
     || isCustomsAlertTemplate;
   const preview = notificationTemplatePreview(currentForm);
   const editable = currentForm.editable && !currentForm.securitySensitive;

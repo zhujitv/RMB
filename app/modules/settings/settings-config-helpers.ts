@@ -149,7 +149,7 @@ export function notificationTemplatePreview(form: NotificationTemplateForm) {
     .filter(Boolean)
     .join("、");
   const recipientLabels = configuredRecipientLabels
-    || (["FREIGHTOWER_TRACKING_UPDATE", "FREIGHTOWER_PORT_ROLLOVER_ALERT", "FREIGHTOWER_CUSTOMS_ALERT"].includes(form.type)
+    || (["FREIGHTOWER_TRACKING_UPDATE", "FREIGHTOWER_PORT_ROLLOVER_ALERT", "FREIGHTOWER_PORT_OPERATION_ALERT", "FREIGHTOWER_CUSTOMS_ALERT"].includes(form.type)
       ? "已启用的管理员和订单业务员"
       : form.type === "FREIGHTOWER_TRACKING_CUSTOMER_UPDATE"
         ? "客户资料中绑定的主联系邮箱"

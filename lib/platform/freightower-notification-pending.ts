@@ -10,6 +10,11 @@ import {
   freightowerTrackingNotificationEventKey,
   notifyFreightowerTrackingUpdate,
 } from "./shipsgo-tracking-notifications";
+import { freightowerComprehensivePortOperationEvent } from "./freightower-notification-events";
+import {
+  freightowerPortOperationEventSegment,
+  isFreightowerPortOperationEvent,
+} from "./freightower-port-notifications";
 import {
   claimFreightowerTrackingSyncLease,
   releaseFreightowerTrackingSyncLease,
@@ -36,6 +41,15 @@ export async function markFreightowerNotificationPending(
 
 function preferredPortEvent(tracking: ShipsgoTracking) {
   const events = extractFreightowerPortTimeline(tracking.portRawResponse);
+  const activeDumping = [...events].reverse().find((event) => (
+    event.isDumpingWarning && freightowerPortEventHasActiveAlert(events, event)
+  ));
+  if (activeDumping) return activeDumping;
+  const operation = [...events].reverse().find(isFreightowerPortOperationEvent);
+  const operationSegment = freightowerPortOperationEventSegment(operation);
+  if (operation && operationSegment && !tracking.trackingNotificationQueuedKey?.includes(operationSegment)) {
+    return operation;
+  }
   return [...events].reverse().find((event) => (
     event.isWarning && freightowerPortEventHasActiveAlert(events, event)
   )) || latestFreightowerPortEvent(tracking.portRawResponse);
@@ -49,7 +63,17 @@ function preferredCustomsEvent(tracking: ShipsgoTracking) {
 }
 
 function pendingChanges(tracking: ShipsgoTracking, mask: number) {
+  const comprehensiveOperation = freightowerComprehensivePortOperationEvent(tracking);
+  const comprehensiveOperationSegment = freightowerPortOperationEventSegment(comprehensiveOperation);
+  const hasNewComprehensiveOperation = Boolean(
+    comprehensiveOperation
+    && comprehensiveOperationSegment
+    && !tracking.trackingNotificationQueuedKey?.includes(comprehensiveOperationSegment),
+  );
   return [
+    ...(mask & FREIGHTOWER_NOTIFICATION_COMPREHENSIVE && hasNewComprehensiveOperation
+      ? [{ source: "port" as const, event: comprehensiveOperation }]
+      : []),
     ...(mask & FREIGHTOWER_NOTIFICATION_PORT
       ? [{ source: "port" as const, event: preferredPortEvent(tracking) }]
       : []),

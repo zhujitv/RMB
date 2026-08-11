@@ -1,13 +1,14 @@
 import { prisma } from "../prisma";
 import { freightowerAlertText, latestFreightowerDumpingAlert } from "./freightower-alerts";
 import { extractFreightowerCustomsTimeline, latestFreightowerCustomsEvent } from "./freightower-customs-events";
-import { maskCustomsDeclarationNumbers } from "./freightower-customs-privacy";
+import { freightowerTrackingChangedEventTexts } from "./freightower-notification-copy";
 import {
   freightowerNotificationSourceEvent,
   freightowerTrackingNotificationEventKey,
   type FreightowerNotificationChangeSource,
   type FreightowerNotificationEvent,
 } from "./freightower-notification-events";
+import { freightowerPortOperationNotification } from "./freightower-port-notifications";
 import { extractFreightowerPortTimeline, latestFreightowerPortEvent } from "./freightower-port-events";
 import {
   freightowerCustomsEventHasActiveAlert,
@@ -15,10 +16,7 @@ import {
 } from "./freightower-supplemental-alerts";
 import { NOTIFICATION_TYPES } from "./notification-definitions";
 import { enabledAdminEmails, templateValue, uniqueEmails } from "./notification-helpers";
-import {
-  freightowerCustomerEventText,
-  freightowerCustomerStatusText,
-} from "./freightower-tracking-email";
+import { freightowerCustomerEventText, freightowerCustomerStatusText } from "./freightower-tracking-email";
 import {
   freightowerTrackingEventTimeText,
   freightowerTrackingEmailAudiencePolicy,
@@ -146,6 +144,7 @@ export async function notifyFreightowerTrackingUpdate(
   ));
   const customsChanged = options.changeSource === "customs"
     || changedEvents.some((change) => change.source === "customs");
+  const portOperation = freightowerPortOperationNotification(changedEvents, portTimeline);
 
   const trackingEventKey = options.trackingEventKey || freightowerTrackingNotificationEventKey(tracking);
   const latestEventKey = trackingEventKey;
@@ -159,27 +158,26 @@ export async function notifyFreightowerTrackingUpdate(
 
   const orderNo = templateValue(tracking.order.orderNo);
   const blNo = templateValue(tracking.masterBlNo || tracking.order.blNo || tracking.bookingNumber);
+  const notificationTitle = currentDumpingAlert || portDumping
+    ? "物流甩柜预警"
+    : customsWarning
+      ? "中国海关异常预警"
+      : portOperation.title || "物流状态更新";
   const statusText = templateValue(
     currentDumpingAlert || portDumping
       ? `甩柜预警 / ${tracking.currentStatus || tracking.status || tracking.syncStatus || "运输异常"}`
       : customsWarning
         ? "中国海关异常预警"
-        : tracking.currentStatus || tracking.status || tracking.syncStatus,
+        : portOperation.title || tracking.currentStatus || tracking.status || tracking.syncStatus,
   );
-  const changedEventText = changedEvents.map((change) => {
-    const description = change.source === "customs"
-      ? maskCustomsDeclarationNumbers(change.event?.description || "")
-      : change.event?.description || "";
-    return changedEvents.length > 1
-      ? `${change.source === "customs" ? "中国海关" : "中国港区"}：${description}`
-      : description;
-  }).filter(Boolean).join("；");
-  const singleEventText = options.changeSource === "customs"
-    ? maskCustomsDeclarationNumbers(sourceEvent?.description || "")
-    : sourceEvent?.description || "";
+  const eventTexts = freightowerTrackingChangedEventTexts({
+    changedEvents,
+    changeSource: options.changeSource,
+    sourceEvent,
+  });
   const eventText = templateValue(
-    [currentDumpingAlertText, changedEventText].filter(Boolean).join("；")
-      || singleEventText
+    [currentDumpingAlertText, eventTexts.internalChangedText].filter(Boolean).join("；")
+      || eventTexts.singleInternalText
       || tracking.lastEvent,
   );
   const eventTime = currentDumpingAlert?.time
@@ -189,7 +187,7 @@ export async function notifyFreightowerTrackingUpdate(
   const officialNotification = enqueueWechatOfficialNotifications({
     userIds: recipientUserIds,
     idempotencyKey: `freightower-tracking-update:${latestEventKey}`,
-    title: currentDumpingAlert || portDumping ? "物流甩柜预警" : customsWarning ? "中国海关异常预警" : "物流状态更新",
+    title: notificationTitle,
     content: `订单：${orderNo}；提单：${blNo}；状态：${statusText}；节点：${eventText}；时间：${freightowerTrackingEventTimeText(eventTime)}`,
     url: trackingUrl,
     relatedEntityType: "shipsgo_tracking",
@@ -213,15 +211,9 @@ export async function notifyFreightowerTrackingUpdate(
   const [officialDelivery, miniDelivery] = await Promise.all([officialNotification, miniNotification]);
 
   const warning = Boolean(currentDumpingAlert || portDumping || customsWarning);
-  const customerChangedEventText = changedEvents.map((change) => {
-    const description = freightowerCustomerEventText(change.event);
-    return changedEvents.length > 1
-      ? `${change.source === "customs" ? "China Customs" : "China Port"}: ${description}`
-      : description;
-  }).join("; ");
   const eventTextEn = currentDumpingAlert
     ? "Container rollover alert"
-    : customerChangedEventText || freightowerCustomerEventText(sourceEvent);
+    : eventTexts.customerChangedText || freightowerCustomerEventText(sourceEvent);
   const statusTextEn = freightowerCustomerStatusText(statusText, warning);
   const containerNumbers = tracking.containers.map((item) => item.containerNo).filter(Boolean);
   const currentEta = tracking.predictedDischargeDate || tracking.eta || tracking.dateOfDischarge;
@@ -255,7 +247,11 @@ export async function notifyFreightowerTrackingUpdate(
     customsEventSource: customsEvent ? "freightower_china_customs" : undefined,
     notificationChangeSource: options.changeSource || "comprehensive",
   };
-  const emailAudience = freightowerTrackingEmailAudiencePolicy({ portRolloverChanged, customsChanged });
+  const emailAudience = freightowerTrackingEmailAudiencePolicy({
+    portRolloverChanged,
+    customsChanged,
+    portOperationChanged: portOperation.changed,
+  });
   const [emailDelivery, customerEmailDelivery] = await Promise.all([
     sendDurableFreightowerTrackingEmail({
       type: emailAudience.internalType,

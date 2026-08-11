@@ -62,6 +62,7 @@ const freightowerOnlyMigration = readFileSync("prisma/migrations/20260729160000_
 const notifications = readNotificationEngineSource();
 const trackingNotifications = readFileSync("lib/platform/shipsgo-tracking-notifications.ts", "utf8");
 const trackingEmailNotification = readFileSync("lib/platform/freightower-tracking-email-notification.ts", "utf8");
+const trackingEmailAudience = readFileSync("lib/platform/freightower-notification-audience.ts", "utf8");
 const freightowerNotificationEvents = readFileSync("lib/platform/freightower-notification-events.ts", "utf8");
 const freightowerPendingNotifications = readFileSync("lib/platform/freightower-notification-pending.ts", "utf8");
 const freightowerSyncLease = readFileSync("lib/platform/shipsgo-tracking-sync-lease.ts", "utf8");
@@ -208,10 +209,13 @@ test("Freightower tracking changes split internal Chinese and customer English e
   assert.match(trackingNotifications, /recipientSource: "customer_contact_email"/);
   assert.match(trackingNotifications, /FREIGHTOWER_TRACKING_CUSTOMER_UPDATE/);
   assert.match(trackingNotifications, /portRolloverChanged/);
+  assert.match(trackingNotifications, /portOperationChanged/);
+  assert.match(trackingNotifications, /freightowerPortOperationNotification/);
   assert.match(trackingNotifications, /customsChanged/);
   assert.match(trackingNotifications, /emailAudience\.customerAllowed \? customerRecipientEmails : \[\]/);
-  assert.match(trackingEmailNotification, /FREIGHTOWER_PORT_ROLLOVER_ALERT/);
-  assert.match(trackingEmailNotification, /FREIGHTOWER_CUSTOMS_ALERT/);
+  assert.match(trackingEmailAudience, /FREIGHTOWER_PORT_ROLLOVER_ALERT/);
+  assert.match(trackingEmailAudience, /FREIGHTOWER_PORT_OPERATION_ALERT/);
+  assert.match(trackingEmailAudience, /FREIGHTOWER_CUSTOMS_ALERT/);
   assert.match(trackingEmailNotification, /`freightower-tracking-update:\$\{input\.trackingEventKey\}:\$\{input\.audience\}`/);
   assert.match(trackingNotifications, /"internal"/);
   assert.match(trackingNotifications, /"customer"/);

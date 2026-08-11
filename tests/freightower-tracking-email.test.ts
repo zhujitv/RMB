@@ -90,8 +90,8 @@ test("tracking email labels provider events without timestamps as pending instea
   assert.doesNotMatch(customer, /待飞驼更新/);
 });
 
-test("port rollover and customs alert templates render in Chinese without audience labels", () => {
-  for (const type of ["FREIGHTOWER_PORT_ROLLOVER_ALERT", "FREIGHTOWER_CUSTOMS_ALERT"]) {
+test("port and customs alert templates render in Chinese without audience labels", () => {
+  for (const type of ["FREIGHTOWER_PORT_ROLLOVER_ALERT", "FREIGHTOWER_PORT_OPERATION_ALERT", "FREIGHTOWER_CUSTOMS_ALERT"]) {
     const html = freightowerTrackingEmailHtml(type, variables);
     assert.match(html, /lang="zh-CN"/);
     assert.match(html, /当前状态|最新变化/);
