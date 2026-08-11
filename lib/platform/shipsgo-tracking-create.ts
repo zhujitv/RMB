@@ -30,6 +30,7 @@ import {
   getShipsgoTrackingOrder,
   lockShipsgoTrackingCreation,
   loadShipsgoTrackingWithContainers,
+  orderContainerNumbers,
   replaceShipsgoTrackingContainers,
   type AuditRequestLike,
 } from "./shipsgo-tracking-service-shared";
@@ -65,12 +66,31 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
   }
 
   const payload = createFreightowerPayloadFromInput(body, order, settings);
-  const response = await freightowerApiRequest<unknown>(settings, "/application/v1/query", payload);
-  const mapped = mapFreightowerShipmentPayload(response, settings);
-  const trackingData = trackingDataFromFreightowerMappedShipment(mapped);
+  let mapped: ReturnType<typeof mapFreightowerShipmentPayload> | null = null;
+  let comprehensiveError: unknown = null;
+  try {
+    const response = await freightowerApiRequest<unknown>(settings, "/application/v1/query", payload);
+    mapped = mapFreightowerShipmentPayload(response, settings);
+  } catch (error) {
+    comprehensiveError = error;
+  }
+  const comprehensiveErrorMessage = comprehensiveError instanceof Error
+    ? comprehensiveError.message
+    : "当前船公司暂不支持海运综合跟踪。";
+  const trackingData = mapped
+    ? trackingDataFromFreightowerMappedShipment(mapped)
+    : {
+        status: "SUPPLEMENTAL_ONLY",
+        currentStatus: "港区及海关跟踪中",
+        syncStatus: "SYNC_FAILED",
+        syncMessage: `海运综合跟踪暂不可用：${comprehensiveErrorMessage}；已继续查询中国港区和海关。`.slice(0, 500),
+      };
+  const containerNumbers = mapped?.containerNumbers.length
+    ? mapped.containerNumbers
+    : orderContainerNumbers(order);
   const now = new Date();
   const initialComprehensiveDumping = latestFreightowerDumpingAlert(
-    trackingData.rawResponse ?? trackingData.rawPayload,
+    "rawResponse" in trackingData ? trackingData.rawResponse ?? trackingData.rawPayload : null,
   );
   const initialLease = createFreightowerTrackingSyncLease(now);
   const created = await prisma.$transaction(async (tx) => {
@@ -92,15 +112,18 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
         provider: FREIGHTOWER_PROVIDER,
         mode: OCEAN_MODE,
         ...trackingData,
-        masterBlNo: mapped.masterBlNo || payload.billNo,
-        reference: mapped.reference || payload.businessNo,
-        carrierScac: mapped.carrierScac || payload.carrierCode,
-        bookingNumber: mapped.bookingNumber || payload.billNo,
-        containerNumber: mapped.containerNumber || mapped.containerNumbers[0] || payload.containerNo || null,
-        eta: mapped.eta,
-        currentStatus: mapped.currentStatus,
+        masterBlNo: mapped?.masterBlNo || payload.billNo,
+        reference: mapped?.reference || payload.businessNo,
+        carrierScac: mapped?.carrierScac || payload.carrierCode,
+        bookingNumber: mapped?.bookingNumber || payload.billNo,
+        containerNumber: mapped?.containerNumber || containerNumbers[0] || payload.containerNo || null,
+        eta: mapped?.eta,
+        currentStatus: mapped?.currentStatus || trackingData.currentStatus,
+        portCode: payload.portCode || null,
+        portDirection: "E",
+        customsDirection: "E",
         lastCheckedAt: now,
-        lastSyncedAt: mapped.syncStatus === "SUBSCRIBED" ? null : now,
+        lastSyncedAt: mapped && mapped.syncStatus !== "SUBSCRIBED" ? now : null,
         lastSyncTime: now,
         syncLeaseToken: initialLease.token,
         syncLeaseExpiresAt: initialLease.expiresAt,
@@ -119,7 +142,7 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
   }
   const savedBase = created.row;
   try {
-    await replaceShipsgoTrackingContainers(savedBase.id, mapped.containerNumbers);
+    await replaceShipsgoTrackingContainers(savedBase.id, containerNumbers);
     await Promise.all([
       runNonCriticalTask(
         "飞驼可视中国港区订阅与同步",
@@ -154,7 +177,13 @@ export async function createShipsgoOceanTracking(request: AuditRequestLike, acto
       },
     ));
 
-    return { tracking: serializeShipsgoTracking(saved), alreadyExists: false, message: "飞驼可视跟踪已创建。" };
+    return {
+      tracking: serializeShipsgoTracking(saved),
+      alreadyExists: false,
+      message: comprehensiveError
+        ? "海运综合跟踪暂不可用，已启动中国港区和海关跟踪。"
+        : "飞驼可视跟踪已创建。",
+    };
   } finally {
     await releaseFreightowerTrackingSyncLease(savedBase.id, initialLease.token).catch((error: unknown) => {
       console.error("freightower-create-sync-lease-release-failed", {

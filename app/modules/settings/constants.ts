@@ -154,7 +154,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_FORM: ShipsgoIntegrationForm = {
   freightowerWebhookAccessSecretConfigured: false,
   freightowerDefaultCarrierCode: "AUTO",
   freightowerDefaultPortCode: "",
-  freightowerDefaultIsExport: "",
+  freightowerDefaultIsExport: "E",
   freightowerDefaultLang: "zh",
   freightowerHiddenReference: false,
   oceanTrackingEnabled: true,
@@ -235,9 +235,7 @@ export const FREIGHTOWER_LANG_OPTIONS = [
   { value: "jp", label: "日文" },
 ];
 export const FREIGHTOWER_EXPORT_OPTIONS = [
-  { value: "", label: "不指定" },
   { value: "E", label: "出口 E" },
-  { value: "I", label: "进口 I" },
 ];
 export const USER_ROLES = ["管理员", "业务员", "财务", "物流供应商", FACTORY_SUPPLIER_ACCOUNT_ROLE, "物流资料录入员"];
 export const USER_APPROVAL_STATUS_OPTIONS = [

@@ -92,6 +92,8 @@ test("tracking settings force Freightower as the only provider and keep secrets 
   assert.match(integration, /input\.freightowerIframeKey \|\| input\.freightowerMapKey/);
   assert.equal(normalizeShipsgoIntegrationSettings({}).customsTrackingEnabled, true);
   assert.equal(normalizeShipsgoIntegrationSettings({ customsTrackingEnabled: false }).customsTrackingEnabled, false);
+  assert.equal(normalizeShipsgoIntegrationSettings({}).freightowerDefaultIsExport, "E");
+  assert.equal(normalizeShipsgoIntegrationSettings({ freightowerDefaultIsExport: "I" }).freightowerDefaultIsExport, "E");
   assert.doesNotMatch(integration, /customsTrackingEnabled && \(!value\.freightowerClientId \|\| !value\.freightowerApiSecret\)/);
 });
 
@@ -401,9 +403,26 @@ test("Freightower creation is idempotent per order and provider", () => {
   assert.match(trackingServiceShared, /pg_advisory_xact_lock[\s\S]*::text AS "locked"/);
   assert.match(freightowerSyncLeaseMigration, /shipsgo_trackings_provider_shipment_unique/);
   assert.match(freightowerSyncLeaseMigration, /"deleted_at" IS NULL/);
-  assert.match(createService, /replaceShipsgoTrackingContainers\(savedBase\.id, mapped\.containerNumbers\)/);
+  assert.match(createService, /replaceShipsgoTrackingContainers\(savedBase\.id, containerNumbers\)/);
   assert.match(logisticsModule, /开始追踪/);
   assert.match(logisticsModule, /从\$\{activeProviderLabel\}同步已有跟踪/);
+});
+
+test("tracking creation keeps port and customs active when comprehensive ocean tracking fails", () => {
+  assert.match(createService, /let comprehensiveError: unknown = null/);
+  assert.match(createService, /status: "SUPPLEMENTAL_ONLY"/);
+  assert.match(createService, /portDirection: "E"/);
+  assert.match(createService, /customsDirection: "E"/);
+  assert.match(createService, /syncFreightowerPortTracking\(savedBase\.id, settings\)/);
+  assert.match(createService, /syncFreightowerCustomsTracking\(savedBase\.id, settings\)/);
+  assert.match(createService, /海运综合跟踪暂不可用，已启动中国港区和海关跟踪/);
+  assert.doesNotMatch(syncService, /if \(comprehensiveError\) throw comprehensiveError/);
+  assert.match(syncService, /海运综合跟踪暂不可用，中国港区和海关已继续同步/);
+  assert.match(logisticsModule, /中国起运港代码（港区跟踪）/);
+  assert.match(logisticsModule, /portCode: payload\.portCode \|\| ""/);
+  assert.match(logisticsModule, /isExport: "E"/);
+  assert.match(logisticsModule, /海运不支持该船公司时，港区和海关仍会继续/);
+  assert.doesNotMatch(logisticsModule, /本地未保存.*跟踪ID，请先同步已有跟踪/);
 });
 
 test("Freightower control tower remains read-only and permission scoped", () => {

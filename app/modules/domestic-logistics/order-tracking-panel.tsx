@@ -26,7 +26,7 @@ export function ShipsgoOrderTrackingPanel({
   canManage: boolean;
   canDelete: boolean;
   busyKey: string;
-  onCreate: (payload?: { carrierScac?: string }) => Promise<void>;
+  onCreate: (payload?: { carrierScac?: string; portCode?: string }) => Promise<void>;
   onSync: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecover: () => Promise<void>;
   onDelete: (tracking: ShipsgoTrackingRow) => void;
@@ -34,6 +34,7 @@ export function ShipsgoOrderTrackingPanel({
   const trackings = row.shipsgoTrackings || [];
   const hasTracking = trackings.length > 0;
   const [carrierScac, setCarrierScac] = useState("");
+  const [portCode, setPortCode] = useState("");
   const [showCarrierInput, setShowCarrierInput] = useState(false);
   const [createError, setCreateError] = useState("");
   const [expandedTimelineId, setExpandedTimelineId] = useState("");
@@ -53,6 +54,7 @@ export function ShipsgoOrderTrackingPanel({
 
   useEffect(() => {
     setCarrierScac("");
+    setPortCode("");
     setShowCarrierInput(false);
     setCreateError("");
     setExpandedTimelineId("");
@@ -72,7 +74,7 @@ export function ShipsgoOrderTrackingPanel({
       return;
     }
     try {
-      await onCreate({ carrierScac: showCarrierInput ? carrierScac : "" });
+      await onCreate({ carrierScac: showCarrierInput ? carrierScac : "", portCode });
     } catch (error) {
       const message = error instanceof Error ? error.message : `创建${activeProviderLabel}跟踪失败`;
       setCreateError(message);
@@ -95,13 +97,6 @@ export function ShipsgoOrderTrackingPanel({
       return;
     }
     setExpandedTimelineId(tracking.id);
-    if (!tracking.shipsgoShipmentId) {
-      setTimelineErrors((current) => ({
-        ...current,
-        [tracking.id]: `本地未保存${trackingProviderLabel()}跟踪ID，请先同步已有跟踪。`,
-      }));
-      return;
-    }
     if (shipsgoTimelineEvents(tracking).length && !trackingNeedsRefresh(tracking)) return;
     if (!canManage) {
       setTimelineErrors((current) => ({
@@ -145,7 +140,7 @@ export function ShipsgoOrderTrackingPanel({
     <section className={styles.documentGroupCard}>
       <div className={styles.quickCreateHeader}>
         <div>
-          <strong>{activeProviderLabel}海运跟踪</strong>
+          <strong>{activeProviderLabel}物流跟踪</strong>
         </div>
       </div>
       {trackings.length ? (
@@ -184,6 +179,16 @@ export function ShipsgoOrderTrackingPanel({
               <input value={carrierScac} onChange={(event) => updateCarrierScac(event.target.value)} placeholder="例如 MAEU / COSCO / MSC" />
             </label>
           ) : null}
+          <label>
+            中国起运港代码（港区跟踪）
+            <input
+              value={portCode}
+              onChange={(event) => setPortCode(event.target.value.toUpperCase())}
+              placeholder="例如 CNSHA；已设后台默认值可留空"
+              maxLength={16}
+            />
+          </label>
+          <span className={styles.infoStrip}>点击后将分别查询海运、中国港区和中国海关；海运不支持该船公司时，港区和海关仍会继续。</span>
           {createError ? (
             <div className={`${styles.inlineError} ${styles.shipsgoCreateError}`} role="alert">
               {createError}

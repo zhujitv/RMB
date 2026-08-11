@@ -116,10 +116,11 @@ async function syncLoadedShipsgoOceanTrackingUnlocked(request: AuditRequestLike,
     { status: before.status, syncStatus: before.syncStatus },
     { status: saved.status, syncStatus: saved.syncStatus, lastSyncedAt: saved.lastSyncedAt },
   ));
-  if (comprehensiveError) throw comprehensiveError;
   return {
     tracking: serializeShipsgoTracking(saved),
-    message: syncMessage,
+    message: comprehensiveError
+      ? "海运综合跟踪暂不可用，中国港区和海关已继续同步。"
+      : syncMessage,
   };
 }
 
