@@ -8,6 +8,7 @@ const jiti = createJiti(import.meta.url);
 
 const config = readFileSync("lib/platform/wechat-official-config.ts", "utf8");
 const provider = readFileSync("lib/platform/wechat-official-provider.ts", "utf8");
+const template = readFileSync("lib/platform/wechat-official-template.ts", "utf8");
 const subscriptions = readFileSync("lib/platform/wechat-official-subscriptions.ts", "utf8");
 const notifications = readFileSync("lib/platform/wechat-official-notifications.ts", "utf8");
 const tracking = readFileSync("lib/platform/shipsgo-tracking-notifications.ts", "utf8");
@@ -17,6 +18,7 @@ const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const accountUi = readFileSync("app/account-settings/wechat-panel.tsx", "utf8");
 const callbackRoute = readFileSync("app/api/wechat-official/subscription/callback/route.ts", "utf8");
 const migration = readFileSync("prisma/migrations/20260802110000_wechat_official_notifications/migration.sql", "utf8");
+const persistentMigration = readFileSync("prisma/migrations/20260812130000_wechat_official_persistent_templates/migration.sql", "utf8");
 const securityAudit = readFileSync("scripts/security-audit.mjs", "utf8");
 const schema = readPrismaSchemaSource();
 
@@ -28,27 +30,47 @@ test("微信公众号密钥只在服务端加密保存且不回传明文", () =>
   assert.doesNotMatch(accountUi, /appSecret/i);
 });
 
-test("一次性订阅授权严格校验 reserved、模板和场景", () => {
+test("公众号使用一次绑定的静默网页授权并严格校验 state", () => {
   assert.match(subscriptions, /randomBytes\(32\)\.toString\("base64url"\)/);
   assert.match(subscriptions, /tokenHash\(reserved\)/);
-  assert.match(subscriptions, /request\.templateId !== input\.templateId \|\| request\.scene !== input\.scene/);
   assert.match(subscriptions, /status !== "PENDING"/);
   assert.match(subscriptions, /WECHAT_OPENID_ALREADY_BOUND/);
-  assert.match(subscriptions, /action", "get_confirm"/);
+  assert.match(subscriptions, /connect\/oauth2\/authorize/);
+  assert.match(subscriptions, /scope", "snsapi_base"/);
+  assert.match(subscriptions, /exchangeWechatOfficialOAuthCode/);
   assert.match(subscriptions, /#wechat_redirect|url\.hash = "wechat_redirect"/);
   assert.match(callbackRoute, /https:\/\/www\.nextwood\.net\//);
   assert.match(callbackRoute, /workbenchTarget", "\/account"/);
   assert.match(securityAudit, /app\/api\/wechat-official\/subscription\/callback\/route\.ts/);
 });
 
-test("微信 provider 使用官方稳定 token 和一次性订阅发送接口", () => {
+test("微信 provider 使用官方稳定 token 和可持续模板消息接口", () => {
   assert.match(provider, /https:\/\/api\.weixin\.qq\.com\/cgi-bin\/stable_token/);
-  assert.match(provider, /https:\/\/api\.weixin\.qq\.com\/cgi-bin\/message\/template\/subscribe/);
+  assert.match(provider, /https:\/\/api\.weixin\.qq\.com\/cgi-bin\/message\/template\/send/);
+  assert.match(provider, /get_all_private_template/);
+  assert.match(provider, /sns\/oauth2\/access_token/);
   assert.match(provider, /grant_type: "client_credential"/);
   assert.match(provider, /force_refresh: false/);
   assert.doesNotMatch(provider, /force_refresh: true/);
-  assert.match(provider, /title: message\.title\.slice\(0, 15\)/);
-  assert.match(provider, /value: message\.content\.slice\(0, 200\)/);
+  assert.match(provider, /wechatTemplateData\(keys, message\)/);
+  assert.match(template, /keyword1/);
+});
+
+test("公众号模板字段会分别填入订单、状态、时间和节点", async () => {
+  const { wechatTemplateData } = await jiti.import<typeof import("../lib/platform/wechat-official-template.ts")>("../lib/platform/wechat-official-template.ts");
+  const data = wechatTemplateData(["first", "keyword1", "keyword2", "keyword3", "keyword4", "remark"], {
+    title: "物流状态更新",
+    content: "完整物流内容",
+    orderNo: "PO-1001",
+    statusText: "已离港",
+    eventTimeText: "2026-08-12 14:00",
+    eventText: "上海港已装船",
+  });
+  assert.equal(data.first?.value, "物流状态更新");
+  assert.equal(data.keyword1?.value, "PO-1001");
+  assert.equal(data.keyword2?.value, "已离港");
+  assert.equal(data.keyword3?.value, "2026-08-12 14:00");
+  assert.equal(data.keyword4?.value, "上海港已装船");
 });
 
 test("物流更新按管理员和订单业务员入微信队列并保持邮件通道", () => {
@@ -57,8 +79,8 @@ test("物流更新按管理员和订单业务员入微信队列并保持邮件�
   assert.match(tracking, /tracking\.order\.salesperson\.id/);
   assert.match(tracking, /sendDurableFreightowerTrackingEmail/);
   assert.match(notifications, /idempotencyKey: `wechat:/);
-  assert.match(notifications, /status: "RESERVED"/);
-  assert.match(notifications, /status: "CONSUMED"/);
+  assert.match(notifications, /bindingId: binding\.id/);
+  assert.match(notifications, /row\.binding\?\.enabled/);
   assert.match(cron, /processWechatOfficialNotificationOutbox\(\{ limit: 8 \}\)/);
 });
 
@@ -67,17 +89,20 @@ test("数据库模型保证授权与消息幂等", () => {
     assert.match(schema, new RegExp(`model ${model}`));
   }
   assert.match(schema, /idempotencyKey\s+String\s+@unique/);
-  assert.match(schema, /subscriptionId\s+String\s+@unique/);
+  assert.match(schema, /subscriptionId\s+String\?\s+@unique/);
+  assert.match(schema, /bindingId\s+String\?\s+@map\("binding_id"\)/);
   assert.match(migration, /wechat_official_deliveries_idempotency_key_key/);
   assert.match(migration, /provider_accepted_at/);
   assert.match(migration, /outcome_unknown_at/);
   assert.match(migration, /ON DELETE CASCADE/);
+  assert.match(persistentMigration, /ALTER COLUMN "subscription_id" DROP NOT NULL/);
+  assert.match(persistentMigration, /wechat_official_deliveries_binding_id_fkey/);
 });
 
 test("个人未认证状态在界面中保持安全停用", () => {
   assert.match(config, /value\.enabled && !value\.accountCertified/);
   assert.match(settingsUi, /企业主体已认证/);
-  assert.match(settingsUi, /个人未认证号/);
+  assert.match(settingsUi, /开通模板消息能力/);
   assert.match(accountUi, /disabled=\{busy \|\| !status\?\.available\}/);
 });
 
@@ -132,6 +157,9 @@ test("失效 Token 使用普通模式恢复，并成功重试一次发送", asyn
         tokenBodies.push(JSON.parse(String(init?.body || "{}")) as Record<string, unknown>);
         return Response.json({ access_token: `token-${tokenRequestCount}`, expires_in: 7200 });
       }
+      if (String(url).includes("get_all_private_template")) {
+        return Response.json({ template_list: [{ template_id: "template-1", content: "{{first.DATA}} {{keyword1.DATA}} {{remark.DATA}}" }] });
+      }
       sendRequestCount += 1;
       return Response.json(sendRequestCount === 1
         ? { errcode: 40014, errmsg: "invalid access token" }
@@ -139,10 +167,9 @@ test("失效 Token 使用普通模式恢复，并成功重试一次发送", asyn
     },
   });
 
-  await providerInstance.sendOneTimeMessage({
+  await providerInstance.sendTemplateMessage({
     openId: "openid_123456",
     templateId: "template-1",
-    scene: 1,
     title: "Logistics update",
     content: "Shipment updated",
   });
@@ -161,18 +188,20 @@ test("发送连接中断会标记结果未知，失败策略不会自动重发",
   let requests = 0;
   const providerInstance = createWechatOfficialProvider({
     loadSettings: async () => ({ appId: "wx-test", appSecret: "secret" }),
-    fetchImpl: async () => {
+    fetchImpl: async (url) => {
       requests += 1;
       if (requests === 1) return Response.json({ access_token: "token-1", expires_in: 7200 });
+      if (String(url).includes("get_all_private_template")) {
+        return Response.json({ template_list: [{ template_id: "template-1", content: "{{first.DATA}} {{keyword1.DATA}}" }] });
+      }
       throw new TypeError("socket closed after request write");
     },
   });
 
   await assert.rejects(
-    providerInstance.sendOneTimeMessage({
+    providerInstance.sendTemplateMessage({
       openId: "openid_123456",
       templateId: "template-1",
-      scene: 1,
       title: "Logistics update",
       content: "Shipment updated",
     }),
@@ -182,7 +211,7 @@ test("发送连接中断会标记结果未知，失败策略不会自动重发",
       return true;
     },
   );
-  assert.equal(requests, 2);
+  assert.equal(requests, 3);
 });
 
 test("微信明确返回的临时错误只在尝试次数未耗尽时重试", async () => {
@@ -192,19 +221,20 @@ test("微信明确返回的临时错误只在尝试次数未耗尽时重试", as
   let requests = 0;
   const providerInstance = createWechatOfficialProvider({
     loadSettings: async () => ({ appId: "wx-test", appSecret: "secret" }),
-    fetchImpl: async () => {
+    fetchImpl: async (url) => {
       requests += 1;
-      return requests === 1
-        ? Response.json({ access_token: "token-1", expires_in: 7200 })
-        : Response.json({ errcode: -1, errmsg: "system busy" });
+      if (requests === 1) return Response.json({ access_token: "token-1", expires_in: 7200 });
+      if (String(url).includes("get_all_private_template")) {
+        return Response.json({ template_list: [{ template_id: "template-1", content: "{{first.DATA}} {{keyword1.DATA}}" }] });
+      }
+      return Response.json({ errcode: -1, errmsg: "system busy" });
     },
   });
 
   await assert.rejects(
-    providerInstance.sendOneTimeMessage({
+    providerInstance.sendTemplateMessage({
       openId: "openid_123456",
       templateId: "template-1",
-      scene: 1,
       title: "Logistics update",
       content: "Shipment updated",
     }),
@@ -216,9 +246,9 @@ test("微信明确返回的临时错误只在尝试次数未耗尽时重试", as
   );
 });
 
-test("同一微信授权回调并发处理时只有一个请求能确认", async () => {
+test("同一微信 OAuth 绑定回调并发处理时只有一个请求能确认", async () => {
   process.env.DATABASE_URL ||= "postgresql://test:test@127.0.0.1:5432/test";
-  const { finalizeWechatSubscriptionCallback } = await jiti.import<typeof import("../lib/platform/wechat-official-subscriptions.ts")>("../lib/platform/wechat-official-subscriptions.ts");
+  const { finalizeWechatOAuthBinding } = await jiti.import<typeof import("../lib/platform/wechat-official-subscriptions.ts")>("../lib/platform/wechat-official-subscriptions.ts");
   const row = {
     id: "subscription-1",
     userId: "user-1",
@@ -250,18 +280,15 @@ test("同一微信授权回调并发处理时只有一个请求能确认", async
   };
   const input = {
     tokenHash: "hash-1",
-    action: "confirm" as const,
-    templateId: "template-1",
-    scene: 7,
     openId: "openid_123456",
   };
 
   const results = await Promise.allSettled([
-    finalizeWechatSubscriptionCallback(transaction as never, input, new Date("2026-08-02T00:00:00.000Z")),
-    finalizeWechatSubscriptionCallback(transaction as never, input, new Date("2026-08-02T00:00:00.000Z")),
+    finalizeWechatOAuthBinding(transaction as never, input, new Date("2026-08-02T00:00:00.000Z")),
+    finalizeWechatOAuthBinding(transaction as never, input, new Date("2026-08-02T00:00:00.000Z")),
   ]);
   assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
   assert.equal(results.filter((result) => result.status === "rejected").length, 1);
-  assert.equal(row.status, "CONFIRMED");
+  assert.equal(row.status, "BOUND");
   assert.equal(bindings.get("openid_123456")?.userId, "user-1");
 });

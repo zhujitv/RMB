@@ -8,6 +8,7 @@ model WechatOfficialBinding {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries WechatOfficialDelivery[]
 
   @@index([enabled])
   @@map("wechat_official_bindings")
@@ -39,11 +40,16 @@ model WechatOfficialSubscription {
 model WechatOfficialDelivery {
   id                 String    @id @default(cuid())
   userId             String    @map("user_id")
-  subscriptionId     String    @unique @map("subscription_id")
+  subscriptionId     String?   @unique @map("subscription_id")
+  bindingId          String?   @map("binding_id")
   idempotencyKey     String    @unique @map("idempotency_key")
   status             String    @default("pending")
   title              String
   content            String
+  orderNo            String?   @map("order_no")
+  statusText         String?   @map("status_text")
+  eventTimeText      String?   @map("event_time_text")
+  eventText          String?   @map("event_text")
   url                String?
   relatedEntityType  String?   @map("related_entity_type")
   relatedEntityId    String?   @map("related_entity_id")
@@ -59,10 +65,12 @@ model WechatOfficialDelivery {
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
   user         User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscription WechatOfficialSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  subscription WechatOfficialSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  binding      WechatOfficialBinding?      @relation(fields: [bindingId], references: [id], onDelete: Restrict)
 
   @@index([status, scheduledAt])
   @@index([userId, createdAt])
+  @@index([bindingId])
   @@index([relatedOrderId])
   @@index([relatedEntityType, relatedEntityId])
   @@map("wechat_official_deliveries")
