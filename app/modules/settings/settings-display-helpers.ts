@@ -20,6 +20,13 @@ export const SUPPLIER_COLUMNS: TableColumn<SupplierRow>[] = [
   },
   { key: "status", label: "状态" },
   { key: "contactPerson", label: "联系人" },
+  {
+    key: "allowLogisticsInvoiceUpload",
+    label: "发票上传",
+    render: (row) => LOGISTICS_SUPPLIER_TYPES.includes(row.supplierType || "")
+      ? (row.allowLogisticsInvoiceUpload ? "已开通" : "未开通")
+      : "-",
+  },
   { key: "isDefaultLogisticsSupplier", label: "默认物流", render: (row) => LOGISTICS_SUPPLIER_TYPES.includes(row.supplierType || "") ? yesNo(row.isDefaultLogisticsSupplier) : "-" },
 ];
 

@@ -79,6 +79,7 @@ export function resolveLogisticsSupplierInvoiceRecipients(
 }
 
 export async function notifyLogisticsSupplierInvoice(expense: LogisticsExpenseLike) {
+  if (expense.supplier?.allowLogisticsInvoiceUpload !== true) return;
   const settings = await getLogisticsInvoiceNotificationSettings();
   if (settings.autoSendOnApproval === false) return;
   const resolved = resolveLogisticsSupplierInvoiceRecipients(expense.supplier || {}, settings.recipientEmailFields);
@@ -129,6 +130,16 @@ export async function notifyLogisticsSupplierInvoiceBills(
   for (const group of bySupplier.values()) {
     const result = await (async (): Promise<InvoiceNotificationResult> => {
       const expenseIds = group.expenses.map((expense) => nonEmpty(expense.id)).filter(Boolean);
+      if (group.supplier?.allowLogisticsInvoiceUpload !== true) {
+        return {
+          supplierId: group.supplierId || "",
+          supplierName: group.supplierName || "供应商",
+          sent: false,
+          skipped: true,
+          error: "",
+          expenseIds,
+        };
+      }
       if (settings.autoSendOnApproval === false) {
         return {
           supplierId: group.supplierId || "",
