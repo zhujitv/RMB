@@ -16,6 +16,8 @@ export type ShipsgoTrackingInput = Record<string, unknown> & {
   carrierScac?: unknown;
   bookingNumber?: unknown;
   reference?: unknown;
+  portCode?: unknown;
+  isExport?: unknown;
 };
 
 export type ShipsgoSettings = Awaited<ReturnType<typeof getShipsgoIntegrationSettings>>;

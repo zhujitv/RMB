@@ -44,6 +44,7 @@ export function shipsgoSyncTime(tracking: ShipsgoTrackingRow) {
 
 export function shipsgoTrackingStatusText(tracking: ShipsgoTrackingRow) {
   const syncStatus = String(tracking.syncStatus || "").toUpperCase();
+  if (String(tracking.status || "").toUpperCase() === "SUPPLEMENTAL_ONLY") return "港区/海关跟踪中";
   if (/FAIL|ERROR/.test(syncStatus)) return "同步失败";
   if (!tracking.shipsgoShipmentId && !tracking.lastSyncTime && !tracking.lastSyncedAt) return "已创建，待同步";
   const translated = formatShipsgoStatusForLocale(tracking.currentStatus || tracking.status || tracking.statusLabel, "zh-CN");

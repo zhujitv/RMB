@@ -34,7 +34,7 @@ export function createShipsgoTrackingActions(context: DomesticLogisticsActionsCo
     }));
   }
 
-  async function createShipsgoTracking(row: DomesticLogisticsRow, payload: { carrierScac?: string } = {}) {
+  async function createShipsgoTracking(row: DomesticLogisticsRow, payload: { carrierScac?: string; portCode?: string } = {}) {
     const busyKey = `${row.id}:shipsgo:create`;
     setShipsgoBusyKey(busyKey);
     setError("");
@@ -45,6 +45,8 @@ export function createShipsgoTrackingActions(context: DomesticLogisticsActionsCo
         body: JSON.stringify({
           orderId: row.id,
           carrierScac: payload.carrierScac || "",
+          portCode: payload.portCode || "",
+          isExport: "E",
         }),
       });
       if (result.success !== true || !result.tracking) throw new Error(result.message || "创建海运跟踪失败");

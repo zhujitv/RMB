@@ -156,9 +156,8 @@ function cleanFreightowerLang(value: unknown) {
   return ["zh", "en", "jp"].includes(lang) ? lang : "zh";
 }
 
-function cleanFreightowerIsExport(value: unknown) {
-  const flag = nonEmpty(value).toUpperCase();
-  return flag === "E" || flag === "I" ? flag : "";
+function cleanFreightowerIsExport(_value: unknown) {
+  return "E";
 }
 
 function cleanDailySyncTime(value: unknown) {

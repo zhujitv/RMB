@@ -62,7 +62,7 @@ export function DomesticLogisticsRows({
   shipsgoBusyKey: string;
   canManageShipsgoTracking: boolean;
   canDeleteShipsgoTracking: boolean;
-  onCreateShipsgoTracking: (payload?: { carrierScac?: string }) => Promise<void>;
+  onCreateShipsgoTracking: (payload?: { carrierScac?: string; portCode?: string }) => Promise<void>;
   onSyncShipsgoTracking: (trackingId: string) => Promise<ShipsgoTrackingRow>;
   onRecoverShipsgoTracking: () => Promise<void>;
   onDeleteShipsgoTracking: (tracking: ShipsgoTrackingRow) => void;

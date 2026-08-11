@@ -87,7 +87,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
   freightowerWebhookAccessSecret: "",
   freightowerDefaultCarrierCode: "AUTO",
   freightowerDefaultPortCode: "",
-  freightowerDefaultIsExport: "",
+  freightowerDefaultIsExport: "E",
   freightowerDefaultLang: "zh",
   freightowerHiddenReference: false,
   oceanTrackingEnabled: true,
