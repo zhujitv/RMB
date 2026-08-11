@@ -694,11 +694,11 @@ INITIAL_ADMIN_NAME=""
 INITIAL_ADMIN_EMAIL=""
 INITIAL_ADMIN_PASSWORD=""
 
-R2_ACCOUNT_ID="your-cloudflare-account-id"
-R2_ACCESS_KEY_ID="your-r2-access-key-id"
-R2_SECRET_ACCESS_KEY="your-r2-secret-access-key"
-R2_BUCKET="your-r2-bucket"
-R2_ENDPOINT=""
+COS_REGION="ap-shanghai"
+COS_ENDPOINT="https://cos.ap-shanghai.myqcloud.com"
+COS_SECRET_ID="your-cos-secret-id"
+COS_SECRET_KEY="your-cos-secret-key"
+COS_BUCKET="your-private-bucket-name-with-appid"
 
 RESEND_API_KEY=""
 RESEND_FROM=""
@@ -780,19 +780,24 @@ API_RATE_LIMIT_REGISTRATION_LIMIT=5
 
 ### 文件服务器配置
 
-PDF 单证和供应商资料必须保存到 Cloudflare R2 / S3 对象存储，不能保存到 Vercel 本地目录。Vercel 环境变量建议配置：
+PDF 单证和供应商资料必须保存到私有对象存储，不能保存到应用服务器本地目录。腾讯云服务器推荐配置 COS：
 
 ```text
-R2_ACCOUNT_ID=Cloudflare 账户 ID
-R2_ACCESS_KEY_ID=R2 API Token 的 Access Key ID
-R2_SECRET_ACCESS_KEY=R2 API Token 的 Secret Access Key
-R2_BUCKET=R2 存储桶名称
+COS_REGION=存储桶地域，例如 ap-shanghai
+COS_ENDPOINT=地域访问端点，例如 https://cos.ap-shanghai.myqcloud.com
+COS_SECRET_ID=专用 CAM 子用户 SecretId
+COS_SECRET_KEY=专用 CAM 子用户 SecretKey
+COS_BUCKET=包含 APPID 的完整存储桶名称
 ```
 
-如果使用其他 S3 兼容存储，同时配置：
+存储桶必须保持私有读写，应用通过服务端鉴权提供上传、预览和下载。旧部署仍兼容以下 Cloudflare R2 / S3 配置：
 
 ```text
-R2_ENDPOINT=https://your-s3-endpoint
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=
+R2_ENDPOINT=
 ```
 
 配置完成后，以管理员登录系统，访问：
