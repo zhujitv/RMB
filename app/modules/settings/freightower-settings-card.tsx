@@ -1,4 +1,9 @@
 import styles from "../../WorkspaceShell.module.css";
+import {
+  CHINA_DEPARTURE_PORT_OPTIONS,
+  CUSTOM_CHINA_DEPARTURE_PORT_VALUE,
+  isCommonChinaDeparturePort,
+} from "../domestic-logistics/shipsgo-port-options";
 import { FREIGHTOWER_EXPORT_OPTIONS, FREIGHTOWER_LANG_OPTIONS } from "./constants";
 import { SecretField, SettingsCard, SettingsField, SettingsSection, SettingsSwitch } from "./settings-layout";
 import type { ShipsgoIntegrationForm } from "./types";
@@ -79,7 +84,31 @@ export function FreightowerSettingsCard({ form, onChange }: FreightowerSettingsC
             <input value={form.freightowerDefaultCarrierCode} onChange={(event) => onChange("freightowerDefaultCarrierCode", event.target.value)} placeholder="AUTO" />
           </SettingsField>
           <SettingsField label="默认港区代码">
-            <input value={form.freightowerDefaultPortCode} onChange={(event) => onChange("freightowerDefaultPortCode", event.target.value)} placeholder="例如 CNSHA" />
+            <select
+              value={isCommonChinaDeparturePort(form.freightowerDefaultPortCode)
+                ? form.freightowerDefaultPortCode
+                : CUSTOM_CHINA_DEPARTURE_PORT_VALUE}
+              onChange={(event) => onChange(
+                "freightowerDefaultPortCode",
+                event.target.value === CUSTOM_CHINA_DEPARTURE_PORT_VALUE ? "" : event.target.value,
+              )}
+            >
+              {CHINA_DEPARTURE_PORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+              <option value={CUSTOM_CHINA_DEPARTURE_PORT_VALUE}>其他港口（手动输入）</option>
+            </select>
+            {!isCommonChinaDeparturePort(form.freightowerDefaultPortCode) ? (
+              <input
+                value={form.freightowerDefaultPortCode}
+                onChange={(event) => onChange(
+                  "freightowerDefaultPortCode",
+                  event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""),
+                )}
+                placeholder="输入其他中国港口代码，例如 CNXMN"
+                maxLength={16}
+              />
+            ) : null}
           </SettingsField>
           <SettingsField label="进出口标识">
             <select value={form.freightowerDefaultIsExport} onChange={(event) => onChange("freightowerDefaultIsExport", event.target.value)}>

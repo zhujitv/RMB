@@ -86,7 +86,7 @@ export const DEFAULT_SHIPSGO_INTEGRATION_SETTINGS = {
   freightowerWebhookCallbackUrl: "https://www.ruscny.com/api/freightower/webhook",
   freightowerWebhookAccessSecret: "",
   freightowerDefaultCarrierCode: "AUTO",
-  freightowerDefaultPortCode: "",
+  freightowerDefaultPortCode: "CNSHA",
   freightowerDefaultIsExport: "E",
   freightowerDefaultLang: "zh",
   freightowerHiddenReference: false,

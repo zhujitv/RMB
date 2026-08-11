@@ -94,6 +94,8 @@ test("tracking settings force Freightower as the only provider and keep secrets 
   assert.equal(normalizeShipsgoIntegrationSettings({ customsTrackingEnabled: false }).customsTrackingEnabled, false);
   assert.equal(normalizeShipsgoIntegrationSettings({}).freightowerDefaultIsExport, "E");
   assert.equal(normalizeShipsgoIntegrationSettings({ freightowerDefaultIsExport: "I" }).freightowerDefaultIsExport, "E");
+  assert.equal(normalizeShipsgoIntegrationSettings({}).freightowerDefaultPortCode, "CNSHA");
+  assert.equal(normalizeShipsgoIntegrationSettings({ freightowerDefaultPortCode: "CNNGB" }).freightowerDefaultPortCode, "CNNGB");
   assert.doesNotMatch(integration, /customsTrackingEnabled && \(!value\.freightowerClientId \|\| !value\.freightowerApiSecret\)/);
 });
 
@@ -418,7 +420,12 @@ test("tracking creation keeps port and customs active when comprehensive ocean t
   assert.match(createService, /海运综合跟踪暂不可用，已启动中国港区和海关跟踪/);
   assert.doesNotMatch(syncService, /if \(comprehensiveError\) throw comprehensiveError/);
   assert.match(syncService, /海运综合跟踪暂不可用，中国港区和海关已继续同步/);
-  assert.match(logisticsModule, /中国起运港代码（港区跟踪）/);
+  assert.match(logisticsModule, /中国起运港（港区跟踪）/);
+  assert.match(logisticsModule, /上海港（CNSHA）/);
+  assert.match(logisticsModule, /宁波港（CNNGB）/);
+  assert.match(logisticsModule, /青岛港（CNTAO）/);
+  assert.match(logisticsModule, /其他港口（手动输入）/);
+  assert.match(logisticsModule, /请选择中国起运港，或输入其他中国港口代码/);
   assert.match(logisticsModule, /portCode: payload\.portCode \|\| ""/);
   assert.match(logisticsModule, /isExport: "E"/);
   assert.match(logisticsModule, /海运不支持该船公司时，港区和海关仍会继续/);
