@@ -7,7 +7,7 @@ import { assertWechatOfficialFollower, exchangeWechatOfficialOAuthCode } from ".
 
 type Actor = { id?: string | null } | null | undefined;
 
-const CALLBACK_URL = "https://www.nextwood.net/api/wechat-official/subscription/callback";
+const CALLBACK_URL = "https://www.nextwood.net/wx";
 const REQUEST_TTL_MS = 15 * 60 * 1000;
 
 function actorId(actor: Actor) {

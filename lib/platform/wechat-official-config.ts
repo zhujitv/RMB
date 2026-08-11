@@ -69,7 +69,7 @@ export function serializeWechatOfficialSettings(value: unknown) {
     appSecretConfigured: Boolean(settings.appSecret),
     credentialsReady,
     ready: settings.enabled && settings.accountCertified && credentialsReady,
-    callbackUrl: "https://www.nextwood.net/api/wechat-official/subscription/callback",
+    callbackUrl: "https://www.nextwood.net/wx",
     accountRequirement: "公众号须完成认证，并在后台开通模板消息能力、添加物流通知模板",
   };
 }
