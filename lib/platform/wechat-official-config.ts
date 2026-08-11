@@ -35,7 +35,7 @@ function cleanAppId(value: unknown) {
 function cleanTemplateId(value: unknown) {
   const templateId = cleanText(value, 160);
   if (templateId && !/^[a-zA-Z0-9_-]{8,160}$/.test(templateId)) {
-    throw codedError("一次性订阅模板 ID 格式不正确", 400, "WECHAT_OFFICIAL_TEMPLATE_ID_INVALID");
+    throw codedError("公众号模板消息 ID 格式不正确", 400, "WECHAT_OFFICIAL_TEMPLATE_ID_INVALID");
   }
   return templateId;
 }
@@ -70,7 +70,7 @@ export function serializeWechatOfficialSettings(value: unknown) {
     credentialsReady,
     ready: settings.enabled && settings.accountCertified && credentialsReady,
     callbackUrl: "https://www.nextwood.net/api/wechat-official/subscription/callback",
-    accountRequirement: "仅企业主体已认证公众号可调用一次性订阅消息接口",
+    accountRequirement: "公众号须完成认证，并在后台开通模板消息能力、添加物流通知模板",
   };
 }
 

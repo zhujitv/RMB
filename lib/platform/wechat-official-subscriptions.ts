@@ -1,8 +1,9 @@
-import { createHash, randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { codedError, nonEmpty } from "./shared-base-utils";
 import { getWechatOfficialSettings, serializeWechatOfficialSettings } from "./wechat-official-config";
+import { assertWechatOfficialFollower, exchangeWechatOfficialOAuthCode } from "./wechat-official-provider";
 
 type Actor = { id?: string | null } | null | undefined;
 
@@ -24,37 +25,17 @@ function validOpenId(value: unknown) {
   return /^[a-zA-Z0-9_-]{8,128}$/.test(openId) ? openId : "";
 }
 
-function validScene(value: unknown) {
-  const scene = Number(value);
-  return Number.isInteger(scene) && scene >= 0 && scene <= 10_000 ? scene : -1;
-}
-
 function maskedOpenId(openId: string | null | undefined) {
   if (!openId) return "";
   if (openId.length <= 8) return "****";
   return `${openId.slice(0, 4)}****${openId.slice(-4)}`;
 }
 
-async function nextScene(userId: string) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const scene = randomInt(0, 10_001);
-    const duplicate = await prisma.wechatOfficialSubscription.findFirst({
-      where: { userId, scene, status: { in: ["PENDING", "CONFIRMED", "RESERVED"] } },
-      select: { id: true },
-    });
-    if (!duplicate) return scene;
-  }
-  throw codedError("暂时无法分配微信订阅场景，请稍后重试", 503, "WECHAT_SCENE_UNAVAILABLE");
-}
-
 export async function readOwnWechatSubscriptionStatus(actor: Actor) {
   const userId = actorId(actor);
-  const [settings, binding, grants, attentionRequired] = await Promise.all([
+  const [settings, binding, attentionRequired] = await Promise.all([
     getWechatOfficialSettings(),
     prisma.wechatOfficialBinding.findUnique({ where: { userId } }),
-    prisma.wechatOfficialSubscription.count({
-      where: { userId, status: "CONFIRMED" },
-    }),
     prisma.wechatOfficialDelivery.count({
       where: { userId, status: { in: ["permanent_failed", "outcome_unknown"] } },
     }),
@@ -70,7 +51,6 @@ export async function readOwnWechatSubscriptionStatus(actor: Actor) {
       openIdMasked: maskedOpenId(binding.openId),
       lastConfirmedAt: binding.lastConfirmedAt,
     } : null,
-    availableGrants: grants,
     attentionRequired,
     requirement: publicSettings.accountRequirement,
   };
@@ -87,43 +67,38 @@ export async function createWechatSubscriptionAuthorization(actor: Actor) {
     data: { status: "EXPIRED" },
   });
   const reserved = randomBytes(32).toString("base64url");
-  const scene = await nextScene(userId);
   const expiresAt = new Date(Date.now() + REQUEST_TTL_MS);
   await prisma.wechatOfficialSubscription.create({
     data: {
       userId,
       tokenHash: tokenHash(reserved),
       templateId: settings.templateId,
-      scene,
+      scene: 0,
       status: "PENDING",
       expiresAt,
     },
   });
-  const url = new URL("https://mp.weixin.qq.com/mp/subscribemsg");
-  url.searchParams.set("action", "get_confirm");
+  const url = new URL("https://open.weixin.qq.com/connect/oauth2/authorize");
   url.searchParams.set("appid", settings.appId);
-  url.searchParams.set("scene", String(scene));
-  url.searchParams.set("template_id", settings.templateId);
-  url.searchParams.set("redirect_url", CALLBACK_URL);
-  url.searchParams.set("reserved", reserved);
+  url.searchParams.set("redirect_uri", CALLBACK_URL);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", "snsapi_base");
+  url.searchParams.set("state", reserved);
   url.hash = "wechat_redirect";
   return { authorizationUrl: url.toString(), expiresAt };
 }
 
 export async function confirmWechatSubscriptionCallback(query: URLSearchParams) {
-  const reserved = nonEmpty(query.get("reserved"));
-  const action = nonEmpty(query.get("action")).toLowerCase();
-  const templateId = nonEmpty(query.get("template_id"));
-  const scene = validScene(query.get("scene"));
-  if (!reserved || reserved.length > 128 || !["confirm", "cancel"].includes(action) || scene < 0) {
+  const reserved = nonEmpty(query.get("state"));
+  const code = nonEmpty(query.get("code"));
+  if (!reserved || reserved.length > 128 || !code || code.length > 256) {
     throw codedError("微信订阅回调参数不完整", 400, "WECHAT_CALLBACK_INVALID");
   }
-  const result = await prisma.$transaction((tx) => finalizeWechatSubscriptionCallback(tx, {
+  const identity = await exchangeWechatOfficialOAuthCode(code);
+  await assertWechatOfficialFollower(identity.openId);
+  const result = await prisma.$transaction((tx) => finalizeWechatOAuthBinding(tx, {
     tokenHash: tokenHash(reserved),
-    action: action as "confirm" | "cancel",
-    templateId,
-    scene,
-    openId: query.get("openid"),
+    openId: identity.openId,
   }));
   if (result.expired) {
     throw codedError("微信订阅请求已过期，请返回系统重新授权", 410, "WECHAT_CALLBACK_EXPIRED");
@@ -136,17 +111,14 @@ type WechatSubscriptionCallbackTransaction = Pick<
   "wechatOfficialSubscription" | "wechatOfficialBinding"
 >;
 
-export type WechatSubscriptionCallbackInput = {
+export type WechatOAuthBindingInput = {
   tokenHash: string;
-  action: "confirm" | "cancel";
-  templateId: string;
-  scene: number;
   openId: unknown;
 };
 
-export async function finalizeWechatSubscriptionCallback(
+export async function finalizeWechatOAuthBinding(
   tx: WechatSubscriptionCallbackTransaction,
-  input: WechatSubscriptionCallbackInput,
+  input: WechatOAuthBindingInput,
   now = new Date(),
 ) {
   const request = await tx.wechatOfficialSubscription.findUnique({
@@ -164,19 +136,6 @@ export async function finalizeWechatSubscriptionCallback(
       throw codedError("微信订阅请求不存在或已处理", 409, "WECHAT_CALLBACK_ALREADY_USED");
     }
     return { confirmed: false, expired: true };
-  }
-  if (request.templateId !== input.templateId || request.scene !== input.scene) {
-    throw codedError("微信订阅回调校验失败", 403, "WECHAT_CALLBACK_MISMATCH");
-  }
-  if (input.action === "cancel") {
-    const cancelled = await tx.wechatOfficialSubscription.updateMany({
-      where: { id: request.id, status: "PENDING" },
-      data: { status: "CANCELLED" },
-    });
-    if (cancelled.count !== 1) {
-      throw codedError("微信订阅请求不存在或已处理", 409, "WECHAT_CALLBACK_ALREADY_USED");
-    }
-    return { confirmed: false, expired: false };
   }
   const openId = validOpenId(input.openId);
   if (!openId) throw codedError("微信未返回有效 OpenID", 400, "WECHAT_CALLBACK_OPENID_INVALID");
@@ -198,7 +157,7 @@ export async function finalizeWechatSubscriptionCallback(
   });
   const confirmed = await tx.wechatOfficialSubscription.updateMany({
     where: { id: request.id, status: "PROCESSING" },
-    data: { openId, status: "CONFIRMED", confirmedAt: now },
+    data: { openId, status: "BOUND", confirmedAt: now },
   });
   if (confirmed.count !== 1) {
     throw codedError("微信订阅请求状态冲突", 409, "WECHAT_CALLBACK_STATE_CONFLICT");
@@ -211,7 +170,7 @@ export async function unlinkOwnWechatOfficialAccount(actor: Actor) {
   await prisma.$transaction([
     prisma.wechatOfficialBinding.updateMany({ where: { userId }, data: { enabled: false } }),
     prisma.wechatOfficialSubscription.updateMany({
-      where: { userId, status: { in: ["PENDING", "CONFIRMED", "RESERVED"] } },
+      where: { userId, status: { in: ["PENDING", "CONFIRMED", "RESERVED", "BOUND"] } },
       data: { status: "CANCELLED" },
     }),
     prisma.wechatOfficialDelivery.updateMany({

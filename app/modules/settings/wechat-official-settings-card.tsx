@@ -26,7 +26,7 @@ const EMPTY_SETTINGS: WechatOfficialSettings = {
   credentialsReady: false,
   ready: false,
   callbackUrl: "https://www.nextwood.net/api/wechat-official/subscription/callback",
-  accountRequirement: "仅企业主体已认证公众号可调用一次性订阅消息接口",
+  accountRequirement: "公众号须完成认证，并在后台开通模板消息能力、添加物流通知模板",
 };
 
 function settingsFingerprint(settings: WechatOfficialSettings) {
@@ -113,20 +113,20 @@ export function WechatOfficialSettingsCard({
   }
 
   return (
-    <SettingsCard title="微信公众号物流通知（预开发）" icon="微">
+    <SettingsCard title="微信公众号物流通知" icon="微">
       {loading ? <div className={styles.emptyState}>正在读取微信公众号设置...</div> : (
         <>
           <SettingsSection title="账号与接口">
             <div className={styles.settingsFieldGrid}>
               <SettingsSwitch
                 label="启用微信公众号通知"
-                tooltip="启用后，物流变化会向已授权的管理员和订单业务员发送一次性订阅消息；邮件通知保持不变。"
+                tooltip="启用后，物流变化会向已绑定微信的管理员和订单业务员持续发送模板消息；邮件通知保持不变。"
                 checked={settings.enabled}
                 onChange={(value) => setField("enabled", value)}
               />
               <SettingsSwitch
                 label="企业主体已认证"
-                tooltip="微信官方规定一次性订阅消息仅允许企业主体已认证账号调用。请在认证完成后再勾选。"
+                tooltip="请确认公众号已完成认证，并已开通模板消息能力。"
                 checked={settings.accountCertified}
                 onChange={(value) => setField("accountCertified", value)}
               />
@@ -140,15 +140,15 @@ export function WechatOfficialSettingsCard({
                   placeholder={settings.appSecretConfigured ? "已配置，留空则保持不变" : "认证后填写 AppSecret"}
                 />
               </SettingsField>
-              <SettingsField label="一次性订阅模板 ID">
-                <input value={settings.templateId} onChange={(event) => setField("templateId", event.target.value)} placeholder="认证后从接口权限中获取" />
+              <SettingsField label="物流通知模板 ID" tooltip="在公众号后台的模板消息中添加物流状态类模板，然后复制模板 ID。">
+                <input value={settings.templateId} onChange={(event) => setField("templateId", event.target.value)} placeholder="公众号模板消息 ID" />
               </SettingsField>
               <SettingsField label="授权回调地址" tooltip="需将 www.nextwood.net 配置为公众号业务域名。">
                 <input value={settings.callbackUrl} readOnly />
               </SettingsField>
             </div>
           </SettingsSection>
-          <p className={styles.accountNote}>{settings.accountRequirement}。个人未认证号可先保存 AppID 等非敏感配置，但无法启用或测试真实推送。</p>
+          <p className={styles.accountNote}>{settings.accountRequirement}。系统会读取模板字段并自动填充物流状态。</p>
           {message ? <div className={message.includes("成功") || message.includes("已保存") ? styles.emptyState : styles.inlineError}>{message}</div> : null}
           <div className={styles.accountActions}>
             <button className={styles.primaryButtonCompact} type="button" onClick={() => void save()} disabled={saving || testing || !dirty}>

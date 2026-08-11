@@ -4,7 +4,7 @@ import { getWechatOfficialSettings } from "./wechat-official-config";
 import {
   isWechatDeliveryOutcomeUnknown,
   isWechatProviderRetryable,
-  sendWechatOneTimeMessage,
+  sendWechatTemplateMessage,
 } from "./wechat-official-provider";
 
 const MAX_ATTEMPTS = 6;
@@ -14,6 +14,10 @@ export type EnqueueWechatNotificationInput = {
   idempotencyKey: string;
   title: string;
   content: string;
+  orderNo?: string;
+  statusText?: string;
+  eventTimeText?: string;
+  eventText?: string;
   url?: string;
   relatedEntityType?: string;
   relatedEntityId?: string;
@@ -49,33 +53,22 @@ export async function enqueueWechatOfficialNotifications(input: EnqueueWechatNot
           approvalStatus: "APPROVED",
           wechatOfficialBinding: { enabled: true },
         },
-        select: { wechatOfficialBinding: { select: { openId: true } } },
+        select: { wechatOfficialBinding: { select: { id: true, openId: true } } },
       });
-      const openId = user?.wechatOfficialBinding?.openId;
-      if (!openId) return false;
-      const subscription = await tx.wechatOfficialSubscription.findFirst({
-        where: {
-          userId,
-          openId,
-          templateId: settings.templateId,
-          status: "CONFIRMED",
-        },
-        orderBy: [{ confirmedAt: "asc" }, { createdAt: "asc" }],
-      });
-      if (!subscription) return false;
-      const reserved = await tx.wechatOfficialSubscription.updateMany({
-        where: { id: subscription.id, status: "CONFIRMED" },
-        data: { status: "RESERVED" },
-      });
-      if (reserved.count !== 1) return false;
+      const binding = user?.wechatOfficialBinding;
+      if (!binding?.openId) return false;
       await tx.wechatOfficialDelivery.create({
         data: {
           userId,
-          subscriptionId: subscription.id,
+          bindingId: binding.id,
           idempotencyKey: `wechat:${input.idempotencyKey}:${userId}`,
           status: "pending",
           title: boundedText(input.title, 15),
           content: boundedText(input.content, 200),
+          orderNo: boundedText(input.orderNo, 80) || null,
+          statusText: boundedText(input.statusText, 80) || null,
+          eventTimeText: boundedText(input.eventTimeText, 80) || null,
+          eventText: boundedText(input.eventText, 200) || null,
           url: nonEmpty(input.url).slice(0, 500) || null,
           relatedEntityType: nonEmpty(input.relatedEntityType) || null,
           relatedEntityId: nonEmpty(input.relatedEntityId) || null,
@@ -90,7 +83,7 @@ export async function enqueueWechatOfficialNotifications(input: EnqueueWechatNot
 }
 
 function publicWechatError(error: unknown) {
-  const message = error instanceof Error ? error.message : "微信订阅消息发送失败";
+  const message = error instanceof Error ? error.message : "微信模板消息发送失败";
   return message.replace(/[\r\n]+/g, " ").slice(0, 300);
 }
 
@@ -111,70 +104,51 @@ async function reconcileInterruptedWechatDeliveries(staleAt: Date) {
       status: { in: ["sending", "dispatching"] },
       updatedAt: { lte: staleAt },
     },
-    select: { id: true, subscriptionId: true },
+    select: { id: true },
     take: 50,
   });
   if (!rows.length) return 0;
   const reconciledAt = new Date();
   const deliveryIds = rows.map((row) => row.id);
-  const subscriptionIds = rows.map((row) => row.subscriptionId);
-  await prisma.$transaction([
-    prisma.wechatOfficialDelivery.updateMany({
-      where: { id: { in: deliveryIds }, status: { in: ["sending", "dispatching"] } },
-      data: {
-        status: "outcome_unknown",
-        outcomeUnknownAt: reconciledAt,
-        failedAt: reconciledAt,
-        lastError: "发送进程中断，无法确认微信是否已接收；为避免重复通知，系统不会自动重发",
-      },
-    }),
-    prisma.wechatOfficialSubscription.updateMany({
-      where: { id: { in: subscriptionIds }, status: "RESERVED" },
-      data: { status: "CONSUMED_UNKNOWN", consumedAt: reconciledAt },
-    }),
-  ]);
+  await prisma.wechatOfficialDelivery.updateMany({
+    where: { id: { in: deliveryIds }, status: { in: ["sending", "dispatching"] } },
+    data: {
+      status: "outcome_unknown",
+      outcomeUnknownAt: reconciledAt,
+      failedAt: reconciledAt,
+      lastError: "发送进程中断，无法确认微信是否已接收；为避免重复通知，系统不会自动重发",
+    },
+  });
   return rows.length;
 }
 
 async function finalizeExhaustedWechatDeliveries() {
   const rows = await prisma.wechatOfficialDelivery.findMany({
     where: { status: "failed", attempts: { gte: MAX_ATTEMPTS } },
-    select: { id: true, subscriptionId: true },
+    select: { id: true },
     take: 50,
   });
   if (!rows.length) return 0;
   const failedAt = new Date();
-  await prisma.$transaction([
-    prisma.wechatOfficialDelivery.updateMany({
-      where: { id: { in: rows.map((row) => row.id) }, status: "failed" },
-      data: { status: "permanent_failed", failedAt },
-    }),
-    prisma.wechatOfficialSubscription.updateMany({
-      where: { id: { in: rows.map((row) => row.subscriptionId) }, status: "RESERVED" },
-      data: { status: "FAILED" },
-    }),
-  ]);
+  await prisma.wechatOfficialDelivery.updateMany({
+    where: { id: { in: rows.map((row) => row.id) }, status: "failed" },
+    data: { status: "permanent_failed", failedAt },
+  });
   return rows.length;
 }
 
-async function markDeliveryOutcomeUnknown(row: { id: string; subscriptionId: string }, error: unknown, providerAcceptedAt?: Date) {
+async function markDeliveryOutcomeUnknown(row: { id: string }, error: unknown, providerAcceptedAt?: Date) {
   const failedAt = new Date();
-  await prisma.$transaction([
-    prisma.wechatOfficialDelivery.updateMany({
-      where: { id: row.id, status: "dispatching" },
-      data: {
-        status: "outcome_unknown",
-        providerAcceptedAt: providerAcceptedAt || null,
-        outcomeUnknownAt: failedAt,
-        failedAt,
-        lastError: publicWechatError(error),
-      },
-    }),
-    prisma.wechatOfficialSubscription.updateMany({
-      where: { id: row.subscriptionId, status: "RESERVED" },
-      data: { status: "CONSUMED_UNKNOWN", consumedAt: failedAt },
-    }),
-  ]);
+  await prisma.wechatOfficialDelivery.updateMany({
+    where: { id: row.id, status: "dispatching" },
+    data: {
+      status: "outcome_unknown",
+      providerAcceptedAt: providerAcceptedAt || null,
+      outcomeUnknownAt: failedAt,
+      failedAt,
+      lastError: publicWechatError(error),
+    },
+  });
 }
 
 export async function processWechatOfficialNotificationOutbox(options: { limit?: number } = {}) {
@@ -194,7 +168,7 @@ export async function processWechatOfficialNotificationOutbox(options: { limit?:
       scheduledAt: { lte: new Date() },
       status: { in: ["pending", "failed"] },
     },
-    include: { subscription: true },
+    include: { binding: true, subscription: true },
     orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
     take: limit,
   });
@@ -210,36 +184,32 @@ export async function processWechatOfficialNotificationOutbox(options: { limit?:
     if (claimed.count !== 1) continue;
     const attempts = row.attempts + 1;
     try {
-      if (!row.subscription.openId || row.subscription.status !== "RESERVED") {
-        throw new Error("微信一次性订阅授权已失效");
-      }
-      await sendWechatOneTimeMessage({
-        openId: row.subscription.openId,
-        templateId: row.subscription.templateId,
-        scene: row.subscription.scene,
+      const openId = row.binding?.enabled ? row.binding.openId : row.subscription?.openId;
+      if (!openId) throw new Error("微信公众号绑定已失效");
+      await sendWechatTemplateMessage({
+        openId,
+        templateId: settings.templateId,
         title: row.title,
         content: row.content,
+        orderNo: row.orderNo || undefined,
+        statusText: row.statusText || undefined,
+        eventTimeText: row.eventTimeText || undefined,
+        eventText: row.eventText || undefined,
         url: row.url || undefined,
       });
       const sentAt = new Date();
       try {
-        await prisma.$transaction([
-          prisma.wechatOfficialDelivery.update({
-            where: { id: row.id },
-            data: {
-              status: "sent",
-              providerAcceptedAt: sentAt,
-              sentAt,
-              failedAt: null,
-              outcomeUnknownAt: null,
-              lastError: null,
-            },
-          }),
-          prisma.wechatOfficialSubscription.update({
-            where: { id: row.subscriptionId },
-            data: { status: "CONSUMED", consumedAt: sentAt },
-          }),
-        ]);
+        await prisma.wechatOfficialDelivery.update({
+          where: { id: row.id },
+          data: {
+            status: "sent",
+            providerAcceptedAt: sentAt,
+            sentAt,
+            failedAt: null,
+            outcomeUnknownAt: null,
+            lastError: null,
+          },
+        });
       } catch (persistenceError: unknown) {
         // 微信已经明确接收；即使本地落库失败也绝不能再次调用发送接口。
         logServerError("Persist accepted WeChat delivery failed", persistenceError, { deliveryId: row.id });
@@ -272,16 +242,10 @@ export async function processWechatOfficialNotificationOutbox(options: { limit?:
         queued += 1;
       } else {
         const failedAt = new Date();
-        await prisma.$transaction([
-          prisma.wechatOfficialDelivery.updateMany({
-            where: { id: row.id, status: "dispatching" },
-            data: { status: "permanent_failed", failedAt, lastError: publicWechatError(error) },
-          }),
-          prisma.wechatOfficialSubscription.updateMany({
-            where: { id: row.subscriptionId, status: "RESERVED" },
-            data: { status: "FAILED" },
-          }),
-        ]);
+        await prisma.wechatOfficialDelivery.updateMany({
+          where: { id: row.id, status: "dispatching" },
+          data: { status: "permanent_failed", failedAt, lastError: publicWechatError(error) },
+        });
       }
       failed += 1;
     }
