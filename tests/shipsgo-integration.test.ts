@@ -61,6 +61,7 @@ const schema = readPrismaSchemaSource();
 const freightowerOnlyMigration = readFileSync("prisma/migrations/20260729160000_freightower_only_tracking/migration.sql", "utf8");
 const notifications = readNotificationEngineSource();
 const trackingNotifications = readFileSync("lib/platform/shipsgo-tracking-notifications.ts", "utf8");
+const trackingEmailNotification = readFileSync("lib/platform/freightower-tracking-email-notification.ts", "utf8");
 const freightowerNotificationEvents = readFileSync("lib/platform/freightower-notification-events.ts", "utf8");
 const freightowerPendingNotifications = readFileSync("lib/platform/freightower-notification-pending.ts", "utf8");
 const freightowerSyncLease = readFileSync("lib/platform/shipsgo-tracking-sync-lease.ts", "utf8");
@@ -179,7 +180,7 @@ test("Freightower dumping warnings are normalized, prioritized, and shown in tra
   assert.match(workspaceStyles, /controlTowerNodeAlert/);
 });
 
-test("Freightower tracking changes notify enabled admins and the order salesperson", () => {
+test("Freightower tracking changes split internal Chinese and customer English emails", () => {
   assert.match(webhookService, /verifyFreightowerWebhookSignature/);
   assert.match(webhookService, /claimWebhookReplay\("freightower"/);
   assert.match(webhookService, /completeWebhookReplayClaim\(replay\.key, "freightower"\)/);
@@ -196,9 +197,21 @@ test("Freightower tracking changes notify enabled admins and the order salespers
   assert.match(freightowerNotificationEvents, /dumpingAlertEventKey\(dumpingAlert\)/);
   assert.match(trackingNotifications, /activeApprovedEmails\(\[tracking\.order\.salesperson\]\)/);
   assert.match(trackingNotifications, /const adminEmails = await enabledAdminEmails\(\)/);
-  assert.match(trackingNotifications, /uniqueEmails\(\[adminEmails, salespersonEmails\]\)/);
+  assert.match(trackingNotifications, /const internalRecipientEmails = uniqueEmails\(\[adminEmails, salespersonEmails\]\)/);
+  assert.match(trackingNotifications, /contactEmail: true/);
+  assert.match(trackingNotifications, /customerRecipientEmails/);
   assert.match(trackingNotifications, /recipientSource: "admins_and_order_salesperson"/);
-  assert.doesNotMatch(trackingNotifications, /contactEmail: true|shippingDocsEmails: true|customerEmails/);
+  assert.match(trackingNotifications, /recipientSource: "customer_contact_email"/);
+  assert.match(trackingNotifications, /FREIGHTOWER_TRACKING_CUSTOMER_UPDATE/);
+  assert.match(trackingNotifications, /portRolloverChanged/);
+  assert.match(trackingNotifications, /customsChanged/);
+  assert.match(trackingNotifications, /emailAudience\.customerAllowed \? customerRecipientEmails : \[\]/);
+  assert.match(trackingEmailNotification, /FREIGHTOWER_PORT_ROLLOVER_ALERT/);
+  assert.match(trackingEmailNotification, /FREIGHTOWER_CUSTOMS_ALERT/);
+  assert.match(trackingEmailNotification, /`freightower-tracking-update:\$\{input\.trackingEventKey\}:\$\{input\.audience\}`/);
+  assert.match(trackingNotifications, /"internal"/);
+  assert.match(trackingNotifications, /"customer"/);
+  assert.match(trackingEmailNotification, /ignoreTemplateCc: input\.audience === "customer"/);
   assert.doesNotMatch(trackingNotifications, /tracking\.order\.createdBy|tracking\.order\.updatedBy|tracking\.createdBy|tracking\.updatedBy/);
   assert.match(syncService, /hasFreightowerTrackingNotificationChange\(before, saved\)/);
   assert.match(syncService, /markFreightowerNotificationPending/);
@@ -215,13 +228,16 @@ test("Freightower tracking changes notify enabled admins and the order salespers
   assert.match(trackingNotifications, /freightowerNotificationSourceEvent/);
   assert.match(freightowerNotificationEvents, /extractFreightowerCustomsTimeline/);
   assert.match(notifications, /FREIGHTOWER_TRACKING_UPDATE: "FREIGHTOWER_TRACKING_UPDATE"/);
-  assert.match(notifications, /name: "飞驼可视运输节点通知"/);
-  assert.match(notifications, /subjectTemplate: "\[NEXTWOOD ERP\] Shipment Tracking Update/);
-  assert.match(notifications, /Shipment tracking for Order \{orderNo\} has changed/);
+  assert.match(notifications, /FREIGHTOWER_TRACKING_CUSTOMER_UPDATE: "FREIGHTOWER_TRACKING_CUSTOMER_UPDATE"/);
+  assert.match(notifications, /name: "物流跟踪通知（内部中文）"/);
+  assert.match(notifications, /subjectTemplate: "【物流跟踪更新】/);
   assert.match(notifications, /订单 \{orderNo\} 的物流跟踪信息发生变化/);
-  assert.match(notifications, /如当前状态包含“甩柜预警”/);
-  assert.match(settingsModule, /物流变化触发与收件人/);
+  assert.match(notifications, /name: "Shipment Tracking Update \(Customer English\)"/);
+  assert.match(notifications, /subjectTemplate: "Shipment Tracking Update \| Order/);
+  assert.match(settingsModule, /内部中文物流通知/);
+  assert.match(settingsModule, /客户英文物流通知/);
   assert.match(settingsModule, /所有已启用且已审批的管理员，以及该订单的业务员/);
+  assert.match(settingsModule, /客户资料中绑定的主联系邮箱/);
 });
 
 test("Freightower manual, scheduled, and webhook syncs share one database lease", () => {

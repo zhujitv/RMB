@@ -30,6 +30,7 @@ export async function sendResendEmail({
   ccEmails,
   subject,
   body,
+  html,
   attachments = [],
   idempotencyKey,
 }: {
@@ -37,6 +38,7 @@ export async function sendResendEmail({
   ccEmails: string[];
   subject: string;
   body: string;
+  html?: string;
   attachments?: NotificationAttachment[];
   idempotencyKey?: string | null;
 }) {
@@ -55,6 +57,7 @@ export async function sendResendEmail({
       cc: ccEmails.length ? ccEmails : undefined,
       subject,
       text: body,
+      html: html || undefined,
       attachments: attachments.length ? resendAttachmentPayload(attachments) : undefined,
     }),
     signal: resendRequestSignal(),

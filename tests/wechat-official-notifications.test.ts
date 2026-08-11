@@ -55,7 +55,7 @@ test("物流更新按管理员和订单业务员入微信队列并保持邮件�
   assert.match(tracking, /enqueueWechatOfficialNotifications/);
   assert.match(tracking, /role: "管理员"/);
   assert.match(tracking, /tracking\.order\.salesperson\.id/);
-  assert.match(tracking, /sendNotificationEmail/);
+  assert.match(tracking, /sendDurableFreightowerTrackingEmail/);
   assert.match(notifications, /idempotencyKey: `wechat:/);
   assert.match(notifications, /status: "RESERVED"/);
   assert.match(notifications, /status: "CONSUMED"/);

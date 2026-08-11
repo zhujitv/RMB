@@ -16,8 +16,16 @@ import {
   uniqueEmails,
 } from "./notification-helpers";
 import { TEXT_LIMITS } from "./notification-definitions";
+import { freightowerTrackingEmailHtml } from "./freightower-tracking-email";
+import { NOTIFICATION_TYPES } from "./notification-definition-types";
 
 const FREIGHTOWER_NOTIFICATION_RETRY_MAX_ATTEMPTS = 6;
+const FREIGHTOWER_EMAIL_TYPES = new Set<string>([
+  NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
+  NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_CUSTOMER_UPDATE,
+  NOTIFICATION_TYPES.FREIGHTOWER_PORT_ROLLOVER_ALERT,
+  NOTIFICATION_TYPES.FREIGHTOWER_CUSTOMS_ALERT,
+]);
 
 function notificationVariablesFromContext(context: unknown) {
   if (!context || typeof context !== "object" || Array.isArray(context)) return {};
@@ -49,6 +57,9 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
   const variables = input.variables || {};
   const subject = cleanTemplateText(input.subjectOverride, applyTemplate(template.subjectTemplate, variables), TEXT_LIMITS.subject);
   const body = cleanTemplateText(input.bodyOverride, applyTemplate(template.bodyTemplate, variables), TEXT_LIMITS.body);
+  const html = input.htmlOverride || (
+    FREIGHTOWER_EMAIL_TYPES.has(template.type) ? freightowerTrackingEmailHtml(template.type, variables) : ""
+  );
   const storedBody = persistedNotificationBody(template, body);
   const storedContext = persistedNotificationContext(template, input.context || {}, variables);
   const idempotencyKey = nonEmpty(input.idempotencyKey);
@@ -113,6 +124,7 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
       ccEmails,
       subject,
       body,
+      html,
       attachments,
       idempotencyKey: idempotencyKey || outbox.id,
     });
@@ -187,7 +199,14 @@ export async function processFailedFreightowerNotificationOutbox(options: { limi
   const staleAt = new Date(Date.now() - 5 * 60 * 1000);
   const rows = await prisma.notificationOutbox.findMany({
     where: {
-      type: "FREIGHTOWER_TRACKING_UPDATE",
+      type: {
+        in: [
+          NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
+          NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_CUSTOMER_UPDATE,
+          NOTIFICATION_TYPES.FREIGHTOWER_PORT_ROLLOVER_ALERT,
+          NOTIFICATION_TYPES.FREIGHTOWER_CUSTOMS_ALERT,
+        ],
+      },
       attempts: { lt: FREIGHTOWER_NOTIFICATION_RETRY_MAX_ATTEMPTS },
       scheduledAt: { lte: new Date() },
       OR: [

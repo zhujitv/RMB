@@ -39,6 +39,11 @@ export function NotificationTemplateSettingsCard({
   const templates = notificationTemplateRows(settings);
   const logs = notificationDeliveryLogs(settings);
   const currentForm = form || notificationTemplateFormFromSettings(settings, selectedType);
+  const isPortAlertTemplate = currentForm.type === "FREIGHTOWER_PORT_ROLLOVER_ALERT";
+  const isCustomsAlertTemplate = currentForm.type === "FREIGHTOWER_CUSTOMS_ALERT";
+  const isInternalTrackingTemplate = currentForm.type === "FREIGHTOWER_TRACKING_UPDATE"
+    || isPortAlertTemplate
+    || isCustomsAlertTemplate;
   const preview = notificationTemplatePreview(currentForm);
   const editable = currentForm.editable && !currentForm.securitySensitive;
   const extraConfig = currentForm.extraConfig || {};
@@ -142,25 +147,46 @@ export function NotificationTemplateSettingsCard({
         </section>
       ) : null}
 
-      {currentForm.type === "FREIGHTOWER_TRACKING_UPDATE" ? (
+      {isInternalTrackingTemplate ? (
         <section className={styles.documentGroupCard}>
-          <strong>物流变化触发与收件人</strong>
+          <strong>{isPortAlertTemplate ? "港区甩箱中文通知" : isCustomsAlertTemplate ? "中国海关中文通知" : "内部中文物流通知"}</strong>
           <div className={styles.quickCreateMeta}>
-            <span>飞驼可视 API 查询到新的运输节点、状态变化或甩柜预警后自动发送。</span>
+            <span>{isPortAlertTemplate
+              ? "港区出现甩箱状态时自动发送，不向客户发送。"
+              : isCustomsAlertTemplate
+                ? "中国海关节点发生变化时自动发送，不向客户发送。"
+                : "普通运输节点或状态发生变化时自动发送。"}</span>
             <span>默认收件人：所有已启用且已审批的管理员，以及该订单的业务员。</span>
             <span>管理员与业务员邮箱重复时自动合并，只发送一次。</span>
-            <span>相同运输节点使用幂等键去重，不会重复发送。</span>
+            <span>邮件正文使用中文卡片式模板；相同运输节点使用独立幂等键去重。</span>
+          </div>
+        </section>
+      ) : null}
+
+      {currentForm.type === "FREIGHTOWER_TRACKING_CUSTOMER_UPDATE" ? (
+        <section className={styles.documentGroupCard}>
+          <strong>客户英文物流通知</strong>
+          <div className={styles.quickCreateMeta}>
+            <span>发送给订单客户资料中绑定的主联系邮箱。</span>
+            <span>客户邮箱与内部邮箱重复时，优先按内部人员发送中文，不重复发送英文。</span>
+            <span>邮件正文使用独立英文卡片式模板，不包含内部中文说明。</span>
+            <span>可关闭此模板，关闭后不向客户自动发送，但内部通知不受影响。</span>
           </div>
         </section>
       ) : null}
 
       <section className={styles.documentGroupCard}>
         <strong>抄送设置</strong>
+        {currentForm.type === "FREIGHTOWER_TRACKING_CUSTOMER_UPDATE" ? (
+          <div className={styles.quickCreateMeta}>
+            <span>客户英文物流通知仅发送到该客户绑定的主联系邮箱，不使用管理员或额外抄送，避免客户信息误发。</span>
+          </div>
+        ) : null}
         <UiSwitch
           label="默认抄送管理员"
           description="发送该类型通知时，自动抄送系统中已启用的管理员邮箱。"
           checked={currentForm.ccAdminEmails}
-          disabled={currentForm.securitySensitive}
+          disabled={currentForm.securitySensitive || currentForm.type === "FREIGHTOWER_TRACKING_CUSTOMER_UPDATE"}
           onChange={(value) => setField("ccAdminEmails", value)}
         />
         <label className={styles.notificationTemplateField}>
@@ -169,7 +195,7 @@ export function NotificationTemplateSettingsCard({
             value={currentForm.ccEmails}
             onChange={(event) => setField("ccEmails", event.target.value)}
             placeholder="多个邮箱可用逗号、分号或换行分隔"
-            disabled={currentForm.securitySensitive}
+            disabled={currentForm.securitySensitive || currentForm.type === "FREIGHTOWER_TRACKING_CUSTOMER_UPDATE"}
             rows={3}
           />
         </label>

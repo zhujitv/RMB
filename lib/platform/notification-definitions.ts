@@ -7,6 +7,7 @@ import {
 import { COMMON_SIGNATURE, NOTIFICATION_TYPES } from "./notification-definition-types";
 import type { NotificationTypeDefinition } from "./notification-definition-types";
 import { SECURITY_NOTIFICATION_TYPE_DEFINITIONS } from "./notification-security-definitions";
+import { FREIGHTOWER_NOTIFICATION_TYPE_DEFINITIONS } from "./notification-freightower-definitions";
 
 export * from "./notification-definition-types";
 
@@ -198,50 +199,7 @@ export const NOTIFICATION_TYPE_DEFINITIONS: NotificationTypeDefinition[] = [
       { key: "companyName", label: "公司名称" },
     ],
   },
-  {
-    type: NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
-    name: "飞驼可视运输节点通知",
-    module: "物流跟踪",
-    description: "飞驼可视查询到新的运输节点或异常预警后，通知管理员和订单业务员。",
-    editable: true,
-    supportsAttachments: false,
-    subjectTemplate: "[NEXTWOOD ERP] Shipment Tracking Update - Order {orderNo} / B/L {blNo}",
-    bodyTemplate: [
-      "Hello / 您好，",
-      "",
-      "Shipment tracking for Order {orderNo} has changed. Please review the details below.",
-      "订单 {orderNo} 的物流跟踪信息发生变化，请查看以下内容。",
-      "",
-      "[Shipment Information / 运输信息]",
-      "- Order No. / 订单号：{orderNo}",
-      "- B/L No. / 提单号：{blNo}",
-      "- Container No. / 箱号：{containerNo}",
-      "- Current Status / 当前状态：{statusText}",
-      "- Latest Event / 最新节点：{eventText}",
-      "- Event Time / 节点时间：{eventTime}",
-      "- ETA / 预计到港：{eta}",
-      "- Vessel / Voyage / 船名航次：{vesselVoyage}",
-      "",
-      "If the status includes a Container Rollover Alert, please confirm the revised sailing schedule with the responsible team promptly.",
-      "如当前状态包含“甩柜预警”，请及时与相关业务人员确认后续船期安排。",
-      "",
-      "View Tracking / 查看物流跟踪：{trackingUrl}",
-      "",
-      "NEXTWOOD Supply Chain Collaboration Platform / NEXTWOOD 供应链协同平台",
-    ].join("\n"),
-    variables: [
-      { key: "orderNo", label: "订单号", required: true },
-      { key: "blNo", label: "提单号" },
-      { key: "containerNo", label: "箱号" },
-      { key: "statusText", label: "当前状态" },
-      { key: "eventText", label: "最新节点" },
-      { key: "eventTime", label: "节点时间" },
-      { key: "eta", label: "预计到港" },
-      { key: "vesselVoyage", label: "船名航次" },
-      { key: "trackingUrl", label: "跟踪详情链接" },
-    ],
-    ccAdminEmails: false,
-  },
+  ...FREIGHTOWER_NOTIFICATION_TYPE_DEFINITIONS,
   {
     type: NOTIFICATION_TYPES.WORKBENCH_TODO_OVERDUE,
     name: "Work Center 逾期待办提醒",

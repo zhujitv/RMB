@@ -15,7 +15,18 @@ import {
 } from "./freightower-supplemental-alerts";
 import { NOTIFICATION_TYPES } from "./notification-definitions";
 import { enabledAdminEmails, templateValue, uniqueEmails } from "./notification-helpers";
-import { sendNotificationEmail } from "./notification-send";
+import {
+  freightowerCustomerEventText,
+  freightowerCustomerStatusText,
+} from "./freightower-tracking-email";
+import {
+  freightowerTrackingEventTimeText,
+  freightowerTrackingEmailAudiencePolicy,
+  freightowerTrackingEmailVariableSets,
+  freightowerTrackingNotificationUrl,
+  sendDurableFreightowerTrackingEmail,
+} from "./freightower-tracking-email-notification";
+import { serializeShipsgoTracking } from "./shipsgo-tracking-serializer";
 import { enqueueWechatOfficialNotifications } from "./wechat-official-notifications";
 import { enqueueWechatMiniNotifications } from "./wechat-mini-notifications";
 import { FREIGHTOWER_PROVIDER } from "./shipsgo-tracking-utils";
@@ -48,27 +59,6 @@ type NotificationUserCandidate = {
   approvalStatus: string;
 } | null | undefined;
 
-function appBaseUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || process.env.APP_BASE_URL || "https://www.nextwood.net").replace(/\/+$/, "");
-}
-
-function displayDateTime(value: Date | string | null | undefined) {
-  if (!value) return "-";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  const parts = new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || "";
-  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")}`;
-}
-
 function activeApprovedEmails(users: NotificationUserCandidate[]) {
   return uniqueEmails(users
     .filter((user): user is NonNullable<NotificationUserCandidate> => Boolean(user?.isActive && user.approvalStatus === "APPROVED"))
@@ -97,6 +87,7 @@ export async function notifyFreightowerTrackingUpdate(
             select: {
               shortName: true,
               name: true,
+              contactEmail: true,
             },
           },
           salesperson: { select: notificationUserSelect },
@@ -112,7 +103,10 @@ export async function notifyFreightowerTrackingUpdate(
 
   const salespersonEmails = activeApprovedEmails([tracking.order.salesperson]);
   const adminEmails = await enabledAdminEmails();
-  const finalRecipientEmails = uniqueEmails([adminEmails, salespersonEmails]);
+  const internalRecipientEmails = uniqueEmails([adminEmails, salespersonEmails]);
+  const internalRecipientSet = new Set(internalRecipientEmails);
+  const customerRecipientEmails = uniqueEmails([tracking.order.customer.contactEmail])
+    .filter((email) => !internalRecipientSet.has(email));
   const admins = await prisma.user.findMany({
     where: { role: "管理员", isActive: true, approvalStatus: "APPROVED", deletedAt: null },
     select: { id: true },
@@ -123,7 +117,7 @@ export async function notifyFreightowerTrackingUpdate(
       ? tracking.order.salesperson.id
       : "",
   ].filter(Boolean);
-  if (!finalRecipientEmails.length && !recipientUserIds.length) {
+  if (!internalRecipientEmails.length && !customerRecipientEmails.length && !recipientUserIds.length) {
     return { deliveryKey: options.trackingEventKey || "", terminalSkipped: true };
   }
   const dumpingAlert = latestFreightowerDumpingAlert(tracking.rawResponse ?? tracking.rawPayload);
@@ -150,16 +144,18 @@ export async function notifyFreightowerTrackingUpdate(
     && change.event?.isWarning === true
     && freightowerCustomsEventHasActiveAlert(customsTimeline, change.event)
   ));
+  const customsChanged = options.changeSource === "customs"
+    || changedEvents.some((change) => change.source === "customs");
 
   const trackingEventKey = options.trackingEventKey || freightowerTrackingNotificationEventKey(tracking);
-  // The state fingerprint is the idempotency key. Do not append a caller-specific
-  // source list: two overlapping syncs can observe the same final snapshot through
-  // different paths and must still produce only one notification.
   const latestEventKey = trackingEventKey;
   const comprehensiveChanged = options.comprehensiveChanged
     ?? (options.changeSource === "comprehensive" && changedEvents.length === 0);
   const currentDumpingAlert = comprehensiveChanged ? dumpingAlert : null;
   const currentDumpingAlertText = freightowerAlertText(currentDumpingAlert);
+  const portRolloverChanged = Boolean(currentDumpingAlert)
+    || changedEvents.some((change) => change.source === "port" && change.event?.isDumpingWarning === true)
+    || (options.changeSource === "port" && sourceEvent?.isDumpingWarning === true);
 
   const orderNo = templateValue(tracking.order.orderNo);
   const blNo = templateValue(tracking.masterBlNo || tracking.order.blNo || tracking.bookingNumber);
@@ -186,14 +182,15 @@ export async function notifyFreightowerTrackingUpdate(
       || singleEventText
       || tracking.lastEvent,
   );
-  const eventTime = currentDumpingAlert?.time || sourceEvent?.time || tracking.lastEventAt || tracking.lastSyncedAt || tracking.lastSyncTime;
-  const trackingUrl = `${appBaseUrl()}/tracking-map?trackingId=${encodeURIComponent(tracking.id)}`;
+  const eventTime = currentDumpingAlert?.time
+    || (sourceEvent ? sourceEvent.time : tracking.lastEventAt || tracking.lastSyncedAt || tracking.lastSyncTime);
+  const trackingUrl = freightowerTrackingNotificationUrl(tracking.id);
 
   const officialNotification = enqueueWechatOfficialNotifications({
     userIds: recipientUserIds,
     idempotencyKey: `freightower-tracking-update:${latestEventKey}`,
     title: currentDumpingAlert || portDumping ? "物流甩柜预警" : customsWarning ? "中国海关异常预警" : "物流状态更新",
-    content: `订单：${orderNo}；提单：${blNo}；状态：${statusText}；节点：${eventText}；时间：${displayDateTime(eventTime)}`,
+    content: `订单：${orderNo}；提单：${blNo}；状态：${statusText}；节点：${eventText}；时间：${freightowerTrackingEventTimeText(eventTime)}`,
     url: trackingUrl,
     relatedEntityType: "shipsgo_tracking",
     relatedEntityId: tracking.id,
@@ -206,7 +203,7 @@ export async function notifyFreightowerTrackingUpdate(
     orderNo,
     statusText,
     eventText,
-    eventTimeText: displayDateTime(eventTime),
+    eventTimeText: freightowerTrackingEventTimeText(eventTime),
     page: `pages/tracking-detail/index?id=${encodeURIComponent(tracking.id)}`,
     relatedEntityType: "shipsgo_tracking",
     relatedEntityId: tracking.id,
@@ -215,62 +212,88 @@ export async function notifyFreightowerTrackingUpdate(
 
   const [officialDelivery, miniDelivery] = await Promise.all([officialNotification, miniNotification]);
 
-  let emailDelivery: Awaited<ReturnType<typeof sendNotificationEmail>> | null = null;
-  if (finalRecipientEmails.length) {
-    try {
-      emailDelivery = await sendNotificationEmail({
-    type: NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
-    recipientEmails: finalRecipientEmails,
-    variables: {
-      orderNo,
-      blNo,
-      containerNo: templateValue(tracking.containerNumber || tracking.containers.map((item) => item.containerNo).filter(Boolean).join(", ")),
-      statusText,
-      eventText,
-      eventTime: displayDateTime(eventTime),
-      eta: displayDateTime(tracking.eta),
-      vesselVoyage: templateValue([
-        sourceEvent?.vesselName || tracking.vesselName,
-        sourceEvent?.voyage || tracking.voyage,
-      ].filter(Boolean).join(" / ")),
-      trackingUrl,
-    },
-    relatedEntityType: "shipsgo_tracking",
-    relatedEntityId: tracking.id,
-    relatedOrderId: tracking.orderId,
-    idempotencyKey: `freightower-tracking-update:${latestEventKey}`,
-    context: {
-      provider: FREIGHTOWER_PROVIDER,
-      customerName: tracking.order.customer.shortName || tracking.order.customer.name || tracking.order.customerNameSnapshot,
-      recipientSource: "admins_and_order_salesperson",
-      adminRecipientCount: adminEmails.length,
-      salespersonRecipientCount: salespersonEmails.length,
-      dumpingWarning: currentDumpingAlertText || undefined,
-      portEventSource: portEvent ? "freightower_china_port" : undefined,
-      customsEventSource: customsEvent ? "freightower_china_customs" : undefined,
-      notificationChangeSource: options.changeSource || "comprehensive",
-    },
-      });
-    } catch (error) {
-      // The email sender persists a failed outbox before throwing. Once that row
-      // exists the notification is durable and the cron retry owns delivery.
-      const durableOutbox = await prisma.notificationOutbox.findUnique({
-        where: { idempotencyKey: `freightower-tracking-update:${latestEventKey}` },
-        select: { id: true, status: true },
-      });
-      if (!durableOutbox) throw error;
-      emailDelivery = {
-        sent: false,
-        skipped: false,
-        outboxId: durableOutbox.id,
-        error: error instanceof Error ? error.message : "邮件已进入失败重试队列",
-      };
-    }
-  }
+  const warning = Boolean(currentDumpingAlert || portDumping || customsWarning);
+  const customerChangedEventText = changedEvents.map((change) => {
+    const description = freightowerCustomerEventText(change.event);
+    return changedEvents.length > 1
+      ? `${change.source === "customs" ? "China Customs" : "China Port"}: ${description}`
+      : description;
+  }).join("; ");
+  const eventTextEn = currentDumpingAlert
+    ? "Container rollover alert"
+    : customerChangedEventText || freightowerCustomerEventText(sourceEvent);
+  const statusTextEn = freightowerCustomerStatusText(statusText, warning);
+  const containerNumbers = tracking.containers.map((item) => item.containerNo).filter(Boolean);
+  const currentEta = tracking.predictedDischargeDate || tracking.eta || tracking.dateOfDischarge;
+  const { internalVariables, customerVariables } = freightowerTrackingEmailVariableSets({
+    trackingId: tracking.id,
+    orderNo,
+    blNo,
+    containerNumber: tracking.containerNumber,
+    containerNumbers,
+    carrier: tracking.carrierName || tracking.carrierScac,
+    origin: tracking.originName,
+    destination: tracking.destinationName,
+    originalEta: tracking.dateOfDischarge,
+    currentEta,
+    loadingDate: tracking.dateOfLoading,
+    vesselName: sourceEvent?.vesselName || tracking.vesselName,
+    voyage: sourceEvent?.voyage || tracking.voyage,
+    statusText,
+    statusTextEn,
+    eventText,
+    eventTextEn,
+    eventTime,
+    warning,
+    timeline: serializeShipsgoTracking(tracking).timeline,
+  });
+  const commonContext = {
+    provider: FREIGHTOWER_PROVIDER,
+    customerName: tracking.order.customer.shortName || tracking.order.customer.name || tracking.order.customerNameSnapshot,
+    dumpingWarning: currentDumpingAlertText || undefined,
+    portEventSource: portEvent ? "freightower_china_port" : undefined,
+    customsEventSource: customsEvent ? "freightower_china_customs" : undefined,
+    notificationChangeSource: options.changeSource || "comprehensive",
+  };
+  const emailAudience = freightowerTrackingEmailAudiencePolicy({ portRolloverChanged, customsChanged });
+  const [emailDelivery, customerEmailDelivery] = await Promise.all([
+    sendDurableFreightowerTrackingEmail({
+      type: emailAudience.internalType,
+      recipientEmails: internalRecipientEmails,
+      audience: "internal",
+      variables: internalVariables,
+      trackingEventKey: latestEventKey,
+      trackingId: tracking.id,
+      orderId: tracking.orderId,
+      context: {
+        ...commonContext,
+        recipientSource: "admins_and_order_salesperson",
+        adminRecipientCount: adminEmails.length,
+        salespersonRecipientCount: salespersonEmails.length,
+        audience: "internal",
+      },
+    }),
+    sendDurableFreightowerTrackingEmail({
+      type: NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_CUSTOMER_UPDATE,
+      recipientEmails: emailAudience.customerAllowed ? customerRecipientEmails : [],
+      audience: "customer",
+      variables: customerVariables,
+      trackingEventKey: latestEventKey,
+      trackingId: tracking.id,
+      orderId: tracking.orderId,
+      context: {
+        ...commonContext,
+        recipientSource: "customer_contact_email",
+        customerRecipientCount: customerRecipientEmails.length,
+        audience: "customer",
+      },
+    }),
+  ]);
   return {
     deliveryKey: latestEventKey,
     terminalSkipped: false,
     email: emailDelivery,
+    customerEmail: customerEmailDelivery,
     official: officialDelivery,
     mini: miniDelivery,
   };

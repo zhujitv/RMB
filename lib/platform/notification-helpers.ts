@@ -20,8 +20,7 @@ import {
   type JsonRecord,
   type NotificationAttachment,
   type NotificationTypeDefinition,
-  logisticsEmailBodyIsBilingual,
-  logisticsEmailSubjectIsEnglish,
+  logisticsEmailBodyIsChinese,
   NOTIFICATION_TYPE_DEFINITIONS,
   NOTIFICATION_TYPES,
 } from "./notification-definitions";
@@ -215,8 +214,15 @@ function legacyLogisticsTemplateSyncData(existing: JsonRecord, definition: Notif
 function legacyFreightowerTemplateSyncData(existing: JsonRecord, definition: NotificationTypeDefinition) {
   if (definition.type !== NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE) return {};
   const update: JsonRecord = {};
-  if (!logisticsEmailSubjectIsEnglish(existing.subjectTemplate)) update.subjectTemplate = definition.subjectTemplate;
-  if (!logisticsEmailBodyIsBilingual(existing.bodyTemplate)) update.bodyTemplate = definition.bodyTemplate;
+  // The legacy tracking template combined Chinese and English in one long plain-text
+  // message. Tracking notifications now have separate internal/customer templates.
+  if (/Shipment Tracking Update/i.test(String(existing.subjectTemplate || ""))) {
+    update.subjectTemplate = definition.subjectTemplate;
+  }
+  if (!logisticsEmailBodyIsChinese(existing.bodyTemplate)
+    || /Shipment Information|Container Rollover Alert/i.test(String(existing.bodyTemplate || ""))) {
+    update.bodyTemplate = definition.bodyTemplate;
+  }
   return update;
 }
 
