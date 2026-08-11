@@ -25,7 +25,7 @@ const EMPTY_SETTINGS: WechatOfficialSettings = {
   templateId: "",
   credentialsReady: false,
   ready: false,
-  callbackUrl: "https://www.nextwood.net/api/wechat-official/subscription/callback",
+  callbackUrl: "https://www.nextwood.net/wx",
   accountRequirement: "公众号须完成认证，并在后台开通模板消息能力、添加物流通知模板",
 };
 

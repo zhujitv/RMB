@@ -14,6 +14,7 @@ const PUBLIC_API_ROUTES = new Set([
   // WeChat redirects users here without the ERP session cookie. The handler is
   // authenticated by a single-use, hashed `reserved` nonce plus scene/template checks.
   "app/api/wechat-official/subscription/callback/route.ts",
+  "app/wx/route.ts",
   "app/api/cron/exchange-rates/route.ts",
   "app/api/cron/freightower-sync/route.ts",
 ]);

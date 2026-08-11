@@ -18,6 +18,7 @@ const settingsModule = readFileSync("app/modules/SettingsModule.tsx", "utf8");
 const accountUi = readFileSync("app/account-settings/wechat-panel.tsx", "utf8");
 const accountWechatStyles = readFileSync("app/account-settings/wechat-panel.module.css", "utf8");
 const callbackRoute = readFileSync("app/api/wechat-official/subscription/callback/route.ts", "utf8");
+const shortCallbackRoute = readFileSync("app/wx/route.ts", "utf8");
 const migration = readFileSync("prisma/migrations/20260802110000_wechat_official_notifications/migration.sql", "utf8");
 const persistentMigration = readFileSync("prisma/migrations/20260812130000_wechat_official_persistent_templates/migration.sql", "utf8");
 const securityAudit = readFileSync("scripts/security-audit.mjs", "utf8");
@@ -41,6 +42,9 @@ test("公众号使用一次绑定的静默网页授权并严格校验 state", ()
   assert.match(subscriptions, /exchangeWechatOfficialOAuthCode/);
   assert.match(subscriptions, /#wechat_redirect|url\.hash = "wechat_redirect"/);
   assert.match(callbackRoute, /https:\/\/www\.nextwood\.net\//);
+  assert.match(subscriptions, /https:\/\/www\.nextwood\.net\/wx/);
+  assert.match(shortCallbackRoute, /confirmWechatSubscriptionCallback/);
+  assert.match(shortCallbackRoute, /wechatSubscription/);
   assert.match(callbackRoute, /workbenchTarget", "\/account"/);
   assert.match(securityAudit, /app\/api\/wechat-official\/subscription\/callback\/route\.ts/);
 });
