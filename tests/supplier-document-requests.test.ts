@@ -28,6 +28,10 @@ const repairTaxRelationService = readRepairTaxRelationsSource();
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
 const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierPurchaseOrders", "supplierDocuments", "manual"\\]`);
 
+test("supplier document template uses a Web-compatible binary response body", () => {
+  assert.match(supplierRequestTemplateRoute, /new Response\(new Uint8Array\(body\)/);
+});
+
 test("supplier document request schema links supplier uploads to tax refund documents", () => {
   assert.match(schema, /model SupplierDocumentRequest/);
   assert.match(schema, /costId\s+String\?\s+@map\("cost_id"\)/);

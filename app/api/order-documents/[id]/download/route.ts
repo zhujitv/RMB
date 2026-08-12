@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const { body, document, mimeType } = await getOrderDocumentDownload(request, actor, id);
     const fileName = preferredOrderDocumentFileName(document);
-    return new Response(body, {
+    return new Response(new Uint8Array(body), {
       headers: managedFileStreamHeaders({ bodyLength: body.length, mimeType: mimeType || "application/pdf", fileName, disposition: "attachment" }),
     });
   } catch (error: unknown) {

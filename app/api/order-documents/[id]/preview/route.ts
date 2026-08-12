@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const { body, document, mimeType } = await getOrderDocumentPreview(request, actor, id);
     const fileName = preferredOrderDocumentFileName(document);
-    return new Response(body, {
+    return new Response(new Uint8Array(body), {
       headers: managedFileStreamHeaders({ bodyLength: body.length, mimeType: mimeType || "application/pdf", fileName, disposition: "inline" }),
     });
   } catch (error: unknown) {

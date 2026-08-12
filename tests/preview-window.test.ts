@@ -76,6 +76,7 @@ test("preview route returns inline file streams with cache and nosniff headers",
     /getManagedFilePreviewMetadata\(request, actor, kind, id\)/,
   );
   assert.match(previewRoute, /managedFileStreamHeaders/);
+  assert.match(previewRoute, /new Response\(new Uint8Array\(body\)/);
   assert.match(
     orderDocumentsService,
     /export async function getOrderDocumentPreviewMetadata/,
@@ -105,6 +106,7 @@ test("download route returns attachment file streams", () => {
     /managedFileStreamHeaders\(\{[\s\S]*disposition: "attachment"/,
   );
   assert.match(downloadRoute, /managedFileStreamHeaders/);
+  assert.match(downloadRoute, /new Response\(new Uint8Array\(body\)/);
   assert.doesNotMatch(downloadRoute, /searchParams\.get\("disposition"\)/);
   assert.doesNotMatch(downloadRoute, /pdfContentDispositionHeader\("inline"/);
   assert.doesNotMatch(downloadRoute, /NextResponse\.redirect/);

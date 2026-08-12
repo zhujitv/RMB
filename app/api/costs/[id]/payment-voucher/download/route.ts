@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const actor = await requireApiActor(request);
     const { body, mimeType, fileName } = await getProductSupplierCostPaymentVoucher(request, actor, id);
-    return new Response(body, {
+    return new Response(new Uint8Array(body), {
       headers: paymentVoucherHeaders(request, body.length, mimeType, fileName),
     });
   } catch (error: unknown) {

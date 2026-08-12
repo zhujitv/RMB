@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const actor = await requireApiActor(request);
     const { id } = await params;
     const { body, mimeType, fileName } = await getSupplierDocumentRequestTemplate(request, actor, id);
-    return new Response(body, {
+    return new Response(new Uint8Array(body), {
       headers: {
         "Content-Type": mimeType,
         "Content-Disposition": excelContentDisposition(fileName),

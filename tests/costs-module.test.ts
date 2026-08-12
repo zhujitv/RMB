@@ -75,6 +75,7 @@ test("product supplier cost payment vouchers are scoped away from logistics fees
   assert.match(costPaymentVoucherDownloadRoute, /export async function HEAD/);
   assert.match(costPaymentVoucherDownloadRoute, /searchParams\.get\("download"\) === "1" \? "attachment" : "inline"/);
   assert.match(costPaymentVoucherDownloadRoute, /managedFileStreamHeaders/);
+  assert.match(costPaymentVoucherDownloadRoute, /new Response\(new Uint8Array\(body\)/);
   assert.match(uploadValidation, /readValidatedPaymentVoucherUploadFile/);
   assert.match(uploadValidation, /image\/jpeg/);
   assert.match(appUtils, /PAYMENT_VOUCHER_UPLOAD_ACCEPT/);
