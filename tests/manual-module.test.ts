@@ -10,7 +10,8 @@ const manualModule = [
 test("manual explains current tax refund document upload workflow", () => {
   assert.match(manualModule, /操作手册/);
   assert.doesNotMatch(manualModule, /操作说明书/);
-  assert.match(manualModule, /当前版本：v3\.0/);
+  assert.match(manualModule, /MANUAL_VERSION = "v1\.0\.3"/);
+  assert.match(manualModule, /MANUAL_UPDATED_AT = "2026年8月13日"/);
   assert.match(manualModule, /出口资料上传和报关资料上传区域，按资料卡片上传 PDF/);
   assert.match(manualModule, /退税详情仅显示状态提示和前往资料回传入口/);
   assert.match(manualModule, /预览、下载、删除或替换当前 PDF/);
@@ -120,11 +121,67 @@ test("manual covers the complete workspace application map", () => {
   assert.match(manualModule, /角色权限速览/);
 });
 
+test("manual explains quotation, PI, and manual customer acceptance", () => {
+  assert.match(manualModule, /title: "报价管理"/);
+  assert.match(manualModule, /报价号与 PI 发票号一致，按日期生成/);
+  assert.match(manualModule, /同日后续报价依次为 20260809A、20260809B/);
+  assert.match(manualModule, /历史产品和同币种最近单价/);
+  assert.match(manualModule, /发送客户不等于客户接受/);
+  assert.match(manualModule, /只有“手动确认”会将报价登记为已接受/);
+  assert.match(manualModule, /CNY 或 USD 银行账户/);
+  assert.match(manualModule, /永久删除尚未发送、没有任何邮件记录的草稿/);
+});
+
+test("manual explains sales execution and factory allocation", () => {
+  assert.match(manualModule, /title: "销售执行"/);
+  assert.match(manualModule, /老客户不需要先报价，可以直接创建销售执行单/);
+  assert.match(manualModule, /客户订单号和客户要求交货日期必须填写/);
+  assert.match(manualModule, /整单默认工厂一次填入所有尚未分厂的单一分配行/);
+  assert.match(manualModule, /工厂使用模糊查找选择/);
+  assert.match(manualModule, /采购单价可留空等待供应商首次回复时回填/);
+  assert.match(manualModule, /分配数量不能少于或超过销售数量/);
+});
+
+test("manual explains supplier response, production, and shipping handoff", () => {
+  assert.match(manualModule, /title: "工厂采购单与供应商回复"/);
+  assert.match(manualModule, /供应商可接受并确认交期、提出新交期或拒绝采购单/);
+  assert.match(manualModule, /已接受采购单在生产完成前可再次提出一个不同的新交期/);
+  assert.match(manualModule, /被拒原采购单会保留为作废记录/);
+  assert.match(manualModule, /一家工厂确认后即可独立生产，不需要等待同一销售执行中的其它工厂/);
+  assert.match(manualModule, /由供应商在门户点击确认生产完成/);
+  assert.match(manualModule, /所有有效采购单均已接受、生产完成、登记实际交付/);
+  assert.match(manualModule, /当前版本明确跳过质检环节/);
+});
+
+test("manual explains factory payment, penalty, settlement, and cost sync", () => {
+  assert.match(manualModule, /title: "采购付款与工厂结算"/);
+  assert.match(manualModule, /默认采购付款条款、预付款比例/);
+  assert.match(manualModule, /临时包装费、加急人工费/);
+  assert.match(manualModule, /从第 11 天起按采购基数的 0\.003% \/ 天/);
+  assert.match(manualModule, /默认不设上限/);
+  assert.match(manualModule, /冻结采购基数 \+ 增加费用 - 其它扣减 - 延误违约金/);
+  assert.match(manualModule, /人民币结算汇率固定为 1；外币结算必须填写有效汇率/);
+  assert.match(manualModule, /累计付款达到最终应付时系统自动核销并结清/);
+  assert.match(manualModule, /成本管理中的工厂货款成本/);
+  assert.match(manualModule, /工厂结算生成的成本由采购执行管理/);
+});
+
+test("manual explains customer communication and current role menus", () => {
+  assert.match(manualModule, /title: "客户沟通"/);
+  assert.match(manualModule, /附件缺失时先返回物流信息或退税资料补齐/);
+  assert.match(manualModule, /系统外发送标记只记录事实/);
+  assert.match(manualModule, /管理员：经营总览、报价管理、销售执行/);
+  assert.match(manualModule, /业务员：报价管理、销售执行/);
+  assert.match(manualModule, /财务：销售执行、收款管理/);
+  assert.match(manualModule, /产品供应商：工厂采购单、资料回传、操作手册/);
+});
+
 test("manual explains report center and account security workflow", () => {
   assert.match(manualModule, /应收订单明细、收款明细、成本明细、利润分析、业务员提成、逾期催款或退税资料/);
   assert.match(manualModule, /客户名称支持客户全称和客户简称模糊查询/);
   assert.match(manualModule, /新用户注册后需先完成邮箱验证，再由管理员审核通过/);
   assert.match(manualModule, /最近 10 次登录记录/);
   assert.match(manualModule, /物流供应商仅可查看分配订单、提交物流费用并上传发票，不允许创建或删除飞驼可视 Tracking/);
-  assert.match(manualModule, /产品供应商仅可查看资料回传任务并上传工厂采购合同、增值税发票/);
+  assert.match(manualModule, /产品供应商仅可查看本工厂采购单和资料回传任务/);
+  assert.match(manualModule, /可回复采购、回填价格、确认完工并上传工厂合同和增值税发票/);
 });

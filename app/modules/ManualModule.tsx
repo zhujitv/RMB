@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import styles from "../WorkspaceShell.module.css";
 import { useWorkspaceTabContext } from "../workspace/workspace-tab-context";
-import { FLOW_STEPS, SECTIONS, type ManualSection } from "./manual-content";
+import {
+  FLOW_STEPS,
+  MANUAL_UPDATED_AT,
+  MANUAL_VERSION,
+  SECTIONS,
+  type ManualSection,
+} from "./manual-content";
 
 export function ManualModule() {
   const workspaceTab = useWorkspaceTabContext();
@@ -51,16 +57,16 @@ export function ManualModule() {
         <div>
           <span className={styles.kicker}>NEXTWOOD Handbook</span>
           <h2>操作手册</h2>
-          <p>供应链业务、单证、物流费用与退税资料协同平台操作手册</p>
+          <p>报价、销售执行、工厂采购、生产交付、财务结算、单证与退税协同使用说明</p>
           <div className={styles.manualMeta}>
-            <span>当前版本：v3.0</span>
-            <span>适用对象：业务 / 财务 / 成本 / 物流 / 管理员</span>
-            <span>更新时间：{new Date().toLocaleDateString("zh-CN")}</span>
+            <span>当前版本：{MANUAL_VERSION}</span>
+            <span>适用对象：业务 / 财务 / 物流 / 产品供应商 / 管理员</span>
+            <span>更新时间：{MANUAL_UPDATED_AT}</span>
           </div>
         </div>
         <div className={styles.manualHeroBadge}>
-          <strong>一票业务</strong>
-          <span>一个订单 · 一套资料 · 一次归档</span>
+          <strong>业务闭环</strong>
+          <span>报价 · 采购 · 生产 · 发货 · 结算 · 归档</span>
         </div>
       </div>
 

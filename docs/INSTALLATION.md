@@ -4,21 +4,21 @@
 
 ## 1. 部署方式选择
 
-推荐生产环境使用：
+当前正式生产环境使用：
 
 - GitHub 托管源码
-- Vercel 部署 Next.js 应用
-- PostgreSQL 数据库
-- Cloudflare R2 或兼容 S3 的私有对象存储
+- 腾讯云 CVM 运行 Next.js，Nginx 负责 HTTPS 反向代理，systemd 负责单进程守护
+- 腾讯云数据库 PostgreSQL
+- 腾讯云 COS 私有对象存储
 - Resend 邮件服务
 
-本系统不建议直接使用本地电脑作为正式服务器。正式商用应部署到 Vercel 或同等级 Node.js 托管平台，并使用独立生产数据库。
+Vercel 项目已停止使用，不作为当前发布、迁移或验收目标。本系统不建议直接使用本地电脑作为正式服务器；正式环境必须使用独立数据库、私有对象存储和可回滚的版本目录。
 
 ## 2. 基础环境要求
 
 本地开发或服务器构建需要：
 
-- Node.js 20 或更高版本
+- Node.js 22 或 24（项目要求 `>=22 <25`）
 - npm
 - PostgreSQL 数据库
 - Git
@@ -67,15 +67,15 @@ npm run setup
 
 - PostgreSQL 数据库地址、端口、库名、用户名和密码
 - 初始管理员姓名、邮箱和密码
-- R2 / S3 私有文件存储
+- COS / R2 / S3 私有文件存储
 - Resend 邮件服务
-- Upstash Redis 分布式限流
+- 限流方式：腾讯云单 CVM、单 Node 进程可启用内存限流；多进程或多实例部署必须配置 Upstash Redis
 
 完成后会生成 `.env.local`。
 
 如果 `.env.local` 已存在，向导会询问是否覆盖；不覆盖时会生成 `.env.local.generated`，方便人工核对后合并。
 
-注意：初始化向导只生成环境变量文件，不会自动执行数据库迁移，也不会自动上传密钥到 Vercel。
+注意：初始化向导只生成环境变量文件，不会自动执行数据库迁移，也不会自动上传密钥到腾讯云服务器。
 
 ### 手动配置
 
@@ -122,7 +122,17 @@ INITIAL_ADMIN_PASSWORD="StrongPassword123"
 
 ### 文件存储配置
 
-系统中的 PDF、合同、发票、报关资料等附件需要存储到 R2 或兼容 S3 的私有桶。
+系统中的 PDF、合同、发票、报关资料等附件必须存储到私有对象存储。腾讯云生产环境优先使用 COS：
+
+```env
+COS_REGION="ap-shanghai"
+COS_ENDPOINT="https://cos.ap-shanghai.myqcloud.com"
+COS_SECRET_ID="your-cam-secret-id"
+COS_SECRET_KEY="your-cam-secret-key"
+COS_BUCKET="your-private-bucket-name-with-appid"
+```
+
+旧部署仍兼容 R2 或 S3：
 
 ```env
 R2_ACCOUNT_ID="your-cloudflare-account-id"
@@ -268,40 +278,35 @@ npm run verify:release
 
 说明：
 
-- `npm run build` 在任何环境都只构建应用，普通 Git/Vercel Production 构建不会自动执行 Prisma migration。
+- `npm run build` 在任何环境都只构建应用，普通 Git 或腾讯云构建不会自动执行 Prisma migration。
 - `npm run build:release` 会先执行 `prisma migrate deploy`，再构建应用。
 - 只有完成数据库备份并由受保护发布步骤显式调用时，才能使用 `npm run db:deploy` 或 `npm run build:release`。
 - 生产环境发布前必须确认数据库备份已经完成。
 
-## 9. Vercel 部署流程
+## 9. 腾讯云 CVM 部署流程
 
-推荐流程：
+当前生产发布采用 GitHub 代码源和腾讯云版本化目录。推荐顺序：
 
-1. 在 GitHub 创建或使用现有仓库。
-2. 在 Vercel 新建项目并连接该 GitHub 仓库。
-3. 在 Vercel Project Settings -> Environment Variables 中配置 `.env.example` 中需要的变量。
-4. 确认 Production 环境的 `DATABASE_URL` 指向生产数据库。
-5. 确认 R2、邮件、OCR、ShipsGo 等密钥已经配置完整。
-6. 推送代码到 `main` 分支。
-7. Vercel 自动触发部署。
+1. 在本地只选择本次功能文件提交，执行 `npm run verify:ci` 并推送到 GitHub `main`。
+2. 等待 GitHub Actions 全部通过，记录目标 commit SHA。
+3. 在腾讯云数据库控制台创建手动备份，并确认备份状态成功。
+4. 在 CVM 新建 release 目录，拉取同一 commit SHA，执行 `npm ci`。
+5. 核对 `DATABASE_URL`、COS、邮件、OCR、飞驼可视、限流和代理配置，但不要输出或覆盖现有密钥。
+6. 执行 `npx prisma migrate status`。只有存在待执行 migration 时，才在维护窗口显式执行 `npm run db:deploy`。
+7. 使用 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
+8. 原子切换 `current` 版本目录并重启 systemd 应用服务；保留上一版本目录用于代码回滚。
+9. 核对 systemd 服务正常、仅一个 `next-server` 进程、应用只监听本机端口，Nginx HTTPS 正常。
+10. 确认服务器运行 SHA 与 GitHub SHA 一致，`www` 返回 200、裸域名正确跳转，再登录验收核心业务。
 
-Vercel 构建命令使用项目默认配置：
-
-```bash
-npm run build
-```
-
-只有在受保护、确认已备份的发布步骤中，才可以显式执行：
+只有在数据库已备份、连接目标已核对且由受保护发布步骤执行时，才可以使用：
 
 ```bash
+npm run db:deploy
+# 或显式迁移并构建
 npm run build:release
 ```
 
-禁止把 `build:release` 配成 Preview 或普通 Vercel Build Command；默认 `npm run build` 不会根据 `VERCEL_ENV` 或 `VERCEL_TARGET_ENV` 自动迁移数据库。推荐流程是：
-
-1. 先手动备份数据库。
-2. 手动执行迁移。
-3. 再部署应用。
+禁止在普通构建命令中隐式加入 migration，禁止在生产使用 `prisma db push`、`prisma migrate dev` 或重建数据库。数据库迁移是向前执行，代码回滚不会自动撤销已经完成的 migration。
 
 ## 10. 首次上线检查清单
 
@@ -309,15 +314,16 @@ npm run build:release
 
 - 数据库连接正常。
 - 所有 Prisma migration 已执行。
-- R2 / S3 私有桶可上传、预览、下载 PDF。
+- COS 私有桶可上传、预览、下载 PDF。
 - 邮件服务可发送测试邮件。
 - 管理员账号可登录。
 - 业务员、财务、物流供应商、产品供应商角色权限正常。
-- 应收订单、收款、成本、物流信息、物流费用、退税资料、资料回传核心流程可用。
-- PDF 上传限制正常：仅支持 PDF，单个文件最大 5MB。
+- 报价、PI、手动确认、销售执行、工厂采购、供应商回复、生产交付、进入发货、应收订单和采购结算核心流程可用。
+- 收款、成本、物流信息、物流费用、退税资料和资料回传原有流程可用。
+- PDF 上传限制正常：仅支持 PDF，单个文件最大 10MB。
 - 审计日志正常记录关键操作。
 - 安全审计脚本通过。
-- Vercel 最新部署状态为成功。
+- GitHub SHA、服务器运行 SHA、systemd 服务和真实公网页面均已核对。
 
 ## 11. 灰度上线建议
 
@@ -336,14 +342,14 @@ npm run build:release
 至少备份：
 
 - PostgreSQL 数据库
-- R2 / S3 附件文件
+- COS / R2 / S3 附件文件
 - 生产环境变量
 
 建议：
 
 - 每日自动备份数据库。
 - 每周做一次恢复演练。
-- R2 / S3 开启版本控制或对象保留策略。
+- COS / R2 / S3 开启版本控制或对象保留策略。
 - 重要版本发布前手动备份一次数据库。
 
 ## 13. 常见问题
@@ -369,11 +375,11 @@ npm run db:generate
 
 检查：
 
-- R2 / S3 变量是否完整。
+- COS / R2 / S3 变量是否完整。
 - 存储桶是否存在。
 - Access Key 是否有读写权限。
 - 文件是否为 PDF。
-- 文件是否超过 5MB。
+- 文件是否超过 10MB。
 
 ### 预览 PDF 失败但下载成功
 
@@ -387,8 +393,10 @@ npm run db:generate
 
 检查：
 
-- Vercel 是否部署了最新 `main`。
-- 环境变量是否配置到 Production。
+- GitHub `main` 是否包含目标 commit，Actions 是否通过。
+- 腾讯云当前 release 和运行进程是否使用同一 commit SHA。
+- systemd 服务是否已重启并指向新的 `current` 目录。
+- CVM 生产环境变量是否完整且仍指向正确数据库和 COS。
 - 浏览器是否缓存旧页面。
 - 对应角色是否有菜单权限。
 
@@ -410,7 +418,7 @@ npm run db:deploy
 
 当前正式版本可在 GitHub Releases 查看：
 
-- `v1.0.1`
+- `v1.0.3`
 
 每次正式发布建议：
 
@@ -419,4 +427,5 @@ npm run db:deploy
 3. 推送到 `main`。
 4. 创建 Git tag。
 5. 创建 GitHub Release。
-6. 确认 Vercel 部署成功。
+6. 在腾讯云拉取目标 SHA、构建并切换版本。
+7. 确认数据库 migration、服务器 SHA、服务状态和真实公网页面。
