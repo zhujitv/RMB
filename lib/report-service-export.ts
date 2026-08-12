@@ -60,7 +60,7 @@ async function xlsxResponse(filename: string, columns: ReportColumn[], rows: Rep
   zip.folder("xl")!.folder("_rels")!.file("workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
   zip.folder("xl")!.folder("worksheets")!.file("sheet1.xml", `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetData}</sheetData></worksheet>`);
   const body = await zip.generateAsync({ type: "uint8array" });
-  return new Response(Buffer.from(body), {
+  return new Response(new Uint8Array(body), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${filename}.xlsx"`,
