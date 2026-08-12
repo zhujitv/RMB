@@ -217,6 +217,9 @@ export function beginQuotationPdfPage(state: QuotationPdfRenderState, firstPage:
   state.pageCount += 1;
   const context = quotationPdfContext(state);
   context.textBaseline = "top";
+  // A tiny non-zero spacing keeps Skia from emitting ligature glyphs whose
+  // ToUnicode mapping is lost by some Linux PDF readers (for example ti/tt).
+  context.letterSpacing = "0.001px";
   context.fillStyle = PDF_COLORS.ink;
   context.strokeStyle = PDF_COLORS.border;
   context.lineWidth = 0.6;
