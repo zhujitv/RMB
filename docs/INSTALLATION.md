@@ -166,7 +166,7 @@ API_RATE_LIMIT_UPLOAD_LIMIT="60"
 API_RATE_LIMIT_MEMORY_MAX_BUCKETS="20000"
 ```
 
-如果部署为多实例生产环境，必须配置 Upstash Redis：
+生产环境默认必须配置 Upstash Redis：
 
 ```env
 UPSTASH_REDIS_REST_URL=""
@@ -177,7 +177,13 @@ API_RATE_LIMIT_REGISTRATION_WINDOW_MS="900000"
 API_RATE_LIMIT_REGISTRATION_LIMIT="5"
 ```
 
-本地未配置 Redis 时，系统会使用内存限流兜底；Vercel Production 构建会要求配置分布式 Redis。
+本地开发未配置 Redis 时，系统会使用内存限流。腾讯云 CVM 只有在“一台服务器、一个 Node 进程、没有 PM2 cluster/多副本”时，才能显式启用：
+
+```env
+SINGLE_INSTANCE_MEMORY_RATE_LIMIT="true"
+```
+
+这是单实例部署声明，不是通用 Redis 替代方案。增加第二台 CVM、改用 PM2 cluster/多 Node 进程或任何横向扩容前，必须先配置 Redis 并删除该开关。Vercel Production 严禁设置该开关，安全检查会直接拒绝构建。
 
 ### 可选第三方接口
 

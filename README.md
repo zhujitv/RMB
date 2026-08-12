@@ -759,7 +759,7 @@ RESEND_EMAIL_ENDPOINT=https://api.resend.com/emails
 
 `RESEND_EMAIL_ENDPOINT` 可留空，默认使用 Resend 官方接口。若未配置 `RESEND_API_KEY` 或发件邮箱，系统会阻止邮件发送并保存明确失败原因。
 
-统一 API 限流在本地开发时可使用进程内存。多实例生产环境必须配置 Upstash Redis：
+统一 API 限流在本地开发时可使用进程内存。生产环境默认必须配置 Upstash Redis：
 
 ```text
 UPSTASH_REDIS_REST_URL=
@@ -777,6 +777,14 @@ API_RATE_LIMIT_MEMORY_MAX_BUCKETS=20000
 API_RATE_LIMIT_REGISTRATION_WINDOW_MS=900000
 API_RATE_LIMIT_REGISTRATION_LIMIT=5
 ```
+
+仅当腾讯云 CVM 始终只运行一个 Node 进程（不使用 PM2 cluster、多副本或第二台服务器）时，可以显式选择单实例内存限流：
+
+```text
+SINGLE_INSTANCE_MEMORY_RATE_LIMIT=true
+```
+
+只要增加进程、实例或扩容，就必须先改用 Redis 并删除该开关。Vercel Production 严禁使用此开关，即使同时配置了 Redis，安全检查也会拒绝这种冲突配置。
 
 腾讯云 CVM 通过 Nginx 等反向代理运行时，还应配置：
 

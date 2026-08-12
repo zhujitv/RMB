@@ -14,6 +14,7 @@ const SECURITY_ENV_KEYS = [
   "UPSTASH_REDIS_KV_REST_API_TOKEN",
   "RATE_LIMIT_REDIS_REST_URL",
   "RATE_LIMIT_REDIS_REST_TOKEN",
+  "SINGLE_INSTANCE_MEMORY_RATE_LIMIT",
   "STRICT_PRODUCTION_SECURITY",
   "SECURITY_BUILD_MODE",
   "EXPOSE_ERROR_DETAILS",
@@ -64,6 +65,38 @@ test("standalone production builds enforce the same security gate", () => {
   const result = runSecurityEnvironmentCheck({ NODE_ENV: "production" });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /生产环境必须配置 HTTPS/);
+});
+
+test("standalone production requires Redis unless single-process memory limiting is explicit", () => {
+  const withoutRedis = runSecurityEnvironmentCheck({
+    ...validProductionEnvironment,
+    UPSTASH_REDIS_REST_URL: "",
+    UPSTASH_REDIS_REST_TOKEN: "",
+  });
+  assert.equal(withoutRedis.status, 1);
+  assert.match(withoutRedis.stderr, /SINGLE_INSTANCE_MEMORY_RATE_LIMIT=true/);
+
+  const singleInstance = runSecurityEnvironmentCheck({
+    ...validProductionEnvironment,
+    UPSTASH_REDIS_REST_URL: "",
+    UPSTASH_REDIS_REST_TOKEN: "",
+    SINGLE_INSTANCE_MEMORY_RATE_LIMIT: "true",
+  });
+  assert.equal(singleInstance.status, 0, singleInstance.stderr);
+  assert.match(singleInstance.stdout, /passed/);
+});
+
+test("Vercel production rejects the single-instance memory rate-limit mode", () => {
+  for (const deploymentEnvironment of ["VERCEL_ENV", "VERCEL_TARGET_ENV"] as const) {
+    const result = runSecurityEnvironmentCheck({
+      ...validProductionEnvironment,
+      VERCEL: "1",
+      [deploymentEnvironment]: "production",
+      SINGLE_INSTANCE_MEMORY_RATE_LIMIT: "true",
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /SINGLE_INSTANCE_MEMORY_RATE_LIMIT.*Vercel Production/);
+  }
 });
 
 test("ordinary npm build lifecycles enforce the gate before NODE_ENV is set", () => {

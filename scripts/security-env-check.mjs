@@ -75,6 +75,7 @@ const standaloneProductionBuild = !explicitPreviewBuild
 const strictProduction = platformProductionBuild
   || standaloneProductionBuild
   || process.env.STRICT_PRODUCTION_SECURITY === "true";
+const singleInstanceMemoryRateLimit = process.env.SINGLE_INSTANCE_MEMORY_RATE_LIMIT === "true";
 const failures = [];
 
 if (strictProduction && !hasStrongCronSecret()) {
@@ -83,8 +84,11 @@ if (strictProduction && !hasStrongCronSecret()) {
 if (strictProduction && !validEncryptionKey(process.env.SETTINGS_ENCRYPTION_KEY)) {
   failures.push("SETTINGS_ENCRYPTION_KEY 必须配置为 32 字节随机密钥");
 }
-if (strictProduction && !hasDistributedRateLimit()) {
-  failures.push("生产多实例必须配置 Upstash/Redis 分布式限流");
+if (platformProductionBuild && singleInstanceMemoryRateLimit) {
+  failures.push("SINGLE_INSTANCE_MEMORY_RATE_LIMIT 禁止用于 Vercel Production；必须配置 Upstash/Redis 分布式限流");
+}
+if (strictProduction && !hasDistributedRateLimit() && !singleInstanceMemoryRateLimit) {
+  failures.push("生产环境必须配置 Upstash/Redis 分布式限流；仅单实例、单 Node 进程可显式设置 SINGLE_INSTANCE_MEMORY_RATE_LIMIT=true");
 }
 if (strictProduction && !hasCanonicalOrigin()) {
   failures.push("生产环境必须配置 HTTPS APP_URL/APP_BASE_URL/NEXT_PUBLIC_APP_URL");
