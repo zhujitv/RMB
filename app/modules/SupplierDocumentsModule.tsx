@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useConfirmationDialog } from "../components";
-import type { User } from "../types";
+import type { PermissionSnapshot, User } from "../types";
+import { canWritePermission } from "../utils";
 import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 import { SupplierDocumentsModuleView } from "./supplier-documents/module-view";
 import { useSupplierDocumentRequestActions } from "./supplier-documents/use-supplier-document-request-actions";
@@ -10,12 +11,14 @@ import { useSupplierDocumentsData } from "./supplier-documents/use-supplier-docu
 
 export function SupplierDocumentsModule({
   currentUser,
+  permissions,
   initialKeyword = "",
   initialRequestId = "",
   initialOpenToken = 0,
   onRefreshTodos,
 }: {
   currentUser: User;
+  permissions?: PermissionSnapshot;
   initialKeyword?: string;
   initialRequestId?: string;
   initialOpenToken?: number;
@@ -43,6 +46,7 @@ export function SupplierDocumentsModule({
   } = useConfirmationDialog();
 
   const isAdmin = currentUser.role === "管理员";
+  const canWrite = canWritePermission(currentUser, permissions, "supplierDocuments", ["产品供应商", "产品供应商账号", "工厂供应商账号"]);
   const {
     uploadDocument,
     deleteTask,
@@ -50,6 +54,7 @@ export function SupplierDocumentsModule({
     handleRequestCreated,
   } = useSupplierDocumentRequestActions({
     isAdmin,
+    canWrite,
     currentUserRole: currentUser.role,
     page,
     pageSize,
@@ -142,9 +147,10 @@ export function SupplierDocumentsModule({
       resendingTaskId={resendingTaskId}
       createDialogOpen={createDialogOpen}
       isAdmin={isAdmin}
+      canWrite={canWrite}
       safePage={safePage}
       confirmation={confirmation}
-      onCreateRequest={() => setCreateDialogOpen(true)}
+      onCreateRequest={() => { if (canWrite && isAdmin) setCreateDialogOpen(true); }}
       onCloseCreateDialog={() => setCreateDialogOpen(false)}
       onRequestCreated={handleRequestCreated}
       onRefresh={() => {

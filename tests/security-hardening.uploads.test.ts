@@ -185,8 +185,8 @@ test("local build scripts load env files before prisma commands", () => {
     /"build": "node scripts\/vercel-release-build\.mjs"/,
   );
   assert.doesNotMatch(packageJson, /"build": "[^"]*migrate deploy/);
-  assert.match(vercelReleaseBuild, /target === "production"/);
-  assert.match(vercelReleaseBuild, /runNpmScript\("db:deploy"\)/);
+  assert.doesNotMatch(vercelReleaseBuild, /VERCEL_TARGET_ENV|VERCEL_ENV/);
+  assert.doesNotMatch(vercelReleaseBuild, /db:deploy|prisma\s+migrate\s+deploy/);
   assert.match(vercelReleaseBuild, /runNpmScript\("build:app"\)/);
   assert.match(
     packageJson,

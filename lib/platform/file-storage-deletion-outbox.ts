@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { deleteR2Object } from "../r2";
+import { deleteQuotationDocumentObject } from "./quotation-document-storage";
 
 export const FILE_STORAGE_DELETE_OUTBOX_TYPE = "FILE_STORAGE_DELETE";
 export const FILE_STORAGE_DELETE_MAX_ATTEMPTS = 8;
@@ -15,14 +16,15 @@ type FileDeletionOutboxClient = {
 };
 
 type FileDeletionContext = {
+  bucket?: unknown;
   storageKey?: unknown;
   sourceTable?: unknown;
   sourceId?: unknown;
   fileRole?: unknown;
 };
 
-function deletionOutboxKey(storageKey: string) {
-  const digest = createHash("sha256").update(storageKey).digest("hex");
+function deletionOutboxKey(storageKey: string, bucket = "") {
+  const digest = createHash("sha256").update(bucket ? `${bucket}:${storageKey}` : storageKey).digest("hex");
   return `file-storage-delete:${digest}`;
 }
 
@@ -38,21 +40,30 @@ function contextRecord(value: unknown): FileDeletionContext {
 
 export async function enqueueFileStorageDeletion(
   client: FileDeletionOutboxClient,
-  input: { storageKey: string; sourceTable: string; sourceId: string; fileRole: string; deleteAfter?: Date },
+  input: {
+    storageKey: string;
+    bucket?: string | null;
+    sourceTable: string;
+    sourceId: string;
+    fileRole: string;
+    deleteAfter?: Date;
+  },
 ) {
   const storageKey = String(input.storageKey || "").trim();
   if (!storageKey) return null;
-  const idempotencyKey = deletionOutboxKey(storageKey);
+  const bucket = String(input.bucket || "").trim();
+  const idempotencyKey = deletionOutboxKey(storageKey, bucket);
   const scheduledAt = input.deleteAfter instanceof Date
     ? input.deleteAfter
     : new Date(Date.now() + softDeleteRetentionMs());
   const context = {
+    bucket: bucket || null,
     storageKey,
     sourceTable: input.sourceTable,
     sourceId: input.sourceId,
     fileRole: input.fileRole,
   };
-  return client.notificationOutbox.upsert({
+  const row = await client.notificationOutbox.upsert({
     where: { idempotencyKey },
     create: {
       type: FILE_STORAGE_DELETE_OUTBOX_TYPE,
@@ -78,6 +89,7 @@ export async function enqueueFileStorageDeletion(
       scheduledAt,
     },
   });
+  return row as { id: string };
 }
 
 async function processFileStorageDeletionRow(id: string) {
@@ -116,7 +128,11 @@ async function processFileStorageDeletionRow(id: string) {
       });
       return { id, deleted: false, skipped: true, claimed: true, queued: false };
     }
-    await deleteR2Object(storageKey);
+    if (String(context.sourceTable || "") === "sales_quotation_versions") {
+      await deleteQuotationDocumentObject(String(context.bucket || "").trim() || null, storageKey);
+    } else {
+      await deleteR2Object(storageKey);
+    }
     await prisma.notificationOutbox.updateMany({
       where: { id, status: "processing", attempts: row?.attempts || 0 },
       data: { status: "sent", sentAt: new Date(), failedAt: null, lastError: null },

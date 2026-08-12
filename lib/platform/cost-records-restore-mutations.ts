@@ -8,7 +8,7 @@ import { ORDER_COST_STATUS_VOID, assertJsonObject, assertWrite, codedError, isLo
   permissionError, safeSerializeCost, scheduleTaxRefundCompletenessRefresh, writeAudit } from "./shared";
 import { costOrderSummaryForMutation, isVoidedCost, requireCostActor, requireCostLifecycleReason, restoreOrderCostData,
   type AuditRequestLike, type CostActorInput, type CostLifecycleReasonInput } from "./cost-records-mutation-shared";
-import { assertCostCanBeManagedInCostModule } from "./cost-records-module-guard";
+import { assertCostCanBeManagedInCostModule, isFactoryPurchaseSettlementCost } from "./cost-records-module-guard";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
 function scheduleRefresh(orderId: string) {
@@ -64,6 +64,7 @@ export async function batchVoidCosts(request: AuditRequestLike, actor: CostActor
   for (const row of rows) {
     if (!canAccessOrder(currentActor, row.order)) { skipped.push({ id: row.id, reason: "无权限" }); continue; }
     if (isVoidedCost(row)) { skipped.push({ id: row.id, reason: "已作废" }); continue; }
+    if (isFactoryPurchaseSettlementCost(row)) { skipped.push({ id: row.id, reason: "采购结算生成成本请到采购执行模块的结算与付款中操作" }); continue; }
     if (isLogisticsGeneratedCostSourceType(row.sourceType) || row.generatedLogisticsExpense) { skipped.push({ id: row.id, reason: "物流费用同步成本请到物流费用模块操作" }); continue; }
     if (isCommissionSettled(row.order)) { skipped.push({ id: row.id, reason: "业务员提成已结算" }); continue; }
     if (isBusinessArchived(row.order)) { skipped.push({ id: row.id, reason: "订单已提交退税并归档" }); continue; }

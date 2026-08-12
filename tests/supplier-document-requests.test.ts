@@ -9,7 +9,9 @@ const service = readSupplierDocumentRequestsSource();
 const uploadService = service;
 const notificationEngine = readNotificationEngineSource();
 const supplierModule = readSupplierDocumentsModuleSource();
+const workspaceModuleContent = readFileSync("app/WorkspaceModuleContent.tsx", "utf8");
 const supplierCreateDialog = readFileSync("app/modules/supplier-documents/create-request-dialog.tsx", "utf8");
+const supplierRequestCreateService = readFileSync("lib/platform/supplier-document-request-create.ts", "utf8");
 const supplierDocumentStyles = readCssModuleGraphSource("app/styles/workspace-shell/supplier-documents.module.css");
 const supplierCostCandidatesRoute = readFileSync("app/api/supplier-document-requests/cost-candidates/route.ts", "utf8");
 const supplierRequestListRoute = readFileSync("app/api/supplier-document-requests/route.ts", "utf8");
@@ -24,7 +26,7 @@ const permissions = readFileSync("lib/platform/shared-permission-data.ts", "utf8
 const repairSupplierReturnDocumentsScript = readFileSync("scripts/repair-supplier-return-documents.mjs", "utf8");
 const repairTaxRelationService = readRepairTaxRelationsSource();
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
-const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierDocuments", "manual"\\]`);
+const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierPurchaseOrders", "supplierDocuments", "manual"\\]`);
 
 test("supplier document request schema links supplier uploads to tax refund documents", () => {
   assert.match(schema, /model SupplierDocumentRequest/);
@@ -127,6 +129,33 @@ test("supplier portal does not render customer identity fields", () => {
   assert.match(menu, /回传工厂采购合同和增值税发票 PDF/);
 });
 
+test("custom read-only supplier document access hides and blocks every mutation", () => {
+  assert.match(workspaceModuleContent, /<SupplierDocumentsModule currentUser=\{payload\.user\} permissions=\{payload\.permissions\}/);
+  assert.match(supplierModule, /canWritePermission\(currentUser, permissions, "supplierDocuments", \["产品供应商", "产品供应商账号", "工厂供应商账号"\]\)/);
+  assert.match(supplierModule, /\{canWrite \? "上传资料" : "查看资料"\}/);
+  assert.match(supplierModule, /isAdmin && canWrite && task\.canDelete/);
+  assert.match(supplierModule, /isAdmin && canWrite[\s\S]*重新发送邮件/);
+  assert.match(supplierModule, /\{canWrite \? <div className=\{styles\.supplierDocumentUploadControls\}>/);
+  assert.match(supplierModule, /if \(!canWrite\) \{[\s\S]*不能上传文件/);
+  assert.match(supplierModule, /if \(!canWrite \|\| !isAdmin\)/);
+});
+
+test("supplier document request creation blocks same-tick submits and owns a globally unique template key", () => {
+  assert.match(supplierCreateDialog, /const savingRef = useRef\(false\)/);
+  assert.match(supplierCreateDialog, /if \(savingRef\.current\) return/);
+  assert.match(supplierCreateDialog, /savingRef\.current = true;[\s\S]*setSaving\(true\);[\s\S]*apiJson/);
+  assert.match(supplierCreateDialog, /finally \{[\s\S]*savingRef\.current = false;[\s\S]*setSaving\(false\)/);
+
+  assert.match(supplierRequestCreateService, /import \{ randomUUID \} from "node:crypto"/);
+  assert.match(supplierRequestCreateService, /const templateObjectId = randomUUID\(\)/);
+  assert.match(supplierRequestCreateService, /factory-document-template-\$\{order\.orderNo \|\| order\.id\}-\$\{templateObjectId\}/);
+  assert.doesNotMatch(supplierRequestCreateService, /factory-document-template-[^\n]*Date\.now\(\)/);
+  assert.match(supplierRequestCreateService, /const ownedTemplateStorageKey = buildOrderDocumentKey\(/);
+  assert.match(supplierRequestCreateService, /uploadToR2\(\{ key: ownedTemplateStorageKey/);
+  assert.match(supplierRequestCreateService, /templateStorageKey: ownedTemplateStorageKey/);
+  assert.match(supplierRequestCreateService, /catch \(error: unknown\) \{[\s\S]*deleteR2Object\(ownedTemplateStorageKey\)/);
+});
+
 test("supplier document mobile detail opens as a fixed foreground drawer", () => {
   assert.match(supplierDocumentStyles, /\.supplierDocumentTaskDetailMobileHeader/);
   assert.match(supplierDocumentStyles, /@media \(max-width: 720px\)[\s\S]*\.supplierDocumentTaskDetail\s*\{[\s\S]*position: fixed/);
@@ -221,8 +250,8 @@ test("supplier settings and menus expose the controlled factory upload switch", 
 });
 
 test("product supplier callback uses a dedicated supplier account role", () => {
-  assert.match(permissions, /产品供应商: \["supplierDocuments", "manual"\]/);
-  assert.match(menu, /产品供应商: \["supplierDocuments", "manual"\]/);
+  assert.match(permissions, /产品供应商: \["supplierPurchaseOrders", "supplierDocuments", "manual"\]/);
+  assert.match(menu, /产品供应商: \["supplierPurchaseOrders", "supplierDocuments", "manual"\]/);
   assert.doesNotMatch(permissions, legacyProductSupplierMenuPattern);
   assert.doesNotMatch(menu, legacyProductSupplierMenuPattern);
   assert.match(permissions, /SUPPLIER_DOCUMENT_ROLES/);
@@ -232,8 +261,8 @@ test("product supplier callback uses a dedicated supplier account role", () => {
   assert.match(settingsModule, /FACTORY_SUPPLIER_ACCOUNT_ROLE = "产品供应商"/);
   assert.match(settingsModule, /if \(FACTORY_SUPPLIER_ACCOUNT_ROLES\.includes\(role\)\) return PRODUCT_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\)/);
   assert.doesNotMatch(settingsModule, /PRODUCT_SUPPLIER_TYPES\.includes\(supplier\.supplierType \|\| ""\) && supplier\.allowFactoryDocumentUpload/);
-  assert.match(permissions, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
-  assert.match(menu, /工厂供应商账号: \["supplierDocuments", "manual"\]/);
+  assert.match(permissions, /工厂供应商账号: \["supplierPurchaseOrders", "supplierDocuments", "manual"\]/);
+  assert.match(menu, /工厂供应商账号: \["supplierPurchaseOrders", "supplierDocuments", "manual"\]/);
   assert.doesNotMatch(permissions, /物流供应商: \["supplierDocuments", "domesticLogistics", "manual"\]/);
 });
 

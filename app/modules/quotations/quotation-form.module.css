@@ -1,0 +1,281 @@
+.formPanel {
+  margin: 18px 0;
+  border: 1px solid #dbe5f1;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 18px;
+}
+
+.formHeader,
+.sectionHeader,
+.formActions,
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.formHeader {
+  margin-bottom: 16px;
+}
+
+.formTitle {
+  display: grid;
+  gap: 4px;
+}
+
+.formTitle strong {
+  color: #0f172a;
+  font-size: 17px;
+}
+
+.formTitle small,
+.sectionHeader small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.formGrid label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.formGrid input,
+.formGrid select,
+.formGrid textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #dbe1ea;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 10px;
+  font: inherit;
+}
+
+.formGrid input,
+.formGrid select {
+  height: 40px;
+}
+
+.formGrid textarea {
+  min-height: 82px;
+  padding-top: 10px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.formGrid input:focus,
+.formGrid select:focus,
+.formGrid textarea:focus,
+.itemTable input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.wideField {
+  grid-column: span 2;
+}
+
+.fullField {
+  grid-column: 1 / -1;
+}
+
+.readonlyValue {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 11px;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.itemSection {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.sectionHeader h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.itemTableWrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.itemTable {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: collapse;
+}
+
+.itemTable th,
+.itemTable td {
+  border-bottom: 1px solid #edf2f7;
+  padding: 9px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.itemTable th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.itemTable td {
+  color: #334155;
+  font-size: 13px;
+}
+
+.itemTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.itemTable input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  box-sizing: border-box;
+  border: 1px solid #dbe1ea;
+  border-radius: 9px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 8px;
+  font: inherit;
+}
+
+.descriptionCell {
+  width: 46%;
+  min-width: 340px;
+}
+.unitCell { width: 92px; min-width: 92px; }
+.numberCell { width: 112px; min-width: 112px; }
+.amountCell {
+  width: 130px;
+  min-width: 130px;
+  text-align: right !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.actionCell { width: 118px; min-width: 118px; text-align: center !important; }
+
+.productDescriptionControl {
+  position: relative;
+  min-width: 0;
+}
+
+.productSuggestions {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  margin-top: 6px;
+  overflow-y: auto;
+  border: 1px solid #dbe5f1;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 5px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+}
+
+.productSuggestion {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px 9px;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.productSuggestion:hover,
+.productSuggestion:focus-visible,
+.productSuggestion[aria-selected="true"] {
+  outline: none;
+  background: #eaf2ff;
+}
+
+.productSuggestion strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.productSuggestion span,
+.productSuggestionMessage {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.productSuggestionMessage {
+  padding: 8px 9px;
+}
+
+.summaryRow {
+  justify-content: flex-end;
+  padding: 2px 0;
+  color: #475569;
+}
+
+.summaryRow strong {
+  min-width: 180px;
+  color: #0f172a;
+  font-size: 17px;
+  text-align: right;
+}
+
+.formActions {
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 1080px) {
+  .formGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .formPanel { padding: 14px; }
+  .formHeader,
+  .sectionHeader,
+  .formActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .formGrid { grid-template-columns: 1fr; }
+  .wideField,
+  .fullField { grid-column: auto; }
+  .summaryRow { align-items: flex-end; flex-direction: column; }
+}

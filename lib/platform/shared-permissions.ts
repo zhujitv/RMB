@@ -50,7 +50,7 @@ export function getPermissionConfig(actor: AccessUser) {
     ],
     dataScopeOptions: [
       { value: "ALL", label: "全部数据" },
-      { value: "OWN", label: "本人客户和订单" },
+      { value: "OWN", label: "本人客户、报价、销售执行单和订单" },
       { value: "OWN_COST", label: "本人成本相关" },
       { value: "NONE", label: "无数据范围" },
     ],

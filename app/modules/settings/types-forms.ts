@@ -1,6 +1,6 @@
 import type { CompanyProfileSettings } from "../../types";
 import type { NotificationVariableDefinition } from "./types-integrations";
-import type { SettingsTabKey } from "./types-records";
+import type { BusinessEntityBankAccountFields, SettingsTabKey } from "./types-records";
 
 export type ExchangeRateForm = {
   source: string;
@@ -131,6 +131,9 @@ export type SupplierForm = {
   taxNumber: string;
   bankName: string;
   bankAccount: string;
+  purchasePaymentTerm: string;
+  purchasePrepaymentPercent: string;
+  purchasePrepaymentRequiredBeforeProduction: boolean;
   allowDomesticLogisticsEntry: boolean;
   allowLogisticsExpenseEntry: boolean;
   allowLogisticsInvoiceUpload: boolean;
@@ -144,6 +147,15 @@ export type BusinessEntityForm = {
   id: string;
   name: string;
   shortName: string;
+  nameEn: string;
+  address: string;
+  contactEmail: string;
+  contactPhone: string;
+  website: string;
+  showContactPhoneOnPi: boolean;
+  showContactEmailOnPi: boolean;
+  showWebsiteOnPi: boolean;
+  bankAccounts: Record<"CNY" | "USD", BusinessEntityBankAccountFields>;
   isDefault: boolean;
   status: string;
   sortOrder: string;

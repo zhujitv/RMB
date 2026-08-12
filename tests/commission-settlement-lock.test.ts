@@ -36,6 +36,11 @@ const profitModuleSource = readFileSync("app/modules/ProfitModule.tsx", "utf8");
 const schemaSource = readPrismaSchemaSource();
 const migrationSource = readFileSync("prisma/migrations/20260721110000_commission_settlement_reversal_snapshot/migration.sql", "utf8");
 
+test("commission settlement controls follow the effective permission snapshot", () => {
+  assert.match(profitModuleSource, /permissions\?: PermissionSnapshot/);
+  assert.match(profitModuleSource, /canWritePermission\(currentUser, permissions, "commissions", \["管理员", "财务"\]\)/);
+});
+
 test("commission settlement evidence makes the order immutable for commission-affecting writes", () => {
   assert.equal(isCommissionSettled({ commissionStatus: "未结算" }), false);
   assert.equal(isCommissionSettled({ commissionStatus: "SETTLED" }), true);

@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { LOGISTICS_COST_TYPE_OPTIONS } from "../../../lib/platform/logistics-cost-types";
 import { PermissionSelectItem } from "../../components";
 import { BooleanSelect } from "./common-controls";
+import { SupplierPurchaseSettingsFields } from "./supplier-purchase-settings-fields";
 import {
   LOGISTICS_SUPPLIER_TYPES,
   PRODUCT_SUPPLIER_TYPES,
@@ -11,6 +12,8 @@ import {
 } from "./constants";
 import styles from "./settings-styles";
 import type { SupplierForm } from "./types";
+
+const SUPPLIER_PURCHASE_TERM_LABEL = "默认采购付款条款";
 
 export function SupplierEditPanel({
   form,
@@ -162,11 +165,11 @@ export function SupplierEditPanel({
               </div>
             </div>
             <div className={fieldGridClassName}>
-              <BooleanSelect
-                label="允许供应商资料回传"
-                value={form.allowFactoryDocumentUpload}
+              <SupplierPurchaseSettingsFields
+                form={form}
                 disabled={controlsDisabled}
-                onChange={(value) => setField("allowFactoryDocumentUpload", value)}
+                paymentTermLabel={SUPPLIER_PURCHASE_TERM_LABEL}
+                onChange={onChange}
               />
             </div>
           </section>

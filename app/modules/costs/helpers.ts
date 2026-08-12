@@ -30,8 +30,21 @@ export function isLogisticsGeneratedCost(cost: Pick<CostRow, "sourceType">) {
 	return ["LOGISTICS_EXPENSE", "LOGISTICS_FEE"].includes(String(cost.sourceType || ""));
 }
 
+export function isFactoryPurchaseSettlementCost(cost: Pick<CostRow, "sourceType">) {
+  return cost.sourceType === "FACTORY_PURCHASE_SETTLEMENT";
+}
+
+export function isSystemManagedCost(cost: Pick<CostRow, "sourceType">) {
+  return isLogisticsGeneratedCost(cost) || isFactoryPurchaseSettlementCost(cost);
+}
+
 export function isProductSupplierPaymentEnabled(cost: CostRow) {
-  return isFactoryCost(cost) && !isLogisticsGeneratedCost(cost) && !isLogisticsInvoiceCost(cost);
+  return isFactoryCost(cost) && !isLogisticsGeneratedCost(cost) && !isLogisticsInvoiceCost(cost) && !isFactoryPurchaseSettlementCost(cost);
+}
+
+export function isPaymentVoucherEvidenceEnabled(cost: CostRow) {
+  if (isFactoryPurchaseSettlementCost(cost)) return cost.paymentStatus === "已支付";
+  return isProductSupplierPaymentEnabled(cost);
 }
 
 export function isProductSupplierPaid(cost: CostRow) {
@@ -48,16 +61,17 @@ export function hasSuccessfulCostDocument(cost: Pick<CostRow, "documents">) {
 
 export function canDeleteCost(cost: Pick<CostRow, "status" | "paymentStatus" | "costConfirmed" | "paid" | "documents" | "invoiceStatus" | "sourceType" | "canDeleteCost">) {
   if (isVoidedCost(cost)) return false;
+  if (isSystemManagedCost(cost)) return false;
   if (typeof cost.canDeleteCost === "boolean") return cost.canDeleteCost;
   return !shouldVoidCostOnDelete(cost);
 }
 
 export function canVoidCost(cost: Pick<CostRow, "status" | "paymentStatus" | "sourceType">) {
-  return !isVoidedCost(cost) && !isLogisticsGeneratedCost(cost);
+  return !isVoidedCost(cost) && !isSystemManagedCost(cost);
 }
 
 export function shouldVoidCostOnDelete(cost: Pick<CostRow, "sourceType" | "paymentStatus" | "costConfirmed" | "paid" | "documents" | "invoiceStatus">) {
-  return isLogisticsGeneratedCost(cost)
+  return isSystemManagedCost(cost)
     || hasSuccessfulCostDocument(cost)
     || ["已收到", "部分收到"].includes(cost.invoiceStatus || "")
     || isProductSupplierPaid(cost as CostRow)

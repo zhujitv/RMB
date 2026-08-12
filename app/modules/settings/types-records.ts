@@ -47,6 +47,15 @@ export type CustomerRow = {
 
 export type SalespersonOption = { id: string; name?: string; role?: string };
 
+export type BusinessEntityBankAccountFields = {
+  currency: "CNY" | "USD";
+  beneficiaryName: string;
+  beneficiaryAddress: string;
+  bankName: string;
+  accountNumber: string;
+  swiftCode: string;
+};
+
 export type SupplierRow = {
   id: string;
   supplierName?: string;
@@ -61,6 +70,9 @@ export type SupplierRow = {
   taxNumber?: string;
   bankName?: string;
   bankAccount?: string;
+  purchasePaymentTerm?: string;
+  purchasePrepaymentPercent?: string;
+  purchasePrepaymentRequiredBeforeProduction?: boolean;
   allowDomesticLogisticsEntry?: boolean;
   allowLogisticsExpenseEntry?: boolean;
   allowLogisticsInvoiceUpload?: boolean;
@@ -74,6 +86,15 @@ export type BusinessEntityRow = {
   id: string;
   name?: string;
   shortName?: string;
+  nameEn?: string;
+  address?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  website?: string;
+  showContactPhoneOnPi?: boolean;
+  showContactEmailOnPi?: boolean;
+  showWebsiteOnPi?: boolean;
+  bankAccounts?: Partial<Record<"CNY" | "USD", BusinessEntityBankAccountFields>>;
   displayName?: string;
   isDefault?: boolean;
   status?: string;

@@ -203,6 +203,7 @@ const SHARED_CONSTANTS_FILES = [
   "lib/platform/shared-settings-constants.ts",
   "lib/platform/shared-auth-constants.ts",
   "lib/platform/shared-permission-data.ts",
+  "lib/platform/settings-permission-labels.ts",
 ];
 
 const SHARED_USERS_FILES = [
@@ -304,6 +305,7 @@ const SUPPLIER_DOCUMENT_REQUEST_FILES = [
 const NOTIFICATION_ENGINE_FILES = [
   "lib/platform/notification-engine.ts",
   "lib/platform/notification-definitions.ts",
+  "lib/platform/notification-factory-purchase-order-definition.ts",
   "lib/platform/notification-helpers.ts",
   "lib/platform/notification-send.ts",
   "lib/platform/notification-settings.ts",

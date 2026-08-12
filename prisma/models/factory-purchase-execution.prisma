@@ -1,0 +1,137 @@
+enum FactoryPurchaseOrderProductionStatus {
+  WAITING_SUPPLIER
+  WAITING_PREPAYMENT
+  READY
+  IN_PRODUCTION
+  COMPLETED
+}
+
+enum FactoryPurchasePaymentKind {
+  PREPAYMENT
+  BALANCE
+}
+
+enum FactoryPurchaseLedgerStatus {
+  CONFIRMED
+  VOIDED
+}
+
+enum FactoryPurchaseAdjustmentKind {
+  TEMPORARY_FEE
+  DELAY_PENALTY
+  OTHER
+}
+
+enum FactoryPurchaseAdjustmentDirection {
+  INCREASE
+  DECREASE
+}
+
+enum FactoryPurchaseAdjustmentStatus {
+  PROVISIONAL
+  CONFIRMED
+  VOIDED
+}
+
+enum FactoryPurchaseSettlementStatus {
+  PENDING_PAYMENT
+  SETTLED
+}
+
+model FactoryPurchaseOrderPayment {
+  id              String                      @id @default(cuid())
+  purchaseOrderId String                      @map("purchase_order_id")
+  sequenceNo      Int                         @map("sequence_no")
+  kind            FactoryPurchasePaymentKind
+  amount          Decimal                     @db.Decimal(18, 2)
+  currency        String
+  paidAt          DateTime                    @map("paid_at") @db.Date
+  bankReference   String?                     @map("bank_reference")
+  remark          String?
+  status          FactoryPurchaseLedgerStatus @default(CONFIRMED)
+  idempotencyKey  String                      @map("idempotency_key")
+  createdById     String                      @map("created_by")
+  voidedById      String?                     @map("voided_by")
+  voidedAt        DateTime?                   @map("voided_at")
+  voidReason      String?                     @map("void_reason")
+  createdAt       DateTime                    @default(now()) @map("created_at")
+  updatedAt       DateTime                    @updatedAt @map("updated_at")
+
+  purchaseOrder FactoryPurchaseOrder @relation(fields: [purchaseOrderId, currency], references: [id, purchaseCurrency], onDelete: Restrict)
+  createdBy     User                 @relation("FactoryPurchaseOrderPaymentsCreated", fields: [createdById], references: [id], onDelete: Restrict)
+  voidedBy      User?                @relation("FactoryPurchaseOrderPaymentsVoided", fields: [voidedById], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderId, sequenceNo])
+  @@unique([purchaseOrderId, idempotencyKey])
+  @@index([purchaseOrderId, status, kind, paidAt])
+  @@index([createdById])
+  @@index([voidedById])
+  @@map("factory_purchase_order_payments")
+}
+
+model FactoryPurchaseOrderAdjustment {
+  id              String                             @id @default(cuid())
+  purchaseOrderId String                             @map("purchase_order_id")
+  sequenceNo      Int                                @map("sequence_no")
+  kind            FactoryPurchaseAdjustmentKind
+  direction       FactoryPurchaseAdjustmentDirection
+  amount          Decimal                            @db.Decimal(18, 2)
+  currency        String
+  description     String
+  occurredAt      DateTime?                          @map("occurred_at") @db.Date
+  status          FactoryPurchaseAdjustmentStatus    @default(PROVISIONAL)
+  sourceType      String                             @default("MANUAL") @map("source_type")
+  sourceId        String?                            @map("source_id")
+  revision        Int                                @default(1)
+  createdById     String                             @map("created_by")
+  confirmedById   String?                            @map("confirmed_by")
+  confirmedAt     DateTime?                          @map("confirmed_at")
+  voidedById      String?                            @map("voided_by")
+  voidedAt        DateTime?                          @map("voided_at")
+  voidReason      String?                            @map("void_reason")
+  createdAt       DateTime                           @default(now()) @map("created_at")
+  updatedAt       DateTime                           @updatedAt @map("updated_at")
+
+  purchaseOrder FactoryPurchaseOrder @relation(fields: [purchaseOrderId, currency], references: [id, purchaseCurrency], onDelete: Restrict)
+  createdBy     User                 @relation("FactoryPurchaseOrderAdjustmentsCreated", fields: [createdById], references: [id], onDelete: Restrict)
+  confirmedBy   User?                @relation("FactoryPurchaseOrderAdjustmentsConfirmed", fields: [confirmedById], references: [id], onDelete: Restrict)
+  voidedBy      User?                @relation("FactoryPurchaseOrderAdjustmentsVoided", fields: [voidedById], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderId, sequenceNo])
+  @@unique([purchaseOrderId, sourceType, sourceId])
+  @@index([purchaseOrderId, status, kind])
+  @@index([createdById])
+  @@index([confirmedById])
+  @@index([voidedById])
+  @@map("factory_purchase_order_adjustments")
+}
+
+model FactoryPurchaseOrderSettlement {
+  id                     String                          @id @default(cuid())
+  purchaseOrderId        String                          @unique @map("purchase_order_id")
+  baseAmount             Decimal                         @map("base_amount") @db.Decimal(18, 2)
+  increaseAmount         Decimal                         @map("increase_amount") @db.Decimal(18, 2)
+  decreaseAmount         Decimal                         @map("decrease_amount") @db.Decimal(18, 2)
+  delayDays              Int                             @map("delay_days")
+  delayPenaltyAmount     Decimal                         @map("delay_penalty_amount") @db.Decimal(18, 2)
+  finalPayableAmount     Decimal                         @map("final_payable_amount") @db.Decimal(18, 2)
+  currency               String
+  exchangeRate           Decimal                         @map("exchange_rate") @db.Decimal(18, 6)
+  exchangeRateDate       DateTime                        @map("exchange_rate_date") @db.Date
+  paidAmountAtSettlement Decimal                         @map("paid_amount_at_settlement") @db.Decimal(18, 2)
+  status                 FactoryPurchaseSettlementStatus @default(PENDING_PAYMENT)
+  settledAt              DateTime?                       @map("settled_at")
+  settledById            String?                         @map("settled_by")
+  createdById            String                          @map("created_by")
+  createdAt              DateTime                        @default(now()) @map("created_at")
+  updatedAt              DateTime                        @updatedAt @map("updated_at")
+
+  purchaseOrder FactoryPurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  settledBy     User?                @relation("FactoryPurchaseOrderSettlementsSettled", fields: [settledById], references: [id], onDelete: Restrict)
+  createdBy     User                 @relation("FactoryPurchaseOrderSettlementsCreated", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([status, updatedAt])
+  @@index([settledById])
+  @@index([createdById])
+  @@map("factory_purchase_order_settlements")
+}

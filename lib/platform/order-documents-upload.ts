@@ -45,6 +45,7 @@ import {
   type OrderDocumentUploadParams,
 } from "./order-documents-types";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
+import { assertFactoryPurchaseSettlementCostCanBeManagedInCostModule } from "./cost-records-module-guard";
 
 export async function uploadOrderDocument(request: AuditRequestLike, actor: ActorLike, { orderId, documentType, file, costId = "", supplierId = "", uploadSource = "" }: OrderDocumentUploadParams) {
   assertWrite(actor, "documents");
@@ -60,6 +61,9 @@ export async function uploadOrderDocument(request: AuditRequestLike, actor: Acto
   const { order, relatedModule, cost, supplierId: resolvedSupplierId } = await resolveDocumentScope({ orderId, documentType, costId, supplierId, uploadSource }, actor);
   if (isLogisticsGeneratedCostInvoice(documentType, cost)) {
     throw permissionError("物流费用发票请在物流费用模块按发票分组上传，成本管理仅同步查看。", 400);
+  }
+  if (cost) {
+    assertFactoryPurchaseSettlementCostCanBeManagedInCostModule(cost, "上传或替换资料");
   }
   const uploadedFile = await readManagedUploadFile(file, "pdf", "document.pdf");
   const { originalFileName, mimeType, body, fileSize } = uploadedFile;

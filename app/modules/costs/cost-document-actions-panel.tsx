@@ -9,7 +9,8 @@ import { type CostDocument, type CostRow } from "./model";
 
 export function ProductSupplierPaymentPanel({
   cost,
-  canManage,
+  canManagePayment,
+  canUploadVoucher,
   saving,
   voucherUploading,
   voucherProgress,
@@ -18,7 +19,8 @@ export function ProductSupplierPaymentPanel({
   onOpenPaymentVoucher,
 }: {
   cost: CostRow;
-  canManage: boolean;
+  canManagePayment: boolean;
+  canUploadVoucher: boolean;
   saving: boolean;
   voucherUploading: boolean;
   voucherProgress: number;
@@ -30,7 +32,7 @@ export function ProductSupplierPaymentPanel({
   const [paidAtInput, setPaidAtInput] = useState(() => dateTimeLocalValue(cost.paidAt || cost.paymentDate || undefined));
   const voucherLabel = cost.paymentVoucherFileName ? "查看付款凭证" : paid ? "未上传水单" : "未上传";
   const paymentDateDirty = paidAtInput !== dateTimeLocalValue(cost.paidAt || cost.paymentDate || undefined);
-  useWorkspaceTabDirty(paymentDateDirty);
+  useWorkspaceTabDirty(canManagePayment && paymentDateDirty);
   useWorkspaceTabBusy(saving || voucherUploading);
 
   useEffect(() => {
@@ -54,39 +56,45 @@ export function ProductSupplierPaymentPanel({
         </small>
       </div>
       <div className={styles.fileListItemActions}>
-        {canManage ? (
+        {canManagePayment || canUploadVoucher ? (
           <>
-            <label>
-              <span className={styles.mutedText}>付款时间</span>
-              <input
-                className={styles.uiInput}
-                type="datetime-local"
-                value={paidAtInput}
-                disabled={saving}
-                onChange={(event) => setPaidAtInput(event.target.value)}
-              />
-            </label>
-            <button className={paid ? styles.secondaryButton : styles.primaryButtonCompact} type="button" disabled={saving} onClick={submitPaid}>
-              {saving ? "保存中..." : paid ? "更新付款时间" : "标记已付款"}
-            </button>
-            {paid ? (
-              <button className={styles.secondaryButton} type="button" disabled={saving} onClick={() => onUpdatePayment(cost, false, "")}>
-                取消付款
-              </button>
+            {canManagePayment ? (
+              <>
+                <label>
+                  <span className={styles.mutedText}>付款时间</span>
+                  <input
+                    className={styles.uiInput}
+                    type="datetime-local"
+                    value={paidAtInput}
+                    disabled={saving}
+                    onChange={(event) => setPaidAtInput(event.target.value)}
+                  />
+                </label>
+                <button className={paid ? styles.secondaryButton : styles.primaryButtonCompact} type="button" disabled={saving} onClick={submitPaid}>
+                  {saving ? "保存中..." : paid ? "更新付款时间" : "标记已付款"}
+                </button>
+                {paid ? (
+                  <button className={styles.secondaryButton} type="button" disabled={saving} onClick={() => onUpdatePayment(cost, false, "")}>
+                    取消付款
+                  </button>
+                ) : null}
+              </>
             ) : null}
-            <label className={styles.secondaryButton}>
-              {voucherUploading ? "上传中..." : cost.paymentVoucherFileName ? "更换付款凭证" : "上传付款凭证"}
-              <input
-                type="file"
-                accept={PAYMENT_VOUCHER_UPLOAD_ACCEPT}
-                disabled={voucherUploading}
-                hidden
-                onChange={(event) => {
-                  onUploadPaymentVoucher(cost, event.target.files?.[0] || null);
-                  event.currentTarget.value = "";
-                }}
-              />
-            </label>
+            {canUploadVoucher ? (
+              <label className={styles.secondaryButton}>
+                {voucherUploading ? "上传中..." : cost.paymentVoucherFileName ? "更换付款凭证" : "上传付款凭证"}
+                <input
+                  type="file"
+                  accept={PAYMENT_VOUCHER_UPLOAD_ACCEPT}
+                  disabled={voucherUploading}
+                  hidden
+                  onChange={(event) => {
+                    onUploadPaymentVoucher(cost, event.target.files?.[0] || null);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            ) : null}
             {voucherUploading ? <UploadProgressInline progress={voucherProgress} /> : null}
           </>
         ) : (

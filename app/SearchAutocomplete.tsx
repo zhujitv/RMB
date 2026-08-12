@@ -15,6 +15,7 @@ type SearchAutocompleteProps<T extends { id: string }> = {
   getDescription?: (item: T) => string;
   search: (keyword: string) => Promise<T[]>;
   onSelect: (item: T) => void;
+  onSelectedValueInvalidated?: () => void;
   onCreateRequested?: (keyword: string) => void;
 };
 
@@ -32,6 +33,7 @@ export function SearchAutocomplete<T extends { id: string }>({
   getDescription,
   search,
   onSelect,
+  onSelectedValueInvalidated,
   onCreateRequested,
 }: SearchAutocompleteProps<T>) {
   const [keyword, setKeyword] = useState(() => value ? getLabel(value) : "");
@@ -41,10 +43,16 @@ export function SearchAutocomplete<T extends { id: string }>({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const preserveKeywordOnValueClearRef = useRef(false);
   const reactId = useId();
   const listboxId = `${reactId}-autocomplete-listbox`;
 
   useEffect(() => {
+    if (preserveKeywordOnValueClearRef.current && !value) {
+      preserveKeywordOnValueClearRef.current = false;
+      return;
+    }
+    preserveKeywordOnValueClearRef.current = false;
     setKeyword(value ? getLabel(value) : "");
   }, [value?.id]);
 
@@ -103,6 +111,7 @@ export function SearchAutocomplete<T extends { id: string }>({
   }
 
   function selectOption(option: T) {
+    preserveKeywordOnValueClearRef.current = false;
     setKeyword(getLabel(option));
     setOptions([]);
     setOpen(false);
@@ -118,7 +127,12 @@ export function SearchAutocomplete<T extends { id: string }>({
           value={keyword}
           disabled={disabled}
           onChange={(event) => {
-            setKeyword(event.target.value);
+            const nextKeyword = event.target.value;
+            setKeyword(nextKeyword);
+            if (value && nextKeyword !== getLabel(value) && onSelectedValueInvalidated) {
+              preserveKeywordOnValueClearRef.current = true;
+              onSelectedValueInvalidated();
+            }
             setOpen(true);
           }}
           onFocus={() => {

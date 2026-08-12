@@ -2,6 +2,8 @@ import type { MenuItem, PermissionSnapshot, User } from "./types";
 
 export const MENU_ITEMS: MenuItem[] = [
   { key: "dashboard", label: "经营总览", description: "经营分析工具，按需进入后加载统计。" },
+  { key: "quotations", label: "报价管理", description: "创建、编辑和跟进客户报价。" },
+  { key: "salesExecution", label: "销售执行", description: "从报价转入或直接创建销售执行单，并分配工厂采购草稿。" },
   { key: "orders", label: "应收订单", description: "创建、编辑和跟进订单应收信息。" },
   { key: "payments", label: "收款管理", description: "登记客户回款并确认到账状态。" },
   { key: "costs", label: "成本管理", description: "维护工厂、物流、港杂等成本资料。" },
@@ -10,6 +12,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "customerCommunication", label: "客户沟通", description: "按订单发送和追踪客户清关资料邮件。" },
   { key: "oceanControlTower", label: "运输监控", description: "集中查看在途海运跟踪和 ETA 预警。", parentKey: "domesticLogistics" },
   { key: "logisticsFees", label: "物流费用", description: "录入、审核、月结和维护物流费用。" },
+  { key: "supplierPurchaseOrders", label: "工厂采购单", description: "查看本工厂已下发采购单并确认或反馈交期。" },
   { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },
@@ -18,12 +21,12 @@ export const MENU_ITEMS: MenuItem[] = [
 ];
 
 export const ROLE_MENU_FALLBACK: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
-  财务: ["payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
+  管理员: ["dashboard", "quotations", "salesExecution", "orders", "payments", "costs", "profit", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["quotations", "salesExecution", "orders", "payments", "costs", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
+  财务: ["salesExecution", "payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"],
-  产品供应商: ["supplierDocuments", "manual"],
-  工厂供应商账号: ["supplierDocuments", "manual"],
+  产品供应商: ["supplierPurchaseOrders", "supplierDocuments", "manual"],
+  工厂供应商账号: ["supplierPurchaseOrders", "supplierDocuments", "manual"],
   物流资料录入员: ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"],
 };
 

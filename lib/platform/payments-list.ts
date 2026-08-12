@@ -6,7 +6,7 @@ import { orderAccessWhere } from "./order-access";
 import { summarizeCurrencyTotals } from "./currency-totals";
 import type { ActorLike } from "./payments-types";
 
-type PaymentListFilters = { keyword: string; currency: string; paymentType: string; paymentStatus: string; month: string };
+type PaymentListFilters = { paymentId: string; keyword: string; currency: string; paymentType: string; paymentStatus: string; month: string };
 type PageResult<T> = { rows: T[]; total: number; page: number; pageSize: number; totalPages: number };
 export type PaymentListRow = PaymentDto;
 type PaginatedPaymentList = PageResult<PaymentListRow> & { summary: {
@@ -19,11 +19,12 @@ function withWhere(where: Prisma.PaymentWhereInput, condition: Prisma.PaymentWhe
   return { AND: [where, condition] };
 }
 function filtersFromQuery(query: URLSearchParams): PaymentListFilters {
-  return { keyword: nonEmpty(query.get("keyword")), currency: nonEmpty(query.get("currency")),
+  return { paymentId: nonEmpty(query.get("paymentId")), keyword: nonEmpty(query.get("keyword")), currency: nonEmpty(query.get("currency")),
     paymentType: nonEmpty(query.get("paymentType")), paymentStatus: nonEmpty(query.get("paymentStatus")), month: nonEmpty(query.get("month")) };
 }
 function paymentWhere(filters: PaymentListFilters, accessWhere: Prisma.ReceivableOrderWhereInput): Prisma.PaymentWhereInput {
   const clauses: Prisma.PaymentWhereInput[] = [{ deletedAt: null }, { order: { is: accessWhere } }];
+  if (filters.paymentId) clauses.push({ id: filters.paymentId });
   if (filters.currency) clauses.push({ currency: filters.currency });
   if (filters.paymentType) clauses.push({ paymentType: filters.paymentType });
   if (filters.paymentStatus) clauses.push({ status: filters.paymentStatus });

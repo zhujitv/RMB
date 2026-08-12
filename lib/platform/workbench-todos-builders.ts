@@ -1,4 +1,5 @@
 import type { Prisma } from "../generated/prisma/client.js";
+import { businessArchiveOrderWhere } from "./business-archive";
 import { orderAccessWhere, orderSalespersonOwnershipWhere } from "./order-access";
 import { addDays, startOfChinaDay, todoActivationRuleForType, todoPriorityFromDueAt } from "./workbench-todo-rules";
 import type { WorkbenchTodoPriority, WorkbenchTodoStatus } from "./workbench-todo-rules";
@@ -74,6 +75,7 @@ export function productSupplierPaymentCostWhere(): Prisma.OrderCostWhereInput {
   return {
     status: { not: ORDER_COST_STATUS_VOID },
 	    sourceType: { notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES },
+    order: { is: businessArchiveOrderWhere("current") },
     OR: [
       { costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
       { supplier: { is: { supplierType: { in: PRODUCT_SUPPLIER_TYPES } } } },

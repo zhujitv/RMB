@@ -1,0 +1,240 @@
+enum SalesQuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  VOIDED
+}
+
+enum SalesQuotationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum SalesQuotationResponseStatus {
+  ACCEPTED
+  REJECTED
+}
+
+enum SalesQuotationDecisionChannel {
+  SYSTEM_EMAIL
+  EXTERNAL_EMAIL
+  WECHAT
+  WHATSAPP
+  PHONE
+  OTHER
+}
+
+model CustomerProduct {
+  id            String    @id @default(cuid())
+  customerId    String    @map("customer_id")
+  name          String
+  specification String?
+  unit          String
+  fingerprint   String
+  remark        String?
+  createdById   String?   @map("created_by")
+  updatedById   String?   @map("updated_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  customer            Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy           User?                @relation("CustomerProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy           User?                @relation("CustomerProductsUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+  quoteItems          SalesQuotationItem[]
+  salesExecutionItems SalesExecutionItem[]
+
+  @@unique([customerId, fingerprint])
+  @@index([customerId, deletedAt, updatedAt])
+  @@index([name])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("customer_products")
+}
+
+model SalesQuotation {
+  id                   String               @id @default(cuid())
+  quoteNo              String               @unique @map("quote_no")
+  invoiceNo            String?              @unique @map("invoice_no")
+  customerId           String               @map("customer_id")
+  businessEntityId     String               @map("business_entity_id")
+  salespersonUserId    String?              @map("salesperson_user_id")
+  status               SalesQuotationStatus @default(DRAFT)
+  currentVersionNumber Int                  @default(1) @map("current_version_number")
+  voidedAt             DateTime?            @map("voided_at")
+  voidedById           String?              @map("voided_by")
+  voidReason           String?              @map("void_reason")
+  createdById          String?              @map("created_by")
+  updatedById          String?              @map("updated_by")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  customer       Customer                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  businessEntity BusinessEntity           @relation(fields: [businessEntityId], references: [id], onDelete: Restrict)
+  salesperson    User?                    @relation("QuotationSalesperson", fields: [salespersonUserId], references: [id], onDelete: SetNull)
+  voidedBy       User?                    @relation("QuotationsVoided", fields: [voidedById], references: [id], onDelete: SetNull)
+  createdBy      User?                    @relation("QuotationsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy      User?                    @relation("QuotationsUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+  versions       SalesQuotationVersion[]
+  deliveries     SalesQuotationDelivery[]
+  decisions      SalesQuotationDecision[]
+  salesExecution SalesExecution?
+
+  @@index([customerId, status, updatedAt])
+  @@index([businessEntityId])
+  @@index([salespersonUserId])
+  @@index([status, updatedAt])
+  @@index([voidedById])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("sales_quotations")
+}
+
+model SalesQuotationVersion {
+  id                              String    @id @default(cuid())
+  quotationId                     String    @map("quotation_id")
+  versionNumber                   Int       @map("version_number")
+  invoiceNoSnapshot               String?   @map("invoice_no_snapshot")
+  customerNameSnapshot            String    @map("customer_name_snapshot")
+  customerShortNameSnapshot       String?   @map("customer_short_name_snapshot")
+  countrySnapshot                 String?   @map("country_snapshot")
+  contactPersonSnapshot           String?   @map("contact_person_snapshot")
+  contactEmailSnapshot            String?   @map("contact_email_snapshot")
+  contactPhoneSnapshot            String?   @map("contact_phone_snapshot")
+  businessEntityNameSnapshot      String?   @map("business_entity_name_snapshot")
+  businessEntityShortNameSnapshot String?   @map("business_entity_short_name_snapshot")
+  sellerNameEnSnapshot            String?   @map("seller_name_en_snapshot")
+  sellerAddressSnapshot           String?   @map("seller_address_snapshot")
+  sellerEmailSnapshot             String?   @map("seller_email_snapshot")
+  sellerPhoneSnapshot             String?   @map("seller_phone_snapshot")
+  sellerWebsiteSnapshot           String?   @map("seller_website_snapshot")
+  sellerBankAccountSnapshot       String?   @map("seller_bank_account_snapshot")
+  documentTemplateVersion         String    @default("PI_V1") @map("document_template_version")
+  quoteDate                       DateTime  @map("quote_date") @db.Date
+  validUntil                      DateTime? @map("valid_until") @db.Date
+  currency                        String
+  exchangeRate                    Decimal   @default(1) @map("exchange_rate") @db.Decimal(18, 6)
+  subtotal                        Decimal   @db.Decimal(18, 2)
+  discountAmount                  Decimal   @default(0) @map("discount_amount") @db.Decimal(18, 2)
+  taxAmount                       Decimal   @default(0) @map("tax_amount") @db.Decimal(18, 2)
+  totalAmount                     Decimal   @map("total_amount") @db.Decimal(18, 2)
+  tradeTerm                       String?   @map("trade_term")
+  paymentTerm                     String?   @map("payment_term")
+  leadTimeDays                    Int?      @map("lead_time_days")
+  remark                          String?
+  createdById                     String?   @map("created_by")
+  createdAt                       DateTime  @default(now()) @map("created_at")
+  sealedAt                        DateTime? @map("sealed_at")
+
+  quotation      SalesQuotation           @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  createdBy      User?                    @relation("QuotationVersionsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  items          SalesQuotationItem[]
+  deliveries     SalesQuotationDelivery[]
+  decision       SalesQuotationDecision?
+  salesExecution SalesExecution?
+
+  @@unique([quotationId, versionNumber])
+  @@unique([id, quotationId], map: "sales_quotation_versions_id_quotation_id_key")
+  @@index([quotationId, createdAt])
+  @@index([createdById])
+  @@map("sales_quotation_versions")
+}
+
+model SalesQuotationInvoiceSequence {
+  invoiceDate  DateTime @id @map("invoice_date") @db.Date
+  lastSequence Int      @map("last_sequence")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("sales_quotation_invoice_sequences")
+}
+
+model SalesQuotationDelivery {
+  id                    String                        @id @default(cuid())
+  quotationId           String                        @map("quotation_id")
+  quotationVersionId    String                        @map("quotation_version_id")
+  idempotencyKey        String                        @unique @map("idempotency_key")
+  status                SalesQuotationDeliveryStatus  @default(PENDING)
+  recipientEmails       Json                          @map("recipient_emails")
+  ccEmails              Json?                         @map("cc_emails")
+  subject               String
+  body                  String
+  attachmentFileAssetId String?                       @map("attachment_file_asset_id")
+  attachmentFileName    String?                       @map("attachment_file_name")
+  outboxId              String?                       @unique @map("outbox_id")
+  attempts              Int                           @default(0)
+  lastError             String?                       @map("last_error")
+  sentById              String?                       @map("sent_by")
+  sentAt                DateTime?                     @map("sent_at")
+  failedAt              DateTime?                     @map("failed_at")
+  responseStatus        SalesQuotationResponseStatus? @map("response_status")
+  responseReason        String?                       @map("response_reason")
+  respondedById         String?                       @map("responded_by")
+  respondedAt           DateTime?                     @map("responded_at")
+  createdAt             DateTime                      @default(now()) @map("created_at")
+  updatedAt             DateTime                      @updatedAt @map("updated_at")
+
+  quotation        SalesQuotation          @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  quotationVersion SalesQuotationVersion   @relation(fields: [quotationVersionId, quotationId], references: [id, quotationId], onDelete: Restrict)
+  sentBy           User?                   @relation("QuotationDeliveriesSent", fields: [sentById], references: [id], onDelete: SetNull)
+  respondedBy      User?                   @relation("QuotationDeliveriesResponded", fields: [respondedById], references: [id], onDelete: SetNull)
+  decision         SalesQuotationDecision?
+
+  @@index([quotationId, createdAt])
+  @@index([quotationVersionId, status])
+  @@index([status, createdAt])
+  @@index([sentById])
+  @@index([respondedById])
+  @@map("sales_quotation_deliveries")
+}
+
+model SalesQuotationDecision {
+  id                 String                        @id @default(cuid())
+  quotationId        String                        @map("quotation_id")
+  quotationVersionId String                        @unique @map("quotation_version_id")
+  deliveryId         String?                       @unique @map("delivery_id")
+  channel            SalesQuotationDecisionChannel
+  decision           SalesQuotationResponseStatus
+  respondedAt        DateTime                      @map("responded_at")
+  note               String?
+  recordedById       String                        @map("recorded_by")
+  createdAt          DateTime                      @default(now()) @map("created_at")
+
+  quotation        SalesQuotation          @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  quotationVersion SalesQuotationVersion   @relation(fields: [quotationVersionId, quotationId], references: [id, quotationId], onDelete: Restrict)
+  delivery         SalesQuotationDelivery? @relation(fields: [deliveryId], references: [id], onDelete: Restrict)
+  recordedBy       User                    @relation("QuotationDecisionsRecorded", fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@unique([quotationVersionId, quotationId])
+  @@index([quotationId, createdAt])
+  @@index([recordedById])
+  @@map("sales_quotation_decisions")
+}
+
+model SalesQuotationItem {
+  id                         String   @id @default(cuid())
+  quotationVersionId         String   @map("quotation_version_id")
+  lineNumber                 Int      @map("line_number")
+  customerProductId          String?  @map("customer_product_id")
+  productFingerprintSnapshot String   @map("product_fingerprint_snapshot")
+  productNameSnapshot        String   @map("product_name_snapshot")
+  specificationSnapshot      String?  @map("specification_snapshot")
+  unitSnapshot               String   @map("unit_snapshot")
+  currencySnapshot           String   @map("currency_snapshot")
+  quantity                   Decimal  @db.Decimal(18, 4)
+  unitPrice                  Decimal  @map("unit_price") @db.Decimal(18, 6)
+  amount                     Decimal  @db.Decimal(18, 2)
+  remark                     String?
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  quotationVersion    SalesQuotationVersion @relation(fields: [quotationVersionId], references: [id], onDelete: Restrict)
+  customerProduct     CustomerProduct?      @relation(fields: [customerProductId], references: [id], onDelete: SetNull)
+  salesExecutionItems SalesExecutionItem[]
+
+  @@unique([quotationVersionId, lineNumber])
+  @@unique([id, quotationVersionId])
+  @@index([customerProductId])
+  @@index([productFingerprintSnapshot])
+  @@map("sales_quotation_items")
+}

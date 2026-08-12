@@ -37,6 +37,8 @@ export type CostsModuleViewProps = {
   uploadingKey: string;
   uploadProgressByKey: Record<string, number>;
   deletingDocumentId: string;
+  canWriteCosts: boolean;
+  canAdminCostLifecycle: boolean;
   canWriteDocuments: boolean;
   canManageCostType: boolean;
   canManageFactoryPayments: boolean;

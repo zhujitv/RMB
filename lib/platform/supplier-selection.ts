@@ -41,6 +41,7 @@ export function canListAvailableSupplierOptions(actor: SupplierSelectionActor) {
     || permissions.writes.costs
     || permissions.writes.logistics
     || permissions.writes.domesticLogistics
+    || permissions.writes.salesExecution
     || permissions.writes.taxRefund,
   );
 }

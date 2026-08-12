@@ -9,7 +9,7 @@ import {
   type PaymentsResponse,
 } from "./types";
 
-export function usePaymentsList(initialKeyword: string, initialOpenToken: number) {
+export function usePaymentsList(initialKeyword: string, initialOpenToken: number, initialPaymentId = "") {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [summary, setSummary] = useState<PaymentSummary>({});
   const [filters, setFilters] = useState<PaymentFilters>({ ...emptyPaymentFilters });
@@ -25,12 +25,13 @@ export function usePaymentsList(initialKeyword: string, initialOpenToken: number
   const [editPayment, setEditPayment] = useState<PaymentRow | null>(null);
   const listRequestRef = useRef(0);
 
-  async function loadPayments(nextPage = page, nextFilters = submittedFilters): Promise<PaymentRow[] | null> {
+  async function loadPayments(nextPage = page, nextFilters = submittedFilters, targetPaymentId = ""): Promise<PaymentRow[] | null> {
     const requestId = ++listRequestRef.current;
     setLoading(true);
     setError("");
     try {
       const params = new URLSearchParams({ workspace: "1", page: String(nextPage), pageSize: String(PAGE_SIZE) });
+      if (targetPaymentId.trim()) params.set("paymentId", targetPaymentId.trim());
       if (nextFilters.keyword.trim()) params.set("keyword", nextFilters.keyword.trim());
       Object.entries(nextFilters).forEach(([key, value]) => {
         if (key === "keyword") return;
@@ -63,14 +64,20 @@ export function usePaymentsList(initialKeyword: string, initialOpenToken: number
 
   useEffect(() => {
     const value = initialKeyword.trim();
-    if (!initialOpenToken || !value) return;
+    const targetPaymentId = initialPaymentId.trim();
+    if (!initialOpenToken || (!value && !targetPaymentId)) return;
     const nextFilters = { ...emptyPaymentFilters, keyword: value };
     setFilters(nextFilters);
     setSubmittedFilters(nextFilters);
     setDetailPayment(null);
     setNotice("");
-    void loadPayments(1, nextFilters);
-  }, [initialKeyword, initialOpenToken]);
+    void loadPayments(1, nextFilters, targetPaymentId).then((nextRows) => {
+      if (!targetPaymentId || !nextRows) return;
+      const target = nextRows.find((payment) => payment.id === targetPaymentId) || null;
+      setDetailPayment(target);
+      if (!target) setError("该收款记录不存在或当前账号无权查看。");
+    });
+  }, [initialKeyword, initialOpenToken, initialPaymentId]);
 
   useEffect(() => {
     const value = filters.keyword.trim();

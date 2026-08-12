@@ -22,6 +22,9 @@ model Customer {
 
   salesperson                   User?                          @relation("CustomerSalesperson", fields: [salespersonUserId], references: [id])
   orders                        ReceivableOrder[]
+  products                      CustomerProduct[]
+  salesQuotations               SalesQuotation[]
+  salesExecutions               SalesExecution[]
   shippingDocumentNotifications ShippingDocumentNotification[]
 
   @@index([name])
@@ -33,23 +36,54 @@ model Customer {
 }
 
 model BusinessEntity {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  shortName String?   @map("short_name")
-  isDefault Boolean   @default(false) @map("is_default")
-  status    String    @default("启用")
-  sortOrder Int       @default(0) @map("sort_order")
-  remark    String?
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id                   String    @id @default(cuid())
+  name                 String    @unique
+  shortName            String?   @map("short_name")
+  nameEn               String?   @map("name_en")
+  address              String?
+  contactEmail         String?   @map("contact_email")
+  contactPhone         String?   @map("contact_phone")
+  website              String?
+  showContactPhoneOnPi Boolean   @default(false) @map("show_contact_phone_on_pi")
+  showContactEmailOnPi Boolean   @default(false) @map("show_contact_email_on_pi")
+  showWebsiteOnPi      Boolean   @default(false) @map("show_website_on_pi")
+  bankAccount          String?   @map("bank_account")
+  isDefault            Boolean   @default(false) @map("is_default")
+  status               String    @default("启用")
+  sortOrder            Int       @default(0) @map("sort_order")
+  remark               String?
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
 
-  orders ReceivableOrder[]
+  orders          ReceivableOrder[]
+  salesQuotations SalesQuotation[]
+  salesExecutions SalesExecution[]
+  bankAccounts    BusinessEntityBankAccount[]
 
   @@index([status])
   @@index([isDefault])
   @@index([deletedAt])
   @@map("business_entities")
+}
+
+model BusinessEntityBankAccount {
+  id                 String   @id @default(cuid())
+  businessEntityId   String   @map("business_entity_id")
+  currency           String
+  beneficiaryName    String   @map("beneficiary_name")
+  beneficiaryAddress String   @map("beneficiary_address")
+  bankName           String   @map("bank_name")
+  accountNumber      String   @map("account_number")
+  swiftCode          String   @map("swift_code")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  businessEntity BusinessEntity @relation(fields: [businessEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([businessEntityId, currency])
+  @@index([currency])
+  @@map("business_entity_bank_accounts")
 }
 
 model Supplier {
@@ -65,6 +99,9 @@ model Supplier {
   taxNumber                   String?   @map("tax_number")
   bankName                    String?   @map("bank_name")
   bankAccount                 String?   @map("bank_account")
+  purchasePaymentTerm         String?   @map("purchase_payment_term")
+  purchasePrepaymentRatio     Decimal   @default(0) @map("purchase_prepayment_ratio") @db.Decimal(8, 6)
+  purchasePrepaymentRequiredBeforeProduction Boolean @default(false) @map("purchase_prepayment_required_before_production")
   remark                      String?
   status                      String    @default("启用")
   allowDomesticLogisticsEntry Boolean   @default(false) @map("allow_domestic_logistics_entry")
@@ -89,6 +126,7 @@ model Supplier {
   assignedOrders          OrderLogisticsSupplier[]
   factoryDocumentRequests SupplierDocumentRequest[]
   ocrTasks                OcrTask[]
+  factoryPurchaseOrders   FactoryPurchaseOrder[]
 
   @@index([supplierName])
   @@index([supplierType])

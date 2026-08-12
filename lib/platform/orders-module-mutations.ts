@@ -37,6 +37,7 @@ import { assertCustomerScope, resolveSalespersonUserId } from "./shared-admin";
 import { canAccessOrder, validateDuplicateOrder } from "./order-access";
 import { syncOrderLogisticsSuppliers } from "./masters-access";
 import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
+import { assertLinkedOrderIdentityUnchanged } from "./order-sales-execution-source-guards";
 import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 import {
   MAX_BL_NO_LENGTH,
@@ -112,10 +113,13 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
   const currency = optional(inputData.currency)?.toUpperCase();
   if (!currency) throw codedError("请选择币种", 400, "CURRENCY_REQUIRED");
   if (!CURRENCIES.includes(currency)) throw codedError("请选择有效币种", 400, "CURRENCY_REQUIRED");
+  const historicalRateAllowed = before?.exchangeRateSource === "历史录入"
+    && optional(inputData.exchangeRateSource) === "历史录入"
+    && optional(inputData.exchangeRateType) === "历史录入";
   if (currency !== "CNY" && (
     !Number(inputData.exchangeRate)
     || !inputData.exchangeRateDate
-    || !EXCHANGE_RATE_SOURCES.includes(optional(inputData.exchangeRateSource) || "")
+    || (!historicalRateAllowed && !EXCHANGE_RATE_SOURCES.includes(optional(inputData.exchangeRateSource) || ""))
     || !inputData.exchangeRateType
   )) {
     throw codedError("当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。", 400, "OFFICIAL_RATE_REQUIRED");
@@ -128,7 +132,7 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
     defaultDate: todayInputInChina(),
     allowHistoricalSource: before?.exchangeRateSource === "历史录入",
   });
-  if (currency !== "CNY" && !EXCHANGE_RATE_SOURCES.includes(exchange.exchangeRateSource)) {
+  if (currency !== "CNY" && exchange.exchangeRateSource !== "历史录入" && !EXCHANGE_RATE_SOURCES.includes(exchange.exchangeRateSource)) {
     throw codedError("当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。", 400, "OFFICIAL_RATE_REQUIRED");
   }
   const orderAmounts = resolveOrderAmounts(inputData);
@@ -152,6 +156,13 @@ export async function saveOrder(request: AuditRequestLike, actor: ActorLike, inp
     await assertNoUnfinishedOrderDocuments(id, tx);
     const transactionSalespersonUserId = await resolveSalespersonUserId(inputData, actor, transactionCustomer, current, tx);
     const transactionBusinessEntity = await resolveBusinessEntityForOrderInput(inputData, current, tx);
+    assertLinkedOrderIdentityUnchanged(current, {
+      orderNo,
+      customerId: transactionCustomer.id,
+      businessEntityId: transactionBusinessEntity.id,
+      salespersonUserId: transactionSalespersonUserId,
+      currency,
+    });
     if (current?.businessEntityId && transactionBusinessEntity.id !== current.businessEntityId) {
       throw codedError("已有订单如需变更业务主体，请使用业务主体转移操作。", 400, "BUSINESS_ENTITY_TRANSFER_REQUIRED");
     }
@@ -219,6 +230,9 @@ export async function deleteOrder(request: AuditRequestLike, actor: ActorLike, i
     const before = await tx.receivableOrder.findUnique({ where: { id }, include: includeOrderRelations() });
     if (!before || before.deletedAt) throw permissionError("应收订单不存在或已删除", 404);
     if (!canAccessOrder(actor, before)) throw codedError("无权限删除该应收订单", 403, "ORDER_PERMISSION_DENIED");
+    if (before.sourceSalesExecutionId) {
+      throw codedError("该应收订单由销售执行单生成，不能删除；如需终止，请保留记录并将状态改为已取消。", 409, "ORDER_SALES_EXECUTION_SOURCE_LOCKED");
+    }
     const row = await tx.receivableOrder.update({ where: { id }, data: { deletedAt: new Date(), updatedById: currentActorId } });
     await writeAudit(request, actor, "删除应收订单", "receivable_orders", id, before, row, tx);
   });

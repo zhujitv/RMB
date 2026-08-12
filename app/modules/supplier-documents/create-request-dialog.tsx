@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { apiJson } from "../../api";
 import { DismissibleLayer } from "../../components";
 import { SearchAutocomplete } from "../../SearchAutocomplete";
@@ -61,6 +61,7 @@ export function CreateSupplierDocumentRequestDialog({
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const savingRef = useRef(false);
   const formDirty = Boolean(
     selectedCost
     || dueDate
@@ -82,6 +83,7 @@ export function CreateSupplierDocumentRequestDialog({
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (savingRef.current) return;
     setError("");
     if (!selectedCost?.id || !selectedCost.orderId || !selectedCost.supplierId) {
       setError("请选择已登记的工厂供应商成本。");
@@ -104,8 +106,9 @@ export function CreateSupplierDocumentRequestDialog({
     formData.append("dueDate", dueDate);
     formData.append("message", message);
     formData.append("templateFile", templateFile as File);
+    savingRef.current = true;
+    setSaving(true);
     try {
-      setSaving(true);
       const result = await apiJson<CreateSupplierDocumentRequestResult>("/api/supplier-document-requests", {
         method: "POST",
         body: formData,
@@ -114,6 +117,7 @@ export function CreateSupplierDocumentRequestDialog({
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "发起资料回传通知失败");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }

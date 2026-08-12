@@ -9,6 +9,11 @@ export type WorkspaceTabFocus = {
   keyword: string;
   action: string;
   orderId: string;
+  costId: string;
+  paymentId: string;
+  quotationId: string;
+  executionId: string;
+  purchaseOrderId: string;
   billId: string;
   requestId: string;
   settingsTab: SettingsTabKey | "";
@@ -77,6 +82,11 @@ export function createWorkspaceTabFocus(input: WorkspaceTabFocusInput = {}): Wor
     keyword: input.keyword?.trim() || "",
     action: input.action?.trim() || "",
     orderId: input.orderId?.trim() || "",
+    costId: input.costId?.trim() || "",
+    paymentId: input.paymentId?.trim() || "",
+    quotationId: input.quotationId?.trim() || "",
+    executionId: input.executionId?.trim() || "",
+    purchaseOrderId: input.purchaseOrderId?.trim() || "",
     billId: input.billId?.trim() || "",
     requestId: input.requestId?.trim() || "",
     settingsTab: input.settingsTab || "",
@@ -89,6 +99,11 @@ export function hasWorkspaceTabFocus(focus: WorkspaceTabFocusInput = {}) {
     focus.keyword?.trim()
     || focus.action?.trim()
     || focus.orderId?.trim()
+    || focus.costId?.trim()
+    || focus.paymentId?.trim()
+    || focus.quotationId?.trim()
+    || focus.executionId?.trim()
+    || focus.purchaseOrderId?.trim()
     || focus.billId?.trim()
     || focus.requestId?.trim()
     || focus.settingsTab,

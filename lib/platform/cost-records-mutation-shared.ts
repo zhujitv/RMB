@@ -3,6 +3,7 @@ import type { Prisma } from "../generated/prisma/client.js";
 import { canAccessOrder } from "./order-access";
 import { ORDER_COST_STATUS_VOID, codedError, nonEmpty, permissionError, writeAudit } from "./shared";
 import { includeCostRelations } from "./cost-records-shared";
+import { assertFactoryPurchaseSettlementCostCanBeManagedInCostModule, isFactoryPurchaseSettlementCost } from "./cost-records-module-guard";
 import {
   assertProductSupplierPaymentCost,
   type CostActor,
@@ -73,13 +74,28 @@ export function paymentVoucherFileName(extension: string) {
   return `汇款水单.${extension === "jpeg" ? "jpg" : extension}`;
 }
 
-export async function loadCostForPayment(actor: CostActor, id: string): Promise<CostWithPaymentRelations> {
+export async function loadCostForPayment(actor: CostActor, id: string, mutationAction = ""): Promise<CostWithPaymentRelations> {
   const cost = await prisma.orderCost.findFirst({
     where: { id, deletedAt: null, status: { not: ORDER_COST_STATUS_VOID } },
     include: includeCostRelations(),
   });
   if (!cost) throw permissionError("成本记录不存在或已删除", 404);
   if (!canAccessOrder(actor, cost.order)) throw permissionError("无权限读取该成本记录");
+  if (mutationAction) assertFactoryPurchaseSettlementCostCanBeManagedInCostModule(cost, mutationAction);
   assertProductSupplierPaymentCost(cost);
   return cost as CostWithPaymentRelations;
+}
+
+export async function loadCostForPaymentVoucher(actor: CostActor, id: string) {
+  // Purchase-settlement costs keep their financial fields immutable, but the
+  // final payment voucher remains an independently managed piece of evidence.
+  const cost = await loadCostForPayment(actor, id);
+  if (isFactoryPurchaseSettlementCost(cost) && cost.paymentStatus !== "已支付") {
+    throw codedError(
+      "采购结算全额结清后才能上传最终付款凭证。",
+      409,
+      "FACTORY_PURCHASE_SETTLEMENT_NOT_FULLY_PAID",
+    );
+  }
+  return cost;
 }

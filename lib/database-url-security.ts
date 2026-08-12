@@ -2,12 +2,24 @@ const POSTGRES_PROTOCOLS = new Set(["postgres:", "postgresql:"]);
 const SECURE_SSL_MODES = new Set(["require", "verify-ca", "verify-full"]);
 const INSECURE_SSL_MODES = new Set(["disable", "allow", "prefer"]);
 
-function isLocalDatabaseHost(hostname: string) {
+export function isLocalDatabaseHost(hostname: string) {
   const normalized = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
   return normalized.startsWith("/")
     || normalized === "localhost"
     || normalized === "127.0.0.1"
     || normalized === "::1";
+}
+
+export function isLocalDatabaseUrl(rawUrl: string) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!POSTGRES_PROTOCOLS.has(parsed.protocol)) return false;
+    const hosts = parsed.searchParams.getAll("host");
+    if (hosts.length > 1) return false;
+    return isLocalDatabaseHost((hosts[0] || parsed.hostname).trim());
+  } catch {
+    return false;
+  }
 }
 
 /**

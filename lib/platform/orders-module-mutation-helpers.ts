@@ -1,11 +1,12 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import {
-  ORDER_STATUSES, TRADE_TERMS, addDays, amountCny, codedError, dateFromInput,
+  ORDER_STATUSES, TRADE_TERMS, addDays, codedError, dateFromInput,
   depositRatioForPaymentTerm, deriveOrderCollectionStatus, getExchangeRateSettings,
-  includeOrderRelations, inputHasOwn, normalizeInstallments, optional, requirePositive,
+  includeOrderRelations, inputHasOwn, normalizeInstallments, optional,
   resolveBusinessEntityForOrderInput, resolvePaymentTerm, summarizeOrder,
 } from "./shared";
+import { amountCnyDecimal, requirePositiveDecimal } from "./shared-base-input";
 import { canAccessOrder } from "./order-access";
 import { syncOrderLogisticsSuppliers } from "./masters-access";
 import {
@@ -54,14 +55,14 @@ export async function assertNoUnfinishedOrderDocuments(id: string | null, client
 }
 
 export function resolveOrderAmounts(input: OrderInput) {
-  const estimatedReceivableAmount = requirePositive(input.estimatedReceivableAmount ?? input.receivableAmount, "预计应收金额");
-  const actualShipmentAmount = input.actualShipmentAmount === "" || input.actualShipmentAmount == null ? null : requirePositive(input.actualShipmentAmount, "实际发货金额");
+  const estimatedReceivableAmount = requirePositiveDecimal(input.estimatedReceivableAmount ?? input.receivableAmount, "预计应收金额", 2);
+  const actualShipmentAmount = input.actualShipmentAmount === "" || input.actualShipmentAmount == null ? null : requirePositiveDecimal(input.actualShipmentAmount, "实际发货金额", 2);
   const finalReceivableAmount = input.finalReceivableAmount === "" || input.finalReceivableAmount == null
-    ? actualShipmentAmount ?? estimatedReceivableAmount : requirePositive(input.finalReceivableAmount, "最终应收金额");
+    ? actualShipmentAmount ?? estimatedReceivableAmount : requirePositiveDecimal(input.finalReceivableAmount, "最终应收金额", 2);
   return { estimatedReceivableAmount, actualShipmentAmount, finalReceivableAmount };
 }
 
-export function resolveOrderPaymentDates(input: OrderInput, before: Record<string, any> | null, finalAmount: number, exchangeRate: number) {
+export function resolveOrderPaymentDates(input: OrderInput, before: Record<string, any> | null, finalAmount: Prisma.Decimal, exchangeRate: unknown) {
   const paymentTermInfo = resolvePaymentTerm(input, before);
   const paymentTermType = paymentTermInfo.type;
   const createdAt = before?.createdAt || new Date();
@@ -88,17 +89,17 @@ export function resolveOrderPaymentDates(input: OrderInput, before: Record<strin
 
 export function buildReceivableOrderData(params: Record<string, any>): Prisma.ReceivableOrderUncheckedCreateInput {
   const { inputData, before, customer, businessEntity, orderNo, blNo, currentActorId, salespersonUserId, currency, exchange, orderAmounts, payment } = params;
-  const rate = exchange.exchangeRate;
+  const rate = new Prisma.Decimal(String(exchange.exchangeRate));
   return {
     orderNo, blNo, customerId: customer.id, customerNameSnapshot: before && before.customerId === customer.id ? before.customerNameSnapshot : customer.name,
     businessEntityId: businessEntity.id, businessEntityNameSnapshot: businessEntity.name, salespersonUserId,
     salespersonCommissionRate: resolveSalespersonCommissionRate(customer), country: optional(customer.country), currency,
     exchangeRate: rate, exchangeRateDate: exchange.exchangeRateDate, exchangeRateSource: exchange.exchangeRateSource, exchangeRateType: exchange.exchangeRateType,
-    estimatedReceivableAmount: orderAmounts.estimatedReceivableAmount, estimatedReceivableAmountCny: amountCny(orderAmounts.estimatedReceivableAmount, rate),
-    actualShipmentAmount: orderAmounts.actualShipmentAmount, actualShipmentAmountCny: orderAmounts.actualShipmentAmount == null ? null : amountCny(orderAmounts.actualShipmentAmount, rate),
+    estimatedReceivableAmount: orderAmounts.estimatedReceivableAmount, estimatedReceivableAmountCny: amountCnyDecimal(orderAmounts.estimatedReceivableAmount, rate),
+    actualShipmentAmount: orderAmounts.actualShipmentAmount, actualShipmentAmountCny: orderAmounts.actualShipmentAmount == null ? null : amountCnyDecimal(orderAmounts.actualShipmentAmount, rate),
     actualShipmentDate: payment.actualShipmentDate, finalReceivableAmount: orderAmounts.finalReceivableAmount,
-    finalReceivableAmountCny: amountCny(orderAmounts.finalReceivableAmount, rate), receivableAmount: orderAmounts.finalReceivableAmount,
-    receivableAmountCny: amountCny(orderAmounts.finalReceivableAmount, rate),
+    finalReceivableAmountCny: amountCnyDecimal(orderAmounts.finalReceivableAmount, rate), receivableAmount: orderAmounts.finalReceivableAmount,
+    receivableAmountCny: amountCnyDecimal(orderAmounts.finalReceivableAmount, rate),
     tradeTerm: TRADE_TERMS.includes(String(inputData.tradeTerm || "")) ? String(inputData.tradeTerm) : "FOB",
     paymentTerm: payment.paymentTerm, paymentTermType: paymentTermTypeValue(payment.paymentTermType), depositRatio: payment.depositRatio,
     expectedPaymentDate: payment.expectedPaymentDate, expectedArrivalDate: payment.expectedArrivalDate, expectedShipmentDate: payment.expectedShipmentDate,

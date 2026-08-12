@@ -1,0 +1,39 @@
+import { NOTIFICATION_TYPES } from "./notification-definition-types";
+import type { NotificationTypeDefinition } from "./notification-definition-types";
+
+export const FACTORY_PURCHASE_ORDER_DISPATCH_NOTIFICATION_DEFINITION: NotificationTypeDefinition = {
+  type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+  name: "工厂采购单下发通知",
+  module: "销售执行",
+  description: "销售执行单正式下发后，通知对应产品供应商登录平台确认、建议新交期或拒绝订单。",
+  editable: true,
+  supportsAttachments: false,
+  subjectTemplate: "NEXTWOOD 工厂采购单待确认：{poNo}",
+  bodyTemplate: [
+    "尊敬的 {supplierName}：",
+    "",
+    "您好！您有一张新的工厂采购单需要在系统内确认。",
+    "",
+    "采购单号：{poNo}",
+    "要求交货日期：{requestedDeliveryDate}",
+    "采购币种：{purchaseCurrency}",
+    "",
+    "请登录供应链协同平台，选择接受订单、建议新的交货日期或拒绝订单：",
+    "{actionUrl}",
+    "",
+    "采购明细：",
+    "{itemLines}",
+    "",
+    "{companyName}",
+    "本邮件由系统自动发送，请勿直接回复。",
+  ].join("\n"),
+  variables: [
+    { key: "supplierName", label: "供应商名称", required: true },
+    { key: "poNo", label: "工厂采购单号", required: true },
+    { key: "requestedDeliveryDate", label: "要求交货日期", required: true },
+    { key: "purchaseCurrency", label: "采购币种" },
+    { key: "itemLines", label: "采购明细", required: true },
+    { key: "actionUrl", label: "供应商处理入口", required: true },
+    { key: "companyName", label: "业务主体名称" },
+  ],
+};

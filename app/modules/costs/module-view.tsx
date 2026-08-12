@@ -47,6 +47,8 @@ export function CostsModuleView(props: CostsModuleViewProps) {
     uploadingKey,
     uploadProgressByKey,
     deletingDocumentId,
+    canWriteCosts,
+    canAdminCostLifecycle,
     canWriteDocuments,
     canManageCostType,
     canManageFactoryPayments,
@@ -65,13 +67,15 @@ export function CostsModuleView(props: CostsModuleViewProps) {
             <h2>成本管理</h2>
           </div>
           <div className={styles.headerActions}>
-            <button className={styles.primaryButtonCompact} type="button" onClick={props.onCreateCost}>
-              登记成本
-            </button>
+            {canWriteCosts ? (
+              <button className={styles.primaryButtonCompact} type="button" onClick={props.onCreateCost}>
+                登记成本
+              </button>
+            ) : null}
             <button className={styles.secondaryButton} type="button" disabled={loading} onClick={props.onRefresh}>
               {loading ? "刷新中..." : "刷新"}
             </button>
-            {costView === "details" ? (
+            {canAdminCostLifecycle && costView === "details" ? (
               <button className={styles.secondaryButton} type="button" disabled={!selectedVoidableCount || deletingId === "__batch_void__"} onClick={props.onBatchVoid}>
                 {deletingId === "__batch_void__" ? "作废中..." : `批量作废${selectedVoidableCount ? ` (${selectedVoidableCount})` : ""}`}
               </button>
@@ -98,6 +102,7 @@ export function CostsModuleView(props: CostsModuleViewProps) {
           <table className={styles.dataTable}>
             {costView === "orders" ? <CostOrderTableHead /> : costView === "invoiceGroups" || costView === "invoiceExceptions" ? <CostInvoiceGroupTableHead showException={costView === "invoiceExceptions"} /> : (
               <CostDetailTableHead
+                canManage={canAdminCostLifecycle}
                 allSelected={rows.length > 0 && rows.every((cost) => selectedCostIds.includes(cost.id))}
                 onToggleAll={props.onToggleAllVisibleCosts}
               />
@@ -126,6 +131,9 @@ export function CostsModuleView(props: CostsModuleViewProps) {
                     <CostTableRows
                       key={cost.id}
                       cost={cost}
+                      canManage={canWriteCosts}
+                      canSelect={canAdminCostLifecycle}
+                      canRestore={canAdminCostLifecycle}
                       selected={selectedCostIds.includes(cost.id)}
                       onViewDetail={() => props.onSetDetailCost(cost)}
                       deleting={deletingId === cost.id}
@@ -152,6 +160,8 @@ export function CostsModuleView(props: CostsModuleViewProps) {
         {detailCost ? (
           <CostDetailDrawer
             cost={detailCost}
+            canManage={canWriteCosts}
+            canRestore={canAdminCostLifecycle}
             deleting={deletingId === detailCost.id}
             onOpenDocuments={() => props.onOpenDocuments(detailCost.id)}
             onOpenPaymentVoucher={props.onOpenPaymentVoucher}
@@ -163,7 +173,7 @@ export function CostsModuleView(props: CostsModuleViewProps) {
             onClose={() => props.onSetDetailCost(null)}
           />
         ) : null}
-        {costFormDrawer ? (
+        {costFormDrawer && canWriteCosts ? (
           <CostFormDrawer
             drawer={costFormDrawer}
             canManageFactoryPayments={canManageFactoryPayments}
@@ -174,6 +184,8 @@ export function CostsModuleView(props: CostsModuleViewProps) {
         {detailOrderSummary ? (
           <CostOrderSummaryDrawer
             order={detailOrderSummary}
+            canManage={canWriteCosts}
+            canRestore={canAdminCostLifecycle}
             onOpenDocuments={(costId) => props.onOpenDocuments(costId)}
             onOpenPaymentVoucher={props.onOpenPaymentVoucher}
             deletingId={deletingId}
@@ -201,6 +213,8 @@ export function CostsModuleView(props: CostsModuleViewProps) {
             uploadProgressByKey={uploadProgressByKey}
             deletingDocumentId={deletingDocumentId}
             canWriteDocuments={canWriteDocuments}
+            canWriteCosts={canWriteCosts}
+            canRestoreCosts={canAdminCostLifecycle}
             canManageCostType={canManageCostType}
             canManageFactoryPayments={canManageFactoryPayments}
             costTypeSaving={costTypeSavingId === documentCost.id}

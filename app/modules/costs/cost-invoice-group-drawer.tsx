@@ -5,7 +5,7 @@ import { formatCurrencyAmount, formatDate, formatDateTime } from "../../formatte
 import { customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
 import { costInvoiceStatusClass, costPaymentStatusClass } from "./cost-table";
-import { costSupplierName, currencyTotalAmount, hasPaymentVoucher, isProductSupplierPaid, isProductSupplierPaymentEnabled } from "./helpers";
+import { costSupplierName, currencyTotalAmount, hasPaymentVoucher, isPaymentVoucherEvidenceEnabled, isProductSupplierPaid, isSystemManagedCost } from "./helpers";
 import type { CostDocument, CostInvoiceGroupRow, CostRow } from "./model";
 
 export function CostInvoiceGroupDrawer({
@@ -38,7 +38,7 @@ export function CostInvoiceGroupDrawer({
       onClose={onClose}
       actions={
         singleManualCost ? (
-          <button className={styles.primaryButtonCompact} type="button" onClick={() => onOpenDocuments(costs[0].id)}>资料维护</button>
+          <button className={styles.primaryButtonCompact} type="button" onClick={() => onOpenDocuments(costs[0].id)}>{isSystemManagedCost(costs[0]) ? "查看资料" : "资料维护"}</button>
         ) : null
       }
     >
@@ -151,7 +151,7 @@ export function CostInvoiceGroupItemsTable({
                 <td>
                   {hasPaymentVoucher(cost) ? (
                     <button className={styles.fileActionButton} type="button" onClick={() => onOpenPaymentVoucher(cost)}>查看付款凭证</button>
-                  ) : isProductSupplierPaid(cost) && isProductSupplierPaymentEnabled(cost) ? "未上传水单" : "-"}
+                  ) : isProductSupplierPaid(cost) && isPaymentVoucherEvidenceEnabled(cost) ? "未上传水单" : "-"}
                 </td>
                 <td className={styles.statusColumn}><span className={costInvoiceStatusClass(cost.invoiceStatus)}>{cost.invoiceStatus || "-"}</span></td>
                 <td>{formatDateTime(cost.logisticsSource?.createdAt || cost.createdAt)}</td>

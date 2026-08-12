@@ -778,6 +778,15 @@ API_RATE_LIMIT_REGISTRATION_WINDOW_MS=900000
 API_RATE_LIMIT_REGISTRATION_LIMIT=5
 ```
 
+腾讯云 CVM 通过 Nginx 等反向代理运行时，还应配置：
+
+```text
+TRUST_PROXY_HEADERS=true
+TRUSTED_PROXY_PROVIDER=
+```
+
+只有当应用端口不直接暴露公网，且反向代理会覆盖 `X-Real-IP`、追加 `X-Forwarded-For` 时才能启用。否则客户端可以伪造来源地址，导致限流和审计记录失真。若使用 Cloudflare 作为可信入口，则改为 `TRUSTED_PROXY_PROVIDER=cloudflare`，并只允许 Cloudflare 回源访问。
+
 ### 文件服务器配置
 
 PDF 单证和供应商资料必须保存到私有对象存储，不能保存到应用服务器本地目录。腾讯云服务器推荐配置 COS：
@@ -814,10 +823,14 @@ R2_ENDPOINT=
 
 ```text
 /api/reminders/run
+/api/cron/workbench-overdue-todos
 /api/cron/exchange-rates
+/api/cron/logistics-invoice-ocr
+/api/cron/notification-outbox
+/api/cron/freightower-sync
 ```
 
-汇率任务每天自动拉取汇率并缓存到 `exchange_rates`。`/api/reminders/run` 和 `/api/cron/exchange-rates` 都必须携带 `Authorization: Bearer CRON_SECRET`，禁止使用 `change-me` 作为生产密钥。
+汇率任务每天自动拉取汇率并缓存到 `exchange_rates`。所有定时任务都必须携带 `Authorization: Bearer CRON_SECRET`，禁止使用 `change-me` 作为生产密钥。在自托管环境中，必须用唯一调度器按同样路径和频率调用，不得与 Vercel Cron 同时运行。
 
 ## 默认账号
 

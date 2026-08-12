@@ -101,6 +101,7 @@ export function useCostsListController({
   }, [initialKeyword, initialOpenToken]);
 
   useEffect(() => {
+    if (initialOpenToken && initialKeyword.trim()) return;
     void loadCosts(1, { ...emptyCostFilters });
   }, []);
 

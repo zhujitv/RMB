@@ -30,8 +30,17 @@ export function useConfirmationDialog() {
 
   function resolveConfirmation(confirmed: boolean) {
     if (!confirmation) return;
-    if (confirmed && confirmation.requireInput && !String(confirmation.inputValue || "").trim()) {
+    const inputValue = String(confirmation.inputValue || "").trim();
+    if (confirmed && confirmation.requireInput && !inputValue) {
       setConfirmation({ ...confirmation, inputError: confirmation.inputRequiredMessage || "请填写原因后继续。" });
+      return;
+    }
+    if (confirmed && confirmation.inputExpectedValue !== undefined
+      && inputValue !== String(confirmation.inputExpectedValue).trim()) {
+      setConfirmation({
+        ...confirmation,
+        inputError: confirmation.inputMismatchMessage || "输入内容与确认值不一致。",
+      });
       return;
     }
     const resolver = resolverRef.current;
@@ -39,7 +48,7 @@ export function useConfirmationDialog() {
     setConfirmation(null);
     resolver?.({
       confirmed,
-      inputValue: String(confirmation.inputValue || "").trim(),
+      inputValue,
       secondaryInputValue: String(confirmation.secondaryInputValue || "").trim(),
     });
   }

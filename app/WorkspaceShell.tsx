@@ -70,9 +70,29 @@ export function WorkspaceShell() {
     const path = parsed.pathname.replace(/^\/+/, "");
     const keyword = parsed.searchParams.get("keyword") || fallbackOrderNo;
     if (path === "account") return Boolean(openWorkspaceMenu("account"));
+    if (path === "sales-execution") {
+      return Boolean(openWorkspaceMenu("salesExecution", {
+        keyword,
+        action: parsed.searchParams.get("action") || "",
+        quotationId: parsed.searchParams.get("quotationId") || "",
+        executionId: parsed.searchParams.get("executionId") || "",
+      }, { forceNew: Boolean(parsed.searchParams.get("quotationId") || parsed.searchParams.get("executionId")) }));
+    }
     if (path === "orders") return Boolean(openWorkspaceMenu("orders", { keyword }));
-    if (path === "payments") return Boolean(openWorkspaceMenu("payments", { keyword }));
-    if (path === "costs") return Boolean(openWorkspaceMenu("costs", { keyword }));
+    if (path === "payments") {
+      const paymentId = parsed.searchParams.get("paymentId") || "";
+      return Boolean(openWorkspaceMenu("payments", {
+        keyword,
+        paymentId,
+      }, { forceNew: Boolean(paymentId) }));
+    }
+    if (path === "costs") {
+      const costId = parsed.searchParams.get("costId") || "";
+      return Boolean(openWorkspaceMenu("costs", {
+        keyword,
+        costId,
+      }, { forceNew: Boolean(costId) }));
+    }
     if (path === "profit") return Boolean(openWorkspaceMenu("profit", { keyword }));
     if (path === "domestic-logistics") return Boolean(openWorkspaceMenu("domesticLogistics", { keyword }));
     if (path === "customer-communication") {
@@ -87,6 +107,13 @@ export function WorkspaceShell() {
         keyword,
         billId: parsed.searchParams.get("billId") || "",
       }));
+    }
+    if (path === "supplier-purchase-orders") {
+      const purchaseOrderId = parsed.searchParams.get("purchaseOrderId") || "";
+      return Boolean(openWorkspaceMenu("supplierPurchaseOrders", {
+        keyword,
+        purchaseOrderId,
+      }, { forceNew: Boolean(purchaseOrderId) }));
     }
     if (path === "supplier-documents") {
       return Boolean(openWorkspaceMenu("supplierDocuments", {

@@ -68,6 +68,10 @@ const logisticsInvoiceOcrCron = readFileSync("app/api/cron/logistics-invoice-ocr
 const vercelConfig = readFileSync("vercel.json", "utf8");
 
 test("logistics expenses are stored outside official costs until approved", () => {
+  const logisticsExpenseModel = schema.match(
+    /model LogisticsExpense \{[\s\S]*?\n\}/,
+  )?.[0] || "";
+
   assert.match(schema, /model LogisticsExpense/);
   assert.match(schema, /auditStatus\s+String\s+@default\("草稿"\)/);
   assert.match(schema, /costId\s+String\?\s+@unique/);
@@ -93,7 +97,7 @@ test("logistics expenses are stored outside official costs until approved", () =
     /invoiceDocumentId\s+String\?\s+@map\("invoice_document_id"\)/,
   );
   assert.doesNotMatch(
-    schema,
+    logisticsExpenseModel,
     /\binvoiceNo\b|\binvoiceDate\b|\binvoiceAmount\b|\binvoiceRemark\b|invoiceSellerName|invoiceBuyerName|invoiceRecognitionStatus|invoiceRecognitionMessage|invoiceRecognizedAt/,
   );
   assert.match(schema, /@@index\(\[invoiceDocumentId\]\)/);

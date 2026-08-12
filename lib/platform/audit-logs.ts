@@ -28,7 +28,7 @@ async function auditLogAccessWhere(actor: AuditActor | null | undefined): Promis
   const scope = effectivePermissions(actor).dataScope;
   if (actor.role === "管理员" || scope === "ALL") return {};
   if (scope === "OWN") {
-    const [customers, orders] = await Promise.all([
+    const [customers, orders, salesExecutions] = await Promise.all([
       prisma.customer.findMany({
         where: { deletedAt: null, salespersonUserId: actor.id },
         select: { id: true },
@@ -39,9 +39,15 @@ async function auditLogAccessWhere(actor: AuditActor | null | undefined): Promis
         select: { id: true },
         take: AUDIT_ACCESS_ID_SCAN_LIMIT,
       }),
+      prisma.salesExecution.findMany({
+        where: { salespersonUserId: actor.id },
+        select: { id: true },
+        take: AUDIT_ACCESS_ID_SCAN_LIMIT,
+      }),
     ]);
     const customerIds = customers.map((item) => item.id);
     const orderIds = orders.map((item) => item.id);
+    const salesExecutionIds = salesExecutions.map((item) => item.id);
     const [payments, costs, documents, domesticLogisticsInfos] = orderIds.length ? await Promise.all([
       prisma.payment.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true }, take: AUDIT_ACCESS_ID_SCAN_LIMIT }),
       prisma.orderCost.findMany({ where: { deletedAt: null, orderId: { in: orderIds } }, select: { id: true }, take: AUDIT_ACCESS_ID_SCAN_LIMIT }),
@@ -51,6 +57,7 @@ async function auditLogAccessWhere(actor: AuditActor | null | undefined): Promis
     const entityFilters: Prisma.AuditLogWhereInput[] = [];
     if (customerIds.length) entityFilters.push({ entityType: "customers", entityId: { in: customerIds } });
     if (orderIds.length) entityFilters.push({ entityType: "receivable_orders", entityId: { in: orderIds } });
+    if (salesExecutionIds.length) entityFilters.push({ entityType: "sales_executions", entityId: { in: salesExecutionIds } });
     if (payments.length) entityFilters.push({ entityType: "payments", entityId: { in: payments.map((item) => item.id) } });
     if (costs.length) entityFilters.push({ entityType: "order_costs", entityId: { in: costs.map((item) => item.id) } });
     if (documents.length) entityFilters.push({ entityType: "order_documents", entityId: { in: documents.map((item) => item.id) } });
@@ -100,6 +107,7 @@ export async function getAuditLogs(query: AuditQuery | null | undefined, options
   const production = process.env.NODE_ENV === "production";
   const entityTypeLabels: Record<string, string> = {
     receivable_orders: "订单",
+    sales_executions: "销售执行单",
     payments: "收款",
     order_costs: "成本",
     customers: "客户",

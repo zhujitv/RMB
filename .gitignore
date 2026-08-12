@@ -9,3 +9,6 @@ node_modules
 prisma/dev.db
 lib/generated/
 .vercel
+
+# Local development object storage
+.local-storage/

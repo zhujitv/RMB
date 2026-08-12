@@ -206,7 +206,12 @@ export async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
         paymentStatus: { not: "已取消" },
         AND: [
           baseWhere,
-          { paid: true },
+          {
+            OR: [
+              { sourceType: { not: "FACTORY_PURCHASE_SETTLEMENT" }, paid: true },
+              { sourceType: "FACTORY_PURCHASE_SETTLEMENT", paymentStatus: "已支付" },
+            ],
+          },
           { paymentDate: { gte: context.paymentVoucherReminderStartDate } },
           { paymentVoucherStorageKey: null },
           { paymentVoucherUrl: null },

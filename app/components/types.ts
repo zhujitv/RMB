@@ -10,6 +10,8 @@ export type ConfirmationDialogState = {
   inputPlaceholder?: string;
   inputType?: "textarea" | "text" | "date";
   inputRequiredMessage?: string;
+  inputExpectedValue?: string;
+  inputMismatchMessage?: string;
   inputValue?: string;
   inputError?: string;
   secondaryInputLabel?: string;

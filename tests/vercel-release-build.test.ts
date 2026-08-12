@@ -6,16 +6,23 @@ const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as { script
 const releaseBuild = readFileSync("scripts/vercel-release-build.mjs", "utf8");
 const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
 
-test("Vercel production builds deploy migrations before compiling the application", () => {
+test("Vercel production builds compile without applying database migrations", () => {
   assert.equal(packageJson.scripts?.build, "node scripts/vercel-release-build.mjs");
-  assert.match(releaseBuild, /target === "production"/);
-  assert.match(releaseBuild, /runNpmScript\("db:deploy"\)/);
+  assert.doesNotMatch(releaseBuild, /VERCEL_TARGET_ENV|VERCEL_ENV/);
+  assert.doesNotMatch(releaseBuild, /db:deploy|prisma\s+migrate\s+deploy/);
   assert.match(releaseBuild, /runNpmScript\("build:app"\)/);
-  assert.ok(releaseBuild.indexOf('runNpmScript("db:deploy")') < releaseBuild.indexOf('runNpmScript("build:app")'));
 });
 
-test("preview and CI builds never apply production database migrations", () => {
+test("migrations remain explicit while preview and CI builds stay migration-free", () => {
   assert.match(releaseBuild, /database migrations are intentionally skipped/);
+  assert.equal(
+    packageJson.scripts?.["build:release"],
+    "node scripts/run-with-env.mjs prisma migrate deploy && npm run build:app",
+  );
+  assert.equal(
+    packageJson.scripts?.["db:deploy"],
+    "node scripts/run-with-env.mjs prisma migrate deploy",
+  );
   assert.match(workflow, /npm run verify:ci/);
   assert.equal(packageJson.scripts?.["verify:ci"]?.includes("build:app"), true);
   assert.equal(packageJson.scripts?.["verify:ci"]?.includes("build:release"), false);

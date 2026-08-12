@@ -7,10 +7,15 @@ const PRODUCT_SUPPLIER_ACCOUNT_ROLE = "产品供应商";
 const LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE = `${PRODUCT_SUPPLIER_ACCOUNT_ROLE}账号`;
 const LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE = "工厂供应商账号";
 const SUPPLIER_DOCUMENT_ROLES = [PRODUCT_SUPPLIER_ACCOUNT_ROLE, LEGACY_PRODUCT_SUPPLIER_ACCOUNT_ROLE, LEGACY_FACTORY_SUPPLIER_ACCOUNT_ROLE];
+const INTERNAL_SALES_DENIED_ROLES = [...SUPPLIER_DOCUMENT_ROLES, "物流供应商"];
+const INTERNAL_SALES_PERMISSION_KEYS = ["quotations", "salesExecution"];
+const SUPPLIER_PURCHASE_ORDER_PERMISSION_KEY = "supplierPurchaseOrders";
 
 export const WRITE_PERMISSIONS: Record<string, string[]> = {
   users: ["管理员"],
   customers: ["管理员"],
+  quotations: ["管理员", "业务员"],
+  salesExecution: ["管理员", "业务员"],
   orders: ["管理员", "业务员"],
   payments: ["管理员", "财务"],
   costs: ["管理员", "业务员"],
@@ -18,6 +23,7 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
   customerCommunication: ["管理员", "业务员"],
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
+  supplierPurchaseOrders: [...SUPPLIER_DOCUMENT_ROLES],
   supplierDocuments: ["管理员", ...SUPPLIER_DOCUMENT_ROLES],
   taxRefund: ["管理员", "财务"],
   commissions: ["管理员", "财务"],
@@ -27,12 +33,12 @@ export const WRITE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const ROLE_MENUS: Record<string, string[]> = {
-  管理员: ["dashboard", "orders", "payments", "costs", "profit", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
-  业务员: ["orders", "payments", "costs", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
-  财务: ["payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
+  管理员: ["dashboard", "quotations", "salesExecution", "orders", "payments", "costs", "profit", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "supplierDocuments", "taxRefund", "reports", "manual", "settings"],
+  业务员: ["quotations", "salesExecution", "orders", "payments", "costs", "domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "taxRefund", "reports", "manual"],
+  财务: ["salesExecution", "payments", "costs", "profit", "domesticLogistics", "logisticsFees", "taxRefund", "reports", "manual"],
   物流供应商: ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"],
-  产品供应商: ["supplierDocuments", "manual"],
-  工厂供应商账号: ["supplierDocuments", "manual"],
+  产品供应商: ["supplierPurchaseOrders", "supplierDocuments", "manual"],
+  工厂供应商账号: ["supplierPurchaseOrders", "supplierDocuments", "manual"],
   物流资料录入员: ["domesticLogistics", "customerCommunication", "oceanControlTower", "logisticsFees", "manual"],
 };
 
@@ -57,11 +63,11 @@ export function menusWithDerivedAccess(role: string, menus: string[]) {
 
 export const ROLE_SCOPE_TEXT: Record<string, string> = {
   管理员: "可查看和管理全部数据",
-  业务员: "仅可查看本人客户和订单",
-  财务: "可查看全部应收和收款数据",
+  业务员: "仅可查看本人客户、报价、销售执行单和订单",
+  财务: "可查看全部销售执行、应收和成本数据，并维护采购付款",
   物流供应商: "仅可查看分配订单、提交物流费用并上传发票",
-  产品供应商: "仅可查看资料回传任务并上传工厂合同、增值税发票",
-  工厂供应商账号: "仅可查看资料回传任务并上传工厂合同、增值税发票",
+  产品供应商: "仅可查看本工厂采购单和资料回传任务",
+  工厂供应商账号: "仅可查看本工厂采购单和资料回传任务",
   物流资料录入员: "可录入物流信息和报关资料",
 };
 
@@ -69,12 +75,15 @@ export const READ_PERMISSIONS: Record<string, string[]> = {
   users: ["管理员"],
   customers: ["管理员", "业务员"],
   suppliers: ["管理员"],
+  quotations: ["管理员", "业务员"],
+  salesExecution: ["管理员", "业务员", "财务"],
   orders: ["管理员", "业务员", "财务"],
   payments: ["管理员", "业务员", "财务"],
   costs: ["管理员", "业务员", "财务"],
   domesticLogistics: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
   customerCommunication: ["管理员", "业务员", "物流供应商", "物流资料录入员"],
   documents: ["管理员", "业务员", "财务", "物流供应商", "物流资料录入员"],
+  supplierPurchaseOrders: [...SUPPLIER_DOCUMENT_ROLES],
   supplierDocuments: ["管理员", ...SUPPLIER_DOCUMENT_ROLES],
   taxRefund: ["管理员", "业务员", "财务"],
   commissions: ["管理员", "财务"],
@@ -91,58 +100,7 @@ export const MENU_KEYS = Object.values(ROLE_MENUS).flat()
 export const READ_PERMISSION_KEYS = Object.keys(READ_PERMISSIONS);
 export const WRITE_PERMISSION_KEYS = Object.keys(WRITE_PERMISSIONS);
 export const UNSAFE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
-export const SETTINGS_PERMISSION_LABELS = {
-  menu: {
-    dashboard: "经营总览",
-    orders: "应收订单",
-    payments: "收款管理",
-    costs: "成本管理",
-    profit: "利润分析",
-    domesticLogistics: "物流信息",
-    customerCommunication: "客户沟通",
-    oceanControlTower: "运输监控",
-    logisticsFees: "物流费用",
-    supplierDocuments: "资料回传",
-    taxRefund: "退税资料",
-    reports: "报表中心",
-    manual: "操作手册",
-    settings: "系统设置",
-  },
-  read: {
-    users: "用户查看",
-    customers: "客户查看",
-    suppliers: "供应商查看",
-    orders: "应收订单查看",
-    payments: "收款查看",
-    costs: "成本查看",
-    domesticLogistics: "物流信息查看",
-    customerCommunication: "客户沟通查看",
-    documents: "单证查看",
-    supplierDocuments: "供应商资料回传查看",
-    taxRefund: "退税查看",
-    commissions: "提成查看",
-    reports: "报表查看",
-    settings: "系统设置查看",
-    auditLogs: "操作日志查看",
-  },
-  write: {
-    users: "用户管理",
-    customers: "客户维护",
-    orders: "应收订单保存",
-    payments: "收款登记",
-    costs: "成本录入",
-    logistics: "物流费用",
-    domesticLogistics: "物流信息录入",
-    customerCommunication: "客户邮件发送",
-    documents: "单证上传/删除",
-    supplierDocuments: "供应商资料回传",
-    taxRefund: "退税状态",
-    commissions: "提成结算",
-    suppliers: "供应商维护",
-    settings: "系统设置",
-    exchangeRates: "汇率刷新",
-  },
-};
+export { SETTINGS_PERMISSION_LABELS } from "./settings-permission-labels.ts";
 
 export function permissionMode(value: unknown) {
   const mode = String(value || "");
@@ -248,9 +206,16 @@ export function normalizedCustomPermissionInput(value: unknown, role: string) {
   const mode = permissionMode(input.mode || input.permissionMode);
   if (mode !== "CUSTOM") return null;
   const fallback = rolePermissionSnapshot(role);
-  const menus = menusWithDerivedAccess(role, checkedPermissionList(input.menus ?? fallback.menus, MENU_KEYS));
-  const readKeys = checkedPermissionList(input.reads ?? input.readKeys ?? fallback.readKeys, READ_PERMISSION_KEYS);
-  const writeKeys = checkedPermissionList(input.writes ?? input.writeKeys ?? fallback.writeKeys, WRITE_PERMISSION_KEYS);
+  const internalSalesDenied = INTERNAL_SALES_DENIED_ROLES.includes(role);
+  const isProductSupplier = SUPPLIER_DOCUMENT_ROLES.includes(role);
+  const enforceRoleBoundary = (keys: string[]) => keys.filter((key) => {
+    if (internalSalesDenied && INTERNAL_SALES_PERMISSION_KEYS.includes(key)) return false;
+    if (!isProductSupplier && key === SUPPLIER_PURCHASE_ORDER_PERMISSION_KEY) return false;
+    return true;
+  });
+  const menus = enforceRoleBoundary(menusWithDerivedAccess(role, checkedPermissionList(input.menus ?? fallback.menus, MENU_KEYS)));
+  const readKeys = enforceRoleBoundary(checkedPermissionList(input.reads ?? input.readKeys ?? fallback.readKeys, READ_PERMISSION_KEYS));
+  const writeKeys = enforceRoleBoundary(checkedPermissionList(input.writes ?? input.writeKeys ?? fallback.writeKeys, WRITE_PERMISSION_KEYS));
   const requestedDataScope = String(input.dataScope || "");
   const dataScope = DATA_SCOPES.includes(requestedDataScope)
     ? requestedDataScope

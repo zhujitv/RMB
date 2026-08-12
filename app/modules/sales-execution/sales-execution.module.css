@@ -1,0 +1,299 @@
+.moduleIntro {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.toolbarActions,
+.formHeader,
+.formActions,
+.sectionHeader,
+.allocationHeader,
+.allocationBalance,
+.viewTabs,
+.summaryGrid {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbarActions,
+.formHeader,
+.sectionHeader,
+.allocationHeader {
+  justify-content: space-between;
+}
+
+.formPanel {
+  display: grid;
+  gap: 18px;
+  margin: 18px 0;
+  border: 1px solid #dbe5f1;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 18px;
+}
+
+.formTitle,
+.sectionTitle,
+.customerCell,
+.allocationTitle,
+.purchaseOrderTitle {
+  display: grid;
+  gap: 4px;
+}
+
+.formTitle strong,
+.sectionTitle h3,
+.allocationTitle strong {
+  margin: 0;
+  color: #0f172a;
+}
+
+.formTitle small,
+.sectionTitle small,
+.allocationTitle small,
+.fieldHint,
+.purchaseOrderTitle small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.formGrid label,
+.salesFields label,
+.allocationRow label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.formGrid input,
+.formGrid select,
+.formGrid textarea,
+.salesFields input,
+.allocationRow input,
+.allocationRow select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #dbe1ea;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  padding: 0 10px;
+  font: inherit;
+}
+
+.formGrid input,
+.formGrid select,
+.salesFields input,
+.allocationRow input,
+.allocationRow select {
+  height: 40px;
+}
+
+.formGrid textarea {
+  min-height: 76px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.formGrid input:focus,
+.formGrid select:focus,
+.formGrid textarea:focus,
+.salesFields input:focus,
+.allocationRow input:focus,
+.allocationRow select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.wideField { grid-column: span 2; }
+.fullField { grid-column: 1 / -1; }
+
+.readonlyValue {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.salesSection,
+.detailSection,
+.purchaseOrderList {
+  display: grid;
+  gap: 12px;
+}
+
+.salesLineCard {
+  overflow: visible;
+  border: 1px solid #bfdbfe;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.salesLineHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #dbeafe;
+  background: #eff6ff;
+  padding: 10px 12px;
+}
+
+.salesLineHeader strong { color: #1e3a8a; }
+.lineActions { display: flex; gap: 7px; }
+
+.salesFields {
+  display: grid;
+  grid-template-columns: minmax(260px, 3fr) 88px 110px 125px 145px 135px;
+  gap: 10px;
+  padding: 12px;
+}
+
+.amountValue {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.productControl { position: relative; }
+.suggestions {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #bfdbfe;
+  border-radius: 11px;
+  background: #fff;
+  padding: 5px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15);
+}
+
+.suggestion {
+  width: 100%;
+  display: grid;
+  gap: 3px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggestion:hover,
+.suggestion:focus-visible { outline: none; background: #eff6ff; }
+.suggestion small { color: #64748b; }
+
+.allocationPanel {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #fed7aa;
+  background: #fffaf2;
+  padding: 12px;
+}
+
+.allocationTitle strong { color: #9a3412; }
+.allocationBalance { justify-content: flex-end; flex-wrap: wrap; }
+.balanceExact { color: #047857; }
+.balancePending { color: #b45309; }
+.balanceOver { color: #b91c1c; }
+
+.allocationRow {
+  display: grid;
+  grid-template-columns: minmax(190px, 2fr) 92px 120px 120px minmax(130px, 1fr) auto;
+  gap: 9px;
+  align-items: end;
+}
+
+.formActions { justify-content: flex-end; border-top: 1px solid #e2e8f0; padding-top: 16px; }
+
+.sourcePill,
+.tabButton {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.sourceQuote { border-color: #c4b5fd; background: #f5f3ff; color: #6d28d9; }
+.tabButton { cursor: pointer; padding: 7px 12px; }
+.tabActive { border-color: #2563eb; background: #2563eb; color: #fff; }
+
+.summaryGrid { align-items: stretch; flex-wrap: wrap; }
+.summaryCard {
+  min-width: 150px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+}
+.summaryCard span { color: #64748b; font-size: 11px; }
+.summaryCard strong { color: #0f172a; font-size: 15px; }
+
+.detailTableWrap { width: 100%; overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+.detailTable { width: 100%; min-width: 720px; border-collapse: collapse; background: #fff; }
+.detailTable th,
+.detailTable td { border-bottom: 1px solid #edf2f7; padding: 9px; text-align: left; vertical-align: middle; }
+.detailTable th { background: #f8fafc; color: #64748b; font-size: 12px; white-space: nowrap; }
+.detailTable td { color: #334155; font-size: 13px; }
+.detailTable tr:last-child td { border-bottom: 0; }
+.amountCell { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.purchaseOrderCard { border: 1px solid #fed7aa; border-radius: 14px; background: #fffaf2; padding: 12px; }
+.purchaseOrderHeader { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.purchaseOrderTitle strong { color: #9a3412; }
+.purchaseOrderTotal { color: #7c2d12; font-weight: 800; }
+.privacyNote { border: 1px solid #bbf7d0; border-radius: 11px; background: #f0fdf4; color: #166534; padding: 10px 12px; font-size: 12px; }
+
+@media (max-width: 1100px) {
+  .formGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .salesFields { grid-template-columns: minmax(260px, 2fr) repeat(2, 100px); }
+  .allocationRow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .formPanel { padding: 13px; }
+  .formGrid,
+  .salesFields,
+  .allocationRow { grid-template-columns: 1fr; }
+  .wideField,
+  .fullField { grid-column: auto; }
+  .formHeader,
+  .sectionHeader,
+  .allocationHeader,
+  .purchaseOrderHeader { align-items: stretch; flex-direction: column; }
+  .formActions { align-items: stretch; flex-direction: column-reverse; }
+}

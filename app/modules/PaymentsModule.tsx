@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import { ConfirmationDialog, useConfirmationDialog } from "../components";
-import type { User } from "../types";
+import type { PermissionSnapshot, User } from "../types";
+import { canWritePermission } from "../utils";
 import { useWorkspaceTabBusy, useWorkspaceTabContext, useWorkspaceTabDiscardGuard, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 import styles from "../WorkspaceShell.module.css";
 import { PaymentDetailDrawer } from "./payments/payment-detail-drawer";
@@ -15,11 +16,15 @@ import { usePaymentsList } from "./payments/use-payments-list";
 
 export function PaymentsModule({
   currentUser,
+  permissions,
   initialKeyword = "",
+  initialPaymentId = "",
   initialOpenToken = 0,
 }: {
   currentUser: User;
+  permissions?: PermissionSnapshot;
   initialKeyword?: string;
+  initialPaymentId?: string;
   initialOpenToken?: number;
 }) {
   const {
@@ -28,7 +33,7 @@ export function PaymentsModule({
     createOpen, setCreateOpen, editPayment, setEditPayment, setTotal, loadPayments,
     setFilter, submitSearch, resetSearch, gotoPage, paymentMatchesSubmittedFilters,
     mergePaymentRow,
-  } = usePaymentsList(initialKeyword, initialOpenToken);
+  } = usePaymentsList(initialKeyword, initialOpenToken, initialPaymentId);
   const [deletingId, setDeletingId] = useState("");
   const [confirmingId, setConfirmingId] = useState("");
   const {
@@ -38,7 +43,8 @@ export function PaymentsModule({
     confirmConfirmation,
     updateConfirmationInput,
   } = useConfirmationDialog();
-  const canManagePayments = ["管理员", "财务"].includes(currentUser.role);
+  const canManagePayments = canWritePermission(currentUser, permissions, "payments", ["管理员", "财务"])
+    && ["管理员", "财务"].includes(currentUser.role);
   useWorkspaceTabBusy(Boolean(deletingId || confirmingId));
   const workspaceTab = useWorkspaceTabContext();
   const workspaceBusyRef = useRef(Boolean(workspaceTab?.busy));

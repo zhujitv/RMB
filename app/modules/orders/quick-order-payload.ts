@@ -24,6 +24,7 @@ export function quickOrderPayload(form: QuickOrderForm, options: QuickOrderPaylo
     actualShipmentDate: form.actualShipmentDate || undefined,
     tradeTerm: form.tradeTerm,
     paymentTermType: form.paymentTermType,
+    paymentTerm: form.paymentTermType === "CUSTOM" ? form.paymentTerm.trim() : undefined,
     blDate: form.blDate || undefined,
     expectedArrivalDate: form.expectedArrivalDate || undefined,
     expectedPaymentDate: form.expectedPaymentDate || undefined,

@@ -106,6 +106,9 @@ export type SupplierLike = Record<string, unknown> & {
   taxNumber?: string | null;
   bankName?: string | null;
   bankAccount?: string | null;
+  purchasePaymentTerm?: string | null;
+  purchasePrepaymentRatio?: unknown;
+  purchasePrepaymentRequiredBeforeProduction?: boolean | null;
   remark?: string | null;
   status?: string | null;
   allowDomesticLogisticsEntry?: boolean | null;

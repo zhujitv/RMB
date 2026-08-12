@@ -34,6 +34,7 @@ import {
   type DocumentLike,
 } from "./order-documents-types";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
+import { assertFactoryPurchaseSettlementCostCanBeManagedInCostModule } from "./cost-records-module-guard";
 
 export async function deleteOrderDocument(request: AuditRequestLike, actor: ActorLike, id: string) {
   assertWrite(actor, "documents");
@@ -42,10 +43,13 @@ export async function deleteOrderDocument(request: AuditRequestLike, actor: Acto
     include: { order: { include: { customer: true } }, cost: true, supplier: true, uploadedBy: true },
   });
   if (!before || before.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
+  assertCanDeleteOrderDocumentFile(actor, before);
   if (isLogisticsGeneratedCostInvoice(before.documentType, before.cost)) {
     throw permissionError("物流费用发票请在物流费用模块按发票分组删除或替换，成本管理仅同步查看。", 400);
   }
-  assertCanDeleteOrderDocumentFile(actor, before);
+  if (before.cost) {
+    assertFactoryPurchaseSettlementCostCanBeManagedInCostModule(before.cost, "删除资料");
+  }
   const deletedAt = new Date();
   const document = await prisma.$transaction(async (tx) => {
     const updated = await tx.orderDocument.update({

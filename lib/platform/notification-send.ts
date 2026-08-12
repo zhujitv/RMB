@@ -19,7 +19,6 @@ import { TEXT_LIMITS } from "./notification-definitions";
 import { freightowerTrackingEmailHtml } from "./freightower-tracking-email";
 import { NOTIFICATION_TYPES } from "./notification-definition-types";
 
-const FREIGHTOWER_NOTIFICATION_RETRY_MAX_ATTEMPTS = 6;
 const FREIGHTOWER_EMAIL_TYPES = new Set<string>([
   NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
   NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_CUSTOMER_UPDATE,
@@ -27,14 +26,6 @@ const FREIGHTOWER_EMAIL_TYPES = new Set<string>([
   NOTIFICATION_TYPES.FREIGHTOWER_PORT_OPERATION_ALERT,
   NOTIFICATION_TYPES.FREIGHTOWER_CUSTOMS_ALERT,
 ]);
-
-function notificationVariablesFromContext(context: unknown) {
-  if (!context || typeof context !== "object" || Array.isArray(context)) return {};
-  const variables = (context as Record<string, unknown>).variables;
-  return variables && typeof variables === "object" && !Array.isArray(variables)
-    ? variables as Record<string, unknown>
-    : {};
-}
 
 export async function sendNotificationEmail(input: SendNotificationEmailInput) {
   const template = await ensureNotificationTemplate(input.type);
@@ -67,18 +58,37 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
   const existing = idempotencyKey
     ? await prisma.notificationOutbox.findUnique({ where: { idempotencyKey } })
     : null;
+  const claimedOutboxId = nonEmpty(input.claimedOutboxId);
+  const claimedOutboxAttempt = Number(input.claimedOutboxAttempt);
+  const preclaimed = Boolean(
+    claimedOutboxId
+    && existing?.id === claimedOutboxId
+    && existing.status === "sending"
+    && Number.isSafeInteger(claimedOutboxAttempt)
+    && existing.attempts === claimedOutboxAttempt
+  );
+  if (claimedOutboxId && !preclaimed) {
+    return {
+      sent: existing?.status === "sent",
+      skipped: true,
+      outboxId: existing?.id || claimedOutboxId,
+      error: existing?.status === "sent" ? "" : "通知任务租约已失效",
+    };
+  }
   if (existing?.status === "sent") {
     return { sent: true, skipped: true, outboxId: existing.id, error: "" };
   }
-  if (
-    existing
+  if (!preclaimed
+    && existing
     && ["pending", "sending"].includes(existing.status)
     && Date.now() - existing.updatedAt.getTime() < 5 * 60 * 1000
   ) {
     return { sent: false, skipped: true, outboxId: existing.id, error: "相同通知正在发送中" };
   }
   const attachments = input.attachments || [];
-  const outbox = existing
+  const outbox = preclaimed && existing
+    ? existing
+    : existing
     ? await prisma.notificationOutbox.update({
         where: { id: existing.id },
         data: {
@@ -114,12 +124,34 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
           relatedOrderId: nonEmpty(input.relatedOrderId) || null,
         },
       });
+  if (preclaimed) {
+    const prepared = await prisma.notificationOutbox.updateMany({
+      where: { id: outbox.id, status: "sending", attempts: claimedOutboxAttempt },
+      data: {
+        templateId: template.id,
+        recipientEmails,
+        ccEmails,
+        subject,
+        body: storedBody,
+        attachments: jsonOrNull(attachmentMetadata(attachments)),
+        context: jsonOrNull(storedContext),
+        relatedEntityType: nonEmpty(input.relatedEntityType) || null,
+        relatedEntityId: nonEmpty(input.relatedEntityId) || null,
+        relatedOrderId: nonEmpty(input.relatedOrderId) || null,
+      },
+    });
+    if (prepared.count !== 1) {
+      return { sent: false, skipped: true, outboxId: outbox.id, error: "通知任务租约已失效" };
+    }
+  }
   let providerDelivered = false;
   try {
-    await prisma.notificationOutbox.update({
-      where: { id: outbox.id },
-      data: { status: "sending", attempts: { increment: 1 }, lastError: null },
-    });
+    if (!preclaimed) {
+      await prisma.notificationOutbox.update({
+        where: { id: outbox.id },
+        data: { status: "sending", attempts: { increment: 1 }, lastError: null },
+      });
+    }
     await sendResendEmail({
       recipientEmails,
       ccEmails,
@@ -131,12 +163,20 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
     });
     providerDelivered = true;
     const sentAt = new Date();
-    await prisma.$transaction([
-      prisma.notificationOutbox.update({
-        where: { id: outbox.id },
-        data: { status: "sent", sentAt, failedAt: null, lastError: null },
-      }),
-      prisma.notificationDeliveryLog.create({
+    const tracked = await prisma.$transaction(async (tx) => {
+      if (preclaimed) {
+        const changed = await tx.notificationOutbox.updateMany({
+          where: { id: outbox.id, status: "sending", attempts: claimedOutboxAttempt },
+          data: { status: "sent", sentAt, failedAt: null, lastError: null },
+        });
+        if (changed.count !== 1) return false;
+      } else {
+        await tx.notificationOutbox.update({
+          where: { id: outbox.id },
+          data: { status: "sent", sentAt, failedAt: null, lastError: null },
+        });
+      }
+      await tx.notificationDeliveryLog.create({
         data: {
           outboxId: outbox.id,
           templateId: template.id,
@@ -152,8 +192,12 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
           provider: "resend",
           sentAt,
         },
-      }),
-    ]);
+      });
+      return true;
+    });
+    if (!tracked) {
+      throw codedError("通知任务租约已失效", 409, "NOTIFICATION_OUTBOX_LEASE_LOST");
+    }
     return { sent: true, skipped: false, outboxId: outbox.id, error: "" };
   } catch (error: unknown) {
     const message = publicSendError(error);
@@ -165,12 +209,20 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
       });
       return { sent: true, skipped: false, outboxId: outbox.id, error: "", trackingError: message };
     }
-    await prisma.$transaction([
-      prisma.notificationOutbox.update({
-        where: { id: outbox.id },
-        data: { status: "failed", failedAt: new Date(), lastError: message },
-      }),
-      prisma.notificationDeliveryLog.create({
+    await prisma.$transaction(async (tx) => {
+      if (preclaimed) {
+        const changed = await tx.notificationOutbox.updateMany({
+          where: { id: outbox.id, status: "sending", attempts: claimedOutboxAttempt },
+          data: { status: "failed", failedAt: new Date(), lastError: message },
+        });
+        if (changed.count !== 1) return;
+      } else {
+        await tx.notificationOutbox.update({
+          where: { id: outbox.id },
+          data: { status: "failed", failedAt: new Date(), lastError: message },
+        });
+      }
+      await tx.notificationDeliveryLog.create({
         data: {
           outboxId: outbox.id,
           templateId: template.id,
@@ -186,87 +238,8 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
           errorMessage: message,
           provider: "resend",
         },
-      }),
-    ]);
+      });
+    });
     throw error;
   }
-}
-
-export async function processFailedFreightowerNotificationOutbox(options: { limit?: number } = {}) {
-  const requestedLimit = Number(options.limit || 8);
-  const limit = Number.isFinite(requestedLimit)
-    ? Math.min(20, Math.max(1, Math.trunc(requestedLimit)))
-    : 8;
-  const staleAt = new Date(Date.now() - 5 * 60 * 1000);
-  const rows = await prisma.notificationOutbox.findMany({
-    where: {
-      type: {
-        in: [
-          NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
-          NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_CUSTOMER_UPDATE,
-          NOTIFICATION_TYPES.FREIGHTOWER_PORT_ROLLOVER_ALERT,
-          NOTIFICATION_TYPES.FREIGHTOWER_PORT_OPERATION_ALERT,
-          NOTIFICATION_TYPES.FREIGHTOWER_CUSTOMS_ALERT,
-        ],
-      },
-      attempts: { lt: FREIGHTOWER_NOTIFICATION_RETRY_MAX_ATTEMPTS },
-      scheduledAt: { lte: new Date() },
-      OR: [
-        { status: "failed" },
-        { status: "pending", updatedAt: { lte: staleAt } },
-        { status: "sending", updatedAt: { lte: staleAt } },
-      ],
-    },
-    orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
-    take: limit,
-  });
-  const results: Array<{
-    outboxId: string;
-    sent: boolean;
-    skipped: boolean;
-    queued: boolean;
-    error: string;
-  }> = [];
-  for (const row of rows) {
-    const context = row.context && typeof row.context === "object" && !Array.isArray(row.context)
-      ? row.context as Record<string, unknown>
-      : {};
-    try {
-      const delivery = await sendNotificationEmail({
-        type: row.type,
-        recipientEmails: Array.isArray(row.recipientEmails) ? row.recipientEmails : [],
-        ccEmails: Array.isArray(row.ccEmails) ? row.ccEmails : [],
-        variables: notificationVariablesFromContext(context),
-        relatedEntityType: row.relatedEntityType || undefined,
-        relatedEntityId: row.relatedEntityId || undefined,
-        relatedOrderId: row.relatedOrderId || undefined,
-        idempotencyKey: row.idempotencyKey || undefined,
-        context,
-      });
-      results.push({
-        outboxId: row.id,
-        sent: delivery.sent,
-        skipped: delivery.skipped,
-        queued: false,
-        error: delivery.error,
-      });
-    } catch (error: unknown) {
-      const message = publicSendError(error);
-      results.push({
-        outboxId: row.id,
-        sent: false,
-        skipped: false,
-        queued: row.attempts + 1 < FREIGHTOWER_NOTIFICATION_RETRY_MAX_ATTEMPTS,
-        error: message,
-      });
-    }
-  }
-  return {
-    scanned: rows.length,
-    sent: results.filter((result) => result.sent).length,
-    failed: results.filter((result) => !result.sent && !result.skipped).length,
-    skipped: results.filter((result) => result.skipped).length,
-    queued: results.filter((result) => result.queued).length,
-    results,
-  };
 }

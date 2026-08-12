@@ -1,26 +1,28 @@
 "use client";
-
 import { useState } from "react";
 import { useConfirmationDialog } from "../components";
 import type { PermissionSnapshot, User } from "../types";
 import { canWritePermission } from "../utils";
-import { canVoidCost, hasPaymentVoucher, isVoidedCost } from "./costs/helpers";
+import { canVoidCost, isVoidedCost } from "./costs/helpers";
 import { PAGE_SIZE, type CostRow } from "./costs/model";
 import { CostsModuleView } from "./costs/module-view";
 import { useCostDocumentActions } from "./costs/use-cost-document-actions";
 import { useCostDrawerState } from "./costs/use-cost-drawer-state";
 import { useCostWorkspacePresentation } from "./costs/use-cost-workspace-presentation";
 import { useCostsListController } from "./costs/use-costs-list-controller";
-
+import { useInitialCostFocus } from "./costs/use-initial-cost-focus";
+import { usePaymentVoucherPreview } from "./costs/use-payment-voucher-preview";
 export function CostsModule({
   currentUser,
   permissions,
   initialKeyword = "",
+  initialCostId = "",
   initialOpenToken = 0,
 }: {
   currentUser: User;
   permissions?: PermissionSnapshot;
   initialKeyword?: string;
+  initialCostId?: string;
   initialOpenToken?: number;
 }) {
   const {
@@ -43,9 +45,12 @@ export function CostsModule({
     confirmConfirmation,
     updateConfirmationInput,
   } = useConfirmationDialog();
+  const canWriteCosts = canWritePermission(currentUser, permissions, "costs", ["管理员", "业务员"]);
   const canWriteDocuments = canWritePermission(currentUser, permissions, "documents", ["管理员", "财务", "业务员"]);
-  const canManageFactoryPayments = ["管理员", "财务"].includes(currentUser.role);
-  const canManageCostType = ["管理员", "财务"].includes(currentUser.role);
+  const canWritePayments = canWritePermission(currentUser, permissions, "payments", ["管理员", "财务"]);
+  const canAdminCostLifecycle = canWriteCosts && currentUser.role === "管理员";
+  const canManageFactoryPayments = canWritePayments && ["管理员", "财务"].includes(currentUser.role);
+  const canManageCostType = canWriteCosts && ["管理员", "财务"].includes(currentUser.role);
   const {
     rows,
     orderRows,
@@ -76,7 +81,6 @@ export function CostsModule({
     costMatchesSubmittedFilters,
     refreshCostAggregatesInBackground,
   } = useCostsListController({ initialKeyword, initialOpenToken, clearTransientState });
-
   function mergeCostRows(saved: CostRow | CostRow[] | null | undefined) {
     const savedRows = (Array.isArray(saved) ? saved : saved ? [saved] : []).filter((item): item is CostRow => Boolean(item?.id));
     if (!savedRows.length) return;
@@ -104,7 +108,6 @@ export function CostsModule({
       return matched ? { ...current, ...matched } : current;
     });
   }
-
   const {
     fetchCostDetail,
     openCostDocuments,
@@ -147,37 +150,26 @@ export function CostsModule({
     loadCosts,
     requestConfirmation,
   });
-
-  async function openPaymentVoucherPreview(cost: CostRow) {
-    if (!hasPaymentVoucher(cost)) return;
-    setVoucherPreviewCost(cost);
-    try {
-      const freshCost = await fetchCostDetail(cost.id);
-      if (!hasPaymentVoucher(freshCost)) {
-        setVoucherPreviewCost(null);
-        setError("该成本记录当前没有付款凭证。");
-        return;
-      }
-      setVoucherPreviewCost(freshCost);
-    } catch (previewError) {
-      setError(previewError instanceof Error ? previewError.message : "读取最新付款凭证失败");
-    }
-  }
-
-  const selectedCosts = rows.filter((cost) => selectedCostIds.includes(cost.id) && canVoidCost(cost));
-
+  useInitialCostFocus({ costId: initialCostId, openToken: initialOpenToken, openCost: openCostDocuments });
+  const openPaymentVoucherPreview = usePaymentVoucherPreview({
+    fetchCostDetail, setVoucherPreviewCost, setError,
+  });
+  const selectedCosts = canAdminCostLifecycle
+    ? rows.filter((cost) => selectedCostIds.includes(cost.id) && canVoidCost(cost))
+    : [];
   function toggleCostSelection(costId: string, selected: boolean) {
+    if (!canAdminCostLifecycle) return;
     setSelectedCostIds((current) => selected
       ? [...new Set([...current, costId])]
       : current.filter((id) => id !== costId));
   }
-
   function toggleAllVisibleCosts(selected: boolean) {
+    if (!canAdminCostLifecycle) return;
     const selectableIds = rows.filter((cost) => canVoidCost(cost)).map((cost) => cost.id);
     setSelectedCostIds(selected ? selectableIds : []);
   }
-
   async function handleBatchVoid() {
+    if (!canAdminCostLifecycle) return;
     await batchVoidCosts(selectedCosts);
     setSelectedCostIds([]);
   }
@@ -245,6 +237,8 @@ export function CostsModule({
       uploadProgressByKey={uploadProgressByKey}
       deletingDocumentId={deletingDocumentId}
       canWriteDocuments={canWriteDocuments}
+      canWriteCosts={canWriteCosts}
+      canAdminCostLifecycle={canAdminCostLifecycle}
       canManageCostType={canManageCostType}
       canManageFactoryPayments={canManageFactoryPayments}
       costTypeSavingId={costTypeSavingId}
@@ -270,7 +264,7 @@ export function CostsModule({
       onCopyCost={openCopyCostDrawer}
       onVoidCost={(cost) => void voidCost(cost)}
       onDeleteCost={(cost) => void deleteCost(cost)}
-      onRestoreCost={(cost) => void restoreCost(cost)}
+      onRestoreCost={(cost) => { if (canAdminCostLifecycle) void restoreCost(cost); }}
       onToggleCostSelection={toggleCostSelection}
       onToggleAllVisibleCosts={toggleAllVisibleCosts}
       onBatchVoid={() => void handleBatchVoid()}

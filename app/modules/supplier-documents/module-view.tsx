@@ -31,6 +31,7 @@ type SupplierDocumentsModuleViewProps = {
   resendingTaskId: string;
   createDialogOpen: boolean;
   isAdmin: boolean;
+  canWrite: boolean;
   safePage: number;
   confirmation: ConfirmationDialogState | null;
   onCreateRequest: () => void;
@@ -71,6 +72,7 @@ export function SupplierDocumentsModuleView({
   resendingTaskId,
   createDialogOpen,
   isAdmin,
+  canWrite,
   safePage,
   confirmation,
   ...actions
@@ -82,7 +84,7 @@ export function SupplierDocumentsModuleView({
           <h1>{isAdmin ? "供应商资料回传" : "产品供应商资料回传"}</h1>
         </div>
         <div className={styles.supplierDocumentHeaderActions}>
-          {isAdmin ? (
+          {isAdmin && canWrite ? (
             <button className={styles.primaryButtonCompact} type="button" onClick={actions.onCreateRequest}>
               发起资料回传通知
             </button>
@@ -123,7 +125,7 @@ export function SupplierDocumentsModuleView({
       ) : error ? <div className={styles.inlineError}>{error}</div> : null}
 
       {loading ? (
-        <SupplierDocumentListSkeleton />
+        <SupplierDocumentListSkeleton canWrite={canWrite} />
       ) : loadError ? (
         null
       ) : rows.length ? (
@@ -152,6 +154,7 @@ export function SupplierDocumentsModuleView({
                 progressByKey={progressByKey}
                 isExpanded={expandedTaskId === task.id}
                 isAdmin={isAdmin}
+                canWrite={canWrite}
                 deleting={deletingTaskId === task.id}
                 resending={resendingTaskId === task.id}
                 onToggle={() => actions.onToggleTask(task.id)}
@@ -175,7 +178,7 @@ export function SupplierDocumentsModuleView({
           onInputChange={actions.onUpdateConfirmationInput}
         />
       ) : null}
-      {createDialogOpen ? (
+      {createDialogOpen && canWrite && isAdmin ? (
         <CreateSupplierDocumentRequestDialog
           onClose={actions.onCloseCreateDialog}
           onCreated={actions.onRequestCreated}
@@ -185,7 +188,7 @@ export function SupplierDocumentsModuleView({
   );
 }
 
-function SupplierDocumentListSkeleton() {
+function SupplierDocumentListSkeleton({ canWrite }: { canWrite: boolean }) {
   return (
     <div className={styles.supplierDocumentsTaskList} aria-busy="true" aria-label="正在加载产品供应商资料回传任务">
       {[0, 1, 2, 3].map((index) => (
@@ -198,7 +201,7 @@ function SupplierDocumentListSkeleton() {
             <span className={styles.supplierDocumentTaskRequirement}>正在加载资料要求</span>
             <span className={styles.supplierDocumentTaskActions}>
               <button className={styles.secondaryButton} type="button" disabled>展开</button>
-              <button className={styles.primaryButtonCompact} type="button" disabled>上传资料</button>
+              <button className={styles.primaryButtonCompact} type="button" disabled>{canWrite ? "上传资料" : "查看资料"}</button>
             </span>
           </div>
         </article>

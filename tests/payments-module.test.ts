@@ -32,6 +32,11 @@ test("payments page keeps summary cards and avoids duplicate recent payment list
   assert.doesNotMatch(paymentsModule, /mobileCardList/);
 });
 
+test("payments write actions follow the effective permission snapshot", () => {
+  assert.match(paymentsModuleController, /permissions\?: PermissionSnapshot/);
+  assert.match(paymentsModuleController, /canWritePermission\(currentUser, permissions, "payments", \["管理员", "财务"\]\)/);
+});
+
 test("payments API returns paginated summary metrics", () => {
   assert.match(paymentsService, /arrivedAmountCny/);
   assert.match(paymentsService, /pendingAmountCny/);

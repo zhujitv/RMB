@@ -1,0 +1,31 @@
+.rowActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.copyButton,
+.removeButton {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.copyButton {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.removeButton {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.copyButton:disabled,
+.removeButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

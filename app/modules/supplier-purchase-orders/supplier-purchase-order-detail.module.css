@@ -1,0 +1,235 @@
+.detailHeader,
+.responseHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detailHeader {
+  align-items: flex-start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.detailHeader h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 26px;
+  line-height: 1.25;
+}
+
+.responseHint {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.summaryCard {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+  background: #f8fafc;
+  padding: 13px;
+}
+
+.summaryCard span {
+  display: block;
+  margin-bottom: 5px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summaryCard strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.section {
+  margin-top: 20px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section h3,
+.responseHeader h3 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 17px;
+}
+
+.sectionHeader h3 {
+  margin-bottom: 0;
+}
+
+.remarkBox {
+  min-height: 48px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #475569;
+  padding: 12px 13px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.responseCard,
+.responseComplete,
+.terminalCard {
+  margin-top: 22px;
+  border-radius: 15px;
+  padding: 16px;
+}
+
+.responseCard {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+}
+
+.responseComplete {
+  border: 1px solid #dbeafe;
+  background: #f8fafc;
+}
+
+.terminalCard {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+}
+
+.responseGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.actionChoices,
+.responseFields {
+  display: grid;
+  gap: 8px;
+}
+
+.responseFields {
+  gap: 12px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid #bfdbfe;
+  border-radius: 11px;
+  background: #fff;
+  color: #334155;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.followUpSummary {
+  min-height: 132px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px;
+}
+
+.followUpSummary span,
+.followUpSummary strong {
+  display: block;
+}
+
+.followUpSummary span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.followUpSummary strong {
+  margin-top: 6px;
+  color: #1d4ed8;
+  font-size: 20px;
+}
+
+.followUpSummary p {
+  margin: 12px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.responseField {
+  display: grid;
+  gap: 7px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.responseField input,
+.responseField textarea {
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+  padding: 9px 11px;
+  font: inherit;
+  font-weight: 500;
+}
+
+.responseField textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.responseField input:focus,
+.responseField textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.fieldWarning {
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+@media (max-width: 860px) {
+  .detailHeader h2 {
+    font-size: 22px;
+  }
+
+  .summaryGrid,
+  .responseGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

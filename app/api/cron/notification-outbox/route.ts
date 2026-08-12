@@ -8,6 +8,7 @@ import {
   processFileStorageDeletionOutbox,
   processFailedFreightowerNotificationOutbox,
   processPendingFreightowerTrackingNotifications,
+  processFactoryPurchaseOrderDispatchOutbox,
   processLogisticsInvoiceNotificationOutbox,
   writeAudit,
 } from "../../../../lib/platform-db";
@@ -30,12 +31,19 @@ export async function GET(request: NextRequest) {
         results: [],
         error: error instanceof Error ? error.message : "物流待通知队列读取失败",
       }));
-    const [notifications, trackingNotifications, fileDeletions] = await Promise.all([
+    const [notifications, trackingNotifications, factoryPurchaseNotifications, fileDeletions] = await Promise.all([
       processLogisticsInvoiceNotificationOutbox({ limit: 8 }),
       processFailedFreightowerNotificationOutbox({ limit: 8 }),
+      processFactoryPurchaseOrderDispatchOutbox({ limit: 20 }),
       processFileStorageDeletionOutbox(20),
     ]);
-    const result = { notifications, pendingTrackingNotifications, trackingNotifications, fileDeletions };
+    const result = {
+      notifications,
+      pendingTrackingNotifications,
+      trackingNotifications,
+      factoryPurchaseNotifications,
+      fileDeletions,
+    };
     const actor = await getCronActor();
     if (actor) {
       void writeAudit(

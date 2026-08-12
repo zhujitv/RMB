@@ -4,7 +4,7 @@ import { formatCurrencyAmount } from "../../formatters";
 import { customerDisplayName, customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
 import { getBusinessEntityRowClass } from "../business-entity-row-style";
-import { canDeleteCost, canVoidCost, costStatusLabel, currencyTotalAmount, isLogisticsGeneratedCost, isVoidedCost, singlePaymentVoucherCost } from "./helpers";
+import { canDeleteCost, canVoidCost, costStatusLabel, currencyTotalAmount, isSystemManagedCost, isVoidedCost, singlePaymentVoucherCost } from "./helpers";
 import { CostInvoiceActions } from "./invoice-actions";
 import { type CostInvoiceGroupRow, type CostOrderSummary, type CostRow, type CostView } from "./model";
 
@@ -12,6 +12,9 @@ export { recalculateOrderSummary } from "./cost-order-summary";
 
 export function CostTableRows({
   cost,
+  canManage,
+  canSelect,
+  canRestore,
   selected,
   onViewDetail,
   deleting,
@@ -25,6 +28,9 @@ export function CostTableRows({
   onOpenPaymentVoucher,
 }: {
   cost: CostRow;
+  canManage: boolean;
+  canSelect: boolean;
+  canRestore: boolean;
   selected: boolean;
   onViewDetail: () => void;
   deleting: boolean;
@@ -38,7 +44,7 @@ export function CostTableRows({
   onOpenPaymentVoucher: (cost: CostRow) => void;
 }) {
   const supplierName = cost.supplierName || cost.supplierNameSnapshot || cost.vendorName || "-";
-  const manualCost = !isLogisticsGeneratedCost(cost);
+  const manualCost = !isSystemManagedCost(cost);
   const voided = isVoidedCost(cost);
   const deleteAllowed = canDeleteCost(cost);
   const voidAllowed = canVoidCost(cost);
@@ -49,7 +55,7 @@ export function CostTableRows({
           <input
             type="checkbox"
             checked={selected}
-            disabled={!voidAllowed}
+            disabled={!canSelect || !voidAllowed}
             onChange={(event) => onSelect(event.target.checked)}
             onClick={(event) => event.stopPropagation()}
             aria-label={`选择成本 ${cost.orderNo || ""}`}
@@ -65,13 +71,13 @@ export function CostTableRows({
         <td className={styles.costInvoiceActionColumn}>
           <div className={styles.costInvoiceActions}>
             <CostInvoiceActions cost={cost} onOpenDocuments={onOpenDocuments} onOpenPaymentVoucher={onOpenPaymentVoucher} />
-            {manualCost ? (
+            {manualCost && canManage ? (
               <>
-                {voided ? (
+                {voided ? canRestore ? (
                   <button className={styles.secondaryButton} type="button" disabled={deleting} onClick={(event) => { event.stopPropagation(); onRestore(); }}>
                     {deleting ? "处理中..." : "恢复"}
                   </button>
-                ) : (
+                ) : null : (
                   <>
                     <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }}>编辑</button>
                     <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onCopy(); }}>复制</button>
@@ -97,9 +103,11 @@ export function CostTableRows({
 }
 
 export function CostDetailTableHead({
+  canManage,
   allSelected,
   onToggleAll,
 }: {
+  canManage: boolean;
   allSelected: boolean;
   onToggleAll: (selected: boolean) => void;
 }) {
@@ -110,6 +118,7 @@ export function CostDetailTableHead({
           <input
             type="checkbox"
             checked={allSelected}
+            disabled={!canManage}
             onChange={(event) => onToggleAll(event.target.checked)}
             aria-label="选择当前页可作废成本"
           />
@@ -161,6 +170,7 @@ export function CostInvoiceGroupRows({
   const supplierName = group.supplierName || group.supplierNameSnapshot || group.vendorName || "-";
   const exceptionLabel = group.invoiceExceptionLabel || "";
   const voucherCost = singlePaymentVoucherCost(group.costs || []);
+  const documentsReadOnly = Boolean(group.costs?.length) && (group.costs || []).every(isSystemManagedCost);
   return (
     <tr className={getBusinessEntityRowClass(group, styles, styles.clickableRow)} onClick={onViewDetail}>
       <td className={styles.orderNoColumn}><strong>{group.orderNo || "-"}</strong></td>
@@ -185,7 +195,7 @@ export function CostInvoiceGroupRows({
           {voucherCost ? (
             <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenPaymentVoucher(voucherCost); }}>查看付款凭证</button>
           ) : null}
-          <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>资料维护</button>
+          <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>{documentsReadOnly ? "查看资料" : "资料维护"}</button>
         </div>
       </td>
     </tr>

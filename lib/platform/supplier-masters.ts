@@ -1,3 +1,4 @@
+import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import {
   DOMESTIC_LOGISTICS_SUPPLIER_TYPES,
@@ -146,6 +147,24 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
   if (isLogisticsSupplierType && allowLogisticsExpenseEntry && !allowedLogisticsCostTypes.length) {
     throw codedError("请至少配置一个允许录入的物流费用类型。", 400, "LOGISTICS_COST_TYPES_REQUIRED");
   }
+  const purchasePaymentTerm = Object.prototype.hasOwnProperty.call(input, "purchasePaymentTerm")
+    ? optional(input.purchasePaymentTerm)
+    : before?.purchasePaymentTerm || null;
+  if ((purchasePaymentTerm || "").length > 500) {
+    throw codedError("采购付款条款不能超过 500 个字符", 400, "SUPPLIER_PURCHASE_PAYMENT_TERM_TOO_LONG");
+  }
+  const currentPrepaymentPercent = new Prisma.Decimal(before?.purchasePrepaymentRatio || 0).mul(100).toString();
+  const purchasePrepaymentPercent = Object.prototype.hasOwnProperty.call(input, "purchasePrepaymentPercent")
+    ? String(input.purchasePrepaymentPercent ?? "").trim()
+    : currentPrepaymentPercent;
+  if (!/^(?:0|[1-9]\d?)(?:\.\d{1,4})?$|^100(?:\.0{1,4})?$/.test(purchasePrepaymentPercent)) {
+    throw codedError("采购预付款比例必须是 0 到 100 之间的数字", 400, "SUPPLIER_PURCHASE_PREPAYMENT_PERCENT_INVALID");
+  }
+  const purchasePrepaymentRatio = new Prisma.Decimal(purchasePrepaymentPercent).div(100);
+  const purchasePrepaymentRequiredBeforeProduction = purchasePrepaymentRatio.gt(0) && booleanInput(
+    input.purchasePrepaymentRequiredBeforeProduction,
+    before?.purchasePrepaymentRequiredBeforeProduction || false,
+  );
   const activeDefaultLogisticsSupplier = isLogisticsSupplierType && isDefaultLogisticsSupplier;
   const data = {
     supplierName,
@@ -159,6 +178,9 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
     taxNumber: optional(input.taxNumber),
     bankName: optional(input.bankName),
     bankAccount: optional(input.bankAccount),
+    purchasePaymentTerm,
+    purchasePrepaymentRatio,
+    purchasePrepaymentRequiredBeforeProduction,
     remark: optional(input.remark),
     status: SUPPLIER_STATUSES.includes(nonEmpty(input.status)) ? nonEmpty(input.status) : "启用",
     allowDomesticLogisticsEntry,

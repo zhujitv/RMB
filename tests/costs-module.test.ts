@@ -62,8 +62,8 @@ test("product supplier cost payment vouchers are scoped away from logistics fees
   assert.match(paymentVoucherMigration, /"source_type" <> 'LOGISTICS_EXPENSE'/);
   assert.match(costsMutation, /function assertCanManageProductSupplierPayment/);
   assert.match(costsMutation, /actor\.role === "管理员" \|\| actor\.role === "财务"/);
-  assert.match(costsMutation, /export async function updateProductSupplierCostPayment[\s\S]*assertWrite\(actor, "costs"\)/);
-  assert.match(costsMutation, /export async function uploadProductSupplierCostPaymentVoucher[\s\S]*assertWrite\(actor, "costs"\)/);
+  assert.match(costsMutation, /export async function updateProductSupplierCostPayment[\s\S]*assertWrite\(actor, "payments"\)/);
+  assert.match(costsMutation, /export async function uploadProductSupplierCostPaymentVoucher[\s\S]*assertWrite\(actor, "payments"\)/);
   assert.match(costsMutation, /function isProductSupplierPaymentCost/);
   assert.match(costsMutation, /isLogisticsGeneratedCostSourceType\(cost\.sourceType\) \|\| isLogisticsCostType/);
   assert.match(costsMutation, /export async function updateProductSupplierCostPayment/);
@@ -87,7 +87,8 @@ test("product supplier cost payment vouchers are scoped away from logistics fees
   assert.doesNotMatch(costsModule, /target="_blank"[^>]*>\{voucherLabel\}/);
   assert.match(costsModule, /function isProductSupplierPaymentEnabled/);
   assert.match(costsModule, /isFactoryCost\(cost\) && !isLogisticsGeneratedCost\(cost\) && !isLogisticsInvoiceCost\(cost\)/);
-  assert.match(costsModule, /const canManageFactoryPayments = \["管理员", "财务"\]\.includes\(currentUser\.role\)/);
+  assert.match(costsModule, /const canWritePayments = canWritePermission\(currentUser, permissions, "payments", \["管理员", "财务"\]\)/);
+  assert.match(costsModule, /const canManageFactoryPayments = canWritePayments && \["管理员", "财务"\]\.includes\(currentUser\.role\)/);
   assert.match(costsModule, /function isProductSupplierPaymentFormLocked/);
   assert.match(costsModule, /disabled=\{paymentLocked\}/);
   assert.match(costsModule, /validatePaymentVoucherUploadFile/);
@@ -264,8 +265,8 @@ test("payment voucher replacement refreshes current cost and bypasses stale prev
   assert.match(costDocumentActions, /付款凭证替换失败：系统仍关联旧凭证，请重新上传。/);
   assert.match(costDocumentActions, /setRows\(\(current\) => current\.map\(\(item\) => item\.id === nextCost\.id \? \{ \.\.\.item, \.\.\.nextCost \} : item\)\)/);
   assert.match(costDocumentActions, /void loadCosts\(page, submittedFilters, archiveScope, costView, \{ silent: true \}\)/);
-  assert.match(costsMutation, /previousFileId: previousStorageKey/);
-  assert.match(costsMutation, /nextFileId: storedFile\.storageKey/);
+  assert.match(costsMutation, /replacedExistingFile: Boolean\(previousStorageKey\)/);
+  assert.doesNotMatch(costsMutation, /previousFileId: previousStorageKey|nextFileId: storedFile\.storageKey/);
   assert.match(costsMutation, /operatorId: currentActor\.id/);
   assert.match(costsMutation, /replacedAt: storedFile\.uploadedAt/);
 });
@@ -293,6 +294,16 @@ test("cost detail tables always keep an invoice operation column", () => {
   assert.match(workspaceStyles, /\.dataTable th\.costInvoiceActionColumn,[\s\S]*width: 180px;/);
 });
 
+test("administrator-only restore and batch actions follow the backend role guard", () => {
+  assert.match(costsModule, /const canAdminCostLifecycle = canWriteCosts && currentUser\.role === "管理员"/);
+  assert.match(costsModule, /canAdminCostLifecycle && costView === "details"/);
+  assert.match(costsModule, /canSelect=\{canAdminCostLifecycle\}/);
+  assert.match(costsModule, /canRestore=\{canAdminCostLifecycle\}/);
+  assert.match(costsModule, /canRestoreCosts=\{canAdminCostLifecycle\}/);
+  assert.match(costsMutation, /if \(currentActor\.role !== "管理员"\) throw permissionError\("只有管理员可以恢复已作废成本。"/);
+  assert.match(costsMutation, /if \(currentActor\.role !== "管理员"\) throw permissionError\("只有管理员可以批量作废成本。"/);
+});
+
 test("logistics generated costs are read-only in cost invoice management", () => {
   assert.match(costsModule, /function isLogisticsGeneratedCost\(cost: Pick<CostRow, "sourceType">\)/);
   assert.match(costsModule, /\["LOGISTICS_EXPENSE", "LOGISTICS_FEE"\]\.includes\(String\(cost\.sourceType \|\| ""\)\)/);
@@ -314,7 +325,8 @@ test("manual temporary freight forwarder costs remain manageable in costs module
 
 test("cost document drawer supports audited admin cost type correction", () => {
   assert.match(logisticsFeesModule, /\[\.\.\.baseTypes, "港杂费"\]/);
-  assert.match(costsModule, /const canManageCostType = \["管理员", "财务"\]\.includes\(currentUser\.role\)/);
+  assert.match(costsModule, /const canWriteCosts = canWritePermission\(currentUser, permissions, "costs", \["管理员", "业务员"\]\)/);
+  assert.match(costsModule, /const canManageCostType = canWriteCosts && \["管理员", "财务"\]\.includes\(currentUser\.role\)/);
   assert.match(costsModule, /canManageCostType=\{canManageCostType\}/);
   assert.match(costsModule, /onUpdateCostType=\{props\.onUpdateCostType\}/);
   assert.match(costsModule, /\/api\/costs\/\$\{encodeURIComponent\(cost\.id\)\}\/cost-type/);
@@ -324,7 +336,7 @@ test("cost document drawer supports audited admin cost type correction", () => {
   assert.match(costTypeRoute, /return ok\(\{ success: true, ok: true, \.\.\.result \}\)/);
   assert.match(costsMutation, /export async function updateCostType/);
   assert.match(costsMutation, /只有管理员或财务可以修改已登记成本类型/);
-  assert.doesNotMatch(costsMutation, /export async function updateCostType[\s\S]{0,260}assertWrite\(actor, "costs"\)/);
+  assert.match(costsMutation, /export async function updateCostType[\s\S]{0,260}assertWrite\(actor, "costs"\)/);
   assert.match(costsMutation, /requireText\(body\.reason \|\| body\.changeReason, "修改原因"\)/);
   assert.match(costsMutation, /data:\s*\{[\s\S]*costType: nextCostType,[\s\S]*updatedById: currentActor\.id/);
   assert.match(costsMutation, /oldCostType: before\.costType/);

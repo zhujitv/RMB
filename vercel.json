@@ -13,10 +13,6 @@
       "schedule": "30 2 * * *"
     },
     {
-      "path": "/api/cron/supplier-document-ocr",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/cron/logistics-invoice-ocr",
       "schedule": "*/5 * * * *"
     },

@@ -1,8 +1,8 @@
 import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client, type GetObjectCommandOutput } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { objectStorageConfig } from "./object-storage-config";
+import { objectStorageConfig } from "./object-storage-config.ts";
 
-export { objectStorageConfig } from "./object-storage-config";
+export { objectStorageConfig } from "./object-storage-config.ts";
 
 type StorageError = Error & {
   status?: number;
@@ -54,8 +54,7 @@ function r2Config() {
   return objectStorageConfig();
 }
 
-function r2Client() {
-  const config = r2Config();
+function r2Client(config = r2Config()) {
   return new S3Client({
     region: config.region,
     endpoint: config.endpoint,
@@ -115,6 +114,21 @@ export function buildCostPaymentVoucherKey({ costId, fileName }: CostPaymentVouc
   return `order-costs/${costId}/payment-voucher/${safeFileName(fileName || "payment-voucher")}`;
 }
 
+export function r2DeleteObjectTarget(key: string, bucket: string) {
+  const targetKey = String(key || "");
+  const targetBucket = String(bucket || "").trim();
+  if (!targetKey || /[\0\r\n]/.test(targetKey)) {
+    throw storageError("R2 文件 key 缺失或无效，已拒绝删除。", 409, "STORAGE_DELETE_KEY_INVALID");
+  }
+  if (!targetBucket) {
+    throw storageError("R2 原始存储桶记录缺失，已拒绝删除。", 409, "STORAGE_DELETE_BUCKET_REQUIRED");
+  }
+  if (targetBucket.length > 255 || /[\\/\0-\x1f\x7f]/.test(targetBucket)) {
+    throw storageError("R2 原始存储桶记录无效，已拒绝删除。", 409, "STORAGE_DELETE_BUCKET_INVALID");
+  }
+  return { Bucket: targetBucket, Key: targetKey };
+}
+
 function isTimeoutError(error: unknown) {
   const typedError = (error || {}) as { name?: string; code?: string; message?: string };
   const text = `${typedError.name || ""} ${typedError.code || ""} ${typedError.message || ""}`.toLowerCase();
@@ -157,9 +171,10 @@ export async function uploadToR2({ key, body, contentType }: R2UploadInput) {
 }
 
 export async function deleteR2Object(key: string) {
-  const bucket = r2BucketName();
+  const config = r2Config();
+  const target = r2DeleteObjectTarget(key, config.bucket);
   try {
-    await r2Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    await r2Client(config).send(new DeleteObjectCommand(target));
   } catch (error) {
     throw normalizeStorageError(error);
   }

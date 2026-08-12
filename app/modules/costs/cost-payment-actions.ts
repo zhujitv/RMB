@@ -4,6 +4,7 @@ import { uploadFormDataWithProgress, validatePaymentVoucherUploadFile } from "..
 import type { CostActionsContext } from "./cost-actions-context";
 import {
   costSupplierName,
+  isPaymentVoucherEvidenceEnabled,
   isProductSupplierPaymentEnabled,
   paymentVoucherUploadKey,
 } from "./helpers";
@@ -119,8 +120,10 @@ export function createCostPaymentActions(
 
   async function uploadPaymentVoucher(cost: CostRow, file: File | null) {
     if (!file) return;
-    if (!isProductSupplierPaymentEnabled(cost)) {
-      setDocumentError("付款凭证仅适用于产品供应商货款。");
+    if (!isPaymentVoucherEvidenceEnabled(cost)) {
+      setDocumentError(cost.sourceType === "FACTORY_PURCHASE_SETTLEMENT"
+        ? "采购结算全额结清后才能上传最终付款凭证。"
+        : "付款凭证仅适用于产品供应商货款。");
       return;
     }
     if (!canManageFactoryPayments) {

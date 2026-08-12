@@ -24,6 +24,7 @@ type SupplierDocumentLoadRowsOptions = {
 
 type SupplierDocumentRequestActionOptions = {
   isAdmin: boolean;
+  canWrite: boolean;
   currentUserRole: string;
   page: number;
   pageSize: number;
@@ -54,6 +55,7 @@ function normalizedSearchText(value: unknown) {
 
 export function useSupplierDocumentRequestActions({
   isAdmin,
+  canWrite,
   currentUserRole,
   page,
   pageSize,
@@ -114,6 +116,10 @@ export function useSupplierDocumentRequestActions({
   }
 
   async function uploadDocument(task: SupplierDocumentTask, documentType: string, file: File | null, costId = "") {
+    if (!canWrite) {
+      setError("当前账号只有资料查看权限，不能上传文件。");
+      return;
+    }
     const uploadKey = supplierUploadKey(task.id, documentType, costId);
     setNotice("");
     setError("");
@@ -167,7 +173,7 @@ export function useSupplierDocumentRequestActions({
   async function deleteTask(task: SupplierDocumentTask) {
     setNotice("");
     setError("");
-    if (!isAdmin) {
+    if (!canWrite || !isAdmin) {
       setError("只有管理员可以删除资料回传任务。");
       return;
     }
@@ -213,7 +219,7 @@ export function useSupplierDocumentRequestActions({
   }
 
   async function resendNotice(task: SupplierDocumentTask) {
-    if (!isAdmin) {
+    if (!canWrite || !isAdmin) {
       setError("只有管理员可以重新发送资料回传催办。");
       return;
     }

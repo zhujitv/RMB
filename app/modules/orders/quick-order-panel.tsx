@@ -180,6 +180,12 @@ export function QuickCreateOrderPanel({
             {PAYMENT_TERMS.map((term) => <option key={term.value} value={term.value}>{term.label}</option>)}
           </select>
         </label>
+        {controller.form.paymentTermType === "CUSTOM" ? (
+          <label>
+            其他付款约定
+            <input value={controller.form.paymentTerm} onChange={(event) => controller.setFormValue("paymentTerm", event.target.value)} placeholder="例如：30% T/T deposit, balance before shipment" required />
+          </label>
+        ) : null}
         {["OA", "AFTER_ARRIVAL"].includes(controller.form.paymentTermType) ? (
           <label>
             账期天数

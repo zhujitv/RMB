@@ -20,7 +20,7 @@ export type QueryLike = URLSearchParams;
 export type OrderInput = Record<string, unknown>;
 
 export const ORDER_UNPAGINATED_SCAN_LIMIT = 1000;
-export const MAX_ORDER_NO_LENGTH = 80;
+export const MAX_ORDER_NO_LENGTH = 100;
 export const MAX_BL_NO_LENGTH = 80;
 export const MAX_ORDER_REMARK_LENGTH = 2000;
 export const MAX_ORDER_LOGISTICS_SUPPLIERS = 20;

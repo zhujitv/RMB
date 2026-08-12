@@ -47,6 +47,9 @@ export type SendNotificationEmailInput = {
   htmlOverride?: string;
   ignoreTemplateCc?: boolean;
   ignoreTemplateEnabled?: boolean;
+  /** Internal lease used by durable outbox processors after an atomic claim. */
+  claimedOutboxId?: string;
+  claimedOutboxAttempt?: number;
 };
 
 export const TEXT_LIMITS = {
@@ -59,6 +62,8 @@ export const TEXT_LIMITS = {
 export const NOTIFICATION_TYPES = {
   USER_EMAIL_VERIFICATION: "USER_EMAIL_VERIFICATION",
   USER_LOGIN_ALERT: "USER_LOGIN_ALERT",
+  QUOTATION_CUSTOMER_EMAIL: "QUOTATION_CUSTOMER_EMAIL",
+  FACTORY_PURCHASE_ORDER_DISPATCH: "FACTORY_PURCHASE_ORDER_DISPATCH",
   SHIPPING_DOCUMENTS: "SHIPPING_DOCUMENTS",
   SHIPPING_DOCUMENTS_ZH: "SHIPPING_DOCUMENTS_ZH",
   SHIPPING_DOCUMENTS_RU: "SHIPPING_DOCUMENTS_RU",

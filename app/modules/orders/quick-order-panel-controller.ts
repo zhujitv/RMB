@@ -207,6 +207,7 @@ export function useQuickOrderPanelController({
       return setMessage("当前订单缺少官方汇率，请点击【刷新官方汇率】后再保存。");
     }
     if (!normalizedForm.estimatedReceivableAmount || Number(normalizedForm.estimatedReceivableAmount) <= 0) return setMessage("请填写预计应收金额");
+    if (normalizedForm.paymentTermType === "CUSTOM" && !normalizedForm.paymentTerm.trim()) return setMessage("请填写其他付款约定");
     if (normalizedForm.paymentTermType === "AFTER_ARRIVAL" && !normalizedForm.expectedArrivalDate) return setMessage("到港后付款请填写预计到港日期");
     if (["OA", "AFTER_ARRIVAL"].includes(normalizedForm.paymentTermType) && Number(normalizedForm.creditDays) < 0) return setMessage("请填写有效账期天数");
     if (normalizedForm.paymentTermType === "INSTALLMENT" && installmentTotal(normalizedForm.paymentInstallments) !== 100) return setMessage("分批付款比例合计必须等于 100%");

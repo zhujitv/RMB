@@ -1,6 +1,6 @@
 {
   "name": "foreign-trade-ledger",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,6 +8,7 @@
   },
   "scripts": {
     "setup": "node scripts/setup-wizard.mjs",
+    "predev": "prisma generate",
     "dev": "next dev",
     "build:app": "node scripts/run-with-env.mjs node scripts/security-env-check.mjs && node scripts/run-with-env.mjs prisma generate && next build",
     "build:release": "node scripts/run-with-env.mjs prisma migrate deploy && npm run build:app",

@@ -93,6 +93,7 @@ export function expandLegacyFullLogisticsCostTypeList(value: unknown = []) {
 
 export function serializeSupplier(supplierInput: unknown = {}) {
   const supplier = asLooseRecord<SupplierLike>(supplierInput);
+  const prepaymentRatio = Number(supplier.purchasePrepaymentRatio || 0);
   return {
     id: supplier.id,
     supplierName: supplier.supplierName,
@@ -106,6 +107,9 @@ export function serializeSupplier(supplierInput: unknown = {}) {
     taxNumber: supplier.taxNumber || "",
     bankName: supplier.bankName || "",
     bankAccount: supplier.bankAccount || "",
+    purchasePaymentTerm: supplier.purchasePaymentTerm || "",
+    purchasePrepaymentPercent: Number.isFinite(prepaymentRatio) ? String(prepaymentRatio * 100) : "0",
+    purchasePrepaymentRequiredBeforeProduction: Boolean(supplier.purchasePrepaymentRequiredBeforeProduction),
     remark: supplier.remark || "",
     status: supplier.status,
     allowDomesticLogisticsEntry: Boolean(supplier.allowDomesticLogisticsEntry),

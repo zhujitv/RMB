@@ -3,13 +3,14 @@ import type { CustomerAutocompleteOption } from "../../CustomerAutocomplete";
 import type { CurrencyTotals } from "../../../lib/platform/currency-totals";
 
 export const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
-export const TRADE_TERMS = ["EXW", "FOB", "CFR", "CIF", "DDP", "DAP", "其他"];
+export const TRADE_TERMS = ["EXW", "FOB", "FCA", "CFR", "CIF", "DDP", "DAP", "其他"];
 export const ORDER_STATUSES = ["草稿", "已确认", "生产中", "已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"];
 export const PAYMENT_TERMS = [
   { value: "COPY_BL", label: "见提单复印件付款" },
   { value: "OA", label: "OA账期" },
   { value: "AFTER_ARRIVAL", label: "到港后付款" },
   { value: "INSTALLMENT", label: "分批付款" },
+  { value: "CUSTOM", label: "其他付款约定" },
 ];
 export const LOGISTICS_SUPPLIER_TYPES = ["物流供应商", "报关供应商", "海运供应商", "港杂费用供应商"];
 
@@ -171,6 +172,7 @@ export type QuickOrderForm = {
   actualShipmentDate: string;
   tradeTerm: string;
   paymentTermType: string;
+  paymentTerm: string;
   blDate: string;
   expectedArrivalDate: string;
   expectedPaymentDate: string;
@@ -203,6 +205,7 @@ export const emptyQuickOrderForm: QuickOrderForm = {
   actualShipmentDate: "",
   tradeTerm: "FOB",
   paymentTermType: "COPY_BL",
+  paymentTerm: "",
   blDate: "",
   expectedArrivalDate: "",
   expectedPaymentDate: "",

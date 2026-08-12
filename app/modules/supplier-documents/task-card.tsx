@@ -24,6 +24,7 @@ export function SupplierDocumentTaskCard({
   progressByKey,
   isExpanded,
   isAdmin,
+  canWrite,
   deleting,
   resending,
   onToggle,
@@ -37,6 +38,7 @@ export function SupplierDocumentTaskCard({
   progressByKey: Record<string, number>;
   isExpanded: boolean;
   isAdmin: boolean;
+  canWrite: boolean;
   deleting: boolean;
   resending: boolean;
   onToggle: () => void;
@@ -71,9 +73,9 @@ export function SupplierDocumentTaskCard({
             {isExpanded ? "收起" : "展开"}
           </button>
           <button className={styles.primaryButtonCompact} type="button" onClick={onOpen}>
-            上传资料
+            {canWrite ? "上传资料" : "查看资料"}
           </button>
-          {isAdmin && task.canDelete ? (
+          {isAdmin && canWrite && task.canDelete ? (
             <button className={styles.supplierDocumentDeleteButton} type="button" onClick={() => onDelete(task)} disabled={deleting}>
               {deleting ? "删除中..." : "删除"}
             </button>
@@ -133,7 +135,7 @@ export function SupplierDocumentTaskCard({
                   下载合同样本（{task.templateFileName || `${displayOrderNo || "合同样本"}.xlsx`}）
                 </a>
               ) : null}
-              {isAdmin ? (
+              {isAdmin && canWrite ? (
                 <div className={styles.supplierDocumentNoticeActions}>
                   <button className={styles.secondaryButton} type="button" onClick={() => onResendNotice(task)} disabled={resending}>
                     {resending ? "发送中..." : "重新发送邮件"}
@@ -175,7 +177,7 @@ export function SupplierDocumentTaskCard({
                             </div>
                           ) : null}
                         </div>
-                        <div className={styles.supplierDocumentUploadControls}>
+                        {canWrite ? <div className={styles.supplierDocumentUploadControls}>
                           <label className={styles.supplierDocumentUploadButton}>
                             {uploading ? "上传中..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
                             <input
@@ -191,7 +193,7 @@ export function SupplierDocumentTaskCard({
                           </label>
                           <span className={styles.supplierDocumentUploadHint}>仅支持 PDF，单个文件最大 {PDF_UPLOAD_MAX_SIZE_LABEL}，选择后自动上传。</span>
                           {uploading ? <UploadProgressInline progress={progressByKey[key] || 0} /> : null}
-                        </div>
+                        </div> : null}
                       </div>
                     );
                   })}

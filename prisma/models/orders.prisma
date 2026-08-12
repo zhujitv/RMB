@@ -64,6 +64,7 @@ model ReceivableOrder {
   createdAt                          DateTime         @default(now()) @map("created_at")
   updatedAt                          DateTime         @updatedAt @map("updated_at")
   deletedAt                          DateTime?        @map("deleted_at")
+  sourceSalesExecutionId             String?          @unique @map("source_sales_execution_id")
 
   customer                      Customer                       @relation(fields: [customerId], references: [id])
   businessEntity                BusinessEntity?                @relation(fields: [businessEntityId], references: [id])
@@ -73,6 +74,7 @@ model ReceivableOrder {
   taxSubmittedBy                User?                          @relation("TaxRefundSubmittedBy", fields: [taxSubmittedById], references: [id])
   createdBy                     User?                          @relation("OrdersCreated", fields: [createdById], references: [id])
   updatedBy                     User?                          @relation("OrdersUpdated", fields: [updatedById], references: [id])
+  sourceSalesExecution          SalesExecution?                @relation("SalesExecutionReceivableOrder", fields: [sourceSalesExecutionId], references: [id], onDelete: Restrict)
   payments                      Payment[]
   costs                         OrderCost[]
   documents                     OrderDocument[]

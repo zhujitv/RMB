@@ -1,0 +1,65 @@
+.emailRetryButton {
+  width: fit-content;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.emailRetryButton:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.executionPanel { margin-top: 12px; border-top: 1px solid #fed7aa; padding-top: 12px; display: grid; gap: 10px; }
+.metricGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.metricGrid > div { display: grid; gap: 3px; border: 1px solid #ffedd5; border-radius: 9px; background: #fff; padding: 8px 10px; }
+.metricGrid span, .auditLine { color: #78716c; font-size: 11px; }
+.metricGrid strong { color: #431407; font-size: 13px; }
+.auditLine { margin: 0; }
+.actionRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.actionRow button, .entryGrid button { border: 1px solid #fb923c; border-radius: 8px; background: #fff7ed; color: #9a3412; padding: 7px 10px; font: inherit; font-weight: 750; cursor: pointer; }
+.actionRow button:disabled, .entryGrid button:disabled { cursor: wait; opacity: .55; }
+.warning { color: #b45309; font-size: 12px; font-weight: 700; }
+.success, .error { border-radius: 8px; padding: 7px 9px; font-size: 12px; }
+.success { background: #f0fdf4; color: #166534; }
+.error { background: #fef2f2; color: #b91c1c; }
+.entryGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; border: 1px solid #fed7aa; border-radius: 10px; background: #fff; padding: 10px; }
+.entryGrid label { display: grid; gap: 4px; color: #57534e; font-size: 11px; }
+.entryGrid input, .entryGrid select { min-width: 0; border: 1px solid #d6d3d1; border-radius: 7px; padding: 7px 8px; font: inherit; }
+.wide { grid-column: span 2; }
+.ledgerList { display: flex; flex-wrap: wrap; gap: 6px 12px; color: #57534e; font-size: 12px; }
+.ledgerList strong { color: #431407; }
+.ledgerList span { display: inline-flex; align-items: center; gap: 6px; }
+.ledgerList button { border: 0; background: transparent; color: #b91c1c; padding: 2px 4px; font: inherit; font-weight: 700; cursor: pointer; }
+.ledgerList button:disabled { cursor: wait; opacity: .55; }
+.workflowCard { display: grid; gap: 9px; border: 1px solid #d6d3d1; border-radius: 10px; background: #fafaf9; padding: 10px; }
+.workflowCard[data-tone="warning"] { border-color: #fbbf24; background: #fffbeb; }
+.workflowCard[data-tone="danger"] { border-color: #fca5a5; background: #fef2f2; }
+.workflowCard[data-tone="success"] { border-color: #86efac; background: #f0fdf4; }
+.workflowHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.workflowHeader > div { display: grid; gap: 3px; }
+.workflowHeader strong { color: #431407; font-size: 13px; }
+.workflowHeader small { color: #78716c; font-size: 11px; line-height: 1.45; }
+.workflowControls { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
+.workflowControls > label { display: grid; gap: 4px; min-width: 160px; color: #57534e; font-size: 11px; }
+.workflowControls > input, .workflowControls label input { min-width: 180px; flex: 1; border: 1px solid #d6d3d1; border-radius: 7px; padding: 7px 8px; font: inherit; background: #fff; }
+.workflowControls button { border: 1px solid #fb923c; border-radius: 8px; background: #fff7ed; color: #9a3412; padding: 7px 10px; font: inherit; font-weight: 750; cursor: pointer; }
+.workflowControls button:disabled { cursor: wait; opacity: .55; }
+.workflowControls .dangerButton { border-color: #fca5a5; background: #fff; color: #b91c1c; }
+.settlementStatus { border-radius: 999px; background: #fef3c7; color: #92400e; padding: 4px 8px; font-size: 11px; font-weight: 800; }
+.settlementStatus[data-status="SETTLED"] { background: #dcfce7; color: #166534; }
+.settlementGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.settlementGrid > div { display: grid; gap: 2px; border-radius: 8px; background: rgba(255, 255, 255, .75); padding: 7px 8px; }
+.settlementGrid span { color: #78716c; font-size: 10px; }
+.settlementGrid strong { color: #292524; font-size: 12px; }
+
+@media (max-width: 700px) {
+  .metricGrid, .entryGrid, .settlementGrid { grid-template-columns: 1fr; }
+  .wide { grid-column: auto; }
+}

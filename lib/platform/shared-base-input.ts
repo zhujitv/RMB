@@ -1,3 +1,4 @@
+import { Prisma } from "../generated/prisma/client.js";
 import { codedError, isPlainRecord, type AppError } from "./shared-base-errors";
 
 export type JsonBodyRequest = {
@@ -36,6 +37,23 @@ export function num(value: unknown, fallback = 0) {
 
 export function amountCny(amount: unknown, rate: unknown) {
   return Math.round(num(amount) * num(rate, 1) * 100) / 100;
+}
+
+function decimalFromInput(value: unknown, fallback: string): Prisma.Decimal {
+  try {
+    const decimal = Prisma.Decimal.isDecimal(value)
+      ? value
+      : new Prisma.Decimal(String(value ?? "").trim());
+    return decimal.isFinite() ? decimal : new Prisma.Decimal(fallback);
+  } catch {
+    return new Prisma.Decimal(fallback);
+  }
+}
+
+export function amountCnyDecimal(amount: unknown, rate: unknown): Prisma.Decimal {
+  return decimalFromInput(amount, "0")
+    .mul(decimalFromInput(rate, "1"))
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
 export function nonEmpty(value: unknown) {
@@ -168,6 +186,19 @@ export function requirePositive(value: unknown, label: string) {
   return number;
 }
 
+export function requirePositiveDecimal(value: unknown, label: string, decimalPlaces?: number): Prisma.Decimal {
+  const decimal = decimalFromInput(value, "0");
+  const normalized = decimalPlaces == null
+    ? decimal
+    : decimal.toDecimalPlaces(decimalPlaces, Prisma.Decimal.ROUND_HALF_UP);
+  if (normalized.lte(0)) {
+    const error: AppError = new Error(`${label}必须大于 0`);
+    error.status = 400;
+    throw error;
+  }
+  return normalized;
+}
+
 export function requireText(value: unknown, label: string) {
   const text = nonEmpty(value);
   if (!text) {
@@ -201,8 +232,9 @@ export function normalizeCreditDays(value: unknown, required = false) {
   return days;
 }
 
-export function normalizeInstallments(input: unknown, finalAmount: number, exchangeRate: unknown) {
+export function normalizeInstallments(input: unknown, finalAmount: unknown, exchangeRate: unknown) {
   const rows = (Array.isArray(input) ? input : []) as InstallmentInput[];
+  const normalizedFinalAmount = decimalFromInput(finalAmount, "0");
   const cleaned = rows
     .map((item) => ({
       ratio: Math.round(num(item?.ratio) * 100) / 100,
@@ -227,12 +259,15 @@ export function normalizeInstallments(input: unknown, finalAmount: number, excha
       throw error;
     }
     ratioTotal += item.ratio;
-    const amount = Math.round(finalAmount * (item.ratio / 100) * 100) / 100;
+    const amount = normalizedFinalAmount
+      .mul(String(item.ratio))
+      .div(100)
+      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     return {
       ratio: item.ratio,
       condition: item.condition,
-      amount,
-      amountCny: amountCny(amount, exchangeRate),
+      amount: amount.toNumber(),
+      amountCny: amountCnyDecimal(amount, exchangeRate).toNumber(),
     };
   });
   if (Math.abs(ratioTotal - 100) > 0.01) {

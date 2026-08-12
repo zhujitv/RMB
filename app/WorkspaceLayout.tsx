@@ -31,6 +31,8 @@ type WorkspaceLayoutProps = {
 const NAV_ICONS: Record<string, string[]> = {
   welcome: ["M3 11 12 3l9 8", "M5 10v10h14V10", "M9 20v-6h6v6"],
   dashboard: ["M3 3v18h18", "M18 17V9", "M13 17V5", "M8 17v-3"],
+  quotations: ["M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z", "M14 2v6h6", "M8 13h8", "M8 17h5"],
+  salesExecution: ["M4 5h16v14H4z", "M8 9h8", "M8 13h5", "m15 16 2 2 4-4"],
   orders: ["M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z", "M14 2v4a2 2 0 0 0 2 2h4", "M10 9H8", "M16 13H8", "M16 17H8"],
   payments: ["M21 8V7a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7", "M17 14h.01"],
   costs: ["m16 16 2 2 4-4", "M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14", "m3.3 7 8.7 5 8.7-5", "M12 22V12"],

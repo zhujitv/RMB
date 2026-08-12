@@ -1,10 +1,12 @@
 
 import type { OrderRow, PaymentInstallment, QuickOrderForm, SupplierOption } from "./model";
-import { emptyQuickOrderForm } from "./model";
+import { PAYMENT_TERMS, emptyQuickOrderForm } from "./model";
 
 export function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
   if (!order) return { ...emptyQuickOrderForm };
-  const paymentTermType = order.paymentTermType || (String(order.paymentTerm || "").toUpperCase().includes("OA") ? "OA" : "COPY_BL");
+  const paymentTermType = order.paymentTermType
+    || PAYMENT_TERMS.find((term) => term.label === order.paymentTerm)?.value
+    || "CUSTOM";
   return {
     expectedUpdatedAt: order.updatedAt || "",
     customerId: order.customerId || "",
@@ -21,6 +23,7 @@ export function orderFormFromRow(order?: OrderRow | null): QuickOrderForm {
     actualShipmentDate: order.actualShipmentDate || "",
     tradeTerm: order.tradeTerm || "FOB",
     paymentTermType,
+    paymentTerm: order.paymentTerm || "",
     blDate: order.blDate || "",
     expectedArrivalDate: order.expectedArrivalDate || "",
     expectedPaymentDate: order.expectedPaymentDate || "",

@@ -120,10 +120,12 @@ test("E2E permission: logistics supplier only sees assigned logistics work and i
 
 test("E2E permission: product supplier portal is supplier-bound and never exposes customer identity", () => {
   const productSupplier = rolePermissionSnapshot("产品供应商");
-  assert.deepEqual(productSupplier.menus, ["supplierDocuments", "manual"]);
+  assert.deepEqual(productSupplier.menus, ["supplierPurchaseOrders", "supplierDocuments", "manual"]);
   assert.equal(productSupplier.dataScope, "OWN");
   assert.equal(productSupplier.reads.supplierDocuments, true);
   assert.equal(productSupplier.writes.supplierDocuments, true);
+  assert.equal(productSupplier.reads.supplierPurchaseOrders, true);
+  assert.equal(productSupplier.writes.supplierPurchaseOrders, true);
   assert.equal(productSupplier.reads.orders, false);
   assert.equal(productSupplier.reads.customers, false);
   assert.equal(productSupplier.reads.domesticLogistics, false);
@@ -151,6 +153,7 @@ test("E2E permission: finance can read financial modules but cannot mutate order
   const finance = rolePermissionSnapshot("财务");
   assert.equal(finance.dataScope, "ALL");
   assert.equal(finance.reads.payments, true);
+  assert.equal(finance.reads.salesExecution, true);
   assert.equal(finance.reads.costs, true);
   assert.equal(finance.reads.taxRefund, true);
   assert.equal(finance.reads.commissions, true);

@@ -17,6 +17,7 @@ const SECURITY_ENV_KEYS = [
   "STRICT_PRODUCTION_SECURITY",
   "SECURITY_BUILD_MODE",
   "EXPOSE_ERROR_DETAILS",
+  "QUOTATION_FILE_STORAGE_DRIVER",
   "VERCEL",
   "VERCEL_ENV",
   "VERCEL_TARGET_ENV",
@@ -83,6 +84,15 @@ test("valid production configuration passes while error details remain forbidden
   });
   assert.equal(exposed.status, 1);
   assert.match(exposed.stderr, /EXPOSE_ERROR_DETAILS/);
+});
+
+test("production security gate rejects local quotation file storage", () => {
+  const result = runSecurityEnvironmentCheck({
+    ...validProductionEnvironment,
+    QUOTATION_FILE_STORAGE_DRIVER: "local",
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /禁止启用报价本地文件存储/);
 });
 
 test("Vercel Upstash integration variables satisfy the production gate", () => {

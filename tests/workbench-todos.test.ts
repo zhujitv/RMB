@@ -169,7 +169,9 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /paymentVoucherReminderStartDateFromSettings/);
   assert.match(workbenchSource, /getExchangeRateSettings\(\)/);
   assert.match(workbenchSource, /paymentVoucherReminderStartDate: paymentVoucherReminderStartDateFromSettings\(exchangeRateSettings\)/);
-  assert.match(workbenchSource, /\{ paid: true \}[\s\S]*\{ paymentDate: \{ gte: context\.paymentVoucherReminderStartDate \} \}[\s\S]*\{ paymentVoucherStorageKey: null \}/);
+  assert.match(workbenchSource, /sourceType: "FACTORY_PURCHASE_SETTLEMENT", paymentStatus: "已支付"/);
+  assert.match(workbenchSource, /sourceType: \{ not: "FACTORY_PURCHASE_SETTLEMENT" \}, paid: true/);
+  assert.match(workbenchSource, /\{ paymentDate: \{ gte: context\.paymentVoucherReminderStartDate \} \}[\s\S]*\{ paymentVoucherStorageKey: null \}/);
   assert.match(workbenchSource, /handledCostIds/);
   assert.match(workbenchSource, /shouldCreateProfitCostIncompleteTodo/);
   assert.match(workbenchSource, /PROFIT_COST_REVIEW_STATUSES/);

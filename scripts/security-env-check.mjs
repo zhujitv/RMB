@@ -92,6 +92,9 @@ if (strictProduction && !hasCanonicalOrigin()) {
 if (strictProduction && process.env.EXPOSE_ERROR_DETAILS === "true") {
   failures.push("生产环境禁止启用 EXPOSE_ERROR_DETAILS");
 }
+if (strictProduction && String(process.env.QUOTATION_FILE_STORAGE_DRIVER || "").trim().toLowerCase() === "local") {
+  failures.push("生产环境禁止启用报价本地文件存储");
+}
 
 if (failures.length) {
   console.error("Production security environment check failed:");

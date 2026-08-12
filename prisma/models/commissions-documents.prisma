@@ -94,6 +94,7 @@ model FileAsset {
   originalFileName          String?   @map("original_file_name")
   mimeType                  String    @map("mime_type")
   fileSize                  Int?      @map("file_size")
+  contentSha256             String?   @map("content_sha256")
   storageKey                String    @map("storage_key")
   bucket                    String?
   uploadedAt                DateTime? @map("uploaded_at")

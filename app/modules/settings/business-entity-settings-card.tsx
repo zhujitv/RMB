@@ -4,6 +4,7 @@ import styles from "../../WorkspaceShell.module.css";
 import type { CompanyProfileSettings } from "../../types";
 import { uploadFormDataWithProgress, validatePdfUploadFile } from "../../utils";
 import { BooleanSelect } from "./common-controls";
+import { BusinessEntityBankAccountFields } from "./business-entity-bank-account-fields";
 import {
   COMMISSION_FORMULA_DEDUCTIONS,
   COMMISSION_FORMULA_PRESETS,
@@ -20,6 +21,7 @@ import {
   commissionFormulaPreview,
   companyProfileFormFromSettings,
   exchangeFormFromSettings,
+  emptyBusinessEntityForm,
   notificationDeliveryLogs,
   notificationTemplateFormFromSettings,
   notificationTemplatePreview,
@@ -85,15 +87,7 @@ export function BusinessEntitySettingsCard({
   function restoreCurrentForm() {
     if (!currentForm) return;
     const row = entities.find((entity) => entity.id === currentForm.id);
-    onChange(row ? businessEntityFormFromRow(row) : {
-      id: "",
-      name: "",
-      shortName: "",
-      isDefault: false,
-      status: "启用",
-      sortOrder: "0",
-      remark: "",
-    });
+    onChange(row ? businessEntityFormFromRow(row) : emptyBusinessEntityForm());
   }
 
   return (
@@ -119,6 +113,7 @@ export function BusinessEntitySettingsCard({
             <tr>
               <th>公司全称</th>
               <th>公司简称</th>
+              <th>英文抬头</th>
               <th>默认</th>
               <th>状态</th>
               <th>排序</th>
@@ -129,12 +124,13 @@ export function BusinessEntitySettingsCard({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7}><div className={styles.emptyState}>数据加载中...</div></td>
+                <td colSpan={8}><div className={styles.emptyState}>数据加载中...</div></td>
               </tr>
             ) : entities.length ? entities.map((entity) => (
               <tr key={entity.id}>
                 <td title={entity.name || ""}>{entity.name || "-"}</td>
                 <td>{entity.shortName || "-"}</td>
+                <td title={entity.nameEn || ""}>{entity.nameEn || "-"}</td>
                 <td>{entity.isDefault ? "默认" : "-"}</td>
                 <td>{entity.status || "启用"}</td>
                 <td>{entity.sortOrder ?? 0}</td>
@@ -151,7 +147,7 @@ export function BusinessEntitySettingsCard({
               </tr>
             )) : (
               <tr>
-                <td colSpan={7}><div className={styles.emptyState}>暂无业务主体</div></td>
+                <td colSpan={8}><div className={styles.emptyState}>暂无业务主体</div></td>
               </tr>
             )}
           </tbody>
@@ -165,6 +161,7 @@ export function BusinessEntitySettingsCard({
             <label>
               公司全称
               <input
+                maxLength={200}
                 value={currentForm.name}
                 onChange={(event) => setField("name", event.target.value)}
                 required
@@ -172,8 +169,47 @@ export function BusinessEntitySettingsCard({
             </label>
             <label>
               公司简称
-              <input value={currentForm.shortName} onChange={(event) => setField("shortName", event.target.value)} />
+              <input maxLength={100} value={currentForm.shortName} onChange={(event) => setField("shortName", event.target.value)} />
             </label>
+            <label>
+              英文法定抬头
+              <input maxLength={200} value={currentForm.nameEn} onChange={(event) => setField("nameEn", event.target.value)} />
+            </label>
+            <label>
+              联系邮箱
+              <input type="email" maxLength={254} value={currentForm.contactEmail} onChange={(event) => setField("contactEmail", event.target.value)} />
+            </label>
+            <label>
+              联系电话
+              <input maxLength={100} value={currentForm.contactPhone} onChange={(event) => setField("contactPhone", event.target.value)} />
+            </label>
+            <label>
+              官网地址
+              <input type="url" maxLength={500} placeholder="https://" value={currentForm.website} onChange={(event) => setField("website", event.target.value)} />
+            </label>
+            <label>
+              公司地址
+              <textarea maxLength={1000} value={currentForm.address} onChange={(event) => setField("address", event.target.value)} rows={3} />
+            </label>
+            <UiSwitch
+              label="PI 页头显示公司电话"
+              description="默认隐藏；开启后只写入之后生成的报价版本。"
+              checked={currentForm.showContactPhoneOnPi}
+              onChange={(value) => setField("showContactPhoneOnPi", value)}
+            />
+            <UiSwitch
+              label="PI 页头显示公司邮箱"
+              description="默认隐藏；开启后只写入之后生成的报价版本。"
+              checked={currentForm.showContactEmailOnPi}
+              onChange={(value) => setField("showContactEmailOnPi", value)}
+            />
+            <UiSwitch
+              label="PI 页头显示公司网址"
+              description="默认隐藏；开启后只写入之后生成的报价版本。"
+              checked={currentForm.showWebsiteOnPi}
+              onChange={(value) => setField("showWebsiteOnPi", value)}
+            />
+            <BusinessEntityBankAccountFields form={currentForm} onChange={onChange} />
             <label>
               状态
               <select
@@ -205,11 +241,11 @@ export function BusinessEntitySettingsCard({
             />
             <label>
               备注
-              <textarea value={currentForm.remark} onChange={(event) => setField("remark", event.target.value)} rows={3} />
+              <textarea maxLength={2000} value={currentForm.remark} onChange={(event) => setField("remark", event.target.value)} rows={3} />
             </label>
           </div>
           <div className={styles.emptyState}>
-            业务主体用于订单标记、筛选、报表和导出抬头，不改变权限隔离和业务流程。
+            公司地址始终显示；电话、邮箱和网址按上方开关决定。保存仅影响之后生成的新报价版本，已封存版本不会被追溯改写。
           </div>
           <div className={styles.detailActions}>
             <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>{saving ? "保存中..." : "保存业务主体"}</button>

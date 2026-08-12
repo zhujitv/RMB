@@ -3,12 +3,14 @@ import { DetailField, SideDetailDrawer } from "../../components";
 import { formatCny, formatCurrencyAmount } from "../../formatters";
 import { customerLegalName } from "../../utils";
 import styles from "../../WorkspaceShell.module.css";
-import { canDeleteCost, canVoidCost, costSupplierName, isVoidedCost } from "./helpers";
+import { canDeleteCost, canVoidCost, costSupplierName, isFactoryPurchaseSettlementCost, isVoidedCost } from "./helpers";
 import { CostInvoiceActions } from "./invoice-actions";
 import type { CostOrderSummary, CostRow } from "./model";
 
 export function CostOrderSummaryDrawer({
   order,
+  canManage,
+  canRestore,
   onOpenDocuments,
   onOpenPaymentVoucher,
   deletingId,
@@ -18,6 +20,8 @@ export function CostOrderSummaryDrawer({
   onClose,
 }: {
   order: CostOrderSummary;
+  canManage: boolean;
+  canRestore: boolean;
   onOpenDocuments: (costId: string) => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
   deletingId: string;
@@ -47,6 +51,8 @@ export function CostOrderSummaryDrawer({
       </div>
       <CostOrderItemsTable
         costs={order.costs || []}
+        canManage={canManage}
+        canRestore={canRestore}
         deletingId={deletingId}
         onOpenDocuments={onOpenDocuments}
         onOpenPaymentVoucher={onOpenPaymentVoucher}
@@ -60,6 +66,8 @@ export function CostOrderSummaryDrawer({
 
 export function CostOrderItemsTable({
   costs,
+  canManage,
+  canRestore,
   deletingId,
   onOpenDocuments,
   onOpenPaymentVoucher,
@@ -68,6 +76,8 @@ export function CostOrderItemsTable({
   onRestore,
 }: {
   costs: CostRow[];
+  canManage: boolean;
+  canRestore: boolean;
   deletingId: string;
   onOpenDocuments: (costId: string) => void;
   onOpenPaymentVoucher: (cost: CostRow) => void;
@@ -108,11 +118,11 @@ export function CostOrderItemsTable({
                 <td className={styles.costInvoiceActionColumn}>
                   <div className={styles.costInvoiceActions}>
                     <CostInvoiceActions cost={cost} onOpenDocuments={() => onOpenDocuments(cost.id)} onOpenPaymentVoucher={onOpenPaymentVoucher} />
-                    {isVoidedCost(cost) ? (
+                    {canRestore && isVoidedCost(cost) && !isFactoryPurchaseSettlementCost(cost) ? (
                       <button className={styles.secondaryButton} type="button" disabled={deletingId === cost.id} onClick={(event) => { event.stopPropagation(); onRestore(cost); }}>
                         {deletingId === cost.id ? "处理中..." : "恢复"}
                       </button>
-                    ) : (
+                    ) : canManage && !isVoidedCost(cost) ? (
                       <>
                         {canVoidCost(cost) ? (
                           <button className={styles.secondaryButton} type="button" disabled={deletingId === cost.id} onClick={(event) => { event.stopPropagation(); onVoid(cost); }}>
@@ -125,7 +135,7 @@ export function CostOrderItemsTable({
                           </button>
                         ) : null}
                       </>
-                    )}
+                    ) : null}
                   </div>
                 </td>
               </tr>

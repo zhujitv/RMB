@@ -62,6 +62,7 @@ type PaymentTermSnapshot = {
 export function resolvePaymentTerm(input: PaymentTermInput, before: PaymentTermSnapshot) {
   const rawType = optional(input.paymentTermType);
   const rawLabel = optional(input.paymentTerm);
+  if (rawType === "CUSTOM" && rawLabel) return { type: null, label: rawLabel };
   const fromLabel = rawLabel ? PAYMENT_TERM_TYPE_BY_LABEL[rawLabel] : null;
   const type = validPaymentTermType(rawType) ? rawType : fromLabel;
   if (type) return { type, label: paymentTermLabel(type) };

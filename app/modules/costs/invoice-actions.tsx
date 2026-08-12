@@ -1,6 +1,6 @@
 import styles from "../../WorkspaceShell.module.css";
 import type { CostRow } from "./model";
-import { hasPaymentVoucher, isLogisticsGeneratedCost } from "./helpers";
+import { hasPaymentVoucher, isFactoryPurchaseSettlementCost, isLogisticsGeneratedCost } from "./helpers";
 
 export function CostInvoiceActions({
   cost,
@@ -22,6 +22,8 @@ export function CostInvoiceActions({
         ) : (
           <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>查看说明</button>
         )
+      ) : isFactoryPurchaseSettlementCost(cost) ? (
+        <button className={styles.secondaryButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>{invoiceReceived ? "查看发票" : "查看资料"}</button>
       ) : invoiceReceived ? (
         <>
           <button className={styles.rowDetailButton} type="button" onClick={(event) => { event.stopPropagation(); onOpenDocuments(); }}>查看发票</button>
@@ -36,4 +38,3 @@ export function CostInvoiceActions({
     </div>
   );
 }
-

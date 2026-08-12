@@ -26,6 +26,7 @@ import {
 import {
   assertCanManageProductSupplierPayment,
   loadCostForPayment,
+  loadCostForPaymentVoucher,
   paidAtFromInput,
   paymentBooleanInput,
   paymentVoucherFileName,
@@ -35,12 +36,13 @@ import {
   type CostInput,
 } from "./cost-records-mutation-shared";
 import { assertBusinessOrderWritableInTransaction } from "./business-archive";
+import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
 export async function updateProductSupplierCostPayment(request: AuditRequestLike, actor: CostActorInput, id: string, input: CostInput) {
-  assertWrite(actor, "costs");
+  assertWrite(actor, "payments");
   const currentActor = requireCostActor(actor);
   assertCanManageProductSupplierPayment(currentActor);
-  const before = await loadCostForPayment(currentActor, id);
+  const before = await loadCostForPayment(currentActor, id, "修改付款状态");
   const paid = paymentBooleanInput(input.paid ?? input.isPaid ?? input.paymentPaid);
   const paidAt = paid ? paidAtFromInput(input.paidAt ?? input.paymentTime ?? input.paymentDate) : null;
   const data = {
@@ -82,14 +84,15 @@ export async function updateProductSupplierCostPayment(request: AuditRequestLike
     );
     return current;
   });
+  invalidateWorkbenchTodosCache();
   return safeSerializeCost(await attachBusinessDocumentsToCost(updated));
 }
 
 export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequestLike, actor: CostActorInput, id: string, file: unknown) {
-  assertWrite(actor, "costs");
+  assertWrite(actor, "payments");
   const currentActor = requireCostActor(actor);
   assertCanManageProductSupplierPayment(currentActor);
-  const before = await loadCostForPayment(currentActor, id);
+  const before = await loadCostForPaymentVoucher(currentActor, id);
   const uploadedFile = await readManagedUploadFile(file, "paymentVoucherImage", "payment-voucher.jpg");
   const { mimeType, fileSize } = uploadedFile;
   const extension = uploadedFile.extension || "jpg";
@@ -145,8 +148,7 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
         costId: id,
         operatorId: currentActor.id,
         replacedAt: storedFile.uploadedAt,
-        previousFileId: previousStorageKey,
-        nextFileId: storedFile.storageKey,
+        replacedExistingFile: Boolean(previousStorageKey),
         previousFileName: before.paymentVoucherFileName || "",
         fileName,
         mimeType,
@@ -161,6 +163,7 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
   if (previousStorageKey && previousStorageKey !== storedFile.storageKey) {
     await runNonCriticalTask("付款凭证旧文件删除", () => deleteManagedStoredFile(previousStorageKey));
   }
+  invalidateWorkbenchTodosCache();
   return safeSerializeCost(await attachBusinessDocumentsToCost(updated));
 }
 

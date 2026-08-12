@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Prisma, type OrderDocumentType } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { buildOrderDocumentKey, deleteR2Object, ensureR2Configured, readR2Object, safeFileName, uploadToR2 } from "../r2";
@@ -106,21 +107,19 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   const recipients = supplierRecipientEmails({ ...supplier, operatorUsers: supplier.operatorUsers });
   if (!recipients.length) throw codedError("供应商未配置有效邮箱或绑定账号邮箱，不能发送回传通知。", 400, "SUPPLIER_EMAIL_REQUIRED");
   const ccEmails = await adminCcEmails();
-  let templateStorageKey = "";
-  let templateBucket = "";
-  let templateFileName = "";
   const { bucket } = ensureR2Configured();
-  templateBucket = bucket;
+  const templateBucket = bucket;
   const templateExtension = template.originalFileName.toLowerCase().endsWith(".xls") ? "xls" : "xlsx";
-  templateFileName = safeFileName(`factory-document-template-${order.orderNo || order.id}-${Date.now()}.${templateExtension}`);
-  templateStorageKey = buildOrderDocumentKey({
+  const templateObjectId = randomUUID();
+  const templateFileName = safeFileName(`factory-document-template-${order.orderNo || order.id}-${templateObjectId}.${templateExtension}`);
+  const ownedTemplateStorageKey = buildOrderDocumentKey({
     orderId: order.id,
     documentType: "SUPPLIER_PURCHASE_CONTRACT_TEMPLATE",
     relatedModule: "SUPPLIER",
     supplierId: supplier.id,
     fileName: templateFileName,
   });
-  await uploadToR2({ key: templateStorageKey, body: template.body, contentType: template.mimeType });
+  await uploadToR2({ key: ownedTemplateStorageKey, body: template.body, contentType: template.mimeType });
 
   const companyProfile = await runNonCriticalTask("公司资料读取", () => getCompanyProfileSettings());
   const companyName = companyProfile?.companyNameZh || DEFAULT_COMPANY_PROFILE_SETTINGS.companyNameZh;
@@ -158,7 +157,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
           templateOriginalName: template.originalFileName,
           templateMimeType: template.mimeType,
           templateFileSize: template.fileSize,
-          templateStorageKey,
+          templateStorageKey: ownedTemplateStorageKey,
           templateBucket,
           recipientEmails: recipients,
           ccEmails,
@@ -176,7 +175,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
       timeout: 15000,
     });
   } catch (error: unknown) {
-    if (templateStorageKey) await deleteR2Object(templateStorageKey).catch(() => null);
+    await deleteR2Object(ownedTemplateStorageKey).catch(() => null);
     if (["P2002", "P2034"].includes(String((error as { code?: string })?.code || ""))) {
       throw duplicateSupplierDocumentRequestError();
     }

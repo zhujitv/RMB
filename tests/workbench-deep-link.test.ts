@@ -51,6 +51,52 @@ test("workbench target parser accepts only known internal module hrefs and query
   assert.equal(buildWorkbenchDeepLink("javascript:alert(1)", "/tax-refund"), null);
 });
 
+test("supplier purchase order links preserve only the supplier portal detail target", () => {
+  const target = "/supplier-purchase-orders?purchaseOrderId=po-1&keyword=PO-2026";
+  const safe = parseWorkbenchInternalHref(target);
+  assert.ok(safe);
+  assert.equal(safe.pathname, "/supplier-purchase-orders");
+  assert.equal(safe.searchParams.get("purchaseOrderId"), "po-1");
+
+  const link = buildWorkbenchDeepLink("https://erp.example.com", target);
+  assert.ok(link);
+  assert.equal(new URL(link).searchParams.get(WORKBENCH_DEEP_LINK_PARAM), target);
+  assert.equal(parseWorkbenchInternalHref("/supplier-purchase-orders?supplierId=other"), null);
+  assert.equal(parseWorkbenchInternalHref("/supplier-purchase-orders?purchaseOrderId=one&purchaseOrderId=two"), null);
+});
+
+test("cost todo links preserve and open the exact cost target", () => {
+  const target = "/costs?orderId=order-1&keyword=NW-1&costId=cost-1";
+  const safe = parseWorkbenchInternalHref(target);
+  assert.ok(safe);
+  assert.equal(safe.searchParams.get("costId"), "cost-1");
+
+  const shellSource = readWorkspaceShellSource();
+  const contentSource = readFileSync("app/WorkspaceModuleContent.tsx", "utf8");
+  const costsSource = readFileSync("app/modules/CostsModule.tsx", "utf8");
+  assert.match(shellSource, /const costId = parsed\.searchParams\.get\("costId"\) \|\| "";/);
+  assert.match(shellSource, /openWorkspaceMenu\("costs", \{\s*keyword,\s*costId,\s*\}, \{ forceNew: Boolean\(costId\) \}\)/);
+  assert.match(contentSource, /initialCostId=\{focus\.costId\}/);
+  assert.match(costsSource, /void openCostDocuments\(costId\)/);
+});
+
+test("payment todo links preserve and open the exact payment target", () => {
+  const target = "/payments?orderId=order-1&keyword=NW-1&paymentId=payment-1";
+  const safe = parseWorkbenchInternalHref(target);
+  assert.ok(safe);
+  assert.equal(safe.searchParams.get("paymentId"), "payment-1");
+
+  const shellSource = readWorkspaceShellSource();
+  const contentSource = readFileSync("app/WorkspaceModuleContent.tsx", "utf8");
+  const listSource = readFileSync("app/modules/payments/use-payments-list.ts", "utf8");
+  const backendSource = readFileSync("lib/platform/payments-list.ts", "utf8");
+  assert.match(shellSource, /const paymentId = parsed\.searchParams\.get\("paymentId"\) \|\| "";/);
+  assert.match(contentSource, /initialPaymentId=\{focus\.paymentId\}/);
+  assert.match(listSource, /params\.set\("paymentId", targetPaymentId\.trim\(\)\)/);
+  assert.match(listSource, /setDetailPayment\(target\)/);
+  assert.match(backendSource, /if \(filters\.paymentId\) clauses\.push\(\{ id: filters\.paymentId \}\)/);
+});
+
 test("workbench deep link is consumed once and removed without losing unrelated URL state", () => {
   const target = "/tax-refund?orderId=o-1&keyword=NW-1";
   const currentUrl = `https://erp.example.com/?source=email&${WORKBENCH_DEEP_LINK_PARAM}=${encodeURIComponent(target)}#summary`;
@@ -107,4 +153,13 @@ test("deep link and export-invoice refresh are wired through the production UI c
   assert.match(controllerSource, /onRefreshTodos,[\s\S]*useTaxRefundMutations\(\{[\s\S]*onRefreshTodos,/);
   assert.match(mutationSource, /documentType === "EXPORT_INVOICE" \? onRefreshTodos : undefined/);
   assert.match(mutationSource, /refreshAfterSuccessfulDocumentMutation\(orderId, document\.documentType \|\| ""\)/);
+});
+
+test("cost workbench focus is not overwritten by the default list request", () => {
+  const controllerSource = readFileSync("app/modules/costs/use-costs-list-controller.ts", "utf8");
+
+  assert.match(
+    controllerSource,
+    /useEffect\(\(\) => \{\s*if \(initialOpenToken && initialKeyword\.trim\(\)\) return;\s*void loadCosts\(1, \{ \.\.\.emptyCostFilters \}\);\s*\}, \[\]\);/,
+  );
 });

@@ -1,0 +1,299 @@
+enum SalesExecutionSourceType {
+  QUOTATION
+  DIRECT
+}
+enum SalesExecutionStatus {
+  DRAFT
+  DISPATCHED
+  VOIDED
+}
+enum FactoryPurchaseOrderStatus {
+  DRAFT
+  DISPATCHED
+  ACCEPTED
+  DELIVERY_PROPOSED
+  REJECTED
+  VOIDED
+}
+model SalesExecution {
+  id                              String                   @id @default(cuid())
+  executionNo                     String                   @unique @map("execution_no")
+  creationKey                     String?                  @unique @map("creation_key")
+  executionDate                   DateTime                 @map("execution_date") @db.Date
+  sourceType                      SalesExecutionSourceType @map("source_type")
+  sourceQuotationId               String?                  @unique @map("source_quotation_id")
+  sourceQuotationVersionId        String?                  @unique @map("source_quotation_version_id")
+  customerId                      String                   @map("customer_id")
+  businessEntityId                String                   @map("business_entity_id")
+  salespersonUserId               String                   @map("salesperson_user_id")
+  customerNameSnapshot            String                   @map("customer_name_snapshot")
+  customerShortNameSnapshot       String?                  @map("customer_short_name_snapshot")
+  businessEntityNameSnapshot      String                   @map("business_entity_name_snapshot")
+  businessEntityShortNameSnapshot String?                  @map("business_entity_short_name_snapshot")
+  currency                        String
+  exchangeRate                    Decimal                  @default(1) @map("exchange_rate") @db.Decimal(18, 6)
+  tradeTerm                       String?                  @map("trade_term")
+  paymentTerm                     String?                  @map("payment_term")
+  customerOrderNo                 String                   @map("customer_order_no")
+  requestedDeliveryDate           DateTime                 @map("requested_delivery_date") @db.Date
+  subtotal                        Decimal                  @db.Decimal(18, 2)
+  totalAmount                     Decimal                  @map("total_amount") @db.Decimal(18, 2)
+  status                          SalesExecutionStatus     @default(DRAFT)
+  currentVersionNumber            Int                      @default(1) @map("current_version_number")
+  revision                        Int                      @default(1)
+  remark                          String?
+  dispatchedAt                    DateTime?                @map("dispatched_at")
+  dispatchedById                  String?                  @map("dispatched_by")
+  dispatchedVersionNumber         Int?                     @map("dispatched_version_number")
+  shippingStartedAt               DateTime?                @map("shipping_started_at")
+  shippingStartedById             String?                  @map("shipping_started_by")
+  voidedAt                        DateTime?                @map("voided_at")
+  voidedById                      String?                  @map("voided_by")
+  voidReason                      String?                  @map("void_reason")
+  createdById                     String?                  @map("created_by")
+  updatedById                     String?                  @map("updated_by")
+  createdAt                       DateTime                 @default(now()) @map("created_at")
+  updatedAt                       DateTime                 @updatedAt @map("updated_at")
+  sourceQuotation        SalesQuotation?         @relation(fields: [sourceQuotationId], references: [id], onDelete: Restrict)
+  sourceQuotationVersion SalesQuotationVersion?  @relation(fields: [sourceQuotationVersionId, sourceQuotationId], references: [id, quotationId], onDelete: Restrict)
+  customer               Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  businessEntity         BusinessEntity          @relation(fields: [businessEntityId], references: [id], onDelete: Restrict)
+  salesperson            User                    @relation("SalesExecutionSalesperson", fields: [salespersonUserId], references: [id], onDelete: Restrict)
+  dispatchedBy           User?                   @relation("SalesExecutionsDispatched", fields: [dispatchedById], references: [id], onDelete: Restrict)
+  shippingStartedBy      User?                   @relation("SalesExecutionsShippingStarted", fields: [shippingStartedById], references: [id], onDelete: Restrict)
+  voidedBy               User?                   @relation("SalesExecutionsVoided", fields: [voidedById], references: [id], onDelete: Restrict)
+  createdBy              User?                   @relation("SalesExecutionsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy              User?                   @relation("SalesExecutionsUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+  items                  SalesExecutionItem[]
+  versions               SalesExecutionVersion[]
+  purchaseOrders         FactoryPurchaseOrder[]
+  receivableOrder        ReceivableOrder?        @relation("SalesExecutionReceivableOrder")
+
+  @@unique([sourceQuotationVersionId, sourceQuotationId])
+  @@index([customerId, status, updatedAt])
+  @@index([customerId, customerOrderNo])
+  @@index([businessEntityId])
+  @@index([salespersonUserId, status, updatedAt])
+  @@index([status, updatedAt])
+  @@index([dispatchedById])
+  @@index([shippingStartedById])
+  @@index([voidedById])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("sales_executions")
+}
+model SalesExecutionItem {
+  id                         String   @id @default(cuid())
+  executionId                String   @map("execution_id")
+  lineNumber                 Int      @map("line_number")
+  sourceQuotationItemId      String?  @map("source_quotation_item_id")
+  sourceQuotationVersionId   String?  @map("source_quotation_version_id")
+  customerProductId          String?  @map("customer_product_id")
+  productFingerprintSnapshot String   @map("product_fingerprint_snapshot")
+  productNameSnapshot        String   @map("product_name_snapshot")
+  specificationSnapshot      String?  @map("specification_snapshot")
+  unitSnapshot               String   @map("unit_snapshot")
+  currencySnapshot           String   @map("currency_snapshot")
+  quantity                   Decimal  @db.Decimal(18, 4)
+  unitNetWeightKg            Decimal? @map("unit_net_weight_kg") @db.Decimal(18, 6)
+  salesUnitPrice             Decimal  @map("sales_unit_price") @db.Decimal(18, 6)
+  salesAmount                Decimal  @map("sales_amount") @db.Decimal(18, 2)
+  remark                     String?
+  createdAt                  DateTime @default(now()) @map("created_at")
+  execution           SalesExecution             @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  sourceQuotationItem SalesQuotationItem?        @relation(fields: [sourceQuotationItemId, sourceQuotationVersionId], references: [id, quotationVersionId], onDelete: Restrict)
+  customerProduct     CustomerProduct?           @relation(fields: [customerProductId], references: [id], onDelete: SetNull)
+  purchaseOrderItems  FactoryPurchaseOrderItem[]
+
+  @@unique([executionId, lineNumber])
+  @@unique([id, executionId])
+  @@unique([executionId, sourceQuotationItemId])
+  @@index([sourceQuotationVersionId])
+  @@index([customerProductId])
+  @@index([productFingerprintSnapshot])
+  @@map("sales_execution_items")
+}
+
+model SalesExecutionVersion {
+  id            String   @id @default(cuid())
+  executionId   String   @map("execution_id")
+  versionNumber Int      @map("version_number")
+  snapshot      Json
+  createdById   String?  @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  execution SalesExecution @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  createdBy User?          @relation("SalesExecutionVersionsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([executionId, versionNumber])
+  @@index([createdById])
+  @@map("sales_execution_versions")
+}
+
+model FactoryPurchaseOrder {
+  id                       String                     @id @default(cuid())
+  executionId              String                     @map("execution_id")
+  sequenceNo               Int                        @map("sequence_no")
+  poNo                     String                     @unique @map("po_no")
+  supplierId               String                     @map("supplier_id")
+  supplierNameSnapshot     String                     @map("supplier_name_snapshot")
+  replacementForId         String?                    @unique @map("replacement_for_id")
+  status                   FactoryPurchaseOrderStatus @default(DRAFT)
+  purchaseCurrency         String                     @map("purchase_currency")
+  subtotal                 Decimal?                   @db.Decimal(18, 2)
+  requestedDeliveryDate    DateTime                   @map("requested_delivery_date") @db.Date
+  paymentTerm              String?                    @map("payment_term")
+  prepaymentRatio          Decimal                    @default(0) @map("prepayment_ratio") @db.Decimal(8, 6)
+  prepaymentRequiredBeforeProduction Boolean          @default(false) @map("prepayment_required_before_production")
+  initialSupplierDeliveryDate DateTime?                @map("initial_supplier_delivery_date") @db.Date
+  confirmedSupplierDeliveryDate DateTime?              @map("confirmed_supplier_delivery_date") @db.Date
+  actualDeliveryDate       DateTime?                  @map("actual_delivery_date") @db.Date
+  actualDeliveryRecordedAt DateTime?                  @map("actual_delivery_recorded_at")
+  actualDeliveryRecordedById String?                  @map("actual_delivery_recorded_by")
+  penaltyBaseAmount        Decimal?                   @map("penalty_base_amount") @db.Decimal(18, 2)
+  delayGraceDays           Int                        @default(10) @map("delay_grace_days")
+  delayPenaltyRatePerDay   Decimal                    @default(0.00003) @map("delay_penalty_rate_per_day") @db.Decimal(12, 8)
+  delayPenaltyCapRatio     Decimal?                   @map("delay_penalty_cap_ratio") @db.Decimal(8, 6)
+  productionStatus         FactoryPurchaseOrderProductionStatus @default(WAITING_SUPPLIER) @map("production_status")
+  productionStartedAt      DateTime?                  @map("production_started_at")
+  productionStartedById    String?                    @map("production_started_by")
+  productionCompletedAt    DateTime?                  @map("production_completed_at")
+  productionCompletedById  String?                    @map("production_completed_by")
+  remark                   String?
+  revision                 Int                        @default(1)
+  dispatchedAt             DateTime?                  @map("dispatched_at")
+  dispatchedById           String?                    @map("dispatched_by")
+  dispatchVersionNumber    Int?                       @map("dispatch_version_number")
+  dispatchEmailStatus      String?                    @map("dispatch_email_status")
+  dispatchEmailSentAt      DateTime?                  @map("dispatch_email_sent_at")
+  dispatchEmailError       String?                    @map("dispatch_email_error")
+  dispatchRecipientEmails  Json?                      @map("dispatch_recipient_emails")
+  supplierDeliveryDate     DateTime?                  @map("supplier_delivery_date") @db.Date
+  supplierResponseRemark   String?                    @map("supplier_response_remark")
+  supplierResponseSequence Int                        @default(0) @map("supplier_response_sequence")
+  respondedAt              DateTime?                  @map("responded_at")
+  respondedById            String?                    @map("responded_by")
+  voidedAt                 DateTime?                  @map("voided_at")
+  voidedById               String?                    @map("voided_by")
+  voidReason               String?                    @map("void_reason")
+  createdById              String?                    @map("created_by")
+  updatedById              String?                    @map("updated_by")
+  createdAt                DateTime                   @default(now()) @map("created_at")
+  updatedAt                DateTime                   @updatedAt @map("updated_at")
+
+  execution         SalesExecution                         @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  supplier          Supplier                               @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  replacementFor    FactoryPurchaseOrder?                  @relation("FactoryPurchaseOrderReplacement", fields: [replacementForId], references: [id], onDelete: Restrict)
+  replacementOrder  FactoryPurchaseOrder?                  @relation("FactoryPurchaseOrderReplacement")
+  dispatchedBy      User?                                  @relation("FactoryPurchaseOrdersDispatched", fields: [dispatchedById], references: [id], onDelete: Restrict)
+  respondedBy       User?                                  @relation("FactoryPurchaseOrdersResponded", fields: [respondedById], references: [id], onDelete: Restrict)
+  productionStartedBy User?                                @relation("FactoryPurchaseOrdersProductionStarted", fields: [productionStartedById], references: [id], onDelete: Restrict)
+  productionCompletedBy User?                              @relation("FactoryPurchaseOrdersProductionCompleted", fields: [productionCompletedById], references: [id], onDelete: Restrict)
+  actualDeliveryRecordedBy User?                           @relation("FactoryPurchaseOrdersActualDeliveryRecorded", fields: [actualDeliveryRecordedById], references: [id], onDelete: Restrict)
+  voidedBy          User?                                  @relation("FactoryPurchaseOrdersVoided", fields: [voidedById], references: [id], onDelete: Restrict)
+  createdBy         User?                                  @relation("FactoryPurchaseOrdersCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy         User?                                  @relation("FactoryPurchaseOrdersUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+  items             FactoryPurchaseOrderItem[]
+  supplierResponses FactoryPurchaseOrderSupplierResponse[]
+  payments          FactoryPurchaseOrderPayment[]
+  adjustments       FactoryPurchaseOrderAdjustment[]
+  settlement        FactoryPurchaseOrderSettlement?
+
+  @@unique([executionId, sequenceNo])
+  @@unique([executionId, supplierId, purchaseCurrency])
+  @@unique([id, executionId])
+  @@unique([id, purchaseCurrency])
+  @@index([supplierId, status, updatedAt])
+  @@index([dispatchedById])
+  @@index([respondedById])
+  @@index([productionStatus, updatedAt])
+  @@index([productionStartedById])
+  @@index([productionCompletedById])
+  @@index([actualDeliveryRecordedById])
+  @@index([actualDeliveryDate])
+  @@index([voidedById])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("factory_purchase_orders")
+}
+
+model FactoryPurchaseOrderItem {
+  id                    String   @id @default(cuid())
+  purchaseOrderId       String   @map("purchase_order_id")
+  executionId           String   @map("execution_id")
+  executionItemId       String   @map("execution_item_id")
+  lineNumber            Int      @map("line_number")
+  productNameSnapshot   String   @map("product_name_snapshot")
+  specificationSnapshot String?  @map("specification_snapshot")
+  unitSnapshot          String   @map("unit_snapshot")
+  allocatedQuantity     Decimal  @map("allocated_quantity") @db.Decimal(18, 4)
+  purchaseUnitPrice     Decimal? @map("purchase_unit_price") @db.Decimal(18, 6)
+  amount                Decimal? @db.Decimal(18, 2)
+  remark                String?
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  purchaseOrder FactoryPurchaseOrder               @relation(fields: [purchaseOrderId, executionId], references: [id, executionId], onDelete: Cascade)
+  executionItem SalesExecutionItem                 @relation(fields: [executionItemId, executionId], references: [id, executionId], onDelete: Restrict)
+  supplierPrice FactoryPurchaseOrderSupplierPrice?
+
+  @@unique([purchaseOrderId, executionItemId])
+  @@unique([purchaseOrderId, lineNumber])
+  @@unique([id, purchaseOrderId])
+  @@index([executionItemId, executionId])
+  @@map("factory_purchase_order_items")
+}
+
+model FactoryPurchaseOrderSupplierResponse {
+  id               String    @id @default(cuid())
+  purchaseOrderId  String    @map("purchase_order_id")
+  responseSequence Int       @map("response_sequence")
+  action           String
+  deliveryDate     DateTime? @map("delivery_date") @db.Date
+  remark           String?
+  respondedById    String    @map("responded_by")
+  respondedAt      DateTime  @default(now()) @map("responded_at")
+  internalDecision String?   @map("internal_decision")
+  internalDecisionRemark String? @map("internal_decision_remark")
+  internalDecidedAt DateTime? @map("internal_decided_at")
+  internalDecidedById String? @map("internal_decided_by")
+
+  purchaseOrder  FactoryPurchaseOrder                @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  respondedBy    User                                @relation("FactoryPurchaseOrderSupplierResponses", fields: [respondedById], references: [id], onDelete: Restrict)
+  internalDecidedBy User?                             @relation("FactoryPurchaseOrderDeliveryDecisions", fields: [internalDecidedById], references: [id], onDelete: Restrict)
+  supplierPrices FactoryPurchaseOrderSupplierPrice[]
+
+  @@unique([purchaseOrderId, responseSequence], map: "fpo_supplier_response_po_sequence_key")
+  @@index([respondedById], map: "fpo_supplier_response_user_idx")
+  @@index([internalDecidedById], map: "fpo_supplier_response_internal_decider_idx")
+  @@index([purchaseOrderId, respondedAt], map: "fpo_supplier_response_po_time_idx")
+  @@map("factory_purchase_order_supplier_responses")
+}
+
+model FactoryPurchaseOrderSupplierPrice {
+  id                  String   @id @default(cuid())
+  purchaseOrderId     String   @map("purchase_order_id")
+  purchaseOrderItemId String   @map("purchase_order_item_id")
+  supplierResponseId  String   @map("supplier_response_id")
+  unitPrice           Decimal  @map("unit_price") @db.Decimal(18, 6)
+  amount              Decimal  @db.Decimal(18, 2)
+  confirmedById       String   @map("confirmed_by")
+  confirmedAt         DateTime @default(now()) @map("confirmed_at")
+
+  purchaseOrderItem FactoryPurchaseOrderItem             @relation(fields: [purchaseOrderItemId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+  supplierResponse  FactoryPurchaseOrderSupplierResponse @relation(fields: [supplierResponseId], references: [id], onDelete: Restrict)
+  confirmedBy       User                                 @relation("FactoryPurchaseOrderSupplierPrices", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderItemId, purchaseOrderId], map: "fpo_supplier_price_item_po_key")
+  @@index([purchaseOrderId], map: "fpo_supplier_price_po_idx")
+  @@index([supplierResponseId], map: "fpo_supplier_price_response_idx")
+  @@index([confirmedById], map: "fpo_supplier_price_user_idx")
+  @@map("factory_purchase_order_supplier_prices")
+}
+
+model SalesExecutionNumberSequence {
+  executionDate DateTime @id @map("execution_date") @db.Date
+  lastSequence  Int      @map("last_sequence")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("sales_execution_number_sequences")
+}

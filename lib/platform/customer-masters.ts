@@ -98,7 +98,7 @@ export async function listCustomers(query: CustomerQuery | null | undefined, act
 }
 
 export async function listAvailableCustomers(query: CustomerQuery, actor: CustomerActorInput) {
-  if (!canWrite(actor, "orders")) return [];
+  if (!canWrite(actor, "orders") && !canWrite(actor, "salesExecution")) return [];
   return listCustomers(query, actor);
 }
 

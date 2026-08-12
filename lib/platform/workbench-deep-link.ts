@@ -14,6 +14,7 @@ const WORKBENCH_ROUTE_QUERY_KEYS = new Map<string, ReadonlySet<string>>([
   ["/customer-communication", new Set(["orderId", "keyword"])],
   ["/ocean-control-tower", new Set(["orderId", "keyword", "trackingId"])],
   ["/logistics-fees", new Set(["orderId", "keyword", "billId"])],
+  ["/supplier-purchase-orders", new Set(["keyword", "purchaseOrderId"])],
   ["/supplier-documents", new Set(["orderId", "keyword", "requestId"])],
   ["/tax-refund", new Set(["orderId", "keyword", "status", "action"])],
 ]);

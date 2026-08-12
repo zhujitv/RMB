@@ -8,6 +8,12 @@ import { COMMON_SIGNATURE, NOTIFICATION_TYPES } from "./notification-definition-
 import type { NotificationTypeDefinition } from "./notification-definition-types";
 import { SECURITY_NOTIFICATION_TYPE_DEFINITIONS } from "./notification-security-definitions";
 import { FREIGHTOWER_NOTIFICATION_TYPE_DEFINITIONS } from "./notification-freightower-definitions";
+import { FACTORY_PURCHASE_ORDER_DISPATCH_NOTIFICATION_DEFINITION } from "./notification-factory-purchase-order-definition";
+import {
+  QUOTATION_CUSTOMER_EMAIL_BODY_TEMPLATE,
+  QUOTATION_CUSTOMER_EMAIL_SUBJECT_TEMPLATE,
+  QUOTATION_CUSTOMER_EMAIL_VARIABLES,
+} from "./quotation-email-values";
 
 export * from "./notification-definition-types";
 
@@ -38,6 +44,18 @@ export const NOTIFICATION_TYPE_DEFINITIONS: NotificationTypeDefinition[] = [
     ],
   },
   ...SECURITY_NOTIFICATION_TYPE_DEFINITIONS,
+  {
+    type: NOTIFICATION_TYPES.QUOTATION_CUSTOMER_EMAIL,
+    name: "客户报价单发送",
+    module: "报价管理",
+    description: "向客户发送英文报价邮件并附上对应版本的报价单 PDF。",
+    editable: true,
+    supportsAttachments: true,
+    subjectTemplate: QUOTATION_CUSTOMER_EMAIL_SUBJECT_TEMPLATE,
+    bodyTemplate: QUOTATION_CUSTOMER_EMAIL_BODY_TEMPLATE,
+    variables: QUOTATION_CUSTOMER_EMAIL_VARIABLES,
+  },
+  FACTORY_PURCHASE_ORDER_DISPATCH_NOTIFICATION_DEFINITION,
   {
     type: NOTIFICATION_TYPES.SHIPPING_DOCUMENTS,
     name: "清关资料通知",

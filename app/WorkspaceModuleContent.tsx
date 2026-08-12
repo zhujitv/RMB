@@ -19,12 +19,15 @@ function BusinessModuleLoading() {
 }
 
 const OrdersModule = dynamic(() => import("./modules/OrdersModule").then((module) => module.OrdersModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
+const QuotesModule = dynamic(() => import("./modules/QuotesModule").then((module) => module.QuotesModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
+const SalesExecutionModule = dynamic(() => import("./modules/SalesExecutionModule").then((module) => module.SalesExecutionModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const DashboardModule = dynamic(() => import("./modules/DashboardModule").then((module) => module.DashboardModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const PaymentsModule = dynamic(() => import("./modules/PaymentsModule").then((module) => module.PaymentsModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const CostsModule = dynamic(() => import("./modules/CostsModule").then((module) => module.CostsModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const DomesticLogisticsModule = dynamic(() => import("./modules/DomesticLogisticsModule").then((module) => module.DomesticLogisticsModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const CustomerCommunicationModule = dynamic(() => import("./modules/CustomerCommunicationModule").then((module) => module.CustomerCommunicationModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const LogisticsFeesModule = dynamic(() => import("./modules/LogisticsFeesModule").then((module) => module.LogisticsFeesModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
+const SupplierPurchaseOrdersModule = dynamic(() => import("./modules/SupplierPurchaseOrdersModule").then((module) => module.SupplierPurchaseOrdersModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const SupplierDocumentsModule = dynamic(() => import("./modules/SupplierDocumentsModule").then((module) => module.SupplierDocumentsModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const ProfitModule = dynamic(() => import("./modules/ProfitModule").then((module) => module.ProfitModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
 const TaxRefundModule = dynamic(() => import("./modules/TaxRefundModule").then((module) => module.TaxRefundModule), { ssr: false, loading: () => <BusinessModuleLoading /> });
@@ -78,6 +81,33 @@ export function WorkspaceModuleContent({
   if (!allowedMenuKeys.has(activeMenu)) {
     return <StatusPanel title="无权限访问" message="当前账号没有该功能模块权限，请从左侧选择可用菜单。" actionLabel="返回工作台首页" onAction={() => openWorkspaceMenu("welcome")} />;
   }
+  if (activeMenu === "quotations") {
+    return (
+      <QuotesModule
+        currentUser={payload.user}
+        permissions={payload.permissions}
+        initialKeyword={focus.keyword}
+        initialOpenToken={focus.token}
+        onOpenSalesExecution={(quotationId, quoteNo, executionId, executionNo) => openWorkspaceMenu("salesExecution", executionId ? {
+          executionId,
+        } : { action: "convert", quotationId }, { forceNew: true, title: executionId ? `销售执行 · ${executionNo || "未编号"}` : `新建销售执行 · ${quoteNo || "报价"}` })}
+      />
+    );
+  }
+  if (activeMenu === "salesExecution") {
+    return (
+      <SalesExecutionModule
+        currentUser={payload.user}
+        permissions={payload.permissions}
+        initialKeyword={focus.keyword}
+        initialAction={focus.action}
+        initialQuotationId={focus.quotationId}
+        initialExecutionId={focus.executionId}
+        initialOpenToken={focus.token}
+        onOpenReceivableOrder={(orderNo) => openWorkspaceMenu("orders", { keyword: orderNo }, { forceNew: true, title: `应收订单 · ${orderNo}` })}
+      />
+    );
+  }
   if (activeMenu === "orders") {
     return (
       <OrdersModule
@@ -90,8 +120,8 @@ export function WorkspaceModuleContent({
     );
   }
   if (activeMenu === "dashboard") return <DashboardModule />;
-  if (activeMenu === "payments") return <PaymentsModule currentUser={payload.user} initialKeyword={focus.keyword} initialOpenToken={focus.token} />;
-  if (activeMenu === "costs") return <CostsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={focus.keyword} initialOpenToken={focus.token} />;
+  if (activeMenu === "payments") return <PaymentsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={focus.keyword} initialPaymentId={focus.paymentId} initialOpenToken={focus.token} />;
+  if (activeMenu === "costs") return <CostsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={focus.keyword} initialCostId={focus.costId} initialOpenToken={focus.token} />;
   if (activeMenu === "domesticLogistics") {
     return (
       <DomesticLogisticsModule
@@ -115,10 +145,13 @@ export function WorkspaceModuleContent({
   if (activeMenu === "oceanControlTower") {
     return <DomesticLogisticsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={focus.keyword} initialOpenToken={focus.token} initialView="controlTower" initialControlTowerFullscreen />;
   }
-  if (activeMenu === "supplierDocuments") {
-    return <SupplierDocumentsModule currentUser={payload.user} initialKeyword={focus.keyword} initialRequestId={focus.requestId} initialOpenToken={focus.token} onRefreshTodos={() => loadWorkbenchTodos({ refresh: true })} />;
+  if (activeMenu === "supplierPurchaseOrders") {
+    return <SupplierPurchaseOrdersModule canWrite={canWritePermission(payload.user, payload.permissions, "supplierPurchaseOrders", ["产品供应商", "产品供应商账号", "工厂供应商账号"])} initialKeyword={focus.keyword} initialPurchaseOrderId={focus.purchaseOrderId} initialOpenToken={focus.token} />;
   }
-  if (activeMenu === "profit") return <ProfitModule currentUser={payload.user} initialKeyword={focus.keyword} initialOpenToken={focus.token} />;
+  if (activeMenu === "supplierDocuments") {
+    return <SupplierDocumentsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={focus.keyword} initialRequestId={focus.requestId} initialOpenToken={focus.token} onRefreshTodos={() => loadWorkbenchTodos({ refresh: true })} />;
+  }
+  if (activeMenu === "profit") return <ProfitModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={focus.keyword} initialOpenToken={focus.token} />;
   if (activeMenu === "taxRefund") {
     return (
       <TaxRefundModule

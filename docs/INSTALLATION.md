@@ -262,8 +262,9 @@ npm run verify:release
 
 说明：
 
-- `npm run build` 只构建应用。
+- `npm run build` 在任何环境都只构建应用，普通 Git/Vercel Production 构建不会自动执行 Prisma migration。
 - `npm run build:release` 会先执行 `prisma migrate deploy`，再构建应用。
+- 只有完成数据库备份并由受保护发布步骤显式调用时，才能使用 `npm run db:deploy` 或 `npm run build:release`。
 - 生产环境发布前必须确认数据库备份已经完成。
 
 ## 9. Vercel 部署流程
@@ -290,7 +291,7 @@ npm run build
 npm run build:release
 ```
 
-禁止把 `build:release` 配成 Preview 或普通 Vercel Build Command，避免构建失败时数据库已经被修改。推荐流程是：
+禁止把 `build:release` 配成 Preview 或普通 Vercel Build Command；默认 `npm run build` 不会根据 `VERCEL_ENV` 或 `VERCEL_TARGET_ENV` 自动迁移数据库。推荐流程是：
 
 1. 先手动备份数据库。
 2. 手动执行迁移。

@@ -4,17 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { useConfirmationDialog } from "../components";
 import { formatCny } from "../formatters";
-import type { User } from "../types";
+import type { PermissionSnapshot, User } from "../types";
+import { canWritePermission } from "../utils";
 import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 import { ProfitModuleView } from "./profit/module-view";
 import { PAGE_SIZE, type ProfitResponse, type ProfitRow } from "./profit/shared";
 
 export function ProfitModule({
   currentUser,
+  permissions,
   initialKeyword = "",
   initialOpenToken = 0,
 }: {
   currentUser: User;
+  permissions?: PermissionSnapshot;
   initialKeyword?: string;
   initialOpenToken?: number;
 }) {
@@ -38,8 +41,9 @@ export function ProfitModule({
     confirmConfirmation,
     updateConfirmationInput,
   } = useConfirmationDialog();
-  const canSettleCommission = ["管理员", "财务"].includes(currentUser.role);
-  const canReverseCommission = currentUser.role === "管理员";
+  const canWriteCommissions = canWritePermission(currentUser, permissions, "commissions", ["管理员", "财务"]);
+  const canSettleCommission = canWriteCommissions && ["管理员", "财务"].includes(currentUser.role);
+  const canReverseCommission = canWriteCommissions && currentUser.role === "管理员";
   useWorkspaceTabBusy(Boolean(settlingId || reversingId));
 
   async function loadRows(nextPage = page, nextKeyword = submittedKeyword) {

@@ -68,7 +68,7 @@ const freightowerPendingNotifications = readFileSync("lib/platform/freightower-n
 const freightowerSyncLease = readFileSync("lib/platform/shipsgo-tracking-sync-lease.ts", "utf8");
 const freightowerSyncLeaseMigration = readFileSync("prisma/migrations/20260810130000_freightower_sync_lease/migration.sql", "utf8");
 const notificationOutboxRoute = readFileSync("app/api/cron/notification-outbox/route.ts", "utf8");
-const notificationSend = readFileSync("lib/platform/notification-send.ts", "utf8");
+const freightowerNotificationRetry = readFileSync("lib/platform/notification-freightower-retry.ts", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
 
 test("tracking settings force Freightower as the only provider and keep secrets private", () => {
@@ -279,8 +279,8 @@ test("Freightower tracking notifications persist a durable pending watermark and
   assert.match(freightowerPendingNotifications, /skipped: "error"/);
   assert.match(notificationOutboxRoute, /await processPendingFreightowerTrackingNotifications/);
   assert.match(notificationOutboxRoute, /物流待通知队列读取失败/);
-  assert.match(notificationSend, /status: "pending", updatedAt: \{ lte: staleAt \}/);
-  assert.match(notificationSend, /status: "sending", updatedAt: \{ lte: staleAt \}/);
+  assert.match(freightowerNotificationRetry, /status: "pending", updatedAt: \{ lte: staleAt \}/);
+  assert.match(freightowerNotificationRetry, /status: "sending", updatedAt: \{ lte: staleAt \}/);
 });
 
 test("settings UI focuses on the basic Freightower web workflow", () => {

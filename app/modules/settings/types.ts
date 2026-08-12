@@ -29,6 +29,7 @@ export type {
 export type {
   ApiPerformanceRow,
   AuditLogRow,
+  BusinessEntityBankAccountFields,
   BusinessEntityRow,
   CustomerRow,
   FiltersFor,
