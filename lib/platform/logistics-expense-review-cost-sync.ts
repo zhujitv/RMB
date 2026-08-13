@@ -15,6 +15,7 @@ import {
 import { assertNoSettledLogisticsCostConflict } from "./logistics-expense-cost-safety";
 import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
 import { assertBusinessOrderWritableInTransaction } from "./business-archive";
+import type { LogisticsExpenseReviewTransactionStep } from "./logistics-expense-review-diagnostics";
 
 export async function syncApprovedLogisticsBillWorkflowStates(
   tx: Prisma.TransactionClient,
@@ -73,9 +74,11 @@ export async function syncApprovedLogisticsExpenseCosts(
     allowCommissionSettled?: boolean;
     orderLocksAlreadyHeld?: boolean;
     expectedOrderIds?: string[];
+    onStep?: (step: LogisticsExpenseReviewTransactionStep) => void;
   } = {},
 ) {
   if (!rows.length) throw codedError("物流费用账单缺少费用明细，不能同步成本。", 409, "LOGISTICS_COST_SYNC_ROWS_EMPTY");
+  options.onStep?.("order-scope");
   const orderIds = [...new Set(rows.map((row) => nonEmpty(row.orderId)).filter(Boolean))].sort();
   if (options.orderLocksAlreadyHeld) {
     const expectedOrderIds = [...new Set((options.expectedOrderIds || []).map(nonEmpty).filter(Boolean))].sort();
@@ -83,6 +86,7 @@ export async function syncApprovedLogisticsExpenseCosts(
       throw codedError("物流费用关联订单已变化，成本同步已取消，请刷新后重试。", 409, "LOGISTICS_COST_ORDER_SCOPE_CHANGED");
     }
   } else {
+    options.onStep?.("archive-commission-check");
     for (const orderId of orderIds) {
       await assertBusinessOrderWritableInTransaction(
         tx,
@@ -95,9 +99,11 @@ export async function syncApprovedLogisticsExpenseCosts(
     }
   }
   const settledCostMode = options.settledCostMode || "reject";
+  options.onStep?.("settled-cost");
   if (settledCostMode === "reject") {
     await assertNoSettledLogisticsCostConflict(tx, rows);
   }
+  options.onStep?.("cost-sync");
   const links: CostLink[] = [];
   for (const row of rows) {
     const cost = await createOrUpdateCostFromLogisticsExpense(tx, row, actor, {
@@ -106,6 +112,7 @@ export async function syncApprovedLogisticsExpenseCosts(
     });
     links.push({ expenseId: row.id, costId: cost.id, invoiceDocumentId: row.invoiceDocumentId || null });
   }
+  options.onStep?.("cost-link");
   await updateLogisticsExpenseCostIds(tx, links);
   await linkLogisticsExpenseInvoiceDocumentsToCosts(tx, links);
   return links;

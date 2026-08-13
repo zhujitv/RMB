@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { nonEmpty } from "./shared";
+import { logisticsExpenseReviewDatabaseErrorDiagnostic } from "./logistics-expense-review-diagnostics";
 import {
   aggregateLogisticsExpenseStatus,
   includeLogisticsExpenseRelations,
@@ -16,6 +17,9 @@ import {
 } from "./logistics-expense-workflow-core";
 
 export function logisticsExpenseReviewSafeErrorMessage(error: unknown) {
+  if (logisticsExpenseReviewDatabaseErrorDiagnostic(error)) {
+    return "审核失败：数据库查询结构异常，请联系管理员。";
+  }
   const message = errorMessage(error);
   if (/expired transaction|Transaction API error|timeout|timed out|P2028/i.test(message)) {
     return "审核失败：系统处理超时，请稍后重试。";
@@ -37,7 +41,7 @@ export function logisticsExpenseReviewResultFromRows(rows: LogisticsExpenseRow[]
 }
 
 export function logisticsExpenseReviewResultFromError(identifier: unknown, error: unknown): ReviewResult {
-  const message = errorMessage(error, "审核物流费用失败");
+  const message = logisticsExpenseReviewSafeErrorMessage(error) || "审核物流费用失败";
   return {
     billId: nonEmpty(identifier),
     orderNo: "",

@@ -37,6 +37,7 @@ import {
   type LogisticsExpenseApprovalAuditEntry,
 } from "./logistics-expense-workflow-review-helpers";
 import { processLogisticsInvoiceNotificationOutbox } from "./logistics-invoice-notification-outbox";
+import { logLogisticsExpenseReviewFailure } from "./logistics-expense-review-diagnostics";
 import type { LogisticsExpenseReviewExecutionOptions } from "./logistics-expense-review-types";
 
 function logisticsExpenseRowsAfterCommittedApproval(
@@ -97,6 +98,11 @@ export async function reviewLogisticsExpenseBills(
       approvalAuditEntries.push(...(approval?.auditEntries || []));
       committed = true;
     } catch (error: unknown) {
+      logLogisticsExpenseReviewFailure(error, {
+        phase: "direct-bill-transaction",
+        billCount: directBills.length,
+        rowCount: directBills.reduce((count, bill) => count + bill.rows.length, 0),
+      });
       const safeMessage = logisticsExpenseReviewSafeErrorMessage(error);
       for (const bill of directBills) {
         results.push(logisticsExpenseReviewResultFromRows(bill.rows, {
@@ -135,6 +141,11 @@ export async function reviewLogisticsExpenseBills(
       approvalAuditEntries.push(...(approval?.auditEntries || []));
       committed = true;
     } catch (error: unknown) {
+      logLogisticsExpenseReviewFailure(error, {
+        phase: "legacy-bill-transaction",
+        billCount: 1,
+        rowCount: bill.rows.length,
+      });
       const safeMessage = logisticsExpenseReviewSafeErrorMessage(error);
       results.push(logisticsExpenseReviewResultFromRows(bill.rows, {
         auditStatus: aggregateLogisticsExpenseStatus(bill.rows, "auditStatus"),

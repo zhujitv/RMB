@@ -24,12 +24,43 @@ import {
   syncApprovedLogisticsBillWorkflowStates,
   syncApprovedLogisticsExpenseCosts,
 } from "./logistics-expense-review-cost-sync";
+import {
+  attachLogisticsExpenseReviewTransactionTrace,
+  type LogisticsExpenseReviewTransactionPhase,
+  type LogisticsExpenseReviewTransactionStep,
+} from "./logistics-expense-review-diagnostics";
 
 export type LogisticsExpenseApprovalAuditEntry = {
   billId: string;
   before: { auditStatus: string };
   after: Record<string, unknown>;
 };
+
+async function runTracedLogisticsExpenseReviewTransaction<T>(
+  phase: LogisticsExpenseReviewTransactionPhase,
+  callback: (
+    tx: Prisma.TransactionClient,
+    markStep: (step: LogisticsExpenseReviewTransactionStep) => void,
+  ) => Promise<T>,
+) {
+  let step: LogisticsExpenseReviewTransactionStep = "transaction-setup";
+  let callbackCompleted = false;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const result = await callback(tx, (nextStep) => {
+        step = nextStep;
+      });
+      callbackCompleted = true;
+      return result;
+    }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+  } catch (error: unknown) {
+    attachLogisticsExpenseReviewTransactionTrace(error, {
+      phase,
+      step: callbackCompleted ? "transaction-commit" : step,
+    });
+    throw error;
+  }
+}
 
 export async function approveLogisticsExpenseBillsInTransaction(
   _request: AuditRequestLike,
@@ -41,15 +72,17 @@ export async function approveLogisticsExpenseBillsInTransaction(
   assertWorkflowActor(actor);
   const ids = [...new Set(billIds.map(nonEmpty).filter(Boolean))].sort();
   if (!ids.length) return;
-  return prisma.$transaction(async (tx) => {
+  return runTracedLogisticsExpenseReviewTransaction("direct-bill-transaction", async (tx, markStep) => {
     await tx.$executeRaw(Prisma.sql`SET LOCAL lock_timeout = '5s'`);
     await tx.$executeRaw(Prisma.sql`SET LOCAL statement_timeout = '12s'`);
+    markStep("order-scope");
     const orderRows = await tx.logisticsExpense.findMany({
       where: { billId: { in: ids }, deletedAt: null },
       select: { orderId: true },
       distinct: ["orderId"],
     });
     const orderIds = [...new Set(orderRows.map((row) => nonEmpty(row.orderId)).filter(Boolean))].sort();
+    markStep("archive-commission-check");
     for (const orderId of orderIds) {
       await assertBusinessOrderWritableInTransaction(
         tx,
@@ -58,9 +91,11 @@ export async function approveLogisticsExpenseBillsInTransaction(
       );
       await assertCommissionOrderWritableInTransaction(tx, orderId);
     }
+    markStep("bill-lock");
     for (const billId of ids) {
       await lockLogisticsBillForWorkflow(tx, billId);
     }
+    markStep("bill-update");
     const billUpdate = await tx.logisticsBill.updateMany({
       where: {
         id: { in: ids },
@@ -84,6 +119,7 @@ export async function approveLogisticsExpenseBillsInTransaction(
     if (billUpdate.count !== ids.length) {
       throw codedError("物流费用账单状态已变化，请刷新后重试。", 409, "LOGISTICS_BILL_STATUS_CHANGED");
     }
+    markStep("full-reload");
     const rows = await tx.logisticsExpense.findMany({
       where: {
         billId: { in: ids },
@@ -104,14 +140,18 @@ export async function approveLogisticsExpenseBillsInTransaction(
     ) {
       throw codedError("物流费用账单明细不完整，审核已取消，请刷新后重试。", 409, "LOGISTICS_BILL_ROWS_INCOMPLETE");
     }
+    markStep("header-check");
     for (const [billId, billRows] of rowsByBillId) {
       await assertLogisticsBillRowsMatchHeader(tx, billId, billRows);
     }
     const costLinks = await syncApprovedLogisticsExpenseCosts(tx, rows, actor, {
       orderLocksAlreadyHeld: true,
       expectedOrderIds: orderIds,
+      onStep: markStep,
     });
+    markStep("bill-workflow");
     await syncApprovedLogisticsBillWorkflowStates(tx, rows, actor);
+    markStep("outbox");
     const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents(tx, rows, actorId(actor), now);
     if (outboxIntents.length !== ids.length) {
       throw codedError("物流开票通知任务未完整入队，审核已取消。", 409, "LOGISTICS_INVOICE_OUTBOX_INCOMPLETE");
@@ -128,7 +168,7 @@ export async function approveLogisticsExpenseBillsInTransaction(
       } });
     }
     return { outboxIntents, costLinks, auditEntries };
-  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+  });
 }
 
 export async function approveLogisticsExpenseBillRowsInTransaction(
@@ -142,11 +182,13 @@ export async function approveLogisticsExpenseBillRowsInTransaction(
   const ids = rows.map((row) => row.id).filter(Boolean);
   if (!ids.length) return;
   const billId = rowBillId(rows[0]);
-  return prisma.$transaction(async (tx) => {
+  return runTracedLogisticsExpenseReviewTransaction("legacy-bill-transaction", async (tx, markStep) => {
     await tx.$executeRaw(Prisma.sql`SET LOCAL lock_timeout = '5s'`);
     await tx.$executeRaw(Prisma.sql`SET LOCAL statement_timeout = '12s'`);
     if (rows[0]?.billId) {
+      markStep("order-scope");
       const orderIds = [...new Set(rows.map((row) => nonEmpty(row.orderId)).filter(Boolean))].sort();
+      markStep("archive-commission-check");
       for (const orderId of orderIds) {
         await assertBusinessOrderWritableInTransaction(
           tx,
@@ -155,7 +197,9 @@ export async function approveLogisticsExpenseBillRowsInTransaction(
         );
         await assertCommissionOrderWritableInTransaction(tx, orderId);
       }
+      markStep("bill-lock");
       await lockLogisticsBillForWorkflow(tx, billId);
+      markStep("bill-update");
       const billUpdate = await tx.logisticsBill.updateMany({
         where: {
           id: billId,
@@ -179,6 +223,7 @@ export async function approveLogisticsExpenseBillRowsInTransaction(
       if (billUpdate.count !== 1) {
         throw codedError("物流费用账单状态已变化，请刷新后重试。", 409, "LOGISTICS_BILL_STATUS_CHANGED");
       }
+      markStep("full-reload");
       const savedRows = await tx.logisticsExpense.findMany({
         where: {
           id: { in: ids },
@@ -194,12 +239,16 @@ export async function approveLogisticsExpenseBillRowsInTransaction(
       if (savedRows.length !== expectedRowCount || savedRows.length !== ids.length) {
         throw codedError("物流费用账单明细不完整，审核已取消，请刷新后重试。", 409, "LOGISTICS_BILL_ROWS_INCOMPLETE");
       }
+      markStep("header-check");
       await assertLogisticsBillRowsMatchHeader(tx, billId, savedRows);
       const costLinks = await syncApprovedLogisticsExpenseCosts(tx, savedRows, actor, {
         orderLocksAlreadyHeld: true,
         expectedOrderIds: orderIds,
+        onStep: markStep,
       });
+      markStep("bill-workflow");
       await syncApprovedLogisticsBillWorkflowStates(tx, savedRows, actor);
+      markStep("outbox");
       const outboxIntents = await createLogisticsInvoiceApprovalOutboxIntents(tx, savedRows, actorId(actor), now);
       if (outboxIntents.length !== 1) {
         throw codedError("物流开票通知任务未完整入队，审核已取消。", 409, "LOGISTICS_INVOICE_OUTBOX_INCOMPLETE");
@@ -215,5 +264,5 @@ export async function approveLogisticsExpenseBillRowsInTransaction(
       return { outboxIntents, costLinks, auditEntries };
     }
     throw codedError("物流费用账单缺少主表状态，请先执行账单迁移。", 409, "LOGISTICS_BILL_REQUIRED");
-  }, LOGISTICS_EXPENSE_REVIEW_TRANSACTION_OPTIONS);
+  });
 }
