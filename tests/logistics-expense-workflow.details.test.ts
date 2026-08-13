@@ -297,8 +297,12 @@ test("logistics paid button is locked by bill state machine", () => {
   );
   assert.match(
     updateLogisticsExpensePaymentStatusSource,
-    /loadLogisticsExpenseBillRowsForAction\(id, actor\)/,
+    /loadLogisticsExpenseBillRowsForAction\(id, actor, \{ allowArchivedPayment: true \}\)/,
   );
+  assert.doesNotMatch(updateLogisticsExpensePaymentStatusSource, /assertBusinessOrderWritableInTransaction/);
+  assert.match(updateLogisticsExpensePaymentStatusSource, /await lockBusinessOrderForUpdate\(tx, orderId\)/);
+  assert.match(logisticsModule, /canMarkPaid=\{canConfirmInvoice\}/);
+  assert.match(logisticsModule, /未付款账单仍可继续登记付款/);
   assert.match(
     updateLogisticsExpensePaymentStatusSource,
     /canMarkLogisticsBillPaid\(\{/,
@@ -332,6 +336,7 @@ test("logistics paid button is locked by bill state machine", () => {
   assert.match(reverseLogisticsExpensePaymentSource, /assertCanReverseLogisticsPayment\(actor\)/);
   assert.match(reverseLogisticsExpensePaymentSource, /LOGISTICS_PAYMENT_REVERSAL_REASON_REQUIRED/);
   assert.match(reverseLogisticsExpensePaymentSource, /prisma\.\$transaction/);
+  assert.match(reverseLogisticsExpensePaymentSource, /await lockBusinessOrderForUpdate\(tx, orderId\)/);
   assert.match(reverseLogisticsExpensePaymentSource, /syncApprovedLogisticsExpenseCosts\(tx, currentRows, actor, \{[\s\S]*settledCostMode: "preserve-required"/);
   assert.match(reverseLogisticsExpensePaymentSource, /LOGISTICS_PAYMENT_REVERSAL_COST_LINK_INCOMPLETE/);
   assert.match(reverseLogisticsExpensePaymentSource, /paymentStatus: "待付款"/);

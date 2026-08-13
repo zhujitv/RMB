@@ -47,7 +47,11 @@ export async function reloadLogisticsExpenseRowsForBillIds(billIds: string[] = [
   return rows;
 }
 
-export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown, actor: ActorContext): Promise<LogisticsExpenseRow[]> {
+export async function loadLogisticsExpenseBillRowsForAction(
+  identifier: unknown,
+  actor: ActorContext,
+  options: { allowArchivedPayment?: boolean } = {},
+): Promise<LogisticsExpenseRow[]> {
   const text = requireText(identifier, "物流费用账单");
   if (!text.startsWith("bill:")) {
     const billRows = await prisma.logisticsExpense.findMany({
@@ -61,7 +65,7 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
       take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
     if (billRows.length) {
-      assertRowsAreWritable(billRows);
+      if (!options.allowArchivedPayment) assertRowsAreWritable(billRows);
       return billRows;
     }
   }
@@ -79,7 +83,7 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
       take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
     });
     const matchedRows = rows.filter((row) => rowMatchesLegacyBillKey(row, text));
-    assertRowsAreWritable(matchedRows);
+    if (!options.allowArchivedPayment) assertRowsAreWritable(matchedRows);
     return matchedRows;
   }
   const before = await loadLogisticsExpenseForAction(text, actor);
@@ -95,7 +99,7 @@ export async function loadLogisticsExpenseBillRowsForAction(identifier: unknown,
     take: LOGISTICS_BILL_DETAIL_SCAN_LIMIT,
   });
   const matchedRows = before.billId ? rows : rows.filter((row) => rowMatchesLegacyBillKey(row, billId));
-  assertRowsAreWritable(matchedRows);
+  if (!options.allowArchivedPayment) assertRowsAreWritable(matchedRows);
   return matchedRows;
 }
 

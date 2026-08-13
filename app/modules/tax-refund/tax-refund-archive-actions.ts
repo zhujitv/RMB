@@ -63,7 +63,7 @@ export function createTaxRefundArchiveActions(context: TaxRefundMutationsContext
       }
       const forceResult = await requestConfirmation({
         title: "确认强制提交退税并归档？",
-        message: `当前完整度：${completed}/${total || 0}（${percent}%）。提交前仍会强制检查全部有效物流费用已审核、发票齐全并完成付款。归档后历史数据可继续查询，利润分析不受影响。`,
+        message: `当前完整度：${completed}/${total || 0}（${percent}%）。提交前仍会强制检查全部有效物流费用已审核、发票齐全且成本资料一致；尚未付款不影响归档。归档后历史数据可继续查询，利润分析不受影响。`,
         details: [
           `订单：${row.orderNo || "-"}`,
           `提单号：${row.blNo || "-"}`,
@@ -84,7 +84,7 @@ export function createTaxRefundArchiveActions(context: TaxRefundMutationsContext
     } else {
       const submitResult = await requestConfirmation({
         title: "确认提交退税并归档？",
-        message: "系统将再次检查全部有效物流费用已审核、发票齐全并完成付款。提交成功后业务进入档案，历史费用和单据保留，利润分析不受影响。",
+        message: "系统将再次检查全部有效物流费用已审核、发票齐全且成本资料一致；尚未付款不影响归档。提交成功后业务进入档案，历史费用和单据保留，利润分析不受影响。",
         details: [
           `订单：${row.orderNo || "-"}`,
           `提单号：${row.blNo || "-"}`,

@@ -30,10 +30,10 @@ import {
   type UnknownRecord,
 } from "./logistics-expense-workflow-core";
 import { syncApprovedLogisticsExpenseCosts } from "./logistics-expense-workflow-review-helpers";
-import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 import {
   assertLogisticsBillNotVoided,
 } from "./logistics-expense-invoice-guards";
+import { lockBusinessOrderForUpdate } from "./business-archive";
 
 export async function reverseLogisticsExpensePayment(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
   assertCanReverseLogisticsPayment(actor);
@@ -41,18 +41,14 @@ export async function reverseLogisticsExpensePayment(request: AuditRequestLike, 
   if (!reason) {
     throw codedError("付款更正必须填写冲销原因。", 400, "LOGISTICS_PAYMENT_REVERSAL_REASON_REQUIRED");
   }
-  const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor, { allowArchivedPayment: true });
   if (!billRows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
   assertLogisticsBillNotVoided(billRows);
   const billId = rowBillId(billRows[0]);
   const orderId = nonEmpty(billRows[0]?.orderId);
   const reversedAt = new Date();
   const savedRows = await prisma.$transaction(async (tx) => {
-    await assertBusinessOrderWritableInTransaction(
-      tx,
-      orderId,
-      "该订单已提交退税并归档，不能冲销物流费用付款。",
-    );
+    await lockBusinessOrderForUpdate(tx, orderId);
     await lockLogisticsBillForWorkflow(tx, billId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },

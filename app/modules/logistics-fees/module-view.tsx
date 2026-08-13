@@ -216,7 +216,7 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
-      {readOnlyArchive ? <div className={styles.infoStrip}>已归档业务仅供查看，费用、发票和付款记录均已保留。</div> : null}
+      {readOnlyArchive ? <div className={styles.infoStrip}>已归档业务的费用、审核、发票和明细保持只读；未付款账单仍可继续登记付款。</div> : null}
 
       <LogisticsExpenseBillTable
         rows={rows}
@@ -254,7 +254,7 @@ export function LogisticsFeesModuleView(props: LogisticsFeesModuleViewProps) {
           ))}
           canConfirmInvoice={canConfirmInvoice && !readOnlyArchive}
           canManageInvoiceRecognition={!readOnlyArchive && (canConfirmInvoice || canReviewExpense)}
-          canMarkPaid={canConfirmInvoice && !readOnlyArchive}
+          canMarkPaid={canConfirmInvoice}
           canSubmitDraft={canCreateExpense && !readOnlyArchive}
           canDeleteExpense={canCreateExpense && !readOnlyArchive}
           canShowSupplier={currentUserRole === "管理员" || currentUserRole === "财务"}

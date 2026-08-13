@@ -86,7 +86,7 @@ test("a paid historical fee with a valid invoice file does not depend on legacy 
   assert.equal(summary.complete, true);
 });
 
-test("tax refund closure reports readable invoice and payment blockers", () => {
+test("tax refund closure reports invoice blockers without treating payment as an archive prerequisite", () => {
   const summary = analyzeTaxRefundLogisticsClosure([
     settledRow({
       invoiceDocumentId: null,
@@ -107,11 +107,10 @@ test("tax refund closure reports readable invoice and payment blockers", () => {
   assert.deepEqual(summary.blockers[0].reasons, [
     "审核状态为待审核",
     "物流发票未上传完整",
-    "付款状态为部分付款",
   ]);
 });
 
-test("legacy partial-paid wording is not treated as fully settled", () => {
+test("an unpaid or partially paid logistics fee can still be archived", () => {
   const summary = analyzeTaxRefundLogisticsClosure([
     settledRow({
       bill: {
@@ -123,8 +122,8 @@ test("legacy partial-paid wording is not treated as fully settled", () => {
       },
     }),
   ]);
-  assert.equal(summary.complete, false);
-  assert.deepEqual(summary.blockers[0].reasons, ["付款状态为部分付款"]);
+  assert.equal(summary.complete, true);
+  assert.deepEqual(summary.blockers, []);
 });
 
 test("tax refund closure blocks an approved logistics fee without a cost record", () => {
@@ -135,7 +134,7 @@ test("tax refund closure blocks an approved logistics fee without a cost record"
   assert.deepEqual(summary.blockers[0].reasons, ["成本管理中未生成对应成本"]);
 });
 
-test("tax refund closure blocks a paid bill whose cost payment was not synchronized", () => {
+test("tax refund closure does not require the generated cost to be paid", () => {
   const summary = analyzeTaxRefundLogisticsClosure([
     settledRow({
       cost: {
@@ -146,8 +145,8 @@ test("tax refund closure blocks a paid bill whose cost payment was not synchroni
       },
     }),
   ]);
-  assert.equal(summary.complete, false);
-  assert.deepEqual(summary.blockers[0].reasons, ["成本付款状态未同步（当前：待支付）"]);
+  assert.equal(summary.complete, true);
+  assert.deepEqual(summary.blockers, []);
 });
 
 test("tax refund closure accepts a historical paid cost whose redundant paid flag was not populated", () => {
@@ -165,7 +164,7 @@ test("tax refund closure accepts a historical paid cost whose redundant paid fla
   assert.deepEqual(summary.blockers, []);
 });
 
-test("tax refund closure still blocks a paid status without a payment date", () => {
+test("tax refund closure does not require a payment date", () => {
   const summary = analyzeTaxRefundLogisticsClosure([
     settledRow({
       cost: {
@@ -176,8 +175,8 @@ test("tax refund closure still blocks a paid status without a payment date", () 
       },
     }),
   ]);
-  assert.equal(summary.complete, false);
-  assert.deepEqual(summary.blockers[0].reasons, ["成本付款状态未同步（当前：已支付）"]);
+  assert.equal(summary.complete, true);
+  assert.deepEqual(summary.blockers, []);
 });
 
 test("legacy logistics payment reconciliation only updates exact paid-bill matches", () => {
@@ -287,4 +286,6 @@ test("tax refund submit and logistics mutations are wired to the closure archive
   assert.match(paymentSource, /syncApprovedLogisticsExpenseCosts\(tx, currentRows, actor(?:, \{[\s\S]*?\})?\)/);
   assert.match(paymentSource, /costUpdate\.count !== costIds\.length/);
   assert.doesNotMatch(paymentSource, /orderCost\.updateMany\([\s\S]*?\.catch\(\(\) => null\)/);
+  assert.match(paymentSource, /allowArchivedPayment: true/);
+  assert.match(paymentSource, /await lockBusinessOrderForUpdate\(tx, orderId\)/);
 });

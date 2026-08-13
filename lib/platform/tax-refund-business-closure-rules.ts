@@ -98,22 +98,9 @@ function normalizePaymentStatus(value: unknown) {
   return "待开票";
 }
 
-function normalizeCostPaymentStatus(value: unknown) {
-  const text = String(value || "").trim();
-  if (text.includes("部分")) return "部分支付";
-  if (text.includes("已支付") || text.includes("已付款")) return "已支付";
-  return "待支付";
-}
-
 function moneyKey(value: unknown) {
   const amount = Number(value || 0);
   return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
-}
-
-function dateKey(value: Date | string | null | undefined) {
-  if (!value) return "";
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
 function invoiceValidationPassed(value: unknown) {
@@ -152,7 +139,6 @@ export function analyzeTaxRefundLogisticsClosure(rows: TaxRefundLogisticsClosure
       const validationMessage = String(row.invoiceValidationMessage || "").trim();
       reasons.push(validationMessage || `发票校验状态为${row.invoiceValidationStatus || "未校验"}`);
     }
-    if (paymentStatus !== "已付款") reasons.push(`付款状态为${paymentStatus}`);
     const cost = row.cost;
     const activeCostExists = Boolean(
       row.costId
@@ -177,18 +163,6 @@ export function analyzeTaxRefundLogisticsClosure(rows: TaxRefundLogisticsClosure
       if (documentExists && String(cost.invoiceStatus || "").trim() !== "已收到") {
         reasons.push(`成本发票状态未同步（当前：${cost.invoiceStatus || "未收到"}）`);
       }
-      if (paymentStatus === "已付款") {
-        const costPaymentStatus = normalizeCostPaymentStatus(cost.paymentStatus);
-        const paymentDateMatches = !row.bill?.paymentDate || dateKey(cost.paymentDate) === dateKey(row.bill.paymentDate);
-        // Historical logistics payments already used paymentStatus + paymentDate as
-        // the authoritative ledger fields. Some older rows did not also populate
-        // the redundant `paid` boolean, so do not reject an otherwise consistent
-        // fully-paid record solely because that compatibility flag is false.
-        const costPaymentRecorded = costPaymentStatus === "已支付" && Boolean(dateKey(cost.paymentDate));
-        if (!costPaymentRecorded || !paymentDateMatches) {
-          reasons.push(`成本付款状态未同步（当前：${costPaymentStatus}）`);
-        }
-      }
     }
     return reasons.length ? [{ expenseId: row.id, label: closureRowLabel(row), reasons }] : [];
   });
@@ -203,5 +177,5 @@ export function taxRefundLogisticsClosureErrorMessage(blockers: TaxRefundLogisti
   const visible = blockers.slice(0, 8).map((blocker) => `${blocker.label}：${blocker.reasons.join("、")}`);
   const hiddenCount = Math.max(0, blockers.length - visible.length);
   const hiddenText = hiddenCount ? `；另有 ${hiddenCount} 项未完成` : "";
-  return `物流费用尚未全部结清，不能提交退税：${visible.join("；")}${hiddenText}。请先在物流费用模块完成审核、发票和付款。`;
+  return `物流费用资料尚未满足归档条件，不能提交退税：${visible.join("；")}${hiddenText}。请先在物流费用模块完成审核、发票和成本资料确认。`;
 }

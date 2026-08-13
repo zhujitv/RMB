@@ -134,6 +134,13 @@ test("orders api sorts receivable orders by created time", () => {
   assert.doesNotMatch(ordersListService, /sortedRows\.slice\(start, start \+ pageSize\)/);
 });
 
+test("tax refund archive never hides receivable orders", () => {
+  assert.doesNotMatch(ordersListService, /archiveScope|businessScope|taxArchiveScope/);
+  assert.doesNotMatch(ordersListService, /orderArchiveWhere/);
+  assert.doesNotMatch(ordersListService, /taxArchived|taxRefundStatus/);
+  assert.match(ordersListService, /const clauses: Prisma\.ReceivableOrderWhereInput\[\] = \[\s*\{ deletedAt: null \},\s*orderAccessWhere\(actor\),\s*\]/);
+});
+
 test("paginated orders use a DTO that does not expose unloaded detail relations", () => {
   assert.match(orderSerialization, /export function serializeOrderListRow/);
   assert.match(orderSerialization, /export type SerializedOrderListRowDto = ReturnType<typeof serializeOrderListRow>/);

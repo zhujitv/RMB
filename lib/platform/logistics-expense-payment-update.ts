@@ -36,7 +36,7 @@ import {
 } from "./logistics-expense-workflow-core";
 import { syncApprovedLogisticsExpenseCosts } from "./logistics-expense-workflow-review-helpers";
 import { assertNoSettledLogisticsCostConflict } from "./logistics-expense-cost-safety";
-import { assertBusinessOrderWritableInTransaction } from "./business-archive";
+import { lockBusinessOrderForUpdate } from "./business-archive";
 import {
   assertLogisticsBillNotVoided,
   assertActiveLogisticsInvoiceDocuments,
@@ -45,7 +45,7 @@ import {
 
 export async function updateLogisticsExpensePaymentStatus(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
   assertCanConfirmLogisticsInvoice(actor);
-  const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor);
+  const billRows = await loadLogisticsExpenseBillRowsForAction(id, actor, { allowArchivedPayment: true });
   if (!billRows.length) throw permissionError("物流费用账单不存在或无权访问", 404);
   assertLogisticsBillNotVoided(billRows);
   const before = billRows[0];
@@ -81,11 +81,7 @@ export async function updateLogisticsExpensePaymentStatus(request: AuditRequestL
   const billId = rowBillId(before);
   const orderId = nonEmpty(before.orderId);
   const savedRows = await prisma.$transaction(async (tx) => {
-    await assertBusinessOrderWritableInTransaction(
-      tx,
-      orderId,
-      "该订单已提交退税并归档，不能再修改物流费用付款状态。",
-    );
+    await lockBusinessOrderForUpdate(tx, orderId);
     await lockLogisticsBillForWorkflow(tx, billId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
