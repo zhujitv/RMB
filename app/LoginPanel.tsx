@@ -8,6 +8,8 @@ import type { CompanyProfileSettings } from "./types";
 
 const ICP_RECORD_NUMBER = "浙ICP备2026063624号-1";
 const ICP_RECORD_URL = "https://beian.miit.gov.cn/";
+const PUBLIC_SECURITY_RECORD_NUMBER = "浙公网安备33068102001425号";
+const PUBLIC_SECURITY_RECORD_URL = "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33068102001425";
 
 type LoginPanelProps = {
   message?: string;
@@ -151,8 +153,13 @@ export function LoginPanel({
       <footer className={styles.loginFooter}>
         {footerText ? <span>{footerText}</span> : null}
         <nav aria-label="网站备案信息">
-          <a href={ICP_RECORD_URL} target="_blank" rel="noopener noreferrer">
-            {ICP_RECORD_NUMBER}
+          <a className={styles.loginFilingLink} href={ICP_RECORD_URL} target="_blank" rel="noopener noreferrer">
+            <span className={styles.loginIcpMark} aria-hidden="true">ICP</span>
+            <span>{ICP_RECORD_NUMBER}</span>
+          </a>
+          <a className={styles.loginFilingLink} href={PUBLIC_SECURITY_RECORD_URL} target="_blank" rel="noopener noreferrer">
+            <img className={styles.loginFilingIcon} src="/gongan.png" alt="" aria-hidden="true" />
+            <span>{PUBLIC_SECURITY_RECORD_NUMBER}</span>
           </a>
         </nav>
       </footer>

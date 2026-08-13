@@ -1,0 +1,27 @@
+.loginFilingLink {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 6px;
+}
+
+.loginFilingIcon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  object-fit: contain;
+}
+
+.loginIcpMark {
+  display: inline-grid;
+  width: 24px;
+  height: 18px;
+  flex: 0 0 24px;
+  border: 1px solid rgba(100, 116, 139, 0.48);
+  border-radius: 5px;
+  place-items: center;
+  color: #64748b;
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1;
+}
