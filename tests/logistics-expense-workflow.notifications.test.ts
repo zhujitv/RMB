@@ -62,7 +62,7 @@ import {
   logisticsExpenseQueries,
   listLogisticsExpensesSource,
   logisticsSupplierStatementSource,
-  vercelConfigSource,
+  cronConfigSource,
 } from "./logistics-expense-workflow-context.ts";
 
 test("approved logistics expenses notify supplier contacts without coupling email delivery to approval", () => {
@@ -131,7 +131,7 @@ test("approved logistics expenses notify supplier contacts without coupling emai
 	assert.match(logisticsNotificationOutboxCronRoute, /assertCronSecret\(request\)/);
 	assert.match(logisticsNotificationOutboxCronRoute, /processLogisticsInvoiceNotificationOutbox\(\{ limit: 8 \}\)/);
 	assert.match(logisticsNotificationOutboxCronRoute, /maxDuration = 300/);
-	assert.match(vercelConfigSource, /"path": "\/api\/cron\/notification-outbox"[\s\S]*"schedule": "\*\/5 \* \* \* \*"/);
+	assert.match(cronConfigSource, /"path": "\/api\/cron\/notification-outbox"[\s\S]*"schedule": "\*\/5 \* \* \* \*"/);
 	assert.match(backend, /isLegacyLogisticsTemplateFingerprint/);
 	assert.match(backend, /signal: resendRequestSignal\(\)/);
 	assert.match(backend, /await assertResendResponseOk\(response\)/);

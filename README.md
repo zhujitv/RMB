@@ -824,7 +824,7 @@ API_RATE_LIMIT_REGISTRATION_LIMIT=5
 SINGLE_INSTANCE_MEMORY_RATE_LIMIT=true
 ```
 
-只要增加进程、实例或扩容，就必须先改用 Redis 并删除该开关。Vercel Production 严禁使用此开关，即使同时配置了 Redis，安全检查也会拒绝这种冲突配置。
+只要增加进程、实例或扩容，就必须先改用 Redis 并删除该开关。任何多进程、多实例或无服务器生产环境都不得使用此开关。
 
 腾讯云 CVM 通过 Nginx 等反向代理运行时，还应配置：
 
@@ -867,7 +867,7 @@ R2_ENDPOINT=
 
 ## 定时任务
 
-自托管环境必须用唯一的 systemd timer 或 cron 调度以下路径（`vercel.json` 仅保留任务频率参考，不负责腾讯云执行）：
+腾讯云必须用唯一的 systemd timer 或 cron 调度以下路径，频率统一维护在 `config/tencent-cloud-cron.json`：
 
 ```text
 /api/reminders/run
@@ -990,23 +990,24 @@ npm run db:studio
 
 ## 部署说明
 
-当前生产环境使用 GitHub 作为代码源，并在腾讯云 CVM 上以 Nginx + systemd 运行 Next.js；数据库使用腾讯云 PostgreSQL，附件使用腾讯云 COS 私有桶。Vercel 项目已停止使用，不作为当前发布或验收依据。
+当前生产环境只部署到腾讯云 CVM，以 Nginx + systemd 运行 Next.js；数据库使用腾讯云 PostgreSQL，附件使用腾讯云 COS 私有桶。Vercel 发布配置已经移除，不作为当前发布或验收依据。GitHub 是代码和正式版本的唯一档案库，每个上线版本都必须保存 commit、Git tag 和 GitHub Release。
 
 安全发布顺序：
 
 1. 只选择本次功能文件提交并推送到 GitHub `main`，禁止在脏工作区宽泛暂存。
-2. 在腾讯云确认数据库备份成功，并核对当前 migration 状态。
-3. 确认该 commit 的 GitHub Actions 已通过；CVM 在新的版本目录拉取同一 SHA 并执行 `npm ci`。
-4. 只有存在待执行 migration 时，才在维护窗口显式执行：
+2. 确认该 commit 的 GitHub Actions 已通过，为本次正式版本创建并推送 `vX.Y.Z` Git tag；`GitHub Release Archive` workflow 会自动创建 GitHub Release。
+3. CVM 从 GitHub 拉取并检出同一 tag 或 commit SHA，然后执行 `npm ci`。
+4. 如果存在数据库 migration，先确认数据库备份成功并核对 migration 状态。数据库备份属于业务数据保护，不是代码版本备份。
+5. 只有存在待执行 migration 时，才在维护窗口显式执行：
 
 ```bash
 npm run db:deploy
 ```
 
-5. 使用 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
-6. 原子切换当前版本目录并重启唯一的应用服务，保留旧版本目录用于代码回滚。
-7. 核对服务器运行 commit 与 GitHub SHA 一致、systemd 服务正常、仅一个 Next.js 运行进程、`www` 返回 200、裸域名正确跳转。
-8. 登录后验收报价、销售执行、供应商采购、应收订单、COS 附件和邮件流程。
+6. 使用 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
+7. 重启唯一的应用服务。腾讯云不保留源码压缩包、旧 release 目录或代码版本备份；需要回滚时从 GitHub 检出上一个正式 tag 后重新构建。
+8. 核对服务器运行 commit 与 GitHub SHA 一致、systemd 服务正常、仅一个 Next.js 运行进程、`www` 返回 200、裸域名正确跳转。
+9. 登录后验收报价、销售执行、供应商采购、应收订单、COS 附件和邮件流程。
 
 代码层发布前执行：
 
@@ -1044,9 +1045,10 @@ git commit -m "<清晰描述本次修改>"
 git push origin main
 ```
 
-- 推送到 `main` 只完成代码同步和 GitHub Actions 校验；腾讯云仍必须拉取目标 SHA、构建、切换版本并重启服务。
+- 推送到 `main` 只完成代码同步和 GitHub Actions 校验；正式上线前还必须推送 `vX.Y.Z` Git tag，由 GitHub 自动创建 Release，腾讯云再拉取目标版本、构建并重启服务。
 - GitHub Actions 的 `CI` workflow 运行 `npm run verify:ci`，不连接或迁移生产数据库，也不直接重启腾讯云服务。
 - 如需数据库结构变更，必须在备份后于上线窗口单独执行一次 `npm run db:deploy`；普通构建不会替代生产迁移。
+- GitHub 保存全部代码版本；腾讯云只运行当前目标 SHA，不额外保存代码版本副本。回滚代码时从 GitHub 拉取上一个正式 tag。
 - 工作区存在无关文件时，只 stage 本次变更文件，避免把临时文档、输出目录或调试文件带入部署 commit。
 - 发布完成必须同时验证 GitHub SHA、服务器运行 SHA、服务状态和真实公网页面，不能只以 `git push` 成功作为上线完成。
 

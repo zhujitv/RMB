@@ -66,7 +66,7 @@ const prismaSchema = readPrismaSchemaSource();
 const reportService = readReportServiceSource();
 const manualModule = readFileSync("app/modules/ManualModule.tsx", "utf8");
 const sharedConstants = readSharedConstantsSource();
-const vercelConfig = readFileSync("vercel.json", "utf8");
+const cronConfig = readFileSync("config/tencent-cloud-cron.json", "utf8");
 
 test("domestic logistics list keeps compact accepted columns", () => {
   const tableHead = moduleSource.match(/<th className=\{styles\.orderNoColumn\}>订单号<\/th>[\s\S]*?<th className=\{styles\.detailActionColumn\}>详情<\/th>/)?.[0] || "";
@@ -355,7 +355,7 @@ test("domestic logistics supports bulk warehouse entry mode", () => {
 test("domestic logistics no longer exposes ocean auto tracking feature", () => {
   for (const text of ["海运自动跟踪", "每天自动同步一次", "立即同步", "OCEAN_TRACKING_API_URL", "/api/ocean-carriers", "/api/cron/ocean-tracking"]) {
     assert.doesNotMatch(moduleSource, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    assert.doesNotMatch(vercelConfig, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.doesNotMatch(cronConfig, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 });
 

@@ -52,7 +52,7 @@ const recoverRoute = readFileSync("app/api/freightower/ocean-trackings/recover/r
 const controlTowerRoute = readFileSync("app/api/freightower/ocean-trackings/control-tower/route.ts", "utf8");
 const webhookRoute = readFileSync("app/api/freightower/webhook/route.ts", "utf8");
 const cronRoute = readFileSync("app/api/cron/freightower-sync/route.ts", "utf8");
-const vercelConfig = readFileSync("vercel.json", "utf8");
+const cronConfig = readFileSync("config/tencent-cloud-cron.json", "utf8");
 const settingsModule = readSettingsModuleSource();
 const logisticsModule = readDomesticLogisticsModuleSource();
 const logisticsOps = readDomesticLogisticsOpsSource();
@@ -352,8 +352,8 @@ test("Freightower routes cover create, read, delete, sync, recovery, webhook, an
   assert.match(webhookRoute, /readWebhookBody\(request\)/);
   assert.match(webhookRoute, /handleShipsgoWebhook\(rawBody, null, request\.headers\)/);
   assert.match(cronRoute, /syncDueShipsgoOceanTrackings\(request, actor\)/);
-  assert.match(vercelConfig, /"path": "\/api\/cron\/freightower-sync"/);
-  assert.match(vercelConfig, /"schedule": "\*\/30 \* \* \* \*"/);
+  assert.match(cronConfig, /"path": "\/api\/cron\/freightower-sync"/);
+  assert.match(cronConfig, /"schedule": "\*\/30 \* \* \* \*"/);
   assert.match(scheduledService, /if \(!settings\.autoSyncEnabled\)/);
   assert.match(scheduledService, /syncStatus: "SUBSCRIBED", lastSyncTime: \{ lt: subscribedCutoff \}/);
   assert.match(scheduledService, /trackingUpdateFromFreightowerMappedShipment/);

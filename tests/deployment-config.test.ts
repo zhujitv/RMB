@@ -4,7 +4,9 @@ import test from "node:test";
 
 type CronEntry = { path?: unknown; schedule?: unknown };
 
-const config = JSON.parse(readFileSync("vercel.json", "utf8")) as { crons?: CronEntry[] };
+const config = JSON.parse(readFileSync("config/tencent-cloud-cron.json", "utf8")) as {
+  crons?: CronEntry[];
+};
 
 test("every configured cron points to a real authenticated route", () => {
   const crons = config.crons || [];
@@ -38,15 +40,19 @@ test("release version is consistent between package manifests", () => {
   assert.equal(lockManifest.packages?.[""]?.version, packageManifest.version);
 });
 
-test("ordinary Git and Vercel builds never deploy database migrations", () => {
+test("ordinary Git and Tencent Cloud builds never deploy database migrations", () => {
   const packageManifest = JSON.parse(readFileSync("package.json", "utf8")) as {
     scripts?: Record<string, unknown>;
   };
-  const buildScript = readFileSync("scripts/vercel-release-build.mjs", "utf8");
 
-  assert.equal(packageManifest.scripts?.build, "node scripts/vercel-release-build.mjs");
-  assert.match(buildScript, /runNpmScript\("build:app"\)/);
-  assert.doesNotMatch(buildScript, /db:deploy|prisma\s+migrate\s+deploy/);
+  assert.equal(packageManifest.scripts?.build, "npm run build:app");
+  assert.doesNotMatch(String(packageManifest.scripts?.build), /db:deploy|prisma\s+migrate\s+deploy/);
+});
+
+test("repository has no Vercel deployment entrypoints", () => {
+  assert.equal(existsSync(".github/workflows/vercel-deploy.yml"), false);
+  assert.equal(existsSync("vercel.json"), false);
+  assert.equal(existsSync("scripts/vercel-release-build.mjs"), false);
 });
 
 test("database migration remains an explicit protected release action", () => {

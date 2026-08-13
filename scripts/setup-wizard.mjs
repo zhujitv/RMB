@@ -227,7 +227,7 @@ function renderEnv(values) {
 
 async function main() {
   console.log("\nNEXTWOOD 供应链协同平台初始化安装向导\n");
-  console.log("本向导会生成本地环境变量文件，不会自动修改数据库，也不会上传密钥到 Vercel。\n");
+  console.log("本向导会生成本地环境变量文件，不会自动修改数据库，也不会上传密钥到腾讯云。\n");
 
   const databaseUrl = await collectDatabaseUrl();
   const appUrl = await ask("系统固定访问地址", "http://localhost:3000");
@@ -281,7 +281,7 @@ async function main() {
   console.log("2. 执行 npm run db:deploy 创建空白数据库表结构。");
   console.log("3. 执行 npm run build 验证生产构建。");
   console.log("4. 本地预览执行 npm run dev。");
-  console.log("5. 部署到 Vercel 时，把本文件中的变量配置到 Vercel Production Environment Variables。");
+  console.log("5. 部署到腾讯云时，在 CVM 的受保护环境文件中配置这些变量，不要提交到 GitHub。");
   console.log("\n完成。");
 }
 

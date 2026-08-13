@@ -34,7 +34,7 @@ const sharedExchangeSource = readFileSync("lib/platform/shared-exchange-settings
 const settingsHelpersSource = `${readSettingsModuleSource()}\n${readFileSync("lib/platform/shared-exchange-settings.ts", "utf8")}`;
 const settingsCardsSource = readSettingsModuleSource();
 const schema = readPrismaSchemaSource();
-const vercelConfig = readFileSync("vercel.json", "utf8");
+const cronConfig = readFileSync("config/tencent-cloud-cron.json", "utf8");
 const styles = readCssModuleGraphSource("app/styles/workspace-shell/workbench.module.css");
 
 test("workbench todo priority follows due date rules", () => {
@@ -366,7 +366,7 @@ test("workbench overdue reminder cron sends one email per owner per day", () => 
   assert.match(reminderSource, /WORKBENCH_TODO_OVERDUE/);
   assert.match(reminderSource, /emailStatus: "SKIPPED"/);
   assert.match(notificationEngineSource, /【NEXTWOOD ERP】待办事项已逾期超过 5 天/);
-  assert.match(vercelConfig, /\/api\/cron\/workbench-overdue-todos/);
+  assert.match(cronConfig, /\/api\/cron\/workbench-overdue-todos/);
 });
 
 test("workbench home and topbar consume unified todo DTO without opening new windows", () => {

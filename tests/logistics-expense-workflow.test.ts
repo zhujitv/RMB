@@ -65,7 +65,7 @@ import {
 } from "./logistics-expense-workflow-context.ts";
 
 const logisticsInvoiceOcrCron = readFileSync("app/api/cron/logistics-invoice-ocr/route.ts", "utf8");
-const vercelConfig = readFileSync("vercel.json", "utf8");
+const cronConfig = readFileSync("config/tencent-cloud-cron.json", "utf8");
 
 test("logistics expenses are stored outside official costs until approved", () => {
   const logisticsExpenseModel = schema.match(
@@ -447,7 +447,7 @@ test("logistics invoice upload starts on file selection and shows upload progres
   assert.match(backend, /createLogisticsInvoiceRecognitionTask\([\s\S]*, tx\)/);
   assert.match(logisticsInvoiceOcrCron, /assertCronSecret\(request\)/);
   assert.match(logisticsInvoiceOcrCron, /runPendingLogisticsInvoiceOcrTasks\(5\)/);
-  assert.match(vercelConfig, /"path": "\/api\/cron\/logistics-invoice-ocr"[\s\S]*"schedule": "\*\/5 \* \* \* \*"/);
+  assert.match(cronConfig, /"path": "\/api\/cron\/logistics-invoice-ocr"[\s\S]*"schedule": "\*\/5 \* \* \* \*"/);
   assert.match(invoiceUploadFormSource, /styles\.invoiceUploadProgressBar/);
   assert.match(invoiceUploadFormSource, /accept=\{PDF_UPLOAD_ACCEPT\}/);
   assert.match(

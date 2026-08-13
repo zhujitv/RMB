@@ -12,7 +12,7 @@
 - 腾讯云 COS 私有对象存储
 - Resend 邮件服务
 
-Vercel 项目已停止使用，不作为当前发布、迁移或验收目标。本系统不建议直接使用本地电脑作为正式服务器；正式环境必须使用独立数据库、私有对象存储和可回滚的版本目录。
+Vercel 发布配置已经移除，不作为当前发布、迁移或验收目标。本系统不建议直接使用本地电脑作为正式服务器；正式环境必须使用独立数据库和私有对象存储。代码版本统一从 GitHub 获取和回滚，腾讯云不保存代码版本副本。
 
 ## 2. 基础环境要求
 
@@ -193,7 +193,7 @@ API_RATE_LIMIT_REGISTRATION_LIMIT="5"
 SINGLE_INSTANCE_MEMORY_RATE_LIMIT="true"
 ```
 
-这是单实例部署声明，不是通用 Redis 替代方案。增加第二台 CVM、改用 PM2 cluster/多 Node 进程或任何横向扩容前，必须先配置 Redis 并删除该开关。Vercel Production 严禁设置该开关，安全检查会直接拒绝构建。
+这是单实例部署声明，不是通用 Redis 替代方案。增加第二台 CVM、改用 PM2 cluster/多 Node 进程或任何横向扩容前，必须先配置 Redis 并删除该开关。任何多进程、多实例或无服务器生产环境都不得设置该开关。
 
 ### 可选第三方接口
 
@@ -285,18 +285,19 @@ npm run verify:release
 
 ## 9. 腾讯云 CVM 部署流程
 
-当前生产发布采用 GitHub 代码源和腾讯云版本化目录。推荐顺序：
+当前生产只发布到腾讯云，GitHub 是源码和正式版本的唯一档案库。每个正式发布版本都必须在 GitHub 保存 commit、Git tag 和 GitHub Release。腾讯云 CVM 不保存源码压缩包、旧 release 目录或代码版本备份。
 
 1. 在本地只选择本次功能文件提交，执行 `npm run verify:ci` 并推送到 GitHub `main`。
-2. 等待 GitHub Actions 全部通过，记录目标 commit SHA。
-3. 在腾讯云数据库控制台创建手动备份，并确认备份状态成功。
-4. 在 CVM 新建 release 目录，拉取同一 commit SHA，执行 `npm ci`。
-5. 核对 `DATABASE_URL`、COS、邮件、OCR、飞驼可视、限流和代理配置，但不要输出或覆盖现有密钥。
-6. 执行 `npx prisma migrate status`。只有存在待执行 migration 时，才在维护窗口显式执行 `npm run db:deploy`。
-7. 使用 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
-8. 原子切换 `current` 版本目录并重启 systemd 应用服务；保留上一版本目录用于代码回滚。
-9. 核对 systemd 服务正常、仅一个 `next-server` 进程、应用只监听本机端口，Nginx HTTPS 正常。
-10. 确认服务器运行 SHA 与 GitHub SHA 一致，`www` 返回 200、裸域名正确跳转，再登录验收核心业务。
+2. 等待 GitHub Actions 全部通过，为目标 commit 创建并推送 `vX.Y.Z` Git tag；`GitHub Release Archive` workflow 会自动创建 GitHub Release。
+3. CVM 从 GitHub 拉取并检出同一 tag 或 commit SHA，执行 `npm ci`。
+4. 核对 `DATABASE_URL`、COS、邮件、OCR、飞驼可视、限流和代理配置，但不要输出或覆盖现有密钥。
+5. 执行 `npx prisma migrate status`。只有存在待执行 migration 时，才先确认数据库备份成功，并在维护窗口显式执行 `npm run db:deploy`。
+6. 使用 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
+7. 重启 systemd 应用服务，不在 CVM 创建代码压缩包、旧目录或版本副本。
+8. 核对 systemd 服务正常、仅一个 `next-server` 进程、应用只监听本机端口，Nginx HTTPS 正常。
+9. 确认服务器运行 SHA 与 GitHub SHA 一致，`www` 返回 200、裸域名正确跳转，再登录验收核心业务。
+
+代码回滚时，从 GitHub 检出上一个正式 tag，重新安装依赖、构建并重启服务；不要依赖腾讯云上的旧代码目录。
 
 只有在数据库已备份、连接目标已核对且由受保护发布步骤执行时，才可以使用：
 
@@ -335,9 +336,9 @@ npm run build:release
 4. 观察 1 到 2 周日志、权限、上传、邮件、OCR、海运跟踪等高风险点。
 5. 稳定后再扩大使用范围。
 
-## 12. 备份与恢复
+## 12. 业务数据保护与恢复
 
-生产环境必须建立备份策略。
+GitHub 已保存每个正式代码版本，腾讯云 CVM 不再保存代码版本备份。数据库备份和附件保护属于业务数据安全措施，不是代码版本备份，不能因为代码已保存在 GitHub 而取消。
 
 至少备份：
 
@@ -394,8 +395,8 @@ npm run db:generate
 检查：
 
 - GitHub `main` 是否包含目标 commit，Actions 是否通过。
-- 腾讯云当前 release 和运行进程是否使用同一 commit SHA。
-- systemd 服务是否已重启并指向新的 `current` 目录。
+- 腾讯云工作目录和运行进程是否使用同一 commit SHA。
+- systemd 服务是否已重启并运行目标版本。
 - CVM 生产环境变量是否完整且仍指向正确数据库和 COS。
 - 浏览器是否缓存旧页面。
 - 对应角色是否有菜单权限。
@@ -418,14 +419,14 @@ npm run db:deploy
 
 当前正式版本可在 GitHub Releases 查看：
 
-- `v1.0.3`
+- `v1.0.4`
 
-每次正式发布建议：
+每次正式发布必须：
 
 1. 执行完整检查。
 2. 提交代码。
 3. 推送到 `main`。
 4. 创建 Git tag。
-5. 创建 GitHub Release。
-6. 在腾讯云拉取目标 SHA、构建并切换版本。
+5. 确认 GitHub 已自动创建对应 Release。
+6. 在腾讯云拉取目标 SHA、构建并重启服务，不创建代码版本备份。
 7. 确认数据库 migration、服务器 SHA、服务状态和真实公网页面。

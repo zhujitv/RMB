@@ -40,8 +40,6 @@ import {
   configuredCsp
 } from "./security-hardening-context.ts";
 
-const vercelReleaseBuild = readFileSync("scripts/vercel-release-build.mjs", "utf8");
-
 test("logistics generated cost invoices are managed only by logistics invoice groups", () => {
   assert.match(
     orderDocumentsService,
@@ -180,14 +178,8 @@ test("local build scripts load env files before prisma commands", () => {
     packageJson,
     /"build:release": "node scripts\/run-with-env\.mjs prisma migrate deploy && npm run build:app"/,
   );
-  assert.match(
-    packageJson,
-    /"build": "node scripts\/vercel-release-build\.mjs"/,
-  );
+  assert.match(packageJson, /"build": "npm run build:app"/);
   assert.doesNotMatch(packageJson, /"build": "[^"]*migrate deploy/);
-  assert.doesNotMatch(vercelReleaseBuild, /VERCEL_TARGET_ENV|VERCEL_ENV/);
-  assert.doesNotMatch(vercelReleaseBuild, /db:deploy|prisma\s+migrate\s+deploy/);
-  assert.match(vercelReleaseBuild, /runNpmScript\("build:app"\)/);
   assert.match(
     packageJson,
     /"db:deploy": "node scripts\/run-with-env\.mjs prisma migrate deploy"/,

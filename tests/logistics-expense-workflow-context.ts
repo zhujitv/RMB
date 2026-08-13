@@ -245,7 +245,7 @@ export const logisticsNotificationOutboxCronRoute = readFileSync(
   "app/api/cron/notification-outbox/route.ts",
   "utf8",
 );
-export const vercelConfigSource = readFileSync("vercel.json", "utf8");
+export const cronConfigSource = readFileSync("config/tencent-cloud-cron.json", "utf8");
 export const notificationTemplateRoute = readFileSync(
   "app/api/settings/notification-templates/route.ts",
   "utf8",
