@@ -278,8 +278,8 @@ export function QuotationFormPanel({
         <button
           className={shell.primaryButtonCompact}
           type="submit"
-          disabled={saving || (!dirty && !sellerSnapshotRepairRequired)}
-          title={!dirty && !sellerSnapshotRepairRequired ? "请先填写或修改报价内容" : undefined}
+          disabled={saving || (!initialQuotation?.id && !dirty && !sellerSnapshotRepairRequired)}
+          title={!initialQuotation?.id && !dirty && !sellerSnapshotRepairRequired ? "请先填写报价内容" : undefined}
         >
           {saving ? "保存中..." : sellerSnapshotRepairRequired ? "更新卖方资料并生成新版本" : initialQuotation?.id ? "保存新版本" : "保存草稿"}
         </button>

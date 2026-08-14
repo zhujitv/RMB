@@ -130,6 +130,7 @@ export function ProductSuggestionInput({
                 aria-selected={index === activeIndex}
                 key={product.id}
                 onMouseEnter={() => setActiveIndex(index)}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectProduct(product)}
               >
                 <strong>{productDescription(product)}</strong>
