@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DetailField, PaginationBar, SideDetailDrawer } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
-import type { ApiPerformanceRow, AuditLogRow, CustomerRow, Pagination, SettingsTabKey, SupplierRow, TableColumn, UserRow } from "./types";
+import type { AuditLogRow, CustomerRow, Pagination, SettingsTabKey, SupplierRow, TableColumn, UserRow } from "./types";
 import { detailFieldsFor, drawerSubtitleFor, drawerTitleFor, valueFor } from "./helpers";
 import { CustomerProductsManager } from "./customer-products-manager";
 
@@ -23,12 +23,12 @@ export function SettingsTable({
   onPage,
 }: {
   tab: SettingsTabKey;
-  rows: Array<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>;
-  columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
+  rows: Array<CustomerRow | SupplierRow | UserRow | AuditLogRow>;
+  columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
   loading: boolean;
   pagination: Pagination;
-  detailRow: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow | null;
-  onViewDetail: (row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow) => void;
+  detailRow: CustomerRow | SupplierRow | UserRow | AuditLogRow | null;
+  onViewDetail: (row: CustomerRow | SupplierRow | UserRow | AuditLogRow) => void;
   onCloseDetail: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
   onEditUser: (user: UserRow) => void;
@@ -116,8 +116,8 @@ export function SettingsRows({
   canForceDeleteRejectedUsers,
 }: {
   tab: SettingsTabKey;
-  row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow;
-  columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
+  row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
+  columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
   onViewDetail: () => void;
   onManageProducts: (customer: CustomerRow) => void;
   onEditUser: (user: UserRow) => void;
@@ -202,7 +202,7 @@ export function SettingsDetailDrawer({
   onManageProducts,
 }: {
   tab: SettingsTabKey;
-  row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow;
+  row: CustomerRow | SupplierRow | UserRow | AuditLogRow;
   onClose: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
   onDeleteCustomer: (customer: CustomerRow) => void;

@@ -5,7 +5,6 @@ export function kebabTab(tab: SettingsTabKey) {
   if (tab === "exchangeRates") return "exchange-rates";
   if (tab === "commissionFormula") return "commission-formula";
   if (tab === "auditLogs") return "audit-logs";
-  if (tab === "apiPerformance") return "api-performance";
   return tab;
 }
 
@@ -17,7 +16,6 @@ export function filtersForTab(filters: SettingsFilters, tab: SettingsTabKey) {
   if (tab === "customers") return filters.customers;
   if (tab === "suppliers") return filters.suppliers;
   if (tab === "users") return filters.users;
-  if (tab === "apiPerformance") return filters.apiPerformance;
   return filters.auditLogs;
 }
 
@@ -37,19 +35,12 @@ export function appendFilterParams(params: URLSearchParams, tab: SettingsTabKey,
     const logFilters = filters as SettingsFilters["auditLogs"];
     if (logFilters.action.trim()) params.set("action", logFilters.action.trim());
   }
-  if (tab === "apiPerformance") {
-    const performanceFilters = filters as SettingsFilters["apiPerformance"];
-    if (performanceFilters.source) params.set("source", performanceFilters.source);
-    if (performanceFilters.minDurationMs.trim()) params.set("minDurationMs", performanceFilters.minDurationMs.trim());
-    if (performanceFilters.windowHours) params.set("windowHours", performanceFilters.windowHours);
-  }
 }
 
 export function emptyFiltersForTab(tab: SettingsTabKey) {
   if (tab === "customers") return { keyword: "" };
   if (tab === "suppliers") return { keyword: "", type: "", status: "" };
   if (tab === "users") return { keyword: "", role: "", status: "" };
-  if (tab === "apiPerformance") return { keyword: "", source: "", minDurationMs: "", windowHours: "24" };
   return { keyword: "", action: "" };
 }
 

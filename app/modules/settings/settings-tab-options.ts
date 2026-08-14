@@ -13,5 +13,4 @@ export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "exchangeRates", label: "汇率设置" },
   { key: "commissionFormula", label: "提成公式" },
   { key: "auditLogs", label: "系统日志" },
-  { key: "apiPerformance", label: "后台任务" },
 ];

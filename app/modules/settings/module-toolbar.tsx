@@ -1,7 +1,5 @@
 import styles from "../../WorkspaceShell.module.css";
 import {
-  API_PERFORMANCE_SOURCE_OPTIONS,
-  API_PERFORMANCE_WINDOW_OPTIONS,
   SUPPLIER_STATUSES,
   SUPPLIER_TYPES,
   USER_ROLES,
@@ -72,26 +70,6 @@ export function SettingsModuleToolbar({
           }}
           placeholder="动作"
         />
-      ) : null}
-      {activeTab === "apiPerformance" ? (
-        <>
-          <select value={filters.apiPerformance.source} onChange={(event) => updateFilter("apiPerformance", "source", event.target.value)}>
-            {API_PERFORMANCE_SOURCE_OPTIONS.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
-          </select>
-          <select value={filters.apiPerformance.windowHours} onChange={(event) => updateFilter("apiPerformance", "windowHours", event.target.value)}>
-            {API_PERFORMANCE_WINDOW_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-          <input
-            type="number"
-            min="0"
-            value={filters.apiPerformance.minDurationMs}
-            onChange={(event) => updateFilter("apiPerformance", "minDurationMs", event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") submitSearch();
-            }}
-            placeholder="最小耗时 ms"
-          />
-        </>
       ) : null}
       <button className={styles.primaryButtonCompact} type="button" onClick={submitSearch} disabled={loading}>查询</button>
       <button className={styles.secondaryButton} type="button" onClick={resetSearch} disabled={loading}>重置</button>

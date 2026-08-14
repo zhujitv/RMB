@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { apiJson } from "../../api";
 import type { CompanyProfileSettings } from "../../types";
-import { API_PERFORMANCE_PAGE_SIZE, AUDIT_PAGE_SIZE, PAGE_SIZE } from "./constants";
+import { AUDIT_PAGE_SIZE, PAGE_SIZE } from "./constants";
 import {
   appendFilterParams,
   commissionFormulaFormFromSettings,
@@ -16,7 +16,6 @@ import {
   shipsgoIntegrationFormFromSettings,
 } from "./helpers";
 import type {
-  ApiPerformanceRow,
   AuditLogRow,
   BusinessEntityRow,
   CommissionFormulaForm,
@@ -50,14 +49,13 @@ type SettingsLoadActionsContext = {
   permissionConfig: PermissionConfig | null;
   selectedNotificationTemplateType: string;
   setActiveSuppliers: Setter<SupplierRow[]>;
-  setApiPerformance: Setter<ApiPerformanceRow[]>;
   setBusinessEntities: Setter<BusinessEntityRow[]>;
   setCommissionFormulaForm: Setter<CommissionFormulaForm | null>;
   setCommissionFormulaSettings: Setter<CommissionFormulaSettings | null>;
   setCompanyProfileForm: Setter<CompanyProfileForm | null>;
   setCompanyProfileSettings: Setter<CompanyProfileSettings | null>;
   setCustomers: Setter<CustomerRow[]>;
-  setDetailRow: Setter<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow | null>;
+  setDetailRow: Setter<CustomerRow | SupplierRow | UserRow | AuditLogRow | null>;
   setError: Setter<string>;
   setExchangeForm: Setter<ExchangeRateForm | null>;
   setExchangeSettings: Setter<ExchangeRateSettings | null>;
@@ -87,7 +85,6 @@ export function useSettingsLoadActions(context: SettingsLoadActionsContext) {
     permissionConfig,
     selectedNotificationTemplateType,
     setActiveSuppliers,
-    setApiPerformance,
     setBusinessEntities,
     setCommissionFormulaForm,
     setCommissionFormulaSettings,
@@ -184,11 +181,7 @@ async function loadTab(tab = activeTab, page = activePagination.page || 1, nextF
       if (tab === "users") {
         await ensurePermissionConfig();
       }
-      const pageSize = tab === "auditLogs"
-        ? AUDIT_PAGE_SIZE
-        : tab === "apiPerformance"
-          ? API_PERFORMANCE_PAGE_SIZE
-          : PAGE_SIZE;
+      const pageSize = tab === "auditLogs" ? AUDIT_PAGE_SIZE : PAGE_SIZE;
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
       appendFilterParams(params, tab, nextFilters);
       const result = await apiJson<{
@@ -196,7 +189,6 @@ async function loadTab(tab = activeTab, page = activePagination.page || 1, nextF
         suppliers?: SupplierRow[];
         users?: UserRow[];
         logs?: AuditLogRow[];
-        metrics?: ApiPerformanceRow[];
         pagination?: Pagination;
       }>(`/api/settings/${kebabTab(tab)}?${params}`);
       if (tab === "customers") {
@@ -206,7 +198,6 @@ async function loadTab(tab = activeTab, page = activePagination.page || 1, nextF
       if (tab === "suppliers") setSuppliers(result.suppliers || []);
       if (tab === "users") setUsers(result.users || []);
       if (tab === "auditLogs") setLogs(result.logs || []);
-      if (tab === "apiPerformance") setApiPerformance(result.metrics || []);
       setPagination((current) => ({
         ...current,
         [tab]: result.pagination || emptyPagination(pageSize),

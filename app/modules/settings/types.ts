@@ -27,7 +27,6 @@ export type {
   UserCustomPermissions
 } from "./types-integrations";
 export type {
-  ApiPerformanceRow,
   AuditLogRow,
   BusinessEntityBankAccountFields,
   BusinessEntityRow,

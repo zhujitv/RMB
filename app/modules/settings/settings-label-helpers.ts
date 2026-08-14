@@ -18,13 +18,6 @@ export function userStatus(user: UserRow) {
   return user.approvalStatus || "-";
 }
 
-export function apiPerformanceSourceLabel(source: unknown) {
-  if (source === "server") return "服务端包装器";
-  if (source === "client") return "前端真实请求";
-  if (source === "background") return "后台任务";
-  return source ? String(source) : "-";
-}
-
 export function supplierDisplayName(user: UserRow) {
   const name = user.supplierName || "";
   const type = supplierTypeLabel(user.supplierType);
