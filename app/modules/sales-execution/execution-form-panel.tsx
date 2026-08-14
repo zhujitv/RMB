@@ -203,7 +203,7 @@ export function ExecutionFormPanel({
     <form className={styles.formPanel} onSubmit={submit} inert={saving} aria-busy={saving}>
       <div className={styles.formHeader}>
         <div className={styles.formTitle}>
-          <strong>{existing ? `编辑销售执行草稿 · ${initialExecution?.executionNo || "未编号"}` : "直接创建销售执行草稿"}</strong>
+          <strong>{existing ? `编辑销售执行草稿 · ${initialExecution?.customerOrderNo || "未填写客户订单号"}` : "直接创建销售执行草稿"}</strong>
           <small>{quotationSource ? "客户销售数据来自已接受报价，仅补充执行信息和工厂分配。" : existing ? `保存后生成版本 V${Number(initialExecution?.currentVersionNumber || 1) + 1}` : "客户和业务主体都必须手动选择，保存后系统自动编号。"}</small>
         </div>
         <span className={`${styles.sourcePill} ${quotationSource ? styles.sourceQuote : ""}`}>{quotationSource ? "报价转入" : "直接创建"}</span>

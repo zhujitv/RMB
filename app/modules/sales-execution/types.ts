@@ -201,8 +201,8 @@ export function optionalNumeric(value: unknown) {
   return Number.isFinite(number) ? number : null;
 }
 
-export function executionNumber(row?: SalesExecutionRow | null) {
-  return String(row?.executionNo || "").trim();
+export function customerOrderNumber(row?: SalesExecutionRow | null) {
+  return String(row?.customerOrderNo || "").trim();
 }
 
 export function executionCustomerName(row?: SalesExecutionRow | null) {

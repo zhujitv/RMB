@@ -46,7 +46,7 @@ const quotationDetailInclude = {
   customer: { select: quotationCustomerSelect },
   businessEntity: true,
   salesperson: { select: quotationUserSelect },
-  salesExecution: { select: { id: true, executionNo: true, status: true } },
+  salesExecution: { select: { id: true, customerOrderNo: true, status: true } },
   versions: {
     orderBy: [{ versionNumber: "desc" as const }],
     include: { items: { orderBy: [{ lineNumber: "asc" as const }] } },

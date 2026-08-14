@@ -10,8 +10,8 @@ import styles from "./sales-execution.module.css";
 import { salesExecutionStatusLabel, supplierResponseSummary } from "./status-values";
 import {
   businessEntityName,
+  customerOrderNumber,
   executionCustomerName,
-  executionNumber,
   numeric,
   optionalNumeric,
   salesExecutionTotal,
@@ -132,7 +132,7 @@ export function ExecutionDetailDrawer({
     <SideDetailDrawer
       ariaLabel="销售执行详情"
       kicker="销售执行"
-      title={executionNumber(execution) || "未编号"}
+      title={customerOrderNumber(execution) || "未填写客户订单号"}
       subtitle={`V${execution.currentVersionNumber || 1} · ${execution.sourceType === "QUOTATION" ? "报价转入" : "直接创建"} · ${salesExecutionStatusLabel(execution.status, Boolean(linkedOrder || execution.shippingStartedAt), linkedOrder?.status)}`}
       onClose={onClose}
       actions={canEdit || canDispatch || canVoid || canEnterShipping || (linkedOrder && canOpenReceivableOrder) ? <>

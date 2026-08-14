@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { apiJson } from "../../api";
 import { useConfirmationDialog } from "../../components/dialogs";
 import { useWorkspaceTabBusy } from "../../workspace/workspace-tab-context";
-import { executionNumber, type SalesExecutionResponse, type SalesExecutionRow } from "./types";
+import { customerOrderNumber, type SalesExecutionResponse, type SalesExecutionRow } from "./types";
 
 export function useSalesExecutionVoid({
   canWrite,
@@ -33,7 +33,7 @@ export function useSalesExecutionVoid({
     voidingBusyRef.current = true;
     const result = await dialog.requestConfirmation({
       title: "作废销售执行单",
-      message: `确认作废销售执行单 ${executionNumber(execution) || "未编号"} 吗？`,
+      message: `确认作废客户订单 ${customerOrderNumber(execution) || "未填写客户订单号"} 吗？`,
       variant: "danger",
       confirmLabel: "确认作废",
       cancelLabel: "返回检查",

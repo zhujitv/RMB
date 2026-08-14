@@ -6,7 +6,7 @@ import { useConfirmationDialog } from "../../components";
 import { useWorkspaceTabBusy } from "../../workspace/workspace-tab-context";
 import { salesExecutionShippingReadiness } from "./shipping-readiness";
 import {
-  executionNumber,
+  customerOrderNumber,
   type SalesExecutionRow,
   type SalesExecutionShippingResponse,
 } from "./types";
@@ -39,7 +39,7 @@ export function useSalesExecutionShipping({
     shippingBusyRef.current = true;
     const result = await dialog.requestConfirmation({
       title: "进入发货",
-      message: `确认销售执行单 ${executionNumber(execution) || "未编号"} 已具备发货条件吗？`,
+      message: `确认客户订单 ${customerOrderNumber(execution) || "未填写客户订单号"} 已具备发货条件吗？`,
       confirmLabel: "进入发货",
       cancelLabel: "返回检查",
       variant: "warning",

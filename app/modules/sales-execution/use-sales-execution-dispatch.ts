@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { apiJson } from "../../api";
 import { useConfirmationDialog } from "../../components";
 import { useWorkspaceTabBusy } from "../../workspace/workspace-tab-context";
-import { executionNumber, type SalesExecutionResponse, type SalesExecutionRow } from "./types";
+import { customerOrderNumber, type SalesExecutionResponse, type SalesExecutionRow } from "./types";
 
 export function useSalesExecutionDispatch({
   canWrite,
@@ -39,7 +39,7 @@ export function useSalesExecutionDispatch({
     dispatchBusyRef.current = true;
     const result = await requestConfirmation({
       title: "正式下发工厂",
-      message: `确认将销售执行单 ${executionNumber(execution) || "未编号"} 的 ${orders.length} 张采购单正式下发给工厂吗？`,
+      message: `确认将客户订单 ${customerOrderNumber(execution) || "未填写客户订单号"} 的 ${orders.length} 张采购单正式下发给工厂吗？`,
       variant: "warning",
       confirmLabel: "确认下发",
       cancelLabel: "返回检查",

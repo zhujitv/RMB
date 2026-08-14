@@ -133,7 +133,7 @@ export function QuotationDetailDrawer({
         <DetailField label="付款条款" value={version?.paymentTerm || "-"} wide />
         <DetailField label="预计交期" value={version?.leadTimeDays == null || version.leadTimeDays === "" ? "-" : `${version.leadTimeDays} 天`} />
         <DetailField label="业务员" value={quotation.salesperson?.name || quotation.salespersonName || "-"} />
-        {quotation.salesExecution?.id ? <DetailField label="销售执行单" value={`${quotation.salesExecution.executionNo || "未编号"}${quotation.salesExecution.status === "VOIDED" ? "（已作废）" : ""}`} /> : null}
+        {quotation.salesExecution?.id ? <DetailField label="客户订单号" value={`${quotation.salesExecution.customerOrderNo || "未填写"}${quotation.salesExecution.status === "VOIDED" ? "（已作废）" : ""}`} /> : null}
         <DetailField label="报价小计" value={formatCurrencyAmount(currency, quotationSubtotal(versionQuotation))} />
         <DetailField label="报价总额" value={formatCurrencyAmount(currency, quotationTotal(versionQuotation))} />
         <DetailField label="版本创建时间" value={formatDateTime(version?.createdAt)} />
