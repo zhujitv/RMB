@@ -76,15 +76,21 @@ export function orderToReceivable(order: BusinessReportRow) {
 }
 
 export function orderToProfit(order: BusinessReportRow) {
+  const profitMarginEligible = typeof order.summary?.profitMarginEligible === "boolean"
+    ? order.summary.profitMarginEligible
+    : Boolean(toReportDate(order.actualShipmentDate))
+      || (order.actualShipmentAmount != null && order.actualShipmentAmount !== "")
+      || (order.summary?.actualShipmentAmount != null && order.summary.actualShipmentAmount !== "");
   return {
     ...orderToReceivable(order),
+    profitMarginEligible,
     receivableCny: moneyNumber(order.summary?.receivableCny),
     receivedAmountCny: moneyNumber(order.summary?.arrivedPaymentsCny),
     totalCostCny: moneyNumber(order.summary?.confirmedTotalCostCny ?? order.summary?.totalCostCny),
     expectedGrossProfit: moneyNumber(order.summary?.expectedGrossProfit),
-    expectedGrossMargin: order.summary?.expectedGrossMargin == null ? "--" : `${((Number(order.summary.expectedGrossMargin || 0)) * 100).toFixed(2)}%`,
+    expectedGrossMargin: !profitMarginEligible || order.summary?.expectedGrossMargin == null ? "--" : `${((Number(order.summary.expectedGrossMargin || 0)) * 100).toFixed(2)}%`,
     realizedGrossProfit: order.summary?.realizedGrossProfit == null ? "--" : moneyNumber(order.summary.realizedGrossProfit),
-    realizedGrossMargin: order.summary?.realizedGrossMargin == null ? "--" : `${((Number(order.summary.realizedGrossMargin || 0)) * 100).toFixed(2)}%`,
+    realizedGrossMargin: !profitMarginEligible || order.summary?.realizedGrossMargin == null ? "--" : `${((Number(order.summary.realizedGrossMargin || 0)) * 100).toFixed(2)}%`,
     netCashFlowCny: moneyNumber(order.summary?.netCashFlowCny),
   };
 }

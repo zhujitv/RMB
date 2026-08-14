@@ -48,7 +48,7 @@ function arrivedPeriodPayment(payment: PaymentListRow, month: string) {
     && inOverviewMonth(payment.paymentDate || payment.createdAt, month);
 }
 
-function overviewPeriodActivity(
+export function overviewPeriodActivity(
   month: string,
   rows: OverviewMetric[],
   payments: PaymentListRow[],
@@ -58,11 +58,14 @@ function overviewPeriodActivity(
   const arrivedPayments = payments.filter((payment) => arrivedPeriodPayment(payment, month));
   const confirmedCosts = costs.filter((cost) => confirmedPeriodCost(cost, month));
   const paidCosts = costs.filter((cost) => paidPeriodCost(cost, month));
+  const marginEligibleOrders = orders.filter((row) => row.profitMarginEligible);
   const receivable = sumBy(orders, (row) => row.receivable);
   const collections = sumBy(arrivedPayments, (payment) => Number(payment.amountCny || 0));
   const confirmedCost = sumBy(confirmedCosts, (cost) => Number(cost.amountCny || 0));
   const costPayments = sumBy(paidCosts, (cost) => Number(cost.amountCny || 0));
   const expectedProfit = sumBy(orders, (row) => row.expectedGrossProfit);
+  const marginEligibleReceivable = sumBy(marginEligibleOrders, (row) => row.receivable);
+  const marginEligibleProfit = sumBy(marginEligibleOrders, (row) => row.expectedGrossProfit);
   return {
     month,
     orders,
@@ -75,7 +78,8 @@ function overviewPeriodActivity(
     costPayments,
     netCashFlow: collections - costPayments,
     expectedProfit,
-    expectedGrossMargin: receivable > 0 ? expectedProfit / receivable : null,
+    expectedGrossMargin: marginEligibleReceivable > 0 ? marginEligibleProfit / marginEligibleReceivable : null,
+    profitMarginEligibleOrders: marginEligibleOrders.length,
     orderCount: orders.length,
     customerCount: new Set(orders.map((row) => row.customerName || row.customerFullName).filter(Boolean)).size,
   };
@@ -144,6 +148,9 @@ function buildSalespersonCollections(period: PeriodActivity) {
       collectionBasisPaid: 0,
       unpaid: 0,
       expectedProfit: 0,
+      marginEligibleCount: 0,
+      marginEligibleReceivable: 0,
+      marginEligibleProfit: 0,
       commissionMonth: 0,
       commissionYear: 0,
       commissionPending: 0,
@@ -194,7 +201,7 @@ export async function getOverview(query: URLSearchParams, actor: ActorLike) {
     .sort((a, b) => Number(a.remainingDays) - Number(b.remainingDays) || b.unpaid - a.unpaid)
     .slice(0, 10);
   const lowMarginOrders = activeRows
-    .filter((row) => row.expectedGrossMargin != null && row.expectedGrossMargin < 0.08)
+    .filter((row) => row.profitMarginEligible && row.expectedGrossMargin != null && row.expectedGrossMargin < 0.08)
     .sort((a, b) => Number(a.expectedGrossMargin) - Number(b.expectedGrossMargin) || a.expectedGrossProfit - b.expectedGrossProfit)
     .slice(0, 10);
   const commissionGroups = groupOverviewRows(allRows, (row) => row.salespersonName || "未分配");
@@ -224,6 +231,7 @@ export async function getOverview(query: URLSearchParams, actor: ActorLike) {
       exchangeDifference: periodExchangeDifference,
       expectedProfit: currentPeriod.expectedProfit,
       expectedGrossMargin: currentPeriod.expectedGrossMargin,
+      profitMarginEligibleOrders: currentPeriod.profitMarginEligibleOrders,
       realizedProfit: periodRealizedProfit,
       netCashFlow: currentPeriod.netCashFlow,
       commissionAmount,
@@ -241,8 +249,8 @@ export async function getOverview(query: URLSearchParams, actor: ActorLike) {
       pendingCostAmount,
       pendingCostOrders: activeRows.filter((row) => row.costPendingConfirmation > 0).length,
       missingCostOrders: activeRows.filter((row) => row.costMissing).length,
-      negativeMarginOrders: activeRows.filter((row) => Number(row.expectedGrossMargin) < 0).length,
-      lowMarginOrders: activeRows.filter((row) => row.expectedGrossMargin != null && row.expectedGrossMargin < 0.08).length,
+      negativeMarginOrders: activeRows.filter((row) => row.profitMarginEligible && Number(row.expectedGrossMargin) < 0).length,
+      lowMarginOrders: activeRows.filter((row) => row.profitMarginEligible && row.expectedGrossMargin != null && row.expectedGrossMargin < 0.08).length,
       commissionSnapshotMissingOrders: currentPeriod.orders.filter((row) => row.commissionSnapshotMissing).length,
     },
     periodComparison: buildPeriodComparison(currentPeriod, previousPeriod),
@@ -264,7 +272,12 @@ export async function getOverview(query: URLSearchParams, actor: ActorLike) {
       .sort((a, b) => b.commissionMonth - a.commissionMonth || b.commissionPending - a.commissionPending || b.commissionYear - a.commissionYear)
       .slice(0, 10),
     salespersonProfitRank: periodProfitGroups
-      .map((group) => ({ ...group, expectedGrossMargin: group.receivable > 0 ? group.expectedProfit / group.receivable : null }))
+      .map((group) => ({
+        ...group,
+        expectedGrossMargin: group.marginEligibleReceivable > 0
+          ? group.marginEligibleProfit / group.marginEligibleReceivable
+          : null,
+      }))
       .filter((group) => group.receivable || group.expectedProfit)
       .sort((a, b) => b.expectedProfit - a.expectedProfit || b.receivable - a.receivable)
       .slice(0, 10),

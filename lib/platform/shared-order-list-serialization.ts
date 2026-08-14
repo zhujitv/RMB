@@ -38,6 +38,7 @@ export function serializeOrderListSummary(
     depositGapCny: summary.depositGapCny,
     depositOverpaidCny: summary.depositOverpaidCny,
     depositRatio: summary.depositRatio,
+    profitMarginEligible: summary.profitMarginEligible,
     pendingPaymentsCny: summary.pendingPaymentsCny,
     pendingPaymentsAmount: summary.pendingPaymentsAmount,
     arrivedBalanceAmount: summary.arrivedBalanceAmount,

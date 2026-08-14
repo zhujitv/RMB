@@ -42,6 +42,10 @@ export function commissionRateFromOrder(order: OrderLike) {
   return Math.max(0, Number(order.salespersonCommissionRate || 0));
 }
 
+export function profitMarginEligible(order: OrderLike) {
+  return Boolean(order.actualShipmentDate) || order.actualShipmentAmount != null;
+}
+
 export function commissionLogisticsCosts(order: OrderLike) {
   return (order.costs || []).filter((cost) => validCost(cost) && COMMISSION_LOGISTICS_COST_TYPES.includes(cost.costType || ""));
 }
@@ -162,8 +166,9 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
   const depositOverpaidCny = roundMoney(Math.max(receivedDepositAmount - requiredDepositOriginalAmount, 0) * exchangeRate);
   const expectedTaxRefundIncomeCny = 0;
   const expectedGrossProfit = receivableCny - confirmedTotalCostCny + expectedTaxRefundIncomeCny;
-  const expectedGrossMargin = receivableCny > 0 ? expectedGrossProfit / receivableCny : null;
-  const revenueRecognized = receivableAmount > 0 && arrivedOutstandingAmount <= 0;
+  const marginEligible = profitMarginEligible(order);
+  const expectedGrossMargin = marginEligible && receivableCny > 0 ? expectedGrossProfit / receivableCny : null;
+  const revenueRecognized = marginEligible && receivableAmount > 0 && arrivedOutstandingAmount <= 0;
   const realizedGrossProfit = revenueRecognized ? expectedGrossProfit : null;
   const realizedGrossMargin = realizedGrossProfit != null && receivableCny > 0 ? realizedGrossProfit / receivableCny : null;
   const netCashFlowCny = arrivedPaymentsCny - paidConfirmedCostCny;
@@ -253,6 +258,7 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     settleableCommissionBaseCny,
     settleableCommissionCny,
     expectedGrossProfit,
+    profitMarginEligible: marginEligible,
     expectedGrossMargin,
     realizedGrossProfit,
     realizedGrossMargin,

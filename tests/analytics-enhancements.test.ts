@@ -13,7 +13,7 @@ const {
 } = jiti("../lib/platform/business-overview-metrics.ts") as typeof import("../lib/platform/business-overview-metrics.ts");
 const { buildReportSummary } = jiti("../lib/report-service-summary.ts") as typeof import("../lib/report-service-summary.ts");
 const { filterRows } = jiti("../lib/report-service-shared.ts") as typeof import("../lib/report-service-shared.ts");
-const { aggregateProfitReportRows, reportQueryForBaseRows } = jiti("../lib/report-service-mappers.ts") as typeof import("../lib/report-service-mappers.ts");
+const { aggregateProfitReportRows, orderToProfit, reportQueryForBaseRows } = jiti("../lib/report-service-mappers.ts") as typeof import("../lib/report-service-mappers.ts");
 const { columnsFor } = jiti("../lib/report-service-shared.ts") as typeof import("../lib/report-service-shared.ts");
 
 test("overview trend assigns orders, receipts, and payments to their real business months", () => {
@@ -104,8 +104,8 @@ test("cost report base scan is not accidentally limited to the UI page size", ()
 
 test("customer and salesperson analysis aggregate financial contribution with overdue risk", () => {
   const sourceRows = [
-    { customerName: "CLIENT A", salespersonName: "Alice", createdAt: "2026-07-01", dueDate: "2020-01-01", receivableCny: 1000, receivedAmountCny: 600, outstandingCny: 400, totalCostCny: 700, expectedGrossProfit: 300, netCashFlowCny: -100 },
-    { customerName: "CLIENT A", salespersonName: "Alice", createdAt: "2026-08-01", dueDate: "2099-01-01", receivableCny: 500, receivedAmountCny: 500, outstandingCny: 0, totalCostCny: 350, expectedGrossProfit: 150, netCashFlowCny: 150 },
+    { customerName: "CLIENT A", salespersonName: "Alice", createdAt: "2026-07-01", dueDate: "2020-01-01", profitMarginEligible: true, receivableCny: 1000, receivedAmountCny: 600, outstandingCny: 400, totalCostCny: 700, expectedGrossProfit: 300, netCashFlowCny: -100 },
+    { customerName: "CLIENT A", salespersonName: "Alice", createdAt: "2026-08-01", dueDate: "2099-01-01", profitMarginEligible: true, receivableCny: 500, receivedAmountCny: 500, outstandingCny: 0, totalCostCny: 350, expectedGrossProfit: 150, netCashFlowCny: 150 },
   ];
   const customerRows = aggregateProfitReportRows(sourceRows, "customer");
   const salespersonRows = aggregateProfitReportRows(sourceRows, "salesperson");
@@ -119,4 +119,73 @@ test("customer and salesperson analysis aggregate financial contribution with ov
   assert.equal(salespersonRows[0]?.customerCount, 1);
   assert.ok(columnsFor("customer-analysis").some((column) => column.key === "averageOrderValueCny"));
   assert.ok(columnsFor("salesperson-performance").some((column) => column.key === "collectionRate"));
+});
+
+test("profit reports keep unshipped amounts but calculate margins and risk counts from shipped orders only", () => {
+  const unshipped = orderToProfit({
+    id: "unshipped",
+    orderNo: "UNSHIPPED",
+    actualShipmentDate: null,
+    summary: { profitMarginEligible: false, receivableCny: 2000, confirmedTotalCostCny: 3000, expectedGrossProfit: -1000, expectedGrossMargin: -0.5 },
+  });
+  const shipped = orderToProfit({
+    id: "shipped",
+    orderNo: "SHIPPED",
+    summary: { profitMarginEligible: true, receivableCny: 1000, confirmedTotalCostCny: 900, expectedGrossProfit: 100, expectedGrossMargin: 0.1 },
+  });
+  const shippedLoss = orderToProfit({
+    id: "shipped-loss",
+    orderNo: "SHIPPED-LOSS",
+    summary: { profitMarginEligible: true, receivableCny: 500, confirmedTotalCostCny: 550, expectedGrossProfit: -50, expectedGrossMargin: -0.1 },
+  });
+  const legacyShipped = orderToProfit({
+    id: "legacy-shipped",
+    orderNo: "LEGACY-SHIPPED",
+    actualShipmentAmount: 0,
+    summary: { receivableCny: 100, expectedGrossProfit: 10, expectedGrossMargin: 0.1 },
+  });
+  const summary = buildReportSummary("profits", [unshipped, shipped, shippedLoss]);
+  const metric = (key: string) => summary.metrics.find((item) => item.key === key)?.value;
+
+  assert.equal(unshipped.profitMarginEligible, false);
+  assert.equal(unshipped.expectedGrossMargin, "--");
+  assert.equal(shipped.profitMarginEligible, true);
+  assert.equal(shipped.expectedGrossMargin, "10.00%");
+  assert.equal(legacyShipped.profitMarginEligible, true);
+  assert.equal(metric("receivable"), 3500);
+  assert.equal(metric("cost"), 4450);
+  assert.equal(metric("profit"), -950);
+  assert.equal(metric("margin"), 50 / 1500);
+  assert.equal(metric("negative"), 1);
+  assert.equal(metric("lowMargin"), 1);
+});
+
+test("customer and salesperson margins exclude unshipped orders and become unavailable when every order is unshipped", () => {
+  const mixed = [
+    { customerName: "CLIENT A", salespersonName: "Alice", profitMarginEligible: true, receivableCny: 1000, expectedGrossProfit: 100 },
+    { customerName: "CLIENT A", salespersonName: "Alice", profitMarginEligible: false, receivableCny: 9000, expectedGrossProfit: -900 },
+  ];
+  const customer = aggregateProfitReportRows(mixed, "customer")[0];
+  const salesperson = aggregateProfitReportRows(mixed, "salesperson")[0];
+  const customerSummary = buildReportSummary("customer-analysis", [customer]);
+  const grossMargin = customerSummary.metrics.find((item) => item.key === "grossMargin");
+
+  assert.equal(customer?.orderCount, 2);
+  assert.equal(customer?.receivableCny, 10000);
+  assert.equal(customer?.expectedGrossProfit, -800);
+  assert.equal(customer?.expectedGrossMargin, "10.00%");
+  assert.equal(salesperson?.expectedGrossMargin, "10.00%");
+  assert.equal(grossMargin?.value, 0.1);
+
+  const allUnshipped = aggregateProfitReportRows(mixed.map((row) => ({ ...row, profitMarginEligible: false })), "customer");
+  const allUnshippedSummary = buildReportSummary("customer-analysis", allUnshipped);
+  const unavailableMargin = allUnshippedSummary.metrics.find((item) => item.key === "grossMargin");
+  const directSummary = buildReportSummary("profits", mixed.map((row) => ({ ...row, profitMarginEligible: false })));
+
+  assert.equal(allUnshipped[0]?.orderCount, 2);
+  assert.equal(allUnshipped[0]?.expectedGrossMargin, "--");
+  assert.equal(unavailableMargin?.value, null);
+  assert.equal(directSummary.metrics.find((item) => item.key === "margin")?.value, null);
+  assert.equal(directSummary.metrics.find((item) => item.key === "negative")?.value, 0);
+  assert.equal(directSummary.metrics.find((item) => item.key === "lowMargin")?.value, 0);
 });

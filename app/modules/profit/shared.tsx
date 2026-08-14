@@ -15,6 +15,7 @@ export type ProfitSummary = {
   taxLogisticsCostsComplete?: boolean;
   taxLogisticsMissingLabels?: string[];
   expectedGrossProfit?: number;
+  profitMarginEligible?: boolean;
   expectedGrossMargin?: number | null;
   realizedGrossProfit?: number | null;
   realizedGrossMargin?: number | null;
@@ -55,7 +56,7 @@ export type ProfitResponse = {
 
 export const PAGE_SIZE = 20;
 
-export const REALIZED_GROSS_PROFIT_TOOLTIP = "客户款项未收齐时，不计算已实现毛利；负数现金流请查看净现金流。";
+export const REALIZED_GROSS_PROFIT_TOOLTIP = "订单未发货或客户款项未收齐时，不计算已实现毛利；负数现金流请查看净现金流。";
 
 export function formatCnyOrDash(value: unknown) {
   return value == null || value === "" ? "--" : formatCny(value);

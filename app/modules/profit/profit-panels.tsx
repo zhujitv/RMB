@@ -18,6 +18,7 @@ export function ProfitRows({
   onViewDetail: () => void;
 }) {
   const summary = row.summary || {};
+  const marginText = summary.profitMarginEligible === false ? "未发货" : formatPercent(summary.expectedGrossMargin);
   return (
     <tr className={getBusinessEntityRowClass(row, styles, styles.clickableRow)} onClick={onViewDetail}>
       <td className={styles.orderNoColumn}>{row.orderNo || "-"}</td>
@@ -25,7 +26,7 @@ export function ProfitRows({
       <td className={styles.amountColumn}>{formatCny(summary.receivableCny)}</td>
       <td className={styles.amountColumn}>{formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)}</td>
       <td className={styles.amountColumn}>{formatCny(summary.expectedGrossProfit)}</td>
-      <td>{formatPercent(summary.expectedGrossMargin)}</td>
+      <td>{marginText}</td>
       <td>
         <button
           className={styles.rowDetailButton}
@@ -50,6 +51,7 @@ export function ProfitMobileCard({
   onViewDetail: () => void;
 }) {
   const summary = row.summary || {};
+  const marginText = summary.profitMarginEligible === false ? "未发货" : formatPercent(summary.expectedGrossMargin);
   return (
     <article className={styles.mobileDataCard}>
       <div className={styles.mobileDataHeader}>
@@ -77,7 +79,7 @@ export function ProfitMobileCard({
         </div>
         <div className={styles.mobileMetricItem}>
           <span>预计毛利率</span>
-          <strong>{formatPercent(summary.expectedGrossMargin)}</strong>
+          <strong>{marginText}</strong>
         </div>
       </div>
       <div className={styles.mobileDataActions}>
@@ -107,6 +109,7 @@ export function ProfitDetailDrawer({
   onClose: () => void;
 }) {
   const summary = row.summary || {};
+  const notShipped = summary.profitMarginEligible === false;
   const commissionCanSettle = canSettleCommission && Boolean(summary.commissionCanSettle);
   const commissionSettled = Boolean(summary.commissionSnapshotMissing)
     || summary.commissionStatus === "已结算"
@@ -140,9 +143,9 @@ export function ProfitDetailDrawer({
         <DetailField label="总成本" value={formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)} />
         <DetailField label="物流成本" value={formatCny(summary.logisticsCostCny)} />
         <DetailField label="预计毛利" value={formatCny(summary.expectedGrossProfit)} />
-        <DetailField label="预计毛利率" value={formatPercent(summary.expectedGrossMargin)} />
-        <DetailField label={realizedGrossProfitLabel()} value={formatCnyOrDash(summary.realizedGrossProfit)} />
-        <DetailField label="已实现毛利率" value={formatPercent(summary.realizedGrossMargin)} />
+        <DetailField label="预计毛利率" value={notShipped ? "未发货" : formatPercent(summary.expectedGrossMargin)} />
+        <DetailField label={realizedGrossProfitLabel()} value={notShipped ? "未发货" : formatCnyOrDash(summary.realizedGrossProfit)} />
+        <DetailField label="已实现毛利率" value={notShipped ? "未发货" : formatPercent(summary.realizedGrossMargin)} />
         <DetailField label="净现金流" value={formatCny(summary.netCashFlowCny)} />
         <DetailField label="提成公式" value={summary.commissionFormulaLabel || summary.commissionFormulaDescription || "-"} />
         <DetailField label="提成前置缺失" value={(summary.taxLogisticsMissingLabels || []).join("、") || "-"} wide />

@@ -14,6 +14,7 @@ export type OrderLike = {
   receivableAmount?: NumericLike | null; receivableAmountCny?: NumericLike | null;
   estimatedReceivableAmount?: NumericLike | null; estimatedReceivableAmountCny?: NumericLike | null;
   actualShipmentAmount?: NumericLike | null; actualShipmentAmountCny?: NumericLike | null;
+  actualShipmentDate?: Date | string | null;
   finalReceivableAmount?: NumericLike | null; finalReceivableAmountCny?: NumericLike | null;
   exchangeRate?: NumericLike | null; depositRatio?: NumericLike | null; dueDate?: Date | null;
   reminderDays?: NumericLike | null; payments?: PaymentLike[] | null; costs?: CostLike[] | null;
@@ -42,6 +43,7 @@ export type OrderSummary = {
   commissionFormulaSource: string; commissionFormulaDeductions: unknown; commissionFormulaFloorAtZero: boolean;
   commissionBaseCny: number; estimatedCommissionBaseCny: number; estimatedCommissionCny: number;
   settleableCommissionBaseCny: number; settleableCommissionCny: number; expectedGrossProfit: number;
+  profitMarginEligible: boolean;
   expectedGrossMargin: number | null; realizedGrossProfit: number | null; realizedGrossMargin: number | null;
   actualGrossProfit: number | null; netCashFlowCny: number; grossMargin: number | null;
   reminderStatus: string; overdueDays: number; commissionStatus?: string; commissionCanSettle?: boolean; commissionAmountCny?: number;

@@ -42,6 +42,7 @@ function usdOrder({
     estimatedReceivableAmountCny: Math.round(amount * rate * 100) / 100,
     finalReceivableAmount: amount,
     finalReceivableAmountCny: Math.round(amount * rate * 100) / 100,
+    actualShipmentDate: new Date("2026-01-01T00:00:00.000Z"),
     depositRatio,
     dueDate: new Date("2020-01-01T00:00:00.000Z"),
     reminderDays: 7,
