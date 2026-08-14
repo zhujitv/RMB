@@ -27,6 +27,23 @@ const FINANCE_ONLY_WORKBENCH_TODO_TYPES = new Set([
   "TAX_EXPORT_INVOICE_MISSING",
 ]);
 
+const LOGISTICS_WORKBENCH_TODO_TYPES = new Set([
+  "LOGISTICS_INFO_MISSING",
+  "BILL_OF_LADING_MISSING",
+  "CONTAINER_NO_MISSING",
+  "TAX_CUSTOMS_DECLARATION_MISSING",
+  "LOGISTICS_FEE_ENTRY",
+  "LOGISTICS_FEE_REVIEW",
+  "LOGISTICS_INVOICE_UPLOAD",
+  "LOGISTICS_PAYMENT_REGISTER",
+  "CONTAINER_TRACKING_EXCEPTION",
+  "ETA_ARRIVAL_ALERT",
+  "LOGISTICS_FEE_REVIEW_COMPLETED",
+  "LOGISTICS_INVOICE_UPLOAD_COMPLETED",
+  "LOGISTICS_PAYMENT_REGISTER_COMPLETED",
+  "CONTAINER_TRACKING_SYNCED",
+]);
+
 function roleText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -45,6 +62,10 @@ export function isFinanceWorkbenchReminderTodoType(type: unknown) {
 
 export function isFinanceOnlyWorkbenchTodoType(type: unknown) {
   return FINANCE_ONLY_WORKBENCH_TODO_TYPES.has(roleText(type));
+}
+
+export function isLogisticsWorkbenchTodoType(type: unknown) {
+  return LOGISTICS_WORKBENCH_TODO_TYPES.has(roleText(type));
 }
 
 export function scopeWorkbenchTodosForActor<T extends { type?: string | null; ownerUserIds?: string[] | null }>(

@@ -90,6 +90,31 @@ test("workbench todo summary counts pending, today due, overdue and completed", 
   });
 });
 
+test("workbench reminders exclude logistics while retaining tax refund work", () => {
+  for (const logisticsType of [
+    "LOGISTICS_INFO_MISSING",
+    "BILL_OF_LADING_MISSING",
+    "CONTAINER_NO_MISSING",
+    "TAX_CUSTOMS_DECLARATION_MISSING",
+    "LOGISTICS_FEE_ENTRY",
+    "LOGISTICS_FEE_REVIEW",
+    "LOGISTICS_INVOICE_UPLOAD",
+    "LOGISTICS_PAYMENT_REGISTER",
+    "CONTAINER_TRACKING_EXCEPTION",
+    "ETA_ARRIVAL_ALERT",
+    "LOGISTICS_FEE_REVIEW_COMPLETED",
+    "LOGISTICS_INVOICE_UPLOAD_COMPLETED",
+    "LOGISTICS_PAYMENT_REGISTER_COMPLETED",
+    "CONTAINER_TRACKING_SYNCED",
+  ]) {
+    assert.equal(workbenchTodoPolicy.isLogisticsWorkbenchTodoType(logisticsType), true);
+  }
+  assert.equal(workbenchTodoPolicy.isLogisticsWorkbenchTodoType("TAX_TRUCKING_INVOICE_MISSING"), false);
+  assert.equal(workbenchTodoPolicy.isLogisticsWorkbenchTodoType("TAX_REFUND_READY_NOT_ARCHIVED"), false);
+  assert.match(workbenchSource, /generatedTodos\.filter\(canActivateTodo\)\.filter\(\(todo\) => !isLogisticsWorkbenchTodoType\(todo\.type\)\)/);
+  assert.match(workbenchSource, /completedTodos\.filter\(\(todo\) => !isLogisticsWorkbenchTodoType\(todo\.type\)\)/);
+});
+
 test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(route, /requireApiActor\(request\)/);
   assert.match(route, /const bypassCache = \["1", "true", "yes"\]\.includes/);
@@ -116,7 +141,7 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /sourceTypes: \["taxRefund"\]/);
   assert.match(workbenchSource, /const taxRefundArchivedBatch = taxRefundArchivedTodosBatch\(context, today, tomorrow\)/);
   assert.match(workbenchSource, /if \(isFinanceWorkbenchActor\(actor\)\) \{[\s\S]*taxRefundArchivedBatch \? \[taxRefundArchivedBatch\] : \[\]/);
-  assert.match(workbenchSource, /scopeWorkbenchTodosForActor\(actor, generatedTodos\.filter\(canActivateTodo\), options\)/);
+  assert.match(workbenchSource, /generatedTodos\.filter\(canActivateTodo\)\.filter\(\(todo\) => !isLogisticsWorkbenchTodoType\(todo\.type\)\)/);
   assert.match(workbenchSource, /listWorkbenchTodosForReminders/);
   assert.match(workbenchSource, /flowStage: activationRule\.flowStage/);
   assert.match(workbenchSource, /prerequisiteStage: activationRule\.prerequisiteStage \|\| null/);

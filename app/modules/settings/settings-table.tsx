@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { DetailField, PaginationBar, SideDetailDrawer } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
 import type { ApiPerformanceRow, AuditLogRow, CustomerRow, Pagination, SettingsTabKey, SupplierRow, TableColumn, UserRow } from "./types";
 import { detailFieldsFor, drawerSubtitleFor, drawerTitleFor, valueFor } from "./helpers";
+import { CustomerProductsManager } from "./customer-products-manager";
 
 export function SettingsTable({
   tab,
@@ -36,6 +38,7 @@ export function SettingsTable({
   canForceDeleteRejectedUsers?: boolean;
   onPage: (page: number) => void;
 }) {
+  const [productCustomer, setProductCustomer] = useState<CustomerRow | null>(null);
   const colSpan = columns.length + 1;
   const tableWrapClassName = tab === "suppliers"
     ? `${styles.tableWrap} ${styles.supplierSettingsTableWrap}`
@@ -66,6 +69,7 @@ export function SettingsTable({
                 row={row}
                 columns={columns}
                 onViewDetail={() => onViewDetail(row)}
+                onManageProducts={setProductCustomer}
                 onEditUser={onEditUser}
                 onForceDeleteRejectedUser={onForceDeleteRejectedUser}
                 forceDeletingRejectedUserId={forceDeletingRejectedUserId}
@@ -92,8 +96,10 @@ export function SettingsTable({
           onClose={onCloseDetail}
           onEditCustomer={onEditCustomer}
           onDeleteCustomer={onDeleteCustomer}
+          onManageProducts={setProductCustomer}
         />
       ) : null}
+      {productCustomer ? <CustomerProductsManager customer={productCustomer} onClose={() => setProductCustomer(null)} /> : null}
     </>
   );
 }
@@ -103,6 +109,7 @@ export function SettingsRows({
   row,
   columns,
   onViewDetail,
+  onManageProducts,
   onEditUser,
   onForceDeleteRejectedUser,
   forceDeletingRejectedUserId,
@@ -112,6 +119,7 @@ export function SettingsRows({
   row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow;
   columns: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
   onViewDetail: () => void;
+  onManageProducts: (customer: CustomerRow) => void;
   onEditUser: (user: UserRow) => void;
   onForceDeleteRejectedUser: (user: UserRow) => void;
   forceDeletingRejectedUserId: string;
@@ -153,6 +161,18 @@ export function SettingsRows({
             >
               {tab === "users" || tab === "suppliers" ? "编辑" : "详情"}
             </button>
+            {tab === "customers" ? (
+              <button
+                className={styles.secondaryButton}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onManageProducts(row as CustomerRow);
+                }}
+              >
+                产品属性
+              </button>
+            ) : null}
             {rejectedUser ? (
               <button
                 className={styles.dangerButton}
@@ -179,17 +199,20 @@ export function SettingsDetailDrawer({
   onClose,
   onEditCustomer,
   onDeleteCustomer,
+  onManageProducts,
 }: {
   tab: SettingsTabKey;
   row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow;
   onClose: () => void;
   onEditCustomer: (customer: CustomerRow) => void;
   onDeleteCustomer: (customer: CustomerRow) => void;
+  onManageProducts: (customer: CustomerRow) => void;
 }) {
   const detailFields = detailFieldsFor(tab, row);
   const actions = tab === "customers"
     ? (
       <>
+        <button className={styles.secondaryButton} type="button" onClick={() => onManageProducts(row as CustomerRow)}>产品属性</button>
         <button className={styles.primaryButtonCompact} type="button" onClick={() => onEditCustomer(row as CustomerRow)}>编辑客户</button>
         <button className={styles.dangerButton} type="button" onClick={() => onDeleteCustomer(row as CustomerRow)}>删除客户</button>
       </>

@@ -2,7 +2,7 @@ import { canActivateTodo, summarizeWorkbenchTodos } from "./workbench-todo-rules
 import type { WorkbenchTodoPriority, WorkbenchTodoSummary } from "./workbench-todo-rules";
 import { SUPPLIER_DOCUMENT_TYPES } from "./shared";
 import { completedTodayTodos } from "./workbench-todos-completed";
-import { isFinanceWorkbenchActor, scopeWorkbenchTodosForActor } from "./workbench-todo-policy";
+import { isFinanceWorkbenchActor, isLogisticsWorkbenchTodoType, scopeWorkbenchTodosForActor } from "./workbench-todo-policy";
 import { createWorkbenchTodoContext, sortWorkbenchTodos, uniqueTodos, type ActorLike } from "./workbench-todos-core";
 import { WORKBENCH_TODOS_CACHE_MS, invalidateWorkbenchTodosCache, workbenchTodosCache, workbenchTodosCacheKey } from "./workbench-todos-cache";
 import {
@@ -54,9 +54,17 @@ async function buildWorkbenchTodos(
       completedTodayTodos(context),
     ]);
     const generatedTodos = uniqueTodos([...taxRefundTodos]);
-    const todos = scopeWorkbenchTodosForActor(actor, generatedTodos.filter(canActivateTodo), options)
+    const todos = scopeWorkbenchTodosForActor(
+      actor,
+      generatedTodos.filter(canActivateTodo).filter((todo) => !isLogisticsWorkbenchTodoType(todo.type)),
+      options,
+    )
       .sort(sortWorkbenchTodos);
-    const visibleCompletedTodos = scopeWorkbenchTodosForActor(actor, completedTodos, options);
+    const visibleCompletedTodos = scopeWorkbenchTodosForActor(
+      actor,
+      completedTodos.filter((todo) => !isLogisticsWorkbenchTodoType(todo.type)),
+      options,
+    );
     return {
       todos,
       completedTodos: visibleCompletedTodos,
@@ -100,9 +108,17 @@ async function buildWorkbenchTodos(
     ...profitTodos,
     ...oceanTrackingTodos,
   ]);
-  const todos = scopeWorkbenchTodosForActor(actor, generatedTodos.filter(canActivateTodo), options)
+  const todos = scopeWorkbenchTodosForActor(
+    actor,
+    generatedTodos.filter(canActivateTodo).filter((todo) => !isLogisticsWorkbenchTodoType(todo.type)),
+    options,
+  )
     .sort(sortWorkbenchTodos);
-  const visibleCompletedTodos = scopeWorkbenchTodosForActor(actor, completedTodos, options);
+  const visibleCompletedTodos = scopeWorkbenchTodosForActor(
+    actor,
+    completedTodos.filter((todo) => !isLogisticsWorkbenchTodoType(todo.type)),
+    options,
+  );
   return {
     todos,
     completedTodos: visibleCompletedTodos,

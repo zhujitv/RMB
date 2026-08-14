@@ -1,0 +1,121 @@
+.surface {
+  width: min(1080px, calc(100vw - 40px));
+  max-height: min(820px, calc(100vh - 40px));
+  overflow: auto;
+}
+
+.body {
+  display: grid;
+  gap: 18px;
+  padding: 20px 24px 24px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.searchField {
+  display: grid;
+  flex: 1 1 360px;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.searchField input,
+.formGrid input,
+.formGrid textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+.formCard {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: #eff6ff;
+  padding: 16px;
+}
+
+.formHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.formHeader span,
+.hint {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) minmax(120px, 0.5fr);
+  gap: 12px;
+}
+
+.formGrid label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.remarkField {
+  grid-column: 1 / -1;
+}
+
+.formActions,
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.descriptionCell {
+  min-width: 320px;
+  white-space: normal;
+}
+
+.descriptionCell strong,
+.descriptionCell span {
+  display: block;
+}
+
+.descriptionCell span {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .surface {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .body {
+    padding: 16px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .remarkField {
+    grid-column: auto;
+  }
+}
