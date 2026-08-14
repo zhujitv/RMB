@@ -155,6 +155,7 @@ function ProductDescriptionInput({
                   : product.id === item.customerProductId}
                 data-product-id={product.id}
                 onMouseEnter={() => setHighlightedIndex(index)}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => chooseProduct(product)}
               >
                 <strong>{customerProductDescription(product)}</strong>
@@ -290,7 +291,6 @@ export function QuotationItemsEditor({
           </tbody>
         </table>
       </div>
-
       <div className={styles.summaryRow}>
         <span>报价小计</span>
         <strong>{formatCurrencyAmount(currency, subtotal)}</strong>

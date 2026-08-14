@@ -150,7 +150,7 @@ test("duplicating a quotation row inserts an independent copy immediately below 
   );
 });
 
-test("legacy quotations can upgrade seller snapshots and PI templates without content edits", () => {
+test("existing quotations can save a new version without requiring content edits", () => {
   assert.equal(quotationNeedsSellerSnapshotRepair({
     id: "legacy-quote",
     currentVersion: {
@@ -196,7 +196,8 @@ test("legacy quotations can upgrade seller snapshots and PI templates without co
       sellerSnapshotReady: true,
     },
   }), true);
-  assert.match(formSource, /disabled=\{saving \|\| \(!dirty && !sellerSnapshotRepairRequired\)\}/);
+  assert.match(formSource, /disabled=\{saving \|\| \(!initialQuotation\?\.id && !dirty && !sellerSnapshotRepairRequired\)\}/);
+  assert.doesNotMatch(formSource, /disabled=\{saving \|\| \(!dirty && !sellerSnapshotRepairRequired\)\}/);
   assert.match(formSource, /更新卖方资料并生成新版本/);
 });
 
@@ -212,6 +213,7 @@ test("quotation editor uses inline product suggestions and clears hidden linkage
   assert.match(editorSource, /event\.key === "ArrowDown"/);
   assert.match(editorSource, /event\.key === "ArrowUp"/);
   assert.match(editorSource, /event\.key === "Enter"/);
+  assert.match(editorSource, /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}[\s\S]*onClick=\{\(\) => chooseProduct\(product\)\}/);
   assert.match(editorSource, /duplicateQuotationItemAfter\(items, item\.key\)/);
   assert.match(actionsSource, /复制当前报价行并插入下一行/);
 });

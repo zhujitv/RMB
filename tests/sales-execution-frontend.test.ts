@@ -28,6 +28,7 @@ const linesSource = readFileSync("app/modules/sales-execution/sales-lines-editor
 const allocationSource = readFileSync("app/modules/sales-execution/allocation-editor.tsx", "utf8");
 const detailSource = readFileSync("app/modules/sales-execution/execution-detail-drawer.tsx", "utf8");
 const purchaseDraftSource = readFileSync("app/modules/sales-execution/purchase-order-draft-list.tsx", "utf8");
+const productSuggestionSource = readFileSync("app/modules/sales-execution/product-suggestion-input.tsx", "utf8");
 const listSource = readFileSync("app/modules/sales-execution/execution-list.tsx", "utf8");
 const viewSource = readFileSync("app/modules/sales-execution/sales-execution-module-view.tsx", "utf8");
 const dispatchSource = readFileSync("app/modules/sales-execution/use-sales-execution-dispatch.ts", "utf8");
@@ -264,6 +265,7 @@ test("quote source locks sales fields while direct drafts can reuse customer pro
   assert.match(allocationSource, /工厂采购分配/);
   assert.match(formSource, /\/api\/customer-products/);
   assert.match(formSource, /salesPriceSource/);
+  assert.match(productSuggestionSource, /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}[\s\S]*onClick=\{\(\) => selectProduct\(product\)\}/);
 });
 
 test("sales entry and generated factory purchase orders use one product description field", () => {
