@@ -40,9 +40,7 @@ export function PurchaseOrderReassignmentCard({
     apiJson<SuppliersResponse>("/api/suppliers/available?type=factory")
       .then((result) => {
         if (!active) return;
-        setSuppliers((result.suppliers || []).filter((supplier) => (
-          supplier.id !== order.supplierId && supplier.allowFactoryDocumentUpload !== false
-        )));
+        setSuppliers((result.suppliers || []).filter((supplier) => supplier.id !== order.supplierId));
       })
       .catch((loadError) => {
         if (active) setError(loadError instanceof Error ? loadError.message : "读取可用工厂失败");
@@ -80,7 +78,7 @@ export function PurchaseOrderReassignmentCard({
   return (
     <section className={styles.workflowCard} data-tone="danger">
       <div className={styles.workflowHeader}>
-        <div><strong>被拒采购单重新选厂</strong><small>原单将保留为作废记录，新单独立编号并只发送给新工厂。</small></div>
+        <div><strong>被拒采购单重新选厂</strong><small>原单将保留为作废记录，新单独立编号；有门户账号则在线通知，否则转为线下协同。</small></div>
       </div>
       <div className={styles.workflowControls}>
         <label>新工厂
@@ -88,7 +86,7 @@ export function PurchaseOrderReassignmentCard({
             value={selected}
             disabled={loading || busy}
             cacheKey={`reassign-factory:${order.id}:${suppliers.map((supplier) => supplier.id).join("|")}`}
-            emptyLabel="未找到已启用采购门户的其他工厂"
+            emptyLabel="未找到其他可用工厂"
             placeholder={loading ? "正在读取工厂..." : "输入工厂名称模糊查找"}
             getLabel={supplierName}
             getDescription={(supplier) => supplier.supplierType || "产品供应商"}

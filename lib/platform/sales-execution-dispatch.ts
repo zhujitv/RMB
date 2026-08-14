@@ -19,7 +19,7 @@ import { serializeSalesExecution } from "./sales-execution-values";
 import { appendSalesExecutionVersion } from "./sales-execution-version";
 import { queueFactoryPurchaseOrderDispatchOutbox } from "./factory-purchase-order-dispatch-outbox";
 import { processFactoryPurchaseOrderDispatchOutbox } from "./factory-purchase-order-dispatch-notifications";
-import { resolveFactoryPurchaseOrderDispatchRecipients } from "./factory-purchase-order-dispatch-recipients";
+import { PRODUCT_SUPPLIER_TYPES } from "./shared-party-constants";
 
 type AuditRequest = Parameters<typeof writeAudit>[0];
 type LoadedExecution = Awaited<ReturnType<typeof loadSalesExecution>>;
@@ -57,22 +57,26 @@ function validateDispatchReadiness(execution: LoadedExecution) {
   }
 }
 
-async function activeSupplierIds(
+async function assertActivePurchaseOrderSuppliers(
   tx: Prisma.TransactionClient,
   execution: LoadedExecution,
 ) {
   const supplierIds = [...new Set(execution.purchaseOrders.map((order) => order.supplierId))];
-  for (const supplierId of supplierIds) {
-    const recipients = await resolveFactoryPurchaseOrderDispatchRecipients(tx, supplierId);
-    if (!recipients.recipientEmails.length) {
-      throw codedError(
-        `采购单包含无法处理采购单的工厂：${recipients.blockedReason}，请返回草稿重新选择`,
-        409,
-        "PURCHASE_SUPPLIER_PORTAL_UNAVAILABLE",
-      );
-    }
+  const activeSuppliers = await tx.supplier.count({
+    where: {
+      id: { in: supplierIds },
+      deletedAt: null,
+      status: "启用",
+      supplierType: { in: [...PRODUCT_SUPPLIER_TYPES] },
+    },
+  });
+  if (activeSuppliers !== supplierIds.length) {
+    throw codedError(
+      "采购单包含已停用、已删除或非产品供应商的工厂，请返回草稿重新选择",
+      409,
+      "PURCHASE_SUPPLIER_INVALID",
+    );
   }
-  return supplierIds;
 }
 
 export async function dispatchSalesExecution(
@@ -119,7 +123,7 @@ export async function dispatchSalesExecution(
       }
       assertExpectedSalesExecutionRevision(body, before.revision);
       validateDispatchReadiness(before);
-      await activeSupplierIds(tx, before);
+      await assertActivePurchaseOrderSuppliers(tx, before);
 
       const dispatchedAt = new Date();
       const nextRevision = before.revision + 1;

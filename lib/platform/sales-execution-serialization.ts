@@ -6,6 +6,7 @@ import {
   serializePurchaseOrderRelations,
   serializePurchaseOrderSettlement,
 } from "./sales-execution-purchase-order-relations";
+import { serializeFactoryConfirmationEvents } from "./sales-execution-confirmation-events";
 type LooseRecord = Record<string, unknown>;
 export function executionRecord(value: unknown): LooseRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as LooseRecord : {};
@@ -119,6 +120,11 @@ function serializePurchaseOrder(value: unknown) {
     ratePerDay: order.delayPenaltyRatePerDay as Prisma.Decimal | string | number | null | undefined,
     capRatio: order.delayPenaltyCapRatio as Prisma.Decimal | string | number | null | undefined,
   });
+  const { completionEvent, confirmationEvents } = serializeFactoryConfirmationEvents(
+    order,
+    responseHistory,
+    productionCompletedBy,
+  );
   return {
     id: String(order.id || ""),
     replacementForId: order.replacementForId ? String(order.replacementForId) : null,
@@ -155,6 +161,13 @@ function serializePurchaseOrder(value: unknown) {
     productionStartedBy: productionStartedBy.id ? { id: String(productionStartedBy.id), name: String(productionStartedBy.name || "") } : null,
     productionCompletedAt: order.productionCompletedAt || null,
     productionCompletedBy: productionCompletedBy.id ? { id: String(productionCompletedBy.id), name: String(productionCompletedBy.name || "") } : null,
+    productionCompletionSource: String(order.productionCompletionSource || ""),
+    productionCompletionChannel: String(order.productionCompletionChannel || ""),
+    productionCompletionContact: String(order.productionCompletionContact || ""),
+    productionCompletionRecordedAt: order.productionCompletionRecordedAt || null,
+    productionCompletionRemark: String(order.productionCompletionRemark || ""),
+    productionCompletionEvidenceNote: String(order.productionCompletionEvidenceNote || ""),
+    productionCompletionEvidence: completionEvent?.evidence || null,
     actualDeliveryDate: order.actualDeliveryDate || null,
     actualDeliveryRecordedAt: order.actualDeliveryRecordedAt || null,
     actualDeliveryRecordedBy: actualDeliveryRecordedBy.id ? { id: String(actualDeliveryRecordedBy.id), name: String(actualDeliveryRecordedBy.name || "") } : null,
@@ -170,6 +183,7 @@ function serializePurchaseOrder(value: unknown) {
     supplierResponseRemark: String(order.supplierResponseRemark || ""),
     supplierResponseSequence: Number(order.supplierResponseSequence || 0),
     supplierResponseHistory: responseHistory,
+    confirmationEvents,
     respondedAt: order.respondedAt || null,
     respondedBy: respondedBy.id ? { id: String(respondedBy.id), name: String(respondedBy.name || "") } : null,
     payments,

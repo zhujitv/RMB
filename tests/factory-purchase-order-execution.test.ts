@@ -33,8 +33,8 @@ const invariantCorrectionMigration = readFileSync(
   "prisma/migrations/20260812140000_procurement_database_invariant_corrections/migration.sql",
   "utf8",
 );
-const supplierResponseService = readFileSync(
-  "lib/platform/supplier-purchase-orders.ts",
+const supplierResponseCore = readFileSync(
+  "lib/platform/factory-purchase-order-response-core.ts",
   "utf8",
 );
 const deliveryDecisionService = readFileSync(
@@ -233,17 +233,17 @@ test("historical production start accepts an earlier confirmed response despite 
 
 test("a direct acceptance freezes the first promise while later delivery changes await internal approval", () => {
   assert.match(
-    supplierResponseService,
+    supplierResponseCore,
     /firstAcceptedResponse\s*=\s*response\.action === "ACCEPTED" && !before\.initialSupplierDeliveryDate/,
   );
   assert.match(
-    supplierResponseService,
+    supplierResponseCore,
     /before\.status === "DELIVERY_PROPOSED"[\s\S]*?SUPPLIER_PURCHASE_ORDER_PROPOSAL_PENDING/,
   );
   assert.match(deliveryDecisionService, /firstConfirmation = input\.decision === "ACCEPTED" && !before\.confirmedSupplierDeliveryDate/);
   assert.match(deliveryDecisionService, /\.\.\.\(firstConfirmation \? \{[\s\S]*?initialSupplierDeliveryDate: proposal\.deliveryDate/);
   assert.equal(
-    supplierResponseService.match(/initialSupplierDeliveryDate: response\.deliveryDate/g)?.length,
+    supplierResponseCore.match(/initialSupplierDeliveryDate: response\.deliveryDate/g)?.length,
     1,
   );
   assert.equal(
@@ -254,15 +254,15 @@ test("a direct acceptance freezes the first promise while later delivery changes
 
 test("direct or internally approved first acceptance freezes the penalty base without moving the first promise later", () => {
   assert.match(
-    supplierResponseService,
+    supplierResponseCore,
     /freezePenaltyBase\s*=\s*response\.action === "ACCEPTED" && before\.penaltyBaseAmount === null/,
   );
   assert.match(
-    supplierResponseService,
+    supplierResponseCore,
     /penaltyBaseAmount\s*=\s*freezePenaltyBase\s*\?[\s\S]*?effectiveFactoryPurchaseOrderAmount\(effectiveItems\)[\s\S]*?:\s*before\.penaltyBaseAmount/,
   );
   assert.match(
-    supplierResponseService,
+    supplierResponseCore,
     /\.\.\.\(freezePenaltyBase \? \{\s*penaltyBaseAmount[,\s]/,
   );
   assert.match(deliveryDecisionService, /penaltyBaseAmount = firstConfirmation \? effectiveFactoryPurchaseOrderAmount\(before\.items\) : before\.penaltyBaseAmount/);

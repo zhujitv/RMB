@@ -144,11 +144,15 @@ test("manual explains sales execution and factory allocation", () => {
 
 test("manual explains supplier response, production, and shipping handoff", () => {
   assert.match(manualModule, /title: "工厂采购单与供应商回复"/);
-  assert.match(manualModule, /供应商可接受并确认交期、提出新交期或拒绝采购单/);
-  assert.match(manualModule, /已接受采购单在生产完成前可再次提出一个不同的新交期/);
+  assert.match(manualModule, /供应商可在门户回复，也可由内部人员登记线下确认/);
+  assert.match(manualModule, /工厂无需开通门户也可下发/);
+  assert.match(manualModule, /回复可接受并确认交期、提出新交期或拒绝采购单/);
+  assert.match(manualModule, /供应商提出新交期后，内部人员在销售执行中接受或拒绝/);
   assert.match(manualModule, /被拒原采购单会保留为作废记录/);
   assert.match(manualModule, /一家工厂确认后即可独立生产，不需要等待同一销售执行中的其它工厂/);
-  assert.match(manualModule, /由供应商在门户点击确认生产完成/);
+  assert.match(manualModule, /由供应商在门户确认；未使用门户时，内部人员填写供应商联系人、渠道和实际完工时间进行代录/);
+  assert.match(manualModule, /未填写、未上传或附件上传失败都不撤销完工记录/);
+  assert.match(manualModule, /附件可在确认后补传或替换/);
   assert.match(manualModule, /所有有效采购单均已接受、生产完成、登记实际交付/);
   assert.match(manualModule, /当前版本明确跳过质检环节/);
 });

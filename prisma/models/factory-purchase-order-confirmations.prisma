@@ -1,0 +1,52 @@
+model FactoryPurchaseOrderSupplierResponse {
+  id                    String                      @id @default(cuid())
+  purchaseOrderId       String                      @map("purchase_order_id")
+  responseSequence      Int                         @map("response_sequence")
+  action                String
+  deliveryDate          DateTime?                   @map("delivery_date") @db.Date
+  remark                String?
+  source                FactoryConfirmationSource   @default(SUPPLIER_PORTAL)
+  channel               FactoryConfirmationChannel  @default(PORTAL)
+  supplierContact       String                      @map("supplier_contact")
+  supplierRespondedAt   DateTime                    @map("supplier_responded_at")
+  evidenceNote          String?                     @map("evidence_note")
+  respondedById         String                      @map("responded_by")
+  respondedAt           DateTime                    @default(now()) @map("responded_at")
+  internalDecision      String?                     @map("internal_decision")
+  internalDecisionRemark String?                    @map("internal_decision_remark")
+  internalDecidedAt     DateTime?                   @map("internal_decided_at")
+  internalDecidedById   String?                     @map("internal_decided_by")
+
+  purchaseOrder    FactoryPurchaseOrder                @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  respondedBy      User                                @relation("FactoryPurchaseOrderSupplierResponses", fields: [respondedById], references: [id], onDelete: Restrict)
+  internalDecidedBy User?                              @relation("FactoryPurchaseOrderDeliveryDecisions", fields: [internalDecidedById], references: [id], onDelete: Restrict)
+  supplierPrices   FactoryPurchaseOrderSupplierPrice[]
+
+  @@unique([purchaseOrderId, responseSequence], map: "fpo_supplier_response_po_sequence_key")
+  @@index([respondedById], map: "fpo_supplier_response_user_idx")
+  @@index([internalDecidedById], map: "fpo_supplier_response_internal_decider_idx")
+  @@index([purchaseOrderId, respondedAt], map: "fpo_supplier_response_po_time_idx")
+  @@index([source, supplierRespondedAt], map: "fpo_supplier_response_source_time_idx")
+  @@map("factory_purchase_order_supplier_responses")
+}
+
+model FactoryPurchaseOrderSupplierPrice {
+  id                  String   @id @default(cuid())
+  purchaseOrderId     String   @map("purchase_order_id")
+  purchaseOrderItemId String   @map("purchase_order_item_id")
+  supplierResponseId  String   @map("supplier_response_id")
+  unitPrice           Decimal  @map("unit_price") @db.Decimal(18, 6)
+  amount              Decimal  @db.Decimal(18, 2)
+  confirmedById       String   @map("confirmed_by")
+  confirmedAt         DateTime @default(now()) @map("confirmed_at")
+
+  purchaseOrderItem FactoryPurchaseOrderItem             @relation(fields: [purchaseOrderItemId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+  supplierResponse  FactoryPurchaseOrderSupplierResponse @relation(fields: [supplierResponseId], references: [id], onDelete: Restrict)
+  confirmedBy       User                                 @relation("FactoryPurchaseOrderSupplierPrices", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderItemId, purchaseOrderId], map: "fpo_supplier_price_item_po_key")
+  @@index([purchaseOrderId], map: "fpo_supplier_price_po_idx")
+  @@index([supplierResponseId], map: "fpo_supplier_price_response_idx")
+  @@index([confirmedById], map: "fpo_supplier_price_user_idx")
+  @@map("factory_purchase_order_supplier_prices")
+}

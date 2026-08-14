@@ -22,6 +22,17 @@
 .metricGrid span, .auditLine { color: #78716c; font-size: 11px; }
 .metricGrid strong { color: #431407; font-size: 13px; }
 .auditLine { margin: 0; }
+.confirmationAuditList { display: grid; gap: 7px; }
+.confirmationAuditTitle { color: #431407; font-size: 12px; }
+.confirmationAudit { display: grid; gap: 3px; border-left: 3px solid #fdba74; border-radius: 6px; background: #fff7ed; padding: 8px 10px; color: #78716c; font-size: 11px; line-height: 1.45; }
+.confirmationAudit strong { color: #431407; font-size: 12px; }
+.confirmationEvidenceActions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+.confirmationEvidenceActions a,
+.confirmationEvidenceUpload { border: 1px solid #fdba74; border-radius: 7px; background: #fff; color: #9a3412; padding: 4px 7px; font-size: 11px; font-weight: 750; text-decoration: none; }
+.confirmationEvidenceUpload { position: relative; overflow: hidden; cursor: pointer; }
+.confirmationEvidenceUpload:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
+.confirmationEvidenceUpload[data-disabled="true"] { cursor: wait; opacity: .6; }
+.confirmationEvidenceUpload input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: inherit; }
 .actionRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .actionRow button, .entryGrid button { border: 1px solid #fb923c; border-radius: 8px; background: #fff7ed; color: #9a3412; padding: 7px 10px; font: inherit; font-weight: 750; cursor: pointer; }
 .actionRow button:disabled, .entryGrid button:disabled { cursor: wait; opacity: .55; }

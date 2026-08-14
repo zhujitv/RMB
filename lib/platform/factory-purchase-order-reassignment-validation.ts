@@ -1,7 +1,6 @@
 import type { Prisma } from "../generated/prisma/client.js";
 import { assertJsonObject, codedError } from "./shared";
 import { PRODUCT_SUPPLIER_TYPES } from "./shared-party-constants";
-import { resolveFactoryPurchaseOrderDispatchRecipients } from "./factory-purchase-order-dispatch-recipients";
 
 export function normalizeFactoryPurchaseOrderReassignmentInput(input: unknown) {
   const body = assertJsonObject(input);
@@ -35,7 +34,6 @@ export async function requireFactoryPurchaseOrderReplacementSupplier(
       deletedAt: null,
       status: "启用",
       supplierType: { in: [...PRODUCT_SUPPLIER_TYPES] },
-      allowFactoryDocumentUpload: true,
     },
     select: {
       id: true,
@@ -45,14 +43,11 @@ export async function requireFactoryPurchaseOrderReplacementSupplier(
       purchasePrepaymentRequiredBeforeProduction: true,
     },
   });
-  const recipients = supplier
-    ? await resolveFactoryPurchaseOrderDispatchRecipients(tx, supplier.id)
-    : { recipientEmails: [] as string[] };
-  if (!supplier || !recipients.recipientEmails.length) {
+  if (!supplier) {
     throw codedError(
-      "新工厂未开启采购门户或缺少有效的已审核绑定账号",
+      "新工厂不存在、已停用或不是产品供应商",
       409,
-      "FACTORY_PURCHASE_ORDER_REASSIGN_SUPPLIER_PORTAL_UNAVAILABLE",
+      "FACTORY_PURCHASE_ORDER_REASSIGN_SUPPLIER_INVALID",
     );
   }
   return supplier;

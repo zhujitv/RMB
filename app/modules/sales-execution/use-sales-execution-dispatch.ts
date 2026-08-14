@@ -39,14 +39,14 @@ export function useSalesExecutionDispatch({
     dispatchBusyRef.current = true;
     const result = await requestConfirmation({
       title: "正式下发工厂",
-      message: `确认将客户订单 ${customerOrderNumber(execution) || "未填写客户订单号"} 的 ${orders.length} 张采购单正式下发给工厂吗？`,
+      message: `确认将客户订单 ${customerOrderNumber(execution) || "未填写客户订单号"} 的 ${orders.length} 张采购单正式下发给工厂吗？有门户账号的在线通知，无门户账号的转为线下协同。`,
       variant: "warning",
       confirmLabel: "确认下发",
       cancelLabel: "返回检查",
       details: [
         "下发后销售内容和工厂分配将锁定，不能继续编辑。",
         "采购单价为空的项目会保持“待供应商回填”，不会按 0 元计算。",
-        "供应商后续可以接受订单、申请改期或拒绝订单。",
+        "供应商可在门户回复；通过微信、电话、邮件或纸质回复时，由内部人员如实代录。",
       ],
     });
     if (!result.confirmed) {

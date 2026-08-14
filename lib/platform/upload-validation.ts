@@ -143,3 +143,34 @@ export async function readValidatedPaymentVoucherUploadFile(candidate: unknown, 
     extension,
   };
 }
+
+export async function readValidatedConfirmationEvidenceUploadFile(
+  candidate: unknown,
+  fallbackName = "confirmation-evidence.pdf",
+): Promise<ValidatedUploadFile & { extension: "pdf" | "jpg" | "jpeg" | "png" | "webp" }> {
+  if (!(candidate instanceof File)) {
+    throw codedError("请选择确认凭证文件", 400, "FILE_REQUIRED");
+  }
+  const fileName = safeFileName(candidate.name || fallbackName);
+  const extension = String(fileName.split(".").pop() || "").toLowerCase();
+  if (extension === "pdf") {
+    const file = await readValidatedPdfUploadFile(candidate, fallbackName);
+    return { ...file, extension: "pdf" };
+  }
+  if (["jpg", "jpeg", "png", "webp"].includes(extension)) {
+    try {
+      return await readValidatedPaymentVoucherUploadFile(candidate, fallbackName);
+    } catch (error: unknown) {
+      const code = String((error as { code?: string } | null)?.code || "");
+      if (code === "FILE_TYPE_NOT_ALLOWED" || code === "FILE_SIGNATURE_INVALID") {
+        throw codedError("确认凭证图片格式错误，请上传有效的 JPG、JPEG、PNG 或 WebP 文件", 400, code);
+      }
+      throw error;
+    }
+  }
+  throw codedError(
+    "确认凭证仅支持 PDF、JPG、JPEG、PNG 或 WebP 文件",
+    400,
+    "FILE_TYPE_NOT_ALLOWED",
+  );
+}

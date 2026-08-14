@@ -291,7 +291,8 @@ test("formal factory dispatch is an explicit locked transition with an empty-pri
   assert.match(dispatchSource, /正式下发工厂/);
   assert.match(dispatchSource, /销售内容和工厂分配将锁定/);
   assert.match(dispatchSource, /待供应商回填/);
-  assert.match(dispatchSource, /接受订单、申请改期或拒绝订单/);
+  assert.match(dispatchSource, /有门户账号的在线通知，无门户账号的转为线下协同/);
+  assert.match(dispatchSource, /供应商可在门户回复；通过微信、电话、邮件或纸质回复时，由内部人员如实代录/);
   assert.match(dispatchSource, /response\.execution \|\| response\.data/);
   assert.match(moduleSource, /useSalesExecutionDispatch/);
   assert.match(moduleSource, /executionDispatched[\s\S]*loadRows\(page, submittedKeyword, submittedStatus\)[\s\S]*loadDetail\(saved\.id\)/);
@@ -318,7 +319,7 @@ test("failed factory email can be explicitly retried without redispatching the o
   assert.match(emailRetrySource, /dispatchVersionNumber: Number\(purchaseOrder\.dispatchVersionNumber\)/);
   assert.match(purchaseDraftSource, /dispatchEmailStatus === "FAILED"/);
   assert.match(purchaseDraftSource, /dispatchEmailStatus === "NO_RECIPIENT"/);
-  assert.match(purchaseDraftSource, /重试邮件/);
+  assert.match(purchaseDraftSource, /重试门户邮件/);
 });
 
 test("only draft sales executions remain editable or dispatchable", () => {

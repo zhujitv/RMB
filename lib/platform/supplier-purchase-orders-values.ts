@@ -17,6 +17,7 @@ type DecimalValue = QuantityValue | null | undefined;
 
 export type SupplierPurchaseOrderPublicRow = {
   id: string;
+  supplierId: string;
   revision: number;
   poNo: string;
   execution: { customerOrderNo: string; shippingStartedAt: DateValue };
@@ -37,6 +38,13 @@ export type SupplierPurchaseOrderPublicRow = {
   productionStatus: string;
   productionStartedAt: DateValue;
   productionCompletedAt: DateValue;
+  productionCompletedById: string | null;
+  productionCompletionSource: string | null;
+  productionCompletionChannel: string | null;
+  productionCompletionContact: string | null;
+  productionCompletionRecordedAt: DateValue;
+  productionCompletionRemark: string | null;
+  productionCompletionEvidenceNote: string | null;
   remark: string | null;
   status: SupplierPurchaseOrderStatus;
   supplierDeliveryDate: DateValue;
@@ -44,10 +52,16 @@ export type SupplierPurchaseOrderPublicRow = {
   supplierResponseSequence: number;
   respondedAt: DateValue;
   supplierResponses: Array<{
+    id: string;
     responseSequence: number;
     action: string;
     deliveryDate: DateValue;
     remark: string | null;
+    source: string;
+    channel: string;
+    supplierContact: string;
+    supplierRespondedAt: DateValue;
+    evidenceNote: string | null;
     respondedAt: DateValue;
     internalDecision: string | null;
     internalDecidedAt: DateValue;
@@ -94,6 +108,11 @@ export type SupplierPurchaseOrderDto = {
   productionStatus: string;
   productionStartedAt: string | null;
   productionCompletedAt: string | null;
+  productionCompletionSource: string;
+  productionCompletionChannel: string;
+  productionCompletionContact: string;
+  productionCompletionRecordedAt: string | null;
+  productionCompletionRemark: string;
   deliveryFrozen: boolean;
   purchaseRemark: string;
   status: SupplierPurchaseOrderStatus;
@@ -102,10 +121,16 @@ export type SupplierPurchaseOrderDto = {
   supplierResponseSequence: number;
   respondedAt: string | null;
   responseHistory: Array<{
+    id: string;
     sequence: number;
     action: string;
     deliveryDate: string | null;
     remark: string;
+    source: string;
+    channel: string;
+    supplierContact: string;
+    supplierRespondedAt: string | null;
+    recordedAt: string | null;
     respondedAt: string | null;
     internalDecision: string;
     internalDecidedAt: string | null;
@@ -141,6 +166,7 @@ export function serializeSupplierPurchaseOrder(row: SupplierPurchaseOrderPublicR
     (sum, payment) => sum.add(payment.amount == null ? 0 : payment.amount.toString()),
     new Prisma.Decimal(0),
   ).toDecimalPlaces(2);
+  const latestResponse = row.supplierResponses.at(-1);
   return {
     id: row.id,
     revision: row.revision,
@@ -165,19 +191,30 @@ export function serializeSupplierPurchaseOrder(row: SupplierPurchaseOrderPublicR
     productionStatus: row.productionStatus || "WAITING_SUPPLIER",
     productionStartedAt: isoDate(row.productionStartedAt),
     productionCompletedAt: isoDate(row.productionCompletedAt),
+    productionCompletionSource: row.productionCompletionSource || "",
+    productionCompletionChannel: row.productionCompletionChannel || "",
+    productionCompletionContact: row.productionCompletionContact || "",
+    productionCompletionRecordedAt: isoDate(row.productionCompletionRecordedAt),
+    productionCompletionRemark: row.productionCompletionRemark || "",
     deliveryFrozen: Boolean(row.execution.shippingStartedAt || row.productionStatus === "COMPLETED" || row.actualDeliveryDate),
     purchaseRemark: row.remark || "",
     status: row.status,
     supplierDeliveryDate: isoDate(row.supplierDeliveryDate),
     supplierResponseRemark: row.supplierResponseRemark || "",
     supplierResponseSequence: row.supplierResponseSequence,
-    respondedAt: isoDate(row.respondedAt),
+    respondedAt: isoDate(latestResponse?.supplierRespondedAt || row.respondedAt),
     responseHistory: row.supplierResponses.map((response) => ({
+      id: response.id,
       sequence: response.responseSequence,
       action: response.action,
       deliveryDate: isoDate(response.deliveryDate),
       remark: response.remark || "",
-      respondedAt: isoDate(response.respondedAt),
+      source: response.source || "SUPPLIER_PORTAL",
+      channel: response.channel || "PORTAL",
+      supplierContact: response.supplierContact || "",
+      supplierRespondedAt: isoDate(response.supplierRespondedAt),
+      recordedAt: isoDate(response.respondedAt),
+      respondedAt: isoDate(response.supplierRespondedAt || response.respondedAt),
       internalDecision: response.internalDecision || "",
       internalDecidedAt: isoDate(response.internalDecidedAt),
     })),

@@ -77,6 +77,11 @@ test("supplier purchase order DTO is rebuilt from an explicit non-sales whitelis
     "prepaymentRequiredAmount",
     "prepaymentRequiredBeforeProduction",
     "productionCompletedAt",
+    "productionCompletionChannel",
+    "productionCompletionContact",
+    "productionCompletionRecordedAt",
+    "productionCompletionRemark",
+    "productionCompletionSource",
     "productionStartedAt",
     "productionStatus",
     "purchaseCurrency",
@@ -206,7 +211,14 @@ test("supplier price normalization requires every and only missing purchase-orde
   );
   assert.throws(
     () => normalizeSupplierPurchaseOrderPrices({ itemPrices: [{ purchaseOrderItemId: "fixed-1", unitPrice: "9" }] }, items),
-    (error: unknown) => (error as { code?: string }).code === "SUPPLIER_PURCHASE_ORDER_PRICE_ITEM_INVALID",
+    (error: unknown) => (error as { code?: string }).code === "SUPPLIER_PURCHASE_ORDER_PRICE_FROZEN",
+  );
+  assert.deepEqual(
+    normalizeSupplierPurchaseOrderPrices({ itemPrices: [
+      { purchaseOrderItemId: "missing-1", unitPrice: "12.3456" },
+      { purchaseOrderItemId: "fixed-1", unitPrice: "10.000000" },
+    ] }, items),
+    [{ purchaseOrderItemId: "missing-1", unitPriceText: "12.3456" }],
   );
   assert.throws(
     () => normalizeSupplierPurchaseOrderPrices({ itemPrices: [{ purchaseOrderItemId: "missing-1", unitPrice: "-1" }] }, items),
@@ -216,6 +228,7 @@ test("supplier price normalization requires every and only missing purchase-orde
 
 test("supplier purchase order service scopes every read and response before serialization", () => {
   const service = readFileSync("lib/platform/supplier-purchase-orders.ts", "utf8");
+  const responseCore = readFileSync("lib/platform/factory-purchase-order-response-core.ts", "utf8");
   const production = readFileSync("lib/platform/supplier-purchase-order-production.ts", "utf8");
   const query = readFileSync("lib/platform/supplier-purchase-orders-query.ts", "utf8");
   const values = readFileSync("lib/platform/supplier-purchase-orders-values.ts", "utf8");
@@ -232,14 +245,15 @@ test("supplier purchase order service scopes every read and response before seri
   assert.match(query, /supplier:[\s\S]*?deletedAt: null,[\s\S]*?status: "启用",[\s\S]*?supplierType: \{ in: \[\.\.\.PRODUCT_SUPPLIER_TYPES\] \}/);
   assert.match(service, /where: \{ id: nonEmpty\(id\), \.\.\.supplierPurchaseOrderScope\(actor\) \}/);
   assert.match(service, /FOR UPDATE/);
-  assert.match(service, /factoryPurchaseOrderSupplierResponse\.create/);
-  assert.match(service, /factoryPurchaseOrderSupplierPrice\.create/);
-  assert.match(service, /supplierId,[\s\S]*status: before\.status,[\s\S]*revision: response\.expectedRevision/);
+  assert.match(service, /applyFactoryPurchaseOrderResponse\(/);
+  assert.match(service, /source: "SUPPLIER_PORTAL"/);
+  assert.match(service, /channel: "PORTAL"/);
+  assert.match(responseCore, /factoryPurchaseOrderSupplierResponse\.create/);
+  assert.match(responseCore, /factoryPurchaseOrderSupplierPrice\.create/);
+  assert.match(responseCore, /supplierId,[\s\S]*status: before\.status,[\s\S]*revision: response\.expectedRevision/);
   assert.match(service, /writeAudit\([\s\S]*"factory_purchase_orders"[\s\S]*tx,/);
   assert.match(service, /TransactionIsolationLevel\.Serializable/);
-  assert.match(production, /FROM "users" WHERE "id" = \$\{actorId\} FOR SHARE/);
-  assert.match(production, /FROM "suppliers" WHERE "id" = \$\{supplierId\} FOR SHARE/);
-  assert.match(production, /!validActor \|\| !canWrite\(validActor, "supplierPurchaseOrders"\)/);
+  assert.match(production, /assertActiveSupplierPurchaseOrderActor\(tx, actorId, supplierId\)/);
   assert.match(query, /execution: \{ select: \{ customerOrderNo: true, shippingStartedAt: true \} \}/);
   assert.match(query, /confirmedSupplierDeliveryDate: true/);
   assert.match(query, /actualDeliveryDate: true/);
@@ -247,11 +261,11 @@ test("supplier purchase order service scopes every read and response before seri
   assert.match(query, /internalDecision: true,[\s\S]*internalDecidedAt: true/);
   assert.doesNotMatch(query, /internalDecisionRemark: true/);
   assert.doesNotMatch(values, /internalDecisionRemark:/);
-  assert.match(service, /before\.status === "DELIVERY_PROPOSED"[\s\S]*?SUPPLIER_PURCHASE_ORDER_PROPOSAL_PENDING/);
-  assert.match(service, /before\.confirmedSupplierDeliveryDate \|\| before\.supplierDeliveryDate \|\| before\.requestedDeliveryDate/);
-  assert.match(service, /supplierDeliveryDate: response\.action === "ACCEPTED" \? response\.deliveryDate : before\.supplierDeliveryDate/);
-  assert.match(service, /const firstAcceptedResponse = response\.action === "ACCEPTED" && !before\.initialSupplierDeliveryDate/);
-  for (const forbidden of ["customer", "businessEntityId", "salespersonUserId", "salesUnitPrice", "salesAmount", "executionId", "executionItemId", "subtotal", "supplierId"]) {
+  assert.match(responseCore, /before\.status === "DELIVERY_PROPOSED"[\s\S]*?SUPPLIER_PURCHASE_ORDER_PROPOSAL_PENDING/);
+  assert.match(responseCore, /before\.confirmedSupplierDeliveryDate \|\| before\.supplierDeliveryDate \|\| before\.requestedDeliveryDate/);
+  assert.match(responseCore, /supplierDeliveryDate: response\.action === "ACCEPTED" \? response\.deliveryDate : before\.supplierDeliveryDate/);
+  assert.match(responseCore, /const firstAcceptedResponse = response\.action === "ACCEPTED" && !before\.initialSupplierDeliveryDate/);
+  for (const forbidden of ["customer", "businessEntityId", "salespersonUserId", "salesUnitPrice", "salesAmount", "executionId", "executionItemId", "subtotal"]) {
     assert.equal(query.includes(forbidden + ": true"), false, forbidden);
   }
 });

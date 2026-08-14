@@ -87,6 +87,7 @@ export function PurchaseOrderDraftList({
       {orders.map((order) => {
         const currency = String(order.purchaseCurrency || order.currency || "CNY");
         const total = purchaseOrderTotal(order);
+        const latestResponse = order.supplierResponseHistory?.at(-1);
         return (
           <article className={styles.purchaseOrderCard} key={order.id}>
             <div className={styles.purchaseOrderHeader}>
@@ -102,10 +103,12 @@ export function PurchaseOrderDraftList({
                 {order.confirmedSupplierDeliveryDate || order.supplierDeliveryDate ? <small>当前生效交期：{formatDate(order.confirmedSupplierDeliveryDate || order.supplierDeliveryDate)}</small> : null}
                 {order.status === "DELIVERY_PROPOSED" ? <small>待确认新交期：{formatDate(order.supplierResponseHistory?.at(-1)?.deliveryDate)}</small> : null}
                 {order.supplierResponseRemark ? <small>供应商回复：{order.supplierResponseRemark}</small> : null}
-                {order.respondedAt ? <small>回复时间：{formatDateTime(order.respondedAt)}{order.respondedBy?.name ? ` · ${order.respondedBy.name}` : ""}</small> : null}
-                {order.dispatchEmailStatus === "FAILED" || order.dispatchEmailStatus === "NO_RECIPIENT" ? <small className={styles.balancePending}>邮件提醒异常：{order.dispatchEmailError || "请检查供应商邮箱"}</small> : null}
-                {canRetryEmail && (order.dispatchEmailStatus === "FAILED" || order.dispatchEmailStatus === "NO_RECIPIENT") ? (
-                  <div><button className={actionStyles.emailRetryButton} type="button" disabled={Boolean(retryingPurchaseOrderId)} onClick={() => onRetryEmail?.(order.id)}>{retryingPurchaseOrderId === order.id ? "重试中..." : "重试邮件"}</button></div>
+                {latestResponse?.supplierRespondedAt ? <small>工厂实际回复：{formatDateTime(latestResponse.supplierRespondedAt)}{latestResponse.supplierContact ? ` · ${latestResponse.supplierContact}` : ""}</small> : null}
+                {order.respondedAt ? <small>系统登记：{formatDateTime(order.respondedAt)}{order.respondedBy?.name ? ` · ${order.respondedBy.name}` : ""}</small> : null}
+                {order.dispatchEmailStatus === "FAILED" ? <small className={styles.balancePending}>门户邮件提醒失败：{order.dispatchEmailError || "请检查供应商邮箱"}</small> : null}
+                {order.dispatchEmailStatus === "NO_RECIPIENT" ? <small>未配置供应商门户账号，本单按线下协同，可由内部登记工厂回复。</small> : null}
+                {canRetryEmail && order.dispatchEmailStatus === "FAILED" ? (
+                  <div><button className={actionStyles.emailRetryButton} type="button" disabled={Boolean(retryingPurchaseOrderId)} onClick={() => onRetryEmail?.(order.id)}>{retryingPurchaseOrderId === order.id ? "重试中..." : "重试门户邮件"}</button></div>
                 ) : null}
               </div>
               <span className={total === null ? styles.balancePending : styles.purchaseOrderTotal}>{total === null ? "待供应商回填" : formatCurrencyAmount(currency, total)}</span>
@@ -135,7 +138,7 @@ export function PurchaseOrderDraftList({
                 </tbody>
               </table>
             </div>
-            {executionId && order.status !== "DRAFT" && order.status !== "VOIDED" ? (
+            {executionId && order.status !== "DRAFT" ? (
               <PurchaseOrderExecutionPanel
                 executionId={executionId}
                 executionRevision={executionRevision}

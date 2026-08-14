@@ -33,38 +33,58 @@ function supplierUnitPrice(value: unknown, lineNumber: number) {
   return text;
 }
 
+function sameUnitPrice(left: string, right: string) {
+  const canonical = (value: string) => {
+    const [whole = "0", fraction = ""] = value.split(".");
+    return `${whole.replace(/^0+(?=\d)/, "")}.${fraction.padEnd(6, "0").slice(0, 6)}`;
+  };
+  return canonical(left) === canonical(right);
+}
+
 export function normalizeSupplierPurchaseOrderPrices(
   input: unknown,
   items: SupplierPurchaseOrderPriceTarget[],
+  options: { allowOriginalPriceOverride?: boolean } = {},
 ): NormalizedSupplierPurchaseOrderPrice[] {
   const missingItems = items.filter((item) => item.purchaseUnitPrice == null && item.supplierPrice?.unitPrice == null);
-  if (!missingItems.length) return [];
   if (!isPlainRecord(input) || !Array.isArray(input.itemPrices)) {
+    if (!missingItems.length) return [];
     throw codedError("请补齐所有待回填产品的采购单价", 400, "SUPPLIER_PURCHASE_ORDER_PRICES_REQUIRED");
   }
   if (input.itemPrices.length > 500) {
     throw codedError("单张采购单最多回填 500 行价格", 400, "SUPPLIER_PURCHASE_ORDER_PRICES_LIMIT");
   }
-  const missingById = new Map(missingItems.map((item) => [item.id, item]));
+  const itemById = new Map(items.map((item) => [item.id, item]));
   const seen = new Set<string>();
-  const rows = input.itemPrices.map((raw, index) => {
+  const rows = input.itemPrices.flatMap((raw, index) => {
     if (!isPlainRecord(raw)) {
       throw codedError(`第 ${index + 1} 行价格格式错误`, 400, "SUPPLIER_PURCHASE_ORDER_PRICE_ROW_INVALID");
     }
     const purchaseOrderItemId = typeof raw.purchaseOrderItemId === "string" ? raw.purchaseOrderItemId.trim() : "";
-    if (!purchaseOrderItemId || !missingById.has(purchaseOrderItemId)) {
-      throw codedError("价格回填包含无效或无需回填的采购明细", 400, "SUPPLIER_PURCHASE_ORDER_PRICE_ITEM_INVALID");
+    const item = itemById.get(purchaseOrderItemId);
+    if (!purchaseOrderItemId || !item) {
+      throw codedError("价格确认包含无效采购明细", 400, "SUPPLIER_PURCHASE_ORDER_PRICE_ITEM_INVALID");
     }
     if (seen.has(purchaseOrderItemId)) {
       throw codedError("同一采购明细不能重复回填价格", 400, "SUPPLIER_PURCHASE_ORDER_PRICE_ITEM_DUPLICATE");
     }
     seen.add(purchaseOrderItemId);
-    return {
-      purchaseOrderItemId,
-      unitPriceText: supplierUnitPrice(raw.unitPrice, index + 1),
-    };
+    const unitPriceText = supplierUnitPrice(raw.unitPrice, index + 1);
+    const supplierPrice = item.supplierPrice?.unitPrice == null ? null : String(item.supplierPrice.unitPrice);
+    if (supplierPrice !== null) {
+      if (!sameUnitPrice(unitPriceText, supplierPrice)) {
+        throw codedError("供应商已确认的采购单价不可再次修改，请通过费用调整处理", 409, "SUPPLIER_PURCHASE_ORDER_PRICE_FROZEN");
+      }
+      return [];
+    }
+    const originalPrice = item.purchaseUnitPrice == null ? null : String(item.purchaseUnitPrice);
+    if (originalPrice !== null && sameUnitPrice(unitPriceText, originalPrice)) return [];
+    if (originalPrice !== null && !options.allowOriginalPriceOverride) {
+      throw codedError("采购单价已锁定，后续差额请通过费用调整处理", 409, "SUPPLIER_PURCHASE_ORDER_PRICE_FROZEN");
+    }
+    return [{ purchaseOrderItemId, unitPriceText }];
   });
-  if (seen.size !== missingItems.length) {
+  if (missingItems.some((item) => !seen.has(item.id))) {
     throw codedError("请补齐所有待回填产品的采购单价", 400, "SUPPLIER_PURCHASE_ORDER_PRICES_REQUIRED");
   }
   return rows;

@@ -1,5 +1,40 @@
 export type FactoryPurchaseOrderStatus = "DRAFT" | "DISPATCHED" | "ACCEPTED" | "DELIVERY_PROPOSED" | "REJECTED" | "VOIDED";
 export type FactoryPurchaseOrderProductionStatus = "WAITING_SUPPLIER" | "WAITING_PREPAYMENT" | "READY" | "IN_PRODUCTION" | "COMPLETED";
+export type FactoryConfirmationSource = "SUPPLIER_PORTAL" | "INTERNAL_OFFLINE";
+export type FactoryConfirmationChannel = "PORTAL" | "WECHAT" | "PHONE" | "EMAIL" | "PAPER" | "OTHER";
+export type FactoryConfirmationEvidence = {
+  id?: string;
+  fileName?: string | null;
+  originalFileName?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  uploadedAt?: string | null;
+  uploadedBy?: { id?: string; name?: string | null } | null;
+  previewUrl?: string | null;
+  downloadUrl?: string | null;
+};
+
+export type FactoryPurchaseOrderConfirmationEvent = {
+  key: string;
+  eventId?: string;
+  kind?: "SUPPLIER_RESPONSE" | "PRODUCTION_COMPLETION" | string;
+  action?: string | null;
+  deliveryDate?: string | null;
+  priceChanges?: Array<{
+    purchaseOrderItemId?: string;
+    unitPrice?: string | number | null;
+    amount?: string | number | null;
+  }>;
+  source?: FactoryConfirmationSource | string | null;
+  channel?: FactoryConfirmationChannel | string | null;
+  supplierContact?: string | null;
+  occurredAt?: string | null;
+  recordedAt?: string | null;
+  recordedBy?: { id?: string; name?: string | null } | null;
+  remark?: string | null;
+  evidenceNote?: string | null;
+  evidence?: string | FactoryConfirmationEvidence | null;
+};
 
 export type FactoryPurchaseOrderPayment = {
   id: string;
@@ -106,6 +141,13 @@ export type FactoryPurchaseOrder = {
   productionStartedBy?: { id?: string; name?: string | null } | null;
   productionCompletedAt?: string | null;
   productionCompletedBy?: { id?: string; name?: string | null } | null;
+  productionCompletionSource?: FactoryConfirmationSource | string | null;
+  productionCompletionChannel?: FactoryConfirmationChannel | string | null;
+  productionCompletionContact?: string | null;
+  productionCompletionRecordedAt?: string | null;
+  productionCompletionRemark?: string | null;
+  productionCompletionEvidenceNote?: string | null;
+  productionCompletionEvidence?: string | FactoryConfirmationEvidence | null;
   actualDeliveryDate?: string | null;
   actualDeliveryRecordedAt?: string | null;
   actualDeliveryRecordedBy?: { id?: string; name?: string | null } | null;
@@ -119,16 +161,31 @@ export type FactoryPurchaseOrder = {
   supplierResponseRemark?: string | null;
   supplierResponseSequence?: number | null;
   supplierResponseHistory?: Array<{
+    id?: string;
     sequence?: number;
     action?: string;
     deliveryDate?: string | null;
     remark?: string | null;
+    source?: FactoryConfirmationSource | string | null;
+    channel?: FactoryConfirmationChannel | string | null;
+    supplierContact?: string | null;
+    supplierRespondedAt?: string | null;
+    evidenceNote?: string | null;
+    evidence?: string | FactoryConfirmationEvidence | null;
+    priceChanges?: Array<{
+      purchaseOrderItemId?: string;
+      unitPrice?: string | number | null;
+      amount?: string | number | null;
+    }>;
+    recordedAt?: string | null;
+    recordedBy?: { id?: string; name?: string | null } | null;
     respondedAt?: string | null;
     internalDecision?: string | null;
     internalDecisionRemark?: string | null;
     internalDecidedAt?: string | null;
     internalDecidedBy?: { id?: string; name?: string | null } | null;
   }>;
+  confirmationEvents?: FactoryPurchaseOrderConfirmationEvent[];
   respondedAt?: string | null;
   respondedBy?: { id?: string; name?: string | null } | null;
   payments?: FactoryPurchaseOrderPayment[];

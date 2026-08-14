@@ -170,7 +170,9 @@ test("dispatch validates exact allocation and atomically queues recoverable per-
   assert.match(dispatchRecipients, /if \(!operatorEmails\.length\)/);
   assert.match(dispatchRecipients, /recipientEmails: operatorEmails/);
   assert.doesNotMatch(dispatchRecipients, /recipientEmails: uniqueEmails\(\[operatorEmails, supplier\.email\]\)/);
-  assert.match(dispatchService, /resolveFactoryPurchaseOrderDispatchRecipients\(tx, supplierId\)/);
+  assert.doesNotMatch(dispatchService, /resolveFactoryPurchaseOrderDispatchRecipients|PURCHASE_SUPPLIER_PORTAL_UNAVAILABLE/);
+  assert.match(dispatchOutbox, /if \(!recipientEmails\.length\)[\s\S]*missingRecipient \+= 1/);
+  assert.match(dispatchOutbox, /dispatchEmailStatus: "NO_RECIPIENT"/);
   assert.doesNotMatch(dispatchOutbox, /recipientEmails:\s*body\./);
   assert.match(dispatchService, /processFactoryPurchaseOrderDispatchOutbox/);
   assert.match(dispatchNotifications, /updateMany\(\{[\s\S]*status: "sending"[\s\S]*attempts: \{ increment: 1 \}/);
@@ -191,7 +193,7 @@ test("dispatch validates exact allocation and atomically queues recoverable per-
   assert.doesNotMatch(dispatchService, /ReceivableOrder|OrderCost|qualityInspection/);
 });
 
-test("factory dispatch requires at least one portal operator with effective write access", () => {
+test("dispatch requires active product suppliers without requiring portal capability or recipients", () => {
   assert.equal(canOperateFactoryPurchaseOrderPortal({ role: "产品供应商" }), true);
   assert.equal(canOperateFactoryPurchaseOrderPortal({
     role: "产品供应商",
@@ -213,6 +215,29 @@ test("factory dispatch requires at least one portal operator with effective writ
       dataScope: "OWN",
     },
   }), true);
+  const supplierGuard = dispatchService.match(
+    /async function assertActivePurchaseOrderSuppliers[\s\S]*?(?=\nexport async function dispatchSalesExecution)/,
+  )?.[0] || "";
+  assert.match(supplierGuard, /tx\.supplier\.count/);
+  assert.match(supplierGuard, /id: \{ in: supplierIds \}/);
+  assert.match(supplierGuard, /deletedAt: null/);
+  assert.match(supplierGuard, /status: "启用"/);
+  assert.match(supplierGuard, /supplierType: \{ in: \[\.\.\.PRODUCT_SUPPLIER_TYPES\] \}/);
+  assert.match(supplierGuard, /activeSuppliers !== supplierIds\.length/);
+  assert.match(supplierGuard, /"PURCHASE_SUPPLIER_INVALID"/);
+  assert.doesNotMatch(
+    supplierGuard,
+    /allowFactoryDocumentUpload|recipientEmails|resolveFactoryPurchaseOrderDispatchRecipients|canOperateFactoryPurchaseOrderPortal/,
+  );
+  assert.match(
+    dispatchService,
+    /validateDispatchReadiness\(before\);\s+await assertActivePurchaseOrderSuppliers\(tx, before\);[\s\S]*?const dispatchedAt/,
+  );
+  assert.doesNotMatch(
+    dispatchService,
+    /canOperateFactoryPurchaseOrderPortal|resolveFactoryPurchaseOrderDispatchRecipients/,
+  );
+  assert.match(dispatchService, /queueFactoryPurchaseOrderDispatchOutbox/);
 });
 
 test("terminal factory-email failures have an audited recipient-snapshot retry path", () => {

@@ -4,7 +4,10 @@ import { useRef, useState } from "react";
 import { apiJson } from "../../api";
 import { formatCurrencyAmount, formatDate, formatDateTime } from "../../formatters";
 import styles from "./purchase-order-actions.module.css";
+import { PurchaseOrderConfirmationAudit } from "./purchase-order-confirmation-audit";
 import { PurchaseOrderDeliveryActions } from "./purchase-order-delivery-actions";
+import { PurchaseOrderOfflineProductionCompletion } from "./purchase-order-offline-production-completion";
+import { PurchaseOrderOfflineResponse } from "./purchase-order-offline-response";
 import { PurchaseOrderReassignmentCard } from "./purchase-order-reassignment-card";
 import { PurchaseOrderSettlementCard } from "./purchase-order-settlement-card";
 import { factoryProductionStatusLabel } from "./status-values";
@@ -109,6 +112,11 @@ export function PurchaseOrderExecutionPanel({
     );
   }
 
+  function showOfflineSaved(savedMessage: string) {
+    setError("");
+    setMessage(savedMessage);
+  }
+
   function submitPayment() {
     void run(async () => {
       const kind = order.settlement ? "BALANCE" : paymentKind;
@@ -183,13 +191,15 @@ export function PurchaseOrderExecutionPanel({
       </div>
 
       {order.productionStartedAt ? <p className={styles.auditLine}>开始生产：{formatDateTime(order.productionStartedAt)}{order.productionStartedBy?.name ? ` · ${order.productionStartedBy.name}` : ""}</p> : null}
-      {order.productionCompletedAt ? <p className={styles.auditLine}>生产完成：{formatDateTime(order.productionCompletedAt)}{order.productionCompletedBy?.name ? ` · ${order.productionCompletedBy.name}` : ""}</p> : null}
+      <PurchaseOrderConfirmationAudit executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} />
       <PurchaseOrderReassignmentCard executionId={executionId} executionRevision={executionRevision} order={order} canManage={canStartProduction} onChanged={onChanged} />
       <PurchaseOrderDeliveryActions executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} />
       {message ? <div className={styles.success} role="status">{message}</div> : null}
       {error ? <div className={styles.error} role="alert">{error}</div> : null}
 
       <div className={styles.actionRow}>
+        <PurchaseOrderOfflineResponse executionId={executionId} shippingStarted={shippingStarted} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
+        <PurchaseOrderOfflineProductionCompletion executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
         {canStartProduction && active && order.productionStatus === "READY" ? <button type="button" disabled={busy} onClick={startProduction}>开始生产</button> : null}
         {order.productionStatus === "IN_PRODUCTION" ? <span className={styles.warning}>等待供应商确认生产完成</span> : null}
         {order.productionStatus === "WAITING_PREPAYMENT" ? <span className={styles.warning}>预付款到账后才可生产</span> : null}

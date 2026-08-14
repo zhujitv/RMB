@@ -7,6 +7,8 @@ const supplierDetailSource = readFileSync("app/modules/supplier-purchase-orders/
 const completionCardSource = readFileSync("app/modules/supplier-purchase-orders/supplier-production-completion-card.tsx", "utf8");
 const workspaceContentSource = readFileSync("app/WorkspaceModuleContent.tsx", "utf8");
 const executionPanelSource = readFileSync("app/modules/sales-execution/purchase-order-execution-panel.tsx", "utf8");
+const offlineResponseSource = readFileSync("app/modules/sales-execution/purchase-order-offline-response.tsx", "utf8");
+const offlineCompletionSource = readFileSync("app/modules/sales-execution/purchase-order-offline-production-completion.tsx", "utf8");
 const executionPropsSource = [
   executionPanelSource,
   readFileSync("app/modules/sales-execution/purchase-order-draft-list.tsx", "utf8"),
@@ -56,17 +58,33 @@ test("supplier response rejects same-tick duplicate submissions", () => {
   assert.match(supplierModuleSource, /!canSubmit \|\| responseBusyRef\.current/);
 });
 
-test("internal execution can start production but waits read-only for supplier completion", () => {
+test("internal execution keeps start production and adds a scoped offline completion dialog", () => {
   assert.match(executionPanelSource, /body: JSON\.stringify\(\{ action: "START" \}\)/);
   assert.match(executionPanelSource, />开始生产<\/button>/);
-  assert.match(executionPanelSource, /等待供应商确认生产完成/);
+  assert.match(executionPanelSource, /<PurchaseOrderOfflineProductionCompletion[\s\S]*canManage=\{canStartProduction\}/);
   assert.doesNotMatch(executionPanelSource, /action: "COMPLETE"|标记生产完成|updateProduction/);
+  assert.match(offlineCompletionSource, /order\.status === "ACCEPTED"/);
+  assert.match(offlineCompletionSource, /order\.productionStatus === "IN_PRODUCTION"/);
+  assert.match(offlineCompletionSource, /登记线下生产完成/);
+  assert.match(offlineCompletionSource, /\/offline-production-completion`/);
+  assert.match(offlineCompletionSource, /supplierContact: supplierContact\.trim\(\)/);
+  assert.match(offlineCompletionSource, /productionCompletedAt: shanghaiDateTimeIso\(productionCompletedAt\)/);
+  assert.match(offlineCompletionSource, /evidenceNote: evidenceNote\.trim\(\)/);
+  assert.match(offlineCompletionSource, /expectedRevision: Number\(order\.revision \|\| 1\)/);
+  assert.match(offlineCompletionSource, /await onChanged\(\)/);
+  assert.doesNotMatch(offlineCompletionSource, /source\s*:/);
   assert.match(executionPropsSource, /canStartProduction/);
-  assert.doesNotMatch(executionPropsSource, /canManageProduction|canManageFactoryExecution/);
 });
 
 test("touched supplier completion components stay within the component size boundary", () => {
-  for (const source of [supplierModuleSource, supplierDetailSource, completionCardSource, executionPanelSource]) {
+  for (const source of [
+    supplierModuleSource,
+    supplierDetailSource,
+    completionCardSource,
+    executionPanelSource,
+    offlineResponseSource,
+    offlineCompletionSource,
+  ]) {
     assert.ok(source.split("\n").length <= 301);
   }
 });

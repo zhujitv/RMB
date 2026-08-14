@@ -15,11 +15,50 @@ export function serializePurchaseOrderRelations(order: LooseRecord) {
   const responseHistory = Array.isArray(order.supplierResponses)
     ? order.supplierResponses.map((responseValue) => {
       const response = record(responseValue);
+      const respondedBy = record(response.respondedBy);
       const internalDecidedBy = record(response.internalDecidedBy);
+      const evidenceFile = record(response.confirmationEvidenceFile);
+      const evidenceUploadedBy = record(evidenceFile.uploadedBy);
+      const priceChanges = Array.isArray(response.supplierPrices)
+        ? response.supplierPrices.map((priceValue) => {
+          const price = record(priceValue);
+          return {
+            purchaseOrderItemId: String(price.purchaseOrderItemId || ""),
+            unitPrice: decimalText(price.unitPrice),
+            amount: decimalText(price.amount),
+          };
+        })
+        : [];
+      const evidencePath = response.id
+        ? `/api/sales-executions/${encodeURIComponent(String(order.executionId || ""))}/purchase-orders/${encodeURIComponent(String(order.id || ""))}/confirmation-evidence/SUPPLIER_RESPONSE/${encodeURIComponent(String(response.id))}`
+        : "";
       return {
-        sequence: Number(response.responseSequence || 0), action: String(response.action || ""),
+        id: String(response.id || ""), sequence: Number(response.responseSequence || 0),
+        action: String(response.action || ""),
         deliveryDate: response.deliveryDate || null, remark: String(response.remark || ""),
-        respondedAt: response.respondedAt || null, internalDecision: String(response.internalDecision || ""),
+        priceChanges,
+        source: String(response.source || "SUPPLIER_PORTAL"),
+        channel: String(response.channel || "PORTAL"),
+        supplierContact: String(response.supplierContact || ""),
+        supplierRespondedAt: response.supplierRespondedAt || response.respondedAt || null,
+        evidenceNote: String(response.evidenceNote || ""),
+        evidence: evidenceFile.id ? {
+          id: String(evidenceFile.id),
+          fileName: String(evidenceFile.fileName || "确认凭证"),
+          mimeType: String(evidenceFile.mimeType || "application/octet-stream"),
+          fileSize: Number(evidenceFile.fileSize || 0),
+          uploadedAt: evidenceFile.uploadedAt || null,
+          uploadedBy: evidenceUploadedBy.id ? {
+            id: String(evidenceUploadedBy.id), name: String(evidenceUploadedBy.name || ""),
+          } : null,
+          previewUrl: evidencePath,
+          downloadUrl: `${evidencePath}?download=1`,
+        } : null,
+        recordedAt: response.respondedAt || null,
+        recordedBy: respondedBy.id
+          ? { id: String(respondedBy.id), name: String(respondedBy.name || "") } : null,
+        respondedAt: response.supplierRespondedAt || response.respondedAt || null,
+        internalDecision: String(response.internalDecision || ""),
         internalDecisionRemark: String(response.internalDecisionRemark || ""),
         internalDecidedAt: response.internalDecidedAt || null,
         internalDecidedBy: internalDecidedBy.id

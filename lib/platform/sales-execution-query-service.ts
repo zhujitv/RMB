@@ -7,6 +7,7 @@ import {
   salesExecutionAccessWhere,
 } from "./sales-execution-access";
 import { serializeSalesExecution } from "./sales-execution-values";
+import { FILE_ASSET_ROLES, FILE_ASSET_SOURCE_TABLES } from "./file-asset-data";
 
 type QueryLike = { get(key: string): string | null };
 
@@ -48,7 +49,18 @@ export const salesExecutionDetailInclude = {
       },
       supplierResponses: {
         orderBy: [{ responseSequence: "asc" as const }],
-        include: { internalDecidedBy: { select: userSelect } },
+        include: {
+          respondedBy: { select: userSelect },
+          internalDecidedBy: { select: userSelect },
+          supplierPrices: {
+            orderBy: [{ purchaseOrderItemId: "asc" as const }],
+            select: {
+              purchaseOrderItemId: true,
+              unitPrice: true,
+              amount: true,
+            },
+          },
+        },
       },
       payments: { orderBy: [{ sequenceNo: "asc" as const }] },
       adjustments: { orderBy: [{ sequenceNo: "asc" as const }] },
@@ -109,7 +121,54 @@ export async function loadSalesExecution(
 
 export async function getSalesExecution(id: string, actor: SalesExecutionActor) {
   assertRead(actor, "salesExecution");
-  return serializeSalesExecution(await loadSalesExecution(id, actor), true);
+  const execution = await loadSalesExecution(id, actor);
+  const responseIds = execution.purchaseOrders.flatMap((order) => order.supplierResponses.map((response) => response.id));
+  const purchaseOrderIds = execution.purchaseOrders.map((order) => order.id);
+  const evidenceAssets = responseIds.length || purchaseOrderIds.length
+    ? await prisma.fileAsset.findMany({
+      where: {
+        isDeleted: false,
+        deletedAt: null,
+        OR: [
+          ...(responseIds.length ? [{
+            sourceTable: FILE_ASSET_SOURCE_TABLES.FACTORY_PURCHASE_ORDER_SUPPLIER_RESPONSES,
+            sourceId: { in: responseIds },
+            fileRole: FILE_ASSET_ROLES.SUPPLIER_CONFIRMATION_EVIDENCE,
+          }] : []),
+          ...(purchaseOrderIds.length ? [{
+            sourceTable: FILE_ASSET_SOURCE_TABLES.FACTORY_PURCHASE_ORDERS,
+            sourceId: { in: purchaseOrderIds },
+            fileRole: FILE_ASSET_ROLES.PRODUCTION_COMPLETION_EVIDENCE,
+          }] : []),
+        ],
+      },
+    })
+    : [];
+  const uploaderIds = [...new Set(evidenceAssets.map((asset) => asset.uploadedById).filter((id): id is string => Boolean(id)))];
+  const uploaders = uploaderIds.length
+    ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: userSelect })
+    : [];
+  const uploaderById = new Map(uploaders.map((user) => [user.id, user]));
+  const assetBySource = new Map(evidenceAssets.map((asset) => [
+    `${asset.sourceTable}:${asset.sourceId}:${asset.fileRole}`,
+    { ...asset, uploadedBy: asset.uploadedById ? uploaderById.get(asset.uploadedById) || null : null },
+  ]));
+  const withEvidence = {
+    ...execution,
+    purchaseOrders: execution.purchaseOrders.map((order) => ({
+      ...order,
+      productionCompletionEvidenceFile: assetBySource.get(
+        `${FILE_ASSET_SOURCE_TABLES.FACTORY_PURCHASE_ORDERS}:${order.id}:${FILE_ASSET_ROLES.PRODUCTION_COMPLETION_EVIDENCE}`,
+      ) || null,
+      supplierResponses: order.supplierResponses.map((response) => ({
+        ...response,
+        confirmationEvidenceFile: assetBySource.get(
+          `${FILE_ASSET_SOURCE_TABLES.FACTORY_PURCHASE_ORDER_SUPPLIER_RESPONSES}:${response.id}:${FILE_ASSET_ROLES.SUPPLIER_CONFIRMATION_EVIDENCE}`,
+        ) || null,
+      })),
+    })),
+  };
+  return serializeSalesExecution(withEvidence, true);
 }
 
 export async function listSalesExecutions(query: QueryLike, actor: SalesExecutionActor) {

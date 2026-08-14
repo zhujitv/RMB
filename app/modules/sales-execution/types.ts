@@ -3,10 +3,14 @@ import type { FactoryPurchaseOrder } from "./factory-purchase-order-types";
 export type {
   FactoryPurchaseOrder,
   FactoryPurchaseOrderAdjustment,
+  FactoryPurchaseOrderConfirmationEvent,
   FactoryPurchaseOrderPayment,
   FactoryPurchaseOrderProductionStatus,
   FactoryPurchaseOrderSettlement,
   FactoryPurchaseOrderStatus,
+  FactoryConfirmationChannel,
+  FactoryConfirmationEvidence,
+  FactoryConfirmationSource,
   PurchaseOrderItem,
 } from "./factory-purchase-order-types";
 

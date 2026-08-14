@@ -17,7 +17,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const result = await dispatchSalesExecution(request, actor, id, body);
     const { sent, failed, queued, missingRecipient } = result.notificationSummary;
     const deliveryMessage = result.newlyDispatched
-      ? `；邮件成功 ${sent} 封${failed ? `，失败 ${failed} 封` : ""}${queued ? `，待自动重试 ${queued} 封` : ""}${missingRecipient ? `，${missingRecipient} 家工厂未配置邮箱` : ""}`
+      ? `；门户邮件成功 ${sent} 封${failed ? `，失败 ${failed} 封` : ""}${queued ? `，待自动重试 ${queued} 封` : ""}${missingRecipient ? `，${missingRecipient} 家工厂无门户收件人、按线下协同` : ""}`
       : "";
     return NextResponse.json({
       success: true,

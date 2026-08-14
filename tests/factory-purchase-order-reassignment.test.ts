@@ -22,8 +22,8 @@ const dispatchHelpers = readFileSync(
   "lib/platform/factory-purchase-order-dispatch-notification-helpers.ts",
   "utf8",
 );
-const supplierResponseService = readFileSync(
-  "lib/platform/supplier-purchase-orders.ts",
+const responseCore = readFileSync(
+  "lib/platform/factory-purchase-order-response-core.ts",
   "utf8",
 );
 const auditHardeningMigration = readFileSync(
@@ -49,16 +49,17 @@ test("reassignment locks the execution graph and enforces both revisions", () =>
   assert.match(service, /Prisma\.TransactionIsolationLevel\.Serializable/);
 });
 
-test("only a rejected pre-shipping order can move to another portal-enabled factory", () => {
+test("only a rejected pre-shipping order can move to another active product factory", () => {
   const source = `${service}\n${validation}`;
   assert.match(service, /before\.status !== "DISPATCHED"/);
   assert.match(service, /before\.shippingStartedAt \|\| before\.receivableOrder/);
   assert.match(service, /rejectedOrder\.status !== "REJECTED"/);
   assert.match(service, /rejectedOrder\.supplierId === newSupplierId/);
+  assert.match(source, /status: "启用"/);
   assert.match(source, /supplierType: \{ in: \[\.\.\.PRODUCT_SUPPLIER_TYPES\] \}/);
-  assert.match(source, /allowFactoryDocumentUpload: true/);
-  assert.match(validation, /resolveFactoryPurchaseOrderDispatchRecipients\(tx, supplier\.id\)/);
-  assert.match(validation, /!recipients\.recipientEmails\.length/);
+  assert.doesNotMatch(validation, /allowFactoryDocumentUpload|resolveFactoryPurchaseOrderDispatchRecipients|recipientEmails/);
+  assert.match(service, /queueFactoryPurchaseOrderDispatchOutbox/);
+  assert.match(service, /missingRecipient/);
 });
 
 test("reassignment preserves the rejected order and dispatches a linked price-free replacement", () => {
@@ -95,12 +96,12 @@ test("reassignment cancels stale original notifications and blocks a currently s
   assert.match(auditHardeningMigration, /'NOT_SENT', 'SENDING', 'SENT', 'FAILED', 'NO_RECIPIENT', 'CANCELLED'/);
 });
 
-test("supplier rejection retires actionable notifications immediately", () => {
+test("portal or offline supplier rejection retires actionable notifications immediately", () => {
   assert.doesNotMatch(dispatchHelpers, /"REJECTED"/);
-  assert.match(supplierResponseService, /response\.action === "REJECTED"[\s\S]*notificationOutbox\.updateMany/);
-  assert.match(supplierResponseService, /status: \{ in: \["queued", "failed", "pending"\] \}/);
-  assert.match(supplierResponseService, /status: "cancelled"/);
-  assert.match(supplierResponseService, /dispatchEmailStatus: before\.dispatchEmailStatus === "SENT" \? "SENT" : "CANCELLED"/);
+  assert.match(responseCore, /response\.action === "REJECTED"[\s\S]*notificationOutbox\.updateMany/);
+  assert.match(responseCore, /status: \{ in: \["queued", "failed", "pending"\] \}/);
+  assert.match(responseCore, /status: "cancelled"/);
+  assert.match(responseCore, /dispatchEmailStatus: before\.dispatchEmailStatus === "SENT" \? "SENT" : "CANCELLED"/);
 });
 
 test("reassignment keeps unrelated active purchase-order email retries valid", () => {
