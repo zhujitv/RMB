@@ -34,7 +34,7 @@ test("business modules surface API fallback errors instead of silently treating 
 
 test("domestic logistics reads use explicit safe selects so missing optional migration columns cannot crash list pages", () => {
   assert.match(domesticOps, /export function domesticLogisticsSelectWithRelations/);
-  assert.match(domesticOps, /domesticLogisticsInfos: \{\s*select: domesticLogisticsSelectWithRelations\(\)/);
+  assert.match(domesticOps, /domesticLogisticsInfos: \{\s*where: \{ deletedAt: null \},\s*select: domesticLogisticsSelectWithRelations\(\)/);
   assert.doesNotMatch(domesticOps.match(/export function domesticLogisticsSelectWithRelations[\s\S]*?\n}\n/)?.[0] || "", /exportInvoice|customs_export_invoice/);
   assert.match(domesticOps, /domesticLogisticsOrderInclude\(options: \{ shipsgoTrackings\?: boolean \} = \{\}\)/);
   assert.match(domesticOps, /if \(includeShipsgoTrackings\) \{/);

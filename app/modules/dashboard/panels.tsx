@@ -69,7 +69,7 @@ export function RiskPanel({ title, rows, mode, onOpenOrder }: { title: string; r
 export function LowMarginPanel({ rows, onOpenOrder }: { rows: RiskOrder[]; onOpenOrder?: (row: RiskOrder) => void }) {
   return (
     <section className={styles.overviewPanel}>
-      <PanelHead title="低毛利订单 Top10（仅已发货）" count={rows.length} />
+      <PanelHead title="低毛利订单 Top10（已发货或退税归档）" count={rows.length} />
       {rows.length ? rows.map((row, index) => (
         <button key={row.id || row.orderNo || index} type="button" className={`${styles.rankItem} ${styles.rankButton} ${Number(row.expectedGrossMargin || 0) < 0.08 ? styles.rankDanger : ""}`} onClick={() => onOpenOrder?.(row)}>
           <span className={styles.rankIndex}>{index + 1}</span>
@@ -83,7 +83,7 @@ export function LowMarginPanel({ rows, onOpenOrder }: { rows: RiskOrder[]; onOpe
           </div>
         </button>
       )) : (
-        <EmptyPanel title="还没有发现低毛利订单" note="登记实际发货后，低毛利风险会在这里聚合。" />
+        <EmptyPanel title="还没有发现低毛利订单" note="订单发货或提交退税归档后，低毛利风险会在这里聚合。" />
       )}
     </section>
   );
@@ -259,7 +259,7 @@ export function SalespersonProfitPanel({ rows }: { rows: SalespersonRank[] }) {
     <section className={styles.overviewPanel}>
       <PanelHead title="毛利贡献排行" count={rows.length} />
       {rows.length ? rows.map((row, index) => (
-        <CompactRank key={row.label || index} index={index} label={row.label} amount={row.expectedProfit} note={`毛利率 ${formatPercent(row.expectedGrossMargin)}（仅已发货） · 应收 ${formatCny(row.receivable)}`} />
+        <CompactRank key={row.label || index} index={index} label={row.label} amount={row.expectedProfit} note={`毛利率 ${formatPercent(row.expectedGrossMargin)}（已发货或退税归档） · 应收 ${formatCny(row.receivable)}`} />
       )) : <EmptyPanel title="还没有毛利贡献数据" note="录入订单和成本后自动展示。" />}
     </section>
   );

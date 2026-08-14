@@ -4,6 +4,7 @@ import {
   deriveOrderCollectionBalance,
   deriveOrderCollectionStatus,
   paymentAmountForOrderCurrency,
+  profitMarginEligible,
   roundMoney,
 } from "./shared-order-calculations";
 
@@ -14,7 +15,9 @@ export type RepairInput = {
 
 export const repairOrderSelect = Prisma.validator<Prisma.ReceivableOrderSelect>()({
   id: true, orderNo: true, currency: true, exchangeRate: true, finalReceivableAmount: true,
-  finalReceivableAmountCny: true, actualShipmentAmount: true, status: true, commissionStatus: true,
+  finalReceivableAmountCny: true, actualShipmentAmount: true, actualShipmentDate: true,
+  taxArchived: true, taxRefundStatus: true, taxRefundArchivedAt: true, taxSubmittedAt: true,
+  status: true, commissionStatus: true,
   commissionSettledAt: true, updatedAt: true,
   payments: {
     where: { status: { in: ["待确认", "已到账"] }, deletedAt: null },
@@ -62,6 +65,7 @@ export function analyzeReceivableCollectionStatus(order: RepairOrder): {
   const collection = deriveOrderCollectionBalance({ receivableAmount: order.finalReceivableAmount, receivedAmount,
     receivedAmountCny, orderExchangeRate: order.exchangeRate });
   const nextStatus = deriveOrderCollectionStatus({ currentStatus: order.status, actualShipmentAmount: order.actualShipmentAmount,
+    shipmentCompleted: profitMarginEligible(order),
     receivedAmount, outstandingAmount: collection.outstandingAmount, overpaidAmount: collection.overpaidAmount });
   const arrivedPaymentIds = arrivedPayments.map((payment) => payment.id);
   const commonIssue = { orderId: order.id, orderNo: order.orderNo, previousStatus: order.status, proposedStatus: nextStatus };

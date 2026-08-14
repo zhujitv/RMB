@@ -121,7 +121,7 @@ test("customer and salesperson analysis aggregate financial contribution with ov
   assert.ok(columnsFor("salesperson-performance").some((column) => column.key === "collectionRate"));
 });
 
-test("profit reports keep unshipped amounts but calculate margins and risk counts from shipped orders only", () => {
+test("profit reports keep ordinary unshipped amounts but use eligible orders for margins and risks", () => {
   const unshipped = orderToProfit({
     id: "unshipped",
     orderNo: "UNSHIPPED",
@@ -144,6 +144,13 @@ test("profit reports keep unshipped amounts but calculate margins and risk count
     actualShipmentAmount: 0,
     summary: { receivableCny: 100, expectedGrossProfit: 10, expectedGrossMargin: 0.1 },
   });
+  const taxArchived = orderToProfit({
+    id: "tax-archived",
+    orderNo: "TAX-ARCHIVED",
+    taxRefundStatus: "SUBMITTED",
+    taxArchived: true,
+    summary: { receivableCny: 100, confirmedTotalCostCny: 80, expectedGrossProfit: 20, expectedGrossMargin: 0.2 },
+  });
   const summary = buildReportSummary("profits", [unshipped, shipped, shippedLoss]);
   const metric = (key: string) => summary.metrics.find((item) => item.key === key)?.value;
 
@@ -152,6 +159,9 @@ test("profit reports keep unshipped amounts but calculate margins and risk count
   assert.equal(shipped.profitMarginEligible, true);
   assert.equal(shipped.expectedGrossMargin, "10.00%");
   assert.equal(legacyShipped.profitMarginEligible, true);
+  assert.equal(taxArchived.profitMarginEligible, true);
+  assert.equal(taxArchived.totalCostCny, 80);
+  assert.equal(taxArchived.expectedGrossMargin, "20.00%");
   assert.equal(metric("receivable"), 3500);
   assert.equal(metric("cost"), 4450);
   assert.equal(metric("profit"), -950);
@@ -160,7 +170,7 @@ test("profit reports keep unshipped amounts but calculate margins and risk count
   assert.equal(metric("lowMargin"), 1);
 });
 
-test("customer and salesperson margins exclude unshipped orders and become unavailable when every order is unshipped", () => {
+test("customer and salesperson margins exclude ineligible orders and become unavailable when none qualify", () => {
   const mixed = [
     { customerName: "CLIENT A", salespersonName: "Alice", profitMarginEligible: true, receivableCny: 1000, expectedGrossProfit: 100 },
     { customerName: "CLIENT A", salespersonName: "Alice", profitMarginEligible: false, receivableCny: 9000, expectedGrossProfit: -900 },

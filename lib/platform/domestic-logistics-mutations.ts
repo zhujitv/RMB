@@ -18,10 +18,17 @@ import {
   domesticLogisticsCanArchiveOrder,
   domesticLogisticsOrderInclude,
   domesticLogisticsRemark,
+  domesticLogisticsSelectWithRelations,
   domesticLogisticsSelectWithOrder,
   domesticLogisticsSubmitterRole,
   normalizeDomesticTransportItems,
 } from "./domestic-logistics-ops";
+import { assertBusinessNotArchived, lockBusinessOrderForUpdate } from "./business-archive";
+import {
+  domesticShipmentDateFromItems,
+} from "./domestic-logistics-shipment-sync";
+import { domesticShipmentOrderSelect, syncOrderFromDomesticDeparture } from "./domestic-logistics-order-sync";
+import { deleteDomesticLogisticsInfoInTransaction } from "./domestic-logistics-delete";
 import {
   buildExportInvoiceRemarkFromTransportItems,
   formatExportInvoiceRemark,
@@ -140,6 +147,9 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
   const transportType = DOMESTIC_LOGISTICS_TRANSPORT_TYPES.includes(requestedTransportType) ? requestedTransportType : "TRUCK";
   const transportItems = normalizeDomesticTransportItems(body, transportType);
   const firstTransportItem = transportItems[0] || {};
+  const domesticShipmentDate = domesticShipmentDateFromItems(transportType, transportItems);
+  const domesticDepartureDate = domesticShipmentDate
+    || (transportType === "EXPRESS" ? null : firstTransportItem.departureDate || null);
   const remarkTextManualEdited = body.remarkTextManualEdited === true || body.remarkTextManualEdited === "true";
   const customsExportInvoiceRemark = transportType === "EXPRESS"
     ? { containers: [] }
@@ -154,7 +164,7 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
     trailerPlateNo: transportType === "EXPRESS" ? null : firstTransportItem.trailerPlateNo || null,
     departurePlace: transportType === "EXPRESS" ? null : firstTransportItem.departurePlace || null,
     destinationPlace: transportType === "EXPRESS" ? requireText(body.destinationPlace, "到达地") : firstTransportItem.arrivalPlace || null,
-    departureDate: transportType === "EXPRESS" ? null : firstTransportItem.departureDate || null,
+    departureDate: domesticDepartureDate,
     expressTrackingNo: transportType === "EXPRESS" ? requireText(body.expressTrackingNo, "快递单号") : null,
     cargoDescription: transportType === "EXPRESS" ? requireText(body.cargoDescription, "运输货物名称") : firstTransportItem.cargoName || null,
     remarkTextManualEdited,
@@ -170,9 +180,32 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
     correctionRequested: false,
     correctionReason: null,
   };
-  const row = await prisma.$transaction(async (tx) => {
-    const saved = before
-      ? await tx.domesticLogisticsInfo.update({ where: { id: before.id }, data })
+  const transactionResult = await prisma.$transaction(async (tx) => {
+    await lockBusinessOrderForUpdate(tx, order.id);
+    const currentOrder = await tx.receivableOrder.findUnique({
+      where: { id: order.id },
+      select: domesticShipmentOrderSelect,
+    });
+    if (!currentOrder || currentOrder.deletedAt) throw codedError("订单不存在或已删除", 404, "ORDER_NOT_FOUND");
+    if (!canAccessDomesticLogisticsOrder(currentActor, currentOrder)
+      && !canClaimDomesticLogisticsOrder(currentActor, currentOrder, body)) {
+      throw codedError("无权限修改该订单物流信息", 403, "PERMISSION_DENIED");
+    }
+    assertBusinessNotArchived(currentOrder,
+      "该订单已提交退税并归档，不能修改物流信息；如需更正，请先取消退税归档。");
+    const transactionBefore = id
+      ? await tx.domesticLogisticsInfo.findFirst({ where: { id, deletedAt: null }, select: domesticLogisticsSelectWithRelations() })
+      : await tx.domesticLogisticsInfo.findFirst({
+        where: { orderId: order.id, deletedAt: null },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        select: domesticLogisticsSelectWithRelations(),
+      });
+    if (id && !transactionBefore) throw codedError("物流信息不存在", 404, "DOMESTIC_LOGISTICS_NOT_FOUND");
+    if (transactionBefore && transactionBefore.orderId !== order.id) {
+      throw codedError("物流信息与当前订单不匹配，禁止跨订单修改。", 409, "DOMESTIC_LOGISTICS_ORDER_MISMATCH");
+    }
+    const saved = transactionBefore
+      ? await tx.domesticLogisticsInfo.update({ where: { id: transactionBefore.id }, data })
       : await tx.domesticLogisticsInfo.create({ data });
     await tx.domesticLogisticsTransportItem.deleteMany({ where: { logisticsInfoId: saved.id } });
     if (transportItems.length) {
@@ -193,10 +226,23 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
         })),
       });
     }
-    return tx.domesticLogisticsInfo.findUnique({ where: { id: saved.id }, select: domesticLogisticsSelectWithOrder() });
+    if (domesticShipmentDate) {
+      const previousAutomaticDate = transactionBefore
+        ? domesticShipmentDateFromItems(transactionBefore.transportType, transactionBefore.transportItems)
+          || (transactionBefore.transportType === "TRUCK" || transactionBefore.transportType === "MULTIMODAL"
+            ? transactionBefore.departureDate : null)
+        : null;
+      await syncOrderFromDomesticDeparture({
+        tx, request, actor: currentActor, order: currentOrder, domesticShipmentDate, previousAutomaticDate,
+      });
+    }
+    const row = await tx.domesticLogisticsInfo.findUnique({ where: { id: saved.id }, select: domesticLogisticsSelectWithOrder() });
+    return { row, transactionBefore };
   });
+  const { row, transactionBefore } = transactionResult;
   if (!row) throw codedError("物流信息保存失败，请重试。", 500, "DOMESTIC_LOGISTICS_SAVE_FAILED");
-  await runNonCriticalTask("物流信息操作日志写入", () => writeAudit(request, currentActor, before ? "更新物流信息" : "新增物流信息", "domestic_logistics_infos", row.id, before, row));
+  await runNonCriticalTask("物流信息操作日志写入", () => writeAudit(request, currentActor,
+    transactionBefore ? "更新物流信息" : "新增物流信息", "domestic_logistics_infos", row.id, transactionBefore, row));
   scheduleTaxRefundCompletenessRefresh(order.id);
   return serializeDomesticLogisticsInfo(row);
 }
@@ -204,17 +250,7 @@ export async function saveDomesticLogisticsInfo(request: AuditRequestLike, actor
 export async function deleteDomesticLogisticsInfo(request: AuditRequestLike, actor: DomesticLogisticsActorInput, id: string) {
   const currentActor = requireDomesticLogisticsActor(actor);
   if (currentActor.role !== "管理员") throw codedError("只有管理员可以删除物流信息。", 403, "PERMISSION_DENIED");
-  const before = await prisma.domesticLogisticsInfo.findFirst({
-    where: { id, deletedAt: null },
-    select: domesticLogisticsSelectWithOrder(),
-  });
-  if (!before) throw codedError("物流信息不存在", 404, "DOMESTIC_LOGISTICS_NOT_FOUND");
-  const row = await prisma.domesticLogisticsInfo.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-    select: domesticLogisticsSelectWithOrder(),
-  });
-  await runNonCriticalTask("物流信息删除操作日志写入", () => writeAudit(request, currentActor, "删除物流信息", "domestic_logistics_infos", row.id, before, row));
+  const row = await deleteDomesticLogisticsInfoInTransaction(request, currentActor, id);
   scheduleTaxRefundCompletenessRefresh(row.orderId);
 }
 

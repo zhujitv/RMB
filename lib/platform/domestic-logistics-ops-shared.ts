@@ -168,8 +168,9 @@ export function domesticLogisticsOrderInclude(options: { shipsgoTrackings?: bool
     businessEntity: true,
     salesperson: true,
     domesticLogisticsInfos: {
+      where: { deletedAt: null },
       select: domesticLogisticsSelectWithRelations(),
-      orderBy: [{ updatedAt: "desc" }],
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       take: 1,
     },
     documents: {

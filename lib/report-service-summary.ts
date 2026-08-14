@@ -173,7 +173,7 @@ function profitSummary(rows: ReportRow[]): ReportSummary {
       moneyMetric("receivable", "最终应收", receivable),
       moneyMetric("cost", "总成本", cost),
       moneyMetric("profit", "预计毛利", profit, profit >= 0 ? "positive" : "danger"),
-      nullablePercentMetric("margin", "预计毛利率", marginBasis.profit, marginBasis.receivable, marginBasis.orderCount ? (marginBasis.profit >= 0 ? "positive" : "danger") : "neutral", `仅统计 ${marginBasis.orderCount} 个已发货订单`),
+      nullablePercentMetric("margin", "预计毛利率", marginBasis.profit, marginBasis.receivable, marginBasis.orderCount ? (marginBasis.profit >= 0 ? "positive" : "danger") : "neutral", `统计 ${marginBasis.orderCount} 个已发货或退税归档订单`),
       countMetric("negative", "亏损订单", negative.length, negative.length ? "danger" : "positive"),
       countMetric("lowMargin", "低毛利订单", lowMargin.length, lowMargin.length ? "warning" : "positive", "毛利率低于 8%"),
     ],
@@ -251,7 +251,7 @@ function contributionSummary(type: "customer-analysis" | "salesperson-performanc
       moneyMetric("profit", "预计毛利", profit, profit >= 0 ? "positive" : "danger"),
       moneyMetric("overdue", "逾期金额", overdue, overdue > 0 ? "danger" : "positive"),
       percentMetric("collectionRate", "回款率", received, receivable, received < receivable ? "warning" : "positive"),
-      nullablePercentMetric("grossMargin", "预计毛利率", marginBasis.profit, marginBasis.receivable, marginBasis.orderCount ? (marginBasis.profit >= 0 ? "positive" : "danger") : "neutral", `仅统计 ${marginBasis.orderCount} 个已发货订单`),
+      nullablePercentMetric("grossMargin", "预计毛利率", marginBasis.profit, marginBasis.receivable, marginBasis.orderCount ? (marginBasis.profit >= 0 ? "positive" : "danger") : "neutral", `统计 ${marginBasis.orderCount} 个已发货或退税归档订单`),
     ],
     breakdowns: [breakdown(
       type === "customer-analysis" ? "客户毛利贡献 Top10" : "业务员毛利贡献 Top10",

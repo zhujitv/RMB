@@ -1,4 +1,5 @@
 import { logServerError, codedError } from "./platform-db";
+import { isBusinessArchived } from "./platform/business-archive";
 import { logisticsCostTypeLabel } from "./platform/logistics-cost-types";
 import {
   displayCustomerName,
@@ -66,7 +67,7 @@ export function orderToReceivable(order: BusinessReportRow) {
     dueDate: order.dueDate,
     status: order.status,
     taxRefundStatus: order.taxRefundStatus,
-    taxArchived: Boolean(order.taxArchived || order.taxRefundStatus === "SUBMITTED"),
+    taxArchived: isBusinessArchived(order),
     customsDeclarationNo: order.customsDeclarationNo || "",
     customsDeclarationDate: toReportDate(order.customsDeclarationDate),
     date: order.createdAt,
@@ -80,7 +81,8 @@ export function orderToProfit(order: BusinessReportRow) {
     ? order.summary.profitMarginEligible
     : Boolean(toReportDate(order.actualShipmentDate))
       || (order.actualShipmentAmount != null && order.actualShipmentAmount !== "")
-      || (order.summary?.actualShipmentAmount != null && order.summary.actualShipmentAmount !== "");
+      || (order.summary?.actualShipmentAmount != null && order.summary.actualShipmentAmount !== "")
+      || isBusinessArchived(order);
   return {
     ...orderToReceivable(order),
     profitMarginEligible,
@@ -139,7 +141,7 @@ export function orderToTaxRefund(order: BusinessReportRow) {
     customerName: displayCustomerName(order.customerFullName || order.customerNameSnapshot || customer.name || order.customerName || ""),
     taxRefundStatus: order.taxRefundStatus,
     taxRefundStatusLabel: order.taxRefundStatusLabel,
-    taxArchived: Boolean(order.taxArchived || order.taxRefundStatus === "SUBMITTED"),
+    taxArchived: isBusinessArchived(order),
     customsDeclarationNo: order.customsDeclarationNo || "",
     customsDeclarationDate: toReportDate(order.customsDeclarationDate),
     customsCompleteness: `${completeness.customs?.completed || 0}/${completeness.customs?.total || 3}`,
