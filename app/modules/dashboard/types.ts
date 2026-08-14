@@ -13,19 +13,45 @@ export type OverviewTotals = {
   commissionAmount?: number;
   commissionSnapshotMissingOrders?: number;
   orderCount?: number;
+  customerCount?: number;
+  paymentCount?: number;
+  costCount?: number;
+  confirmedCost?: number;
+  costPayments?: number;
+  overdueAmount?: number;
+  dueSoonAmount?: number;
+  activeOrders?: number;
+  pendingCostAmount?: number;
+  pendingCostOrders?: number;
+  missingCostOrders?: number;
+  negativeMarginOrders?: number;
+  lowMarginOrders?: number;
 };
 
 export type OverviewGroup = {
   label?: string;
   amount?: number;
   count?: number;
+  share?: number;
 };
 
 export type TrendRow = {
   label?: string;
   receivable?: number;
   paid?: number;
-  unpaid?: number;
+  cost?: number;
+  profit?: number;
+  netCashFlow?: number;
+};
+
+export type PeriodComparison = {
+  key?: string;
+  label?: string;
+  current?: number;
+  previous?: number;
+  difference?: number;
+  change?: number | null;
+  format?: "money" | "number";
 };
 
 export type RiskOrder = {
@@ -63,10 +89,16 @@ export type SalespersonRank = {
 
 export type OverviewResponse = {
   overview?: {
+    period?: { month?: string; previousMonth?: string };
+    dataWarnings?: string[];
     totals?: OverviewTotals;
     costStructure?: OverviewGroup[];
     byCustomer?: OverviewGroup[];
     monthlyTrend?: TrendRow[];
+    periodComparison?: PeriodComparison[];
+    agingBuckets?: OverviewGroup[];
+    customerRank?: OverviewGroup[];
+    statusDistribution?: OverviewGroup[];
     overdueTop?: RiskOrder[];
     dueSoonTop?: RiskOrder[];
     lowMarginOrders?: RiskOrder[];

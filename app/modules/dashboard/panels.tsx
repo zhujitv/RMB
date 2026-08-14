@@ -1,6 +1,6 @@
 import { formatCny, formatDate, formatPercent } from "../../formatters";
 import styles from "../../WorkspaceShell.module.css";
-import type { OverviewGroup, RiskOrder, SalespersonRank, TrendRow } from "./types";
+import type { OverviewGroup, PeriodComparison, RiskOrder, SalespersonRank, TrendRow } from "./types";
 import { barHeight, displayCustomer, monthLabel, sumBy } from "./utils";
 
 export function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
@@ -13,15 +13,15 @@ export function SectionTitle({ eyebrow, title }: { eyebrow: string; title: strin
 }
 
 export function TrendPanel({ rows }: { rows: TrendRow[] }) {
-  const maxAmount = Math.max(1, ...rows.flatMap((row) => [Number(row.receivable || 0), Number(row.paid || 0), Number(row.unpaid || 0)]));
+  const maxAmount = Math.max(1, ...rows.flatMap((row) => [Number(row.receivable || 0), Number(row.paid || 0), Number(row.cost || 0)]));
   return (
     <section className={`${styles.overviewPanel} ${styles.dashboardTrendPanel}`}>
       {maxAmount > 1 ? (
         <>
           <div className={styles.dashboardLegend}>
             <span><i className={styles.legendBlue} />应收</span>
-            <span><i className={styles.legendGreen} />回款</span>
-            <span><i className={styles.legendOrange} />未收</span>
+            <span><i className={styles.legendGreen} />实际回款</span>
+            <span><i className={styles.legendOrange} />实际付款</span>
           </div>
           <div className={styles.dashboardTrendGrid}>
             {rows.map((row) => (
@@ -29,7 +29,7 @@ export function TrendPanel({ rows }: { rows: TrendRow[] }) {
                 <div className={styles.trendBars}>
                   <TrendBar className={styles.trendReceivable} value={row.receivable} max={maxAmount} label={`应收 ${formatCny(row.receivable)}`} />
                   <TrendBar className={styles.trendPaid} value={row.paid} max={maxAmount} label={`回款 ${formatCny(row.paid)}`} />
-                  <TrendBar className={styles.trendUnpaid} value={row.unpaid} max={maxAmount} label={`未收 ${formatCny(row.unpaid)}`} />
+                  <TrendBar className={styles.trendUnpaid} value={row.cost} max={maxAmount} label={`付款 ${formatCny(row.cost)}`} />
                 </div>
                 <span>{monthLabel(row.label)}</span>
               </div>
@@ -43,12 +43,12 @@ export function TrendPanel({ rows }: { rows: TrendRow[] }) {
   );
 }
 
-export function RiskPanel({ title, rows, mode }: { title: string; rows: RiskOrder[]; mode: "overdue" | "dueSoon" }) {
+export function RiskPanel({ title, rows, mode, onOpenOrder }: { title: string; rows: RiskOrder[]; mode: "overdue" | "dueSoon"; onOpenOrder?: (row: RiskOrder) => void }) {
   return (
     <section className={styles.overviewPanel}>
       <PanelHead title={title} count={rows.length} />
       {rows.length ? rows.map((row, index) => (
-        <article key={row.id || row.orderNo || index} className={`${styles.rankItem} ${mode === "overdue" ? styles.rankDanger : styles.rankWarning}`}>
+        <button key={row.id || row.orderNo || index} type="button" className={`${styles.rankItem} ${styles.rankButton} ${mode === "overdue" ? styles.rankDanger : styles.rankWarning}`} onClick={() => onOpenOrder?.(row)}>
           <span className={styles.rankIndex}>{index + 1}</span>
           <div className={styles.rankMain}>
             <strong>{displayCustomer(row)} · {row.orderNo || "-"}</strong>
@@ -58,7 +58,7 @@ export function RiskPanel({ title, rows, mode }: { title: string; rows: RiskOrde
             <strong>{formatCny(row.unpaid)}</strong>
             <small>{mode === "overdue" ? `逾期 ${Math.abs(Number(row.remainingDays || 0))} 天` : `剩余 ${row.remainingDays ?? "-"} 天`}</small>
           </div>
-        </article>
+        </button>
       )) : (
         <EmptyPanel title={mode === "overdue" ? "当前没有逾期应收风险" : "未来 7 天内没有临期应收"} note="筛选变化后会自动更新。" />
       )}
@@ -66,12 +66,12 @@ export function RiskPanel({ title, rows, mode }: { title: string; rows: RiskOrde
   );
 }
 
-export function LowMarginPanel({ rows }: { rows: RiskOrder[] }) {
+export function LowMarginPanel({ rows, onOpenOrder }: { rows: RiskOrder[]; onOpenOrder?: (row: RiskOrder) => void }) {
   return (
     <section className={styles.overviewPanel}>
       <PanelHead title="低毛利订单 Top10" count={rows.length} />
       {rows.length ? rows.map((row, index) => (
-        <article key={row.id || row.orderNo || index} className={`${styles.rankItem} ${Number(row.expectedGrossMargin || 0) < 0.08 ? styles.rankDanger : ""}`}>
+        <button key={row.id || row.orderNo || index} type="button" className={`${styles.rankItem} ${styles.rankButton} ${Number(row.expectedGrossMargin || 0) < 0.08 ? styles.rankDanger : ""}`} onClick={() => onOpenOrder?.(row)}>
           <span className={styles.rankIndex}>{index + 1}</span>
           <div className={styles.rankMain}>
             <strong>{row.orderNo || "-"} · {displayCustomer(row)}</strong>
@@ -81,7 +81,7 @@ export function LowMarginPanel({ rows }: { rows: RiskOrder[] }) {
             <strong>{formatCny(row.expectedGrossProfit)}</strong>
             <small>毛利率 {formatPercent(row.expectedGrossMargin)}</small>
           </div>
-        </article>
+        </button>
       )) : (
         <EmptyPanel title="还没有发现低毛利订单" note="有订单和成本数据后，低毛利风险会在这里聚合。" />
       )}
@@ -101,8 +101,16 @@ export function CostStructurePanel({ rows }: { rows: OverviewGroup[] }) {
     styles.costColorAmber,
     styles.costColorSlate,
   ];
+  const displayRows = rows.length <= 8 ? rows : [
+    ...rows.slice(0, 7),
+    {
+      label: "其他",
+      amount: sumBy(rows.slice(7), (row) => Number(row.amount || 0)),
+      count: sumBy(rows.slice(7), (row) => Number(row.count || 0)),
+    },
+  ];
   let cursor = 0;
-  const segments = rows.slice(0, 8).map((row, index) => {
+  const segments = displayRows.map((row, index) => {
     const start = cursor;
     const end = total > 0 ? cursor + (Number(row.amount || 0) / total) * 100 : cursor;
     cursor = end;
@@ -173,10 +181,64 @@ function DonutSegments({ segments }: { segments: Array<OverviewGroup & { colorCl
 export function SalespersonCollectionPanel({ rows }: { rows: SalespersonRank[] }) {
   return (
     <section className={styles.overviewPanel}>
-      <PanelHead title="回款排行" count={rows.length} />
+      <PanelHead title="本期实际回款排行" count={rows.length} />
       {rows.length ? rows.map((row, index) => (
-        <CompactRank key={row.label || index} index={index} label={row.label} amount={row.paid} note={`回款率 ${formatPercent(row.collectionRate)} · 未收 ${formatCny(row.unpaid)}`} />
+        <CompactRank key={row.label || index} index={index} label={row.label} amount={row.paid} note={`本期新增订单额 ${formatCny(row.receivable)}`} />
       )) : <EmptyPanel title="还没有业务员回款数据" note="收款确认到账后自动形成排行。" />}
+    </section>
+  );
+}
+
+export function PeriodComparisonPanel({ rows, previousMonth }: { rows: PeriodComparison[]; previousMonth?: string }) {
+  return (
+    <div className={styles.metricGrid}>
+      {rows.map((row) => {
+        const change = row.change;
+        const positive = Number(row.difference || 0) >= 0;
+        const value = row.format === "number" ? `${Number(row.current || 0).toLocaleString("zh-CN")} 单` : formatCny(row.current);
+        const previous = row.format === "number" ? `${Number(row.previous || 0).toLocaleString("zh-CN")} 单` : formatCny(row.previous);
+        return (
+          <article key={row.key || row.label} className={`${styles.metricCard} ${positive ? styles.metricGreen : styles.metricOrange}`}>
+            <span>{row.label || "期间指标"}</span>
+            <strong>{value}</strong>
+            <small>{previousMonth || "上期"}：{previous} · {change == null ? "无可比基数" : `环比 ${positive ? "+" : ""}${(change * 100).toFixed(1)}%`}</small>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+export function AmountBreakdownPanel({
+  title,
+  rows,
+  emptyText,
+  onSelect,
+}: {
+  title: string;
+  rows: OverviewGroup[];
+  emptyText: string;
+  onSelect?: (row: OverviewGroup) => void;
+}) {
+  return (
+    <section className={styles.overviewPanel}>
+      <PanelHead title={title} count={rows.length} />
+      {rows.length ? rows.map((row, index) => {
+        const content = (
+          <>
+            <span>{row.label || "未填写"}</span>
+            <small>{Number(row.count || 0)} 单{row.share != null ? ` · ${formatPercent(row.share)}` : ""}</small>
+            <strong>{formatCny(row.amount)}</strong>
+          </>
+        );
+        return onSelect ? (
+          <button key={`${row.label || "-"}-${index}`} className={`${styles.overviewRankRow} ${styles.rankButton}`} type="button" onClick={() => onSelect(row)}>
+            {content}
+          </button>
+        ) : (
+          <div key={`${row.label || "-"}-${index}`} className={styles.overviewRankRow}>{content}</div>
+        );
+      }) : <EmptyPanel title={emptyText} note="筛选范围变化后会自动更新。" />}
     </section>
   );
 }

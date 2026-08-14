@@ -119,7 +119,17 @@ export function WorkspaceModuleContent({
       />
     );
   }
-  if (activeMenu === "dashboard") return <DashboardModule />;
+  if (activeMenu === "dashboard") {
+    return (
+      <DashboardModule
+        onOpenModule={(target, keyword) => openWorkspaceMenu(
+          target,
+          keyword ? { keyword } : {},
+          { forceNew: true },
+        )}
+      />
+    );
+  }
   if (activeMenu === "payments") return <PaymentsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={focus.keyword} initialPaymentId={focus.paymentId} initialOpenToken={focus.token} />;
   if (activeMenu === "costs") return <CostsModule currentUser={payload.user} permissions={payload.permissions} initialKeyword={focus.keyword} initialCostId={focus.costId} initialOpenToken={focus.token} />;
   if (activeMenu === "domesticLogistics") {

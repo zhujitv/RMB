@@ -9,6 +9,8 @@ export const REPORT_TYPES = {
   commissions: { label: "业务员提成", area: "commissions", filename: "salesperson-commissions" },
   overdue: { label: "逾期催款", area: "orders", filename: "payment-reminders" },
   "tax-refunds": { label: "退税资料", area: "taxRefund", filename: "tax-refund-materials" },
+  "customer-analysis": { label: "客户经营分析", area: "commissions", filename: "customer-analysis" },
+  "salesperson-performance": { label: "业务员绩效", area: "commissions", filename: "salesperson-performance" },
 };
 
 export type ReportType = keyof typeof REPORT_TYPES;
@@ -125,16 +127,22 @@ export function toReportDate(value: unknown) {
   return dateOnly(value);
 }
 
-function inDateRange(row: ReportRow, from: string, to: string) {
-  if (!from && !to) return true;
-  const dates = [row.date, row.createdAt, row.updatedAt, row.paymentDate, row.dueDate, row.blDate, row.uploadedAt]
-    .map(dateOnly)
-    .filter(Boolean);
-  if (!dates.length) return true;
-  return dates.some((date) => (!from || date >= from) && (!to || date <= to));
+function reportBusinessDate(row: ReportRow, type?: ReportType) {
+  if (type === "payments") return dateOnly(row.paymentDate || row.createdAt);
+  if (type === "costs") return dateOnly(row.createdAt || row.paymentDate);
+  if (type === "overdue") return dateOnly(row.dueDate);
+  if (type === "tax-refunds") return dateOnly(row.customsDeclarationDate || row.createdAt);
+  return dateOnly(row.createdAt || row.date);
 }
 
-export function filterRows(rows: ReportRow[], filters: ReportFilters = {}) {
+function inDateRange(row: ReportRow, from: string, to: string, type?: ReportType) {
+  if (!from && !to) return true;
+  const date = reportBusinessDate(row, type);
+  if (!date) return false;
+  return (!from || date >= from) && (!to || date <= to);
+}
+
+export function filterRows(rows: ReportRow[], filters: ReportFilters = {}, type?: ReportType) {
   const keyword = lower(filters.keyword);
   const customer = lower(filters.customerName || filters.customer);
   const orderNo = lower(filters.orderNo);
@@ -173,7 +181,7 @@ export function filterRows(rows: ReportRow[], filters: ReportFilters = {}) {
       row.taxRefundStatusLabel,
       row.costType,
     ].join(" "));
-    if (!inDateRange(row, dateFrom, dateTo)) return false;
+    if (!inDateRange(row, dateFrom, dateTo, type)) return false;
     if (keyword && !blob.includes(keyword)) return false;
     if (customer && !lower([row.customerName, row.customerFullName, row.customerShortName].join(" ")).includes(customer)) return false;
     if (orderNo && !lower(row.orderNo).includes(orderNo)) return false;
@@ -247,6 +255,12 @@ const columnSets = {
   ],
   "tax-refunds": [
     ["orderNo", "订单号"], ["blNo", "提单号"], ["customerName", "客户名称"], ["businessEntityName", "业务主体"], ["customsDeclarationNo", "报关单号"], ["customsDeclarationDate", "申报日期"], ["currency", "币种"], ["finalReceivableAmountCny", "最终应收人民币"], ["receivedAmountCny", "已收人民币"], ["customsCompleteness", "报关资料完整度"], ["exportCompleteness", "出口资料完整度"], ["domesticLogisticsCompleteness", "物流信息完整度"], ["factoryCompleteness", "工厂资料完整度"], ["logisticsInvoiceCompleteness", "物流资料完整度"], ["overallCompleteness", "总体完整度"], ["missingLogisticsInvoices", "缺失物流费资料明细"], ["missingCustomsInvoices", "缺失报关费资料明细"], ["missingPortInvoices", "缺失已发生费用资料明细"], ["taxRefundStatusLabel", "退税状态"], ["domesticTransportType", "运输方式"], ["truckPlateNo", "车牌号"], ["trailerPlateNo", "挂车车牌"], ["departurePlace", "起运地"], ["destinationPlace", "到达地"], ["departureDate", "起运日期"], ["cargoDescription", "运输货物名称"], ["expressTrackingNo", "快递单号"], ["exportInvoiceRemark", "出口发票备注"], ["domesticSubmitterRole", "录入来源"], ["domesticSubmittedBy", "录入人"], ["domesticSubmittedAt", "录入时间"],
+  ],
+  "customer-analysis": [
+    ["customerName", "客户名称"], ["orderCount", "订单数"], ["receivableCny", "应收总额"], ["receivedAmountCny", "已收金额"], ["outstandingCny", "未收余额"], ["totalCostCny", "总成本"], ["expectedGrossProfit", "预计毛利"], ["expectedGrossMargin", "预计毛利率"], ["averageOrderValueCny", "平均订单额"], ["overdueOrders", "逾期订单"], ["overdueAmountCny", "逾期金额"], ["netCashFlowCny", "净现金流"], ["lastOrderDate", "最近订单日期"],
+  ],
+  "salesperson-performance": [
+    ["salespersonName", "业务员"], ["customerCount", "客户数"], ["orderCount", "订单数"], ["receivableCny", "应收总额"], ["receivedAmountCny", "已收金额"], ["collectionRate", "回款率"], ["outstandingCny", "未收余额"], ["expectedGrossProfit", "预计毛利"], ["expectedGrossMargin", "预计毛利率"], ["overdueOrders", "逾期订单"], ["overdueAmountCny", "逾期金额"], ["netCashFlowCny", "净现金流"],
   ],
 } satisfies Record<ReportType, ReportColumnTuple[]>;
 

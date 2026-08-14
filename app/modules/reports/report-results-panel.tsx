@@ -1,12 +1,15 @@
 import { PaginationBar, UiCheckbox } from "../../components";
 import styles from "../../WorkspaceShell.module.css";
-import { EXPORT_ACTIONS, type ExportFormat, type ExportScope, type ReportColumn, type ReportRow, type SortDirection } from "./model";
+import { EXPORT_ACTIONS, type ExportFormat, type ExportScope, type ReportColumn, type ReportRow, type ReportSummary, type SortDirection } from "./model";
 import { ReportRows } from "./report-rows";
+import { ReportSummaryPanel } from "./report-summary-panel";
 
 type ReportResultsPanelProps = {
   columns: ReportColumn[];
   visibleColumns: ReportColumn[];
   rows: ReportRow[];
+  summary?: ReportSummary;
+  dataWarnings: string[];
   page: number;
   total: number;
   totalPages: number;
@@ -30,13 +33,14 @@ type ReportResultsPanelProps = {
 };
 
 export function ReportResultsPanel({
-  columns, visibleColumns, rows, page, total, totalPages, queried, loading,
+  columns, visibleColumns, rows, summary, dataWarnings, page, total, totalPages, queried, loading,
   downloading, error, notice, selectedIds, expandedId, sortBy, sortDir,
   allPageSelected, onExport, onTogglePageSelection, onToggleRowSelection,
   onToggleExpanded, onToggleSort, onOpenRecord, onPage,
 }: ReportResultsPanelProps) {
   return (
     <section className={styles.moduleCard}>
+      {queried ? <ReportSummaryPanel summary={summary} /> : null}
       {queried ? (
         <div className={styles.reportDownloadBar}>
           <span>已查询 {total} 条，当前页 {rows.length} 条，已勾选 {selectedIds.size} 条</span>
@@ -57,6 +61,7 @@ export function ReportResultsPanel({
       ) : null}
 
       {error ? <div className={styles.inlineError}>{error}</div> : null}
+      {dataWarnings.length ? <div className={styles.inlineError}>{dataWarnings.join("；")}</div> : null}
       {notice ? <div className={styles.infoStrip}>{notice}</div> : null}
 
       <div className={styles.tableWrap}>
