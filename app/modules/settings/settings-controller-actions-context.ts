@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { CompanyProfileSettings } from "../../types";
 import type {
-  ApiPerformanceRow,
   AuditLogRow,
   BusinessEntityForm,
   CommissionFormulaForm,
@@ -47,7 +46,7 @@ export type SettingsControllerActionsContext = {
   setCompanyProfileSettings: Setter<CompanyProfileSettings | null>;
   setCustomerForm: Setter<CustomerForm | null>;
   setCustomerMessage: Setter<string>;
-  setDetailRow: Setter<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow | null>;
+  setDetailRow: Setter<CustomerRow | SupplierRow | UserRow | AuditLogRow | null>;
   setError: Setter<string>;
   setExchangeForm: Setter<ExchangeRateForm | null>;
   setExchangeMessage: Setter<string>;

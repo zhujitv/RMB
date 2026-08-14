@@ -1,13 +1,12 @@
 import type { UserCustomPermissions } from "./types-integrations";
 
-export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs" | "apiPerformance";
+export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
 
 export type SettingsFilters = {
   customers: { keyword: string };
   suppliers: { keyword: string; type: string; status: string };
   users: { keyword: string; role: string; status: string };
   auditLogs: { keyword: string; action: string };
-  apiPerformance: { keyword: string; source: string; minDurationMs: string; windowHours: string };
 };
 
 export type FiltersFor<T extends SettingsTabKey> =
@@ -15,7 +14,6 @@ export type FiltersFor<T extends SettingsTabKey> =
   : T extends "suppliers" ? SettingsFilters["suppliers"]
   : T extends "users" ? SettingsFilters["users"]
   : T extends "auditLogs" ? SettingsFilters["auditLogs"]
-  : T extends "apiPerformance" ? SettingsFilters["apiPerformance"]
   : never;
 
 export type TableColumn<T> = { key: keyof T | string; label: string; render?: (row: T) => string };
@@ -131,18 +129,4 @@ export type AuditLogRow = {
   entityLabel?: string;
   ipAddress?: string;
   createdAt?: string;
-};
-
-export type ApiPerformanceRow = {
-  id: string;
-  source?: string;
-  method?: string;
-  path?: string;
-  count?: number;
-  avgDurationMs?: number;
-  p95DurationMs?: number;
-  maxDurationMs?: number;
-  errorCount?: number;
-  lastStatusCode?: number | null;
-  lastSeenAt?: string;
 };

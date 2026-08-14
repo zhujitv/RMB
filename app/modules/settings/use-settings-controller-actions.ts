@@ -258,7 +258,6 @@ export function useSettingsControllerActions(context: SettingsControllerActionsC
       if (tab === "customers") return { ...current, customers: { ...current.customers, [key]: value } };
       if (tab === "suppliers") return { ...current, suppliers: { ...current.suppliers, [key]: value } };
       if (tab === "users") return { ...current, users: { ...current.users, [key]: value } };
-      if (tab === "apiPerformance") return { ...current, apiPerformance: { ...current.apiPerformance, [key]: value } };
       return { ...current, auditLogs: { ...current.auditLogs, [key]: value } };
     });
   }

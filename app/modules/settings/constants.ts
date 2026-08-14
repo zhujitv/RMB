@@ -4,7 +4,6 @@ export { SETTINGS_TABS } from "./settings-tab-options";
 
 export const PAGE_SIZE = 20;
 export const AUDIT_PAGE_SIZE = 50;
-export const API_PERFORMANCE_PAGE_SIZE = 20;
 export const CURRENCIES = ["", "CNY", "USD", "EUR", "GBP", "HKD"];
 export const SHIPPING_DOCUMENT_TYPE_OPTIONS = [
   { key: "invoice", value: "commercialInvoice", label: "商业发票" },
@@ -247,17 +246,4 @@ export const USER_APPROVAL_STATUS_OPTIONS = [
 export const USER_STATUS_FILTER_OPTIONS = [
   { label: "已验证", value: "email_verified" },
   { label: "未验证", value: "email_unverified" },
-];
-export const API_PERFORMANCE_SOURCE_OPTIONS = [
-  { label: "全部来源", value: "" },
-  { label: "服务端包装器", value: "server" },
-  { label: "前端真实请求", value: "client" },
-  { label: "后台任务", value: "background" },
-];
-export const API_PERFORMANCE_WINDOW_OPTIONS = [
-  { label: "最近 1 小时", value: "1" },
-  { label: "最近 6 小时", value: "6" },
-  { label: "最近 24 小时", value: "24" },
-  { label: "最近 72 小时", value: "72" },
-  { label: "最近 7 天", value: "168" },
 ];

@@ -1,10 +1,8 @@
-import { recordBackgroundTaskMetric } from "./background-task-metrics";
 import { logServerError, sanitizeForLog } from "./shared-base-utils";
 
 type NonCriticalTaskOptions = {
   context?: Record<string, unknown>;
   slowMs?: number;
-  track?: boolean;
 };
 
 function nonCriticalTaskSlowThresholdMs(value: unknown) {
@@ -28,9 +26,6 @@ export async function runNonCriticalTask<T>(
     return null;
   } finally {
     const durationMs = Date.now() - startedAt;
-    if (options.track !== false) {
-      recordBackgroundTaskMetric({ label, durationMs, success });
-    }
     const slowMs = nonCriticalTaskSlowThresholdMs(options.slowMs);
     if (durationMs >= slowMs) {
       console.warn("background-task-slow-log", sanitizeForLog({

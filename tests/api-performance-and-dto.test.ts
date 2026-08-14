@@ -5,59 +5,39 @@ import test from "node:test";
 import { readCostRecordsQueriesSource, readLogisticsExpenseAccessSource, readLogisticsExpenseQueriesSource, readSettingsModuleSource, readSharedConstantsSource } from "./source-helpers.ts";
 
 const schema = readPrismaSchemaSource();
-const migration = readFileSync(
-  "prisma/migrations/20260701211500_api_performance_logs/migration.sql",
-  "utf8",
-);
-const apiPerformance = readFileSync("lib/platform/api-performance.ts", "utf8");
-const backgroundTaskMetrics = readFileSync(
-  "lib/platform/background-task-metrics.ts",
+const removalMigration = readFileSync(
+  "prisma/migrations/20260814150000_remove_api_performance_and_audit_retention/migration.sql",
   "utf8",
 );
 const sharedConstants = readSharedConstantsSource();
 const apiRouteGuard = readFileSync("lib/api-route-guard.ts", "utf8");
 const appApi = readFileSync("app/api.ts", "utf8");
-const apiPerformanceRoute = readFileSync(
-  "app/api/settings/api-performance/route.ts",
-  "utf8",
-);
 const settingsConstants = readSettingsModuleSource();
-const settingsHelpers = readSettingsModuleSource();
-const settingsController = readSettingsModuleSource();
+const maintenanceRoute = readFileSync("app/api/cron/system-maintenance/route.ts", "utf8");
+const retention = readFileSync("lib/platform/audit-log-retention.ts", "utf8");
+const cronConfig = readFileSync("config/tencent-cloud-cron.json", "utf8");
 const costQueries = readCostRecordsQueriesSource();
 const logisticsSerialization = readLogisticsExpenseAccessSource();
 const logisticsQueries = readLogisticsExpenseQueriesSource();
 
-test("api performance logs are persisted and exposed through settings", () => {
-  assert.match(schema, /model ApiPerformanceLog/);
-  assert.match(schema, /@@map\("api_performance_logs"\)/);
-  assert.match(migration, /CREATE TABLE(?: IF NOT EXISTS)? "api_performance_logs"/);
-  assert.match(apiPerformance, /export function recordApiPerformanceLog/);
-  assert.match(apiPerformance, /export async function listApiPerformanceMetrics/);
-  assert.match(apiPerformance, /"background"/);
-  assert.match(apiPerformance, /path\.startsWith\("\/background\/"\)/);
-  assert.match(apiPerformance, /track: false/);
-  assert.match(backgroundTaskMetrics, /source: "background"/);
-  assert.match(backgroundTaskMetrics, /method: "TASK"/);
-  assert.match(sharedConstants, /recordBackgroundTaskMetric/);
+test("background task telemetry is removed and audit logs retain only 30 days", () => {
+  assert.doesNotMatch(schema, /model ApiPerformanceLog/);
+  assert.match(removalMigration, /DROP TABLE IF EXISTS "api_performance_logs"/);
+  assert.match(removalMigration, /DELETE FROM "audit_logs"/);
+  assert.match(removalMigration, /INTERVAL '30 days'/);
+  assert.equal(existsSync("lib/platform/api-performance.ts"), false);
+  assert.equal(existsSync("lib/platform/background-task-metrics.ts"), false);
+  assert.equal(existsSync("app/api/settings/api-performance/route.ts"), false);
+  assert.doesNotMatch(sharedConstants, /recordBackgroundTaskMetric/);
   assert.match(sharedConstants, /background-task-slow-log/);
-  assert.match(apiPerformance, /API_PERFORMANCE_MAX_SCAN_ROWS/);
-  assert.match(apiPerformance, /pageResult\(pagedRows, rows\.length, page, pageSize\)/);
-  assert.match(apiRouteGuard, /recordApiPerformanceLog\(\{/);
-  assert.match(appApi, /reportApiRequestTiming\(\{/);
-  assert.match(appApi, /API_PERFORMANCE_REPORT_PATH = "\/api\/settings\/api-performance"/);
-  assert.match(apiPerformanceRoute, /export async function GET/);
-  assert.match(apiPerformanceRoute, /export async function POST/);
-  assert.match(apiPerformanceRoute, /assertRead\(actor, "auditLogs"\)/);
-  assert.match(settingsConstants, /apiPerformance", label: "后台任务"/);
-  assert.match(settingsConstants, /label: "后台任务", value: "background"/);
-  assert.match(settingsHelpers, /API_PERFORMANCE_COLUMNS/);
-  assert.match(settingsHelpers, /if \(source === "background"\) return "后台任务"/);
-  assert.match(settingsController, /setApiPerformance\(result\.metrics \|\| \[\]\)/);
-  assert.equal(
-    existsSync("app/api/settings/api-performance/route.ts"),
-    true,
-  );
+  assert.doesNotMatch(apiRouteGuard, /recordApiPerformanceLog/);
+  assert.doesNotMatch(appApi, /reportApiRequestTiming|API_PERFORMANCE_REPORT_PATH/);
+  assert.doesNotMatch(settingsConstants, /apiPerformance|后台任务/);
+  assert.match(retention, /AUDIT_LOG_RETENTION_DAYS = 30/);
+  assert.match(retention, /prisma\.auditLog\.deleteMany/);
+  assert.match(maintenanceRoute, /assertCronSecret\(request\)/);
+  assert.match(maintenanceRoute, /cleanupExpiredAuditLogs\(\)/);
+  assert.match(cronConfig, /"path": "\/api\/cron\/system-maintenance"[\s\S]*"schedule": "10 3 \* \* \*"/);
 });
 
 test("api client surfaces non-json route failures with request context", () => {

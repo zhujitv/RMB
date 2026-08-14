@@ -1,13 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import type { CompanyProfileSettings } from "../../types";
-import {
-  API_PERFORMANCE_PAGE_SIZE,
-  AUDIT_PAGE_SIZE,
-  PAGE_SIZE,
-} from "./constants";
+import { AUDIT_PAGE_SIZE, PAGE_SIZE } from "./constants";
 import { columnsFor, emptyPagination, rowsFor } from "./helpers";
 import type {
-  ApiPerformanceRow,
   AuditLogRow,
   BusinessEntityForm,
   BusinessEntityRow,
@@ -42,14 +37,12 @@ export function useSettingsState() {
     suppliers: { keyword: "", type: "", status: "" },
     users: { keyword: "", role: "", status: "" },
     auditLogs: { keyword: "", action: "" },
-    apiPerformance: { keyword: "", source: "", minDurationMs: "", windowHours: "24" },
   });
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [businessEntities, setBusinessEntities] = useState<BusinessEntityRow[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
-  const [apiPerformance, setApiPerformance] = useState<ApiPerformanceRow[]>([]);
   const [companyProfileSettings, setCompanyProfileSettings] = useState<CompanyProfileSettings | null>(null);
   const [companyProfileForm, setCompanyProfileForm] = useState<CompanyProfileForm | null>(null);
   const [exchangeSettings, setExchangeSettings] = useState<ExchangeRateSettings | null>(null);
@@ -78,10 +71,9 @@ export function useSettingsState() {
     notificationTemplates: emptyPagination(PAGE_SIZE),
     shipsgoIntegration: emptyPagination(PAGE_SIZE),
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
-    apiPerformance: emptyPagination(API_PERFORMANCE_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
-  const [detailRow, setDetailRow] = useState<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow | null>(null);
+  const [detailRow, setDetailRow] = useState<CustomerRow | SupplierRow | UserRow | AuditLogRow | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerForm | null>(null);
   const [customerSaving, setCustomerSaving] = useState(false);
   const [customerMessage, setCustomerMessage] = useState("");
@@ -116,16 +108,14 @@ export function useSettingsState() {
   const userEditPanelRef = useRef<HTMLDivElement | null>(null);
   const activePagination = pagination[activeTab] || emptyPagination(PAGE_SIZE);
   const listColumns = useMemo(() => columnsFor(activeTab), [activeTab]);
-  const currentRows = useMemo(() => rowsFor(activeTab, { customers, suppliers, users, logs, apiPerformance }), [activeTab, customers, suppliers, users, logs, apiPerformance]);
+  const currentRows = useMemo(() => rowsFor(activeTab, { customers, suppliers, users, logs }), [activeTab, customers, suppliers, users, logs]);
   const activeFilter = activeTab === "customers"
     ? filters.customers
     : activeTab === "suppliers"
       ? filters.suppliers
       : activeTab === "users"
         ? filters.users
-        : activeTab === "apiPerformance"
-          ? filters.apiPerformance
-          : filters.auditLogs;
+        : filters.auditLogs;
 
   return {
     activeTab,
@@ -142,8 +132,6 @@ export function useSettingsState() {
     setUsers,
     logs,
     setLogs,
-    apiPerformance,
-    setApiPerformance,
     companyProfileSettings,
     setCompanyProfileSettings,
     companyProfileForm,

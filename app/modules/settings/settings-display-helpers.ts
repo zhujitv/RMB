@@ -1,7 +1,7 @@
 import { formatDateTime, yesNo } from "../../formatters";
 import { LOGISTICS_SUPPLIER_TYPES } from "./constants";
-import type { ApiPerformanceRow, AuditLogRow, CustomerRow, SettingsTabKey, SupplierRow, TableColumn, UserRow } from "./types";
-import { apiPerformanceSourceLabel, approvalStatusText, emailListText, isSupplierAccountRole, shippingDocumentTypeLabels, supplierDisplayName, supplierTypeLabel, userStatus } from "./settings-label-helpers";
+import type { AuditLogRow, CustomerRow, SettingsTabKey, SupplierRow, TableColumn, UserRow } from "./types";
+import { approvalStatusText, emailListText, isSupplierAccountRole, shippingDocumentTypeLabels, supplierDisplayName, supplierTypeLabel, userStatus } from "./settings-label-helpers";
 
 export const CUSTOMER_COLUMNS: TableColumn<CustomerRow>[] = [
   { key: "shortName", label: "客户简称", render: (row) => row.shortName || "-" },
@@ -50,24 +50,11 @@ export const AUDIT_COLUMNS: TableColumn<AuditLogRow>[] = [
   { key: "ipAddress", label: "IP" },
 ];
 
-export const API_PERFORMANCE_COLUMNS: TableColumn<ApiPerformanceRow>[] = [
-  { key: "path", label: "路径 / 任务" },
-  { key: "method", label: "方法" },
-  { key: "source", label: "来源", render: (row) => apiPerformanceSourceLabel(row.source) },
-  { key: "count", label: "次数", render: (row) => String(row.count || 0) },
-  { key: "avgDurationMs", label: "平均耗时", render: (row) => `${Number(row.avgDurationMs || 0)} ms` },
-  { key: "p95DurationMs", label: "P95", render: (row) => `${Number(row.p95DurationMs || 0)} ms` },
-  { key: "maxDurationMs", label: "最慢", render: (row) => `${Number(row.maxDurationMs || 0)} ms` },
-  { key: "errorCount", label: "错误数", render: (row) => String(row.errorCount || 0) },
-  { key: "lastSeenAt", label: "最近调用", render: (row) => formatDateTime(row.lastSeenAt) },
-];
-
 export function columnsFor(tab: SettingsTabKey) {
-  if (tab === "customers") return CUSTOMER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
-  if (tab === "suppliers") return SUPPLIER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
-  if (tab === "users") return USER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
-  if (tab === "apiPerformance") return API_PERFORMANCE_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
-  return AUDIT_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>[];
+  if (tab === "customers") return CUSTOMER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
+  if (tab === "suppliers") return SUPPLIER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
+  if (tab === "users") return USER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
+  return AUDIT_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
 }
 
 export function rowsFor(tab: SettingsTabKey, rows: {
@@ -75,17 +62,15 @@ export function rowsFor(tab: SettingsTabKey, rows: {
   suppliers: SupplierRow[];
   users: UserRow[];
   logs: AuditLogRow[];
-  apiPerformance: ApiPerformanceRow[];
 }) {
   if (tab === "customers") return rows.customers;
   if (tab === "suppliers") return rows.suppliers;
   if (tab === "users") return rows.users;
   if (tab === "auditLogs") return rows.logs;
-  if (tab === "apiPerformance") return rows.apiPerformance;
   return [];
 }
 
-export function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow) {
+export function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | UserRow | AuditLogRow) {
   if (tab === "customers") {
     const customer = row as CustomerRow;
     return [
@@ -123,21 +108,6 @@ export function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | Supplier
       { label: "首次改密", value: yesNo(user.mustChangePassword) },
     ];
   }
-  if (tab === "apiPerformance") {
-    const metric = row as ApiPerformanceRow;
-    return [
-      { label: "接口路径", value: metric.path || "-", wide: true },
-      { label: "方法", value: metric.method || "-" },
-      { label: "来源", value: apiPerformanceSourceLabel(metric.source) },
-      { label: "调用次数", value: String(metric.count || 0) },
-      { label: "平均耗时", value: `${Number(metric.avgDurationMs || 0)} ms` },
-      { label: "P95 耗时", value: `${Number(metric.p95DurationMs || 0)} ms` },
-      { label: "最慢耗时", value: `${Number(metric.maxDurationMs || 0)} ms` },
-      { label: "错误次数", value: String(metric.errorCount || 0) },
-      { label: "最近状态码", value: metric.lastStatusCode == null ? "-" : String(metric.lastStatusCode) },
-      { label: "最近调用", value: formatDateTime(metric.lastSeenAt) },
-    ];
-  }
   const log = row as AuditLogRow;
   return [
     { label: "时间", value: formatDateTime(log.createdAt) },
@@ -148,7 +118,7 @@ export function detailFieldsFor(tab: SettingsTabKey, row: CustomerRow | Supplier
   ];
 }
 
-export function drawerTitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow) {
+export function drawerTitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | UserRow | AuditLogRow) {
   if (tab === "customers") {
     const customer = row as CustomerRow;
     return customer.shortName || customer.name || "客户详情";
@@ -157,15 +127,11 @@ export function drawerTitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierR
     const user = row as UserRow;
     return user.name || user.email || "用户详情";
   }
-  if (tab === "apiPerformance") {
-    const metric = row as ApiPerformanceRow;
-    return metric.path || "慢接口详情";
-  }
   const log = row as AuditLogRow;
   return log.entityLabel || log.action || "操作日志";
 }
 
-export function drawerSubtitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow) {
+export function drawerSubtitleFor(tab: SettingsTabKey, row: CustomerRow | SupplierRow | UserRow | AuditLogRow) {
   if (tab === "customers") {
     const customer = row as CustomerRow;
     return `国家：${customer.country || "-"} · 默认币种：${customer.defaultCurrency || "-"}`;
@@ -174,15 +140,11 @@ export function drawerSubtitleFor(tab: SettingsTabKey, row: CustomerRow | Suppli
     const user = row as UserRow;
     return `角色：${user.role || "-"} · 状态：${userStatus(user)}`;
   }
-  if (tab === "apiPerformance") {
-    const metric = row as ApiPerformanceRow;
-    return `${metric.method || "-"} · ${apiPerformanceSourceLabel(metric.source)} · P95 ${Number(metric.p95DurationMs || 0)} ms`;
-  }
   const log = row as AuditLogRow;
   return `时间：${formatDateTime(log.createdAt)} · 操作人：${log.user?.name || "-"}`;
 }
 
-export function valueFor(row: CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow, column: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow | ApiPerformanceRow>) {
+export function valueFor(row: CustomerRow | SupplierRow | UserRow | AuditLogRow, column: TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>) {
   if (column.render) return column.render(row);
   const key = String(column.key) as keyof typeof row;
   return String(row[key] ?? "-");
@@ -192,6 +154,5 @@ export function placeholderFor(tab: SettingsTabKey) {
   if (tab === "customers") return "搜索客户简称 / 全称 / 国家";
   if (tab === "suppliers") return "搜索供应商 / 类型 / 联系人 / 税号";
   if (tab === "users") return "搜索姓名 / 邮箱";
-  if (tab === "apiPerformance") return "搜索接口路径或后台任务";
   return "搜索操作人 / 动作 / 对象";
 }

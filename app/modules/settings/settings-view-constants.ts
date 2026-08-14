@@ -12,7 +12,6 @@ export const SETTINGS_HOME_CARDS: Array<{ tab: SettingsTabKey; title: string; de
   { tab: "exchangeRates", title: "汇率设置", description: "汇率", icon: "汇" },
   { tab: "commissionFormula", title: "提成公式", description: "提成计算", icon: "提" },
   { tab: "auditLogs", title: "系统日志", description: "日志", icon: "志" },
-  { tab: "apiPerformance", title: "后台任务", description: "慢任务", icon: "任" },
 ];
 
 export const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTabKey, string> = {
@@ -28,7 +27,6 @@ export const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTabKey, string> = {
   exchangeRates: "维护汇率来源、手动刷新和基础业务开关。",
   commissionFormula: "维护业务员提成计算规则。",
   auditLogs: "查看关键操作日志。",
-  apiPerformance: "查看慢接口和后台任务执行情况。",
 };
 
-export const TABLE_SETTING_TABS = new Set<SettingsTabKey>(["customers", "suppliers", "users", "auditLogs", "apiPerformance"]);
+export const TABLE_SETTING_TABS = new Set<SettingsTabKey>(["customers", "suppliers", "users", "auditLogs"]);

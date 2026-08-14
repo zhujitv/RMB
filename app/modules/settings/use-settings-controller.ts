@@ -19,7 +19,6 @@ const SETTINGS_TAB_KEYS = new Set<SettingsTabKey>([
   "commissionFormula",
   "notificationTemplates",
   "auditLogs",
-  "apiPerformance",
 ]);
 
 function isSettingsTabKey(value: unknown): value is SettingsTabKey {
@@ -43,7 +42,6 @@ export function useSettingsController({ currentUser = null, initialTab, initialT
     permissionConfig: state.permissionConfig,
     selectedNotificationTemplateType: state.selectedNotificationTemplateType,
     setActiveSuppliers: state.setActiveSuppliers,
-    setApiPerformance: state.setApiPerformance,
     setBusinessEntities: state.setBusinessEntities,
     setCommissionFormulaForm: state.setCommissionFormulaForm,
     setCommissionFormulaSettings: state.setCommissionFormulaSettings,
