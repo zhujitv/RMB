@@ -11,6 +11,7 @@ const SETTINGS_TAB_KEYS = new Set<SettingsTabKey>([
   "companyProfile",
   "businessEntities",
   "customers",
+  "customerProducts",
   "suppliers",
   "users",
   "ocrIntegration",

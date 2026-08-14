@@ -1,6 +1,6 @@
 import type { UserCustomPermissions } from "./types-integrations";
 
-export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
+export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "customerProducts" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
 
 export type SettingsFilters = {
   customers: { keyword: string };
@@ -10,7 +10,7 @@ export type SettingsFilters = {
 };
 
 export type FiltersFor<T extends SettingsTabKey> =
-  T extends "customers" ? SettingsFilters["customers"]
+  T extends "customers" | "customerProducts" ? SettingsFilters["customers"]
   : T extends "suppliers" ? SettingsFilters["suppliers"]
   : T extends "users" ? SettingsFilters["users"]
   : T extends "auditLogs" ? SettingsFilters["auditLogs"]

@@ -128,6 +128,10 @@ export function SettingsRows({
   const rejectedUser = canForceDeleteRejectedUsers && tab === "users" && (row as UserRow).approvalStatus === "REJECTED";
   const userRow = row as UserRow;
   const handlePrimaryAction = () => {
+    if (tab === "customerProducts") {
+      onManageProducts(row as CustomerRow);
+      return;
+    }
     if (tab === "users") {
       onEditUser(row as UserRow);
       return;
@@ -159,7 +163,7 @@ export function SettingsRows({
                 handlePrimaryAction();
               }}
             >
-              {tab === "users" || tab === "suppliers" ? "编辑" : "详情"}
+              {tab === "customerProducts" ? "维护产品属性" : tab === "users" || tab === "suppliers" ? "编辑" : "详情"}
             </button>
             {tab === "customers" ? (
               <button

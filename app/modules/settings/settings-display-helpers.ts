@@ -51,7 +51,7 @@ export const AUDIT_COLUMNS: TableColumn<AuditLogRow>[] = [
 ];
 
 export function columnsFor(tab: SettingsTabKey) {
-  if (tab === "customers") return CUSTOMER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
+  if (tab === "customers" || tab === "customerProducts") return CUSTOMER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
   if (tab === "suppliers") return SUPPLIER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
   if (tab === "users") return USER_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
   return AUDIT_COLUMNS as TableColumn<CustomerRow | SupplierRow | UserRow | AuditLogRow>[];
@@ -63,7 +63,7 @@ export function rowsFor(tab: SettingsTabKey, rows: {
   users: UserRow[];
   logs: AuditLogRow[];
 }) {
-  if (tab === "customers") return rows.customers;
+  if (tab === "customers" || tab === "customerProducts") return rows.customers;
   if (tab === "suppliers") return rows.suppliers;
   if (tab === "users") return rows.users;
   if (tab === "auditLogs") return rows.logs;
@@ -151,7 +151,7 @@ export function valueFor(row: CustomerRow | SupplierRow | UserRow | AuditLogRow,
 }
 
 export function placeholderFor(tab: SettingsTabKey) {
-  if (tab === "customers") return "搜索客户简称 / 全称 / 国家";
+  if (tab === "customers" || tab === "customerProducts") return "搜索客户简称 / 全称 / 国家";
   if (tab === "suppliers") return "搜索供应商 / 类型 / 联系人 / 税号";
   if (tab === "users") return "搜索姓名 / 邮箱";
   return "搜索操作人 / 动作 / 对象";

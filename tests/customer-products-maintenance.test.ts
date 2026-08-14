@@ -4,11 +4,14 @@ import test from "node:test";
 
 const managerSource = readFileSync("app/modules/settings/customer-products-manager.tsx", "utf8");
 const tableSource = readFileSync("app/modules/settings/settings-table.tsx", "utf8");
+const settingsSource = readFileSync("app/modules/settings/settings-view-constants.ts", "utf8");
 const serviceSource = readFileSync("lib/platform/quotation-customer-products.ts", "utf8");
 const schemaSource = readFileSync("prisma/models/quotations.prisma", "utf8");
 
 test("customer details expose a product attribute maintenance entry", () => {
+  assert.match(settingsSource, /customerProducts[\s\S]*产品属性维护/);
   assert.match(tableSource, /onManageProducts/);
+  assert.match(tableSource, /tab === "customerProducts"[\s\S]*onManageProducts/);
   assert.match(tableSource, />产品属性<\/button>/);
   assert.match(tableSource, /onManageProducts\(row as CustomerRow\)/);
   assert.match(tableSource, /<CustomerProductsManager customer=\{productCustomer\}/);
