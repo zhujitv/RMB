@@ -293,3 +293,8 @@
   padding: 10px 12px;
   font-size: 13px;
 }
+
+@media (max-width: 860px) {
+  .loginScreen { height: 100dvh; }
+  .loginFooter { position: static; padding: 0 24px; }
+}

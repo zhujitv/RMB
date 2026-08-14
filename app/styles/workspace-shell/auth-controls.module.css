@@ -13,7 +13,6 @@
 .loginFooter { composes: loginFooter from "./auth-loading-screen.module.css"; }
 .loginFilingLink { composes: loginFilingLink from "./login-filing-records.module.css"; }
 .loginFilingIcon { composes: loginFilingIcon from "./login-filing-records.module.css"; }
-.loginIcpMark { composes: loginIcpMark from "./login-filing-records.module.css"; }
 .loginCard { composes: loginCard from "./auth-loading-screen.module.css"; }
 .loginCardHeader { composes: loginCardHeader from "./auth-loading-screen.module.css"; }
 .loginModalHeader { composes: loginModalHeader from "./auth-loading-screen.module.css"; composes: loginModalHeader from "./auth-dialog-layout.module.css"; }
