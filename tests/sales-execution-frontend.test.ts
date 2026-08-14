@@ -15,7 +15,7 @@ const {
   singleSupplierIdFromItems,
   validateSalesExecutionDraft,
 } = await jiti.import<typeof import("../app/modules/sales-execution/draft-utils.ts")>("../app/modules/sales-execution/draft-utils.ts");
-const { filterSupplierOptions } = await jiti.import<typeof import("../app/modules/sales-execution/types.ts")>("../app/modules/sales-execution/types.ts");
+const { customerOrderNumber, filterSupplierOptions } = await jiti.import<typeof import("../app/modules/sales-execution/types.ts")>("../app/modules/sales-execution/types.ts");
 const {
   factoryPurchaseOrderStatusLabel,
   salesExecutionStatusLabel,
@@ -85,6 +85,15 @@ test("customer order number and customer requested delivery date are mandatory c
   assert.match(formSource, /客户订单号[\s\S]{0,160}<input[^>]*required/);
   assert.match(formSource, /客户要求交货日期[\s\S]{0,160}<input[^>]*type="date"[^>]*required/);
   assert.doesNotMatch(formSource, /客户订单号（可选）|要求交货日期（可选）/);
+});
+
+test("sales execution surfaces customer order numbers instead of internal execution numbers", () => {
+  assert.equal(customerOrderNumber({ id: "execution-1", customerOrderNo: " PO-CUSTOMER-20260809 ", requestedDeliveryDate: "2026-09-15" }), "PO-CUSTOMER-20260809");
+  assert.match(listSource, />客户订单号<\/th>/);
+  assert.match(listSource, /customerOrderNumber\(row\)/);
+  assert.match(viewSource, /placeholder="搜索客户订单号 \/ 客户 \/ 报价号"/);
+  assert.doesNotMatch(salesExecutionUiSource, /执行单号/);
+  assert.doesNotMatch(salesExecutionUiSource, /executionNumber|\.executionNo/);
 });
 
 test("factory allocations must equal each sales line quantity exactly", () => {

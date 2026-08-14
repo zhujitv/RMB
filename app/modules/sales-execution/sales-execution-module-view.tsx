@@ -156,7 +156,7 @@ export function SalesExecutionModuleView({
       {canWrite && (createOpen || editExecution) ? <ExecutionFormContainer initialExecution={editExecution} onCancel={onCancelForm} onSaved={onSaved} /> : null}
 
       <div className={shell.listToolbar}>
-        <input aria-label="搜索销售执行" value={keyword} placeholder="搜索执行单号 / 客户 / 客户订单号 / 报价号" onChange={(event) => onKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onSearch(); }} />
+        <input aria-label="搜索销售执行" value={keyword} placeholder="搜索客户订单号 / 客户 / 报价号" onChange={(event) => onKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onSearch(); }} />
         <select aria-label="销售执行状态" value={status} disabled={loading} onChange={(event) => onStatus(event.target.value)}><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="DISPATCHED">已下发</option><option value="VOIDED">已作废</option></select>
         <button className={shell.primaryButtonCompact} type="button" disabled={loading} onClick={onSearch}>查询</button>
         <button className={shell.secondaryButton} type="button" disabled={loading} onClick={onReset}>重置</button>

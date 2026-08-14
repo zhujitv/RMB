@@ -3,7 +3,7 @@ import { formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import styles from "./sales-execution.module.css";
 import { salesExecutionStatusLabel, statusTone } from "./status-values";
-import { businessEntityName, executionCustomerName, executionNumber, salesExecutionTotal, type SalesExecutionRow } from "./types";
+import { businessEntityName, customerOrderNumber, executionCustomerName, salesExecutionTotal, type SalesExecutionRow } from "./types";
 
 function statusClass(status: unknown, shippingStarted = false, linkedOrderStatus?: unknown) {
   const tone = statusTone(status, shippingStarted, linkedOrderStatus);
@@ -36,7 +36,7 @@ export function ExecutionList({
         <table className={shell.dataTable}>
           <thead>
             <tr>
-              <th className={shell.orderNoColumn}>执行单号</th>
+              <th className={shell.orderNoColumn}>客户订单号</th>
               <th className={shell.customerColumn}>客户</th>
               <th>来源</th>
               <th>业务主体</th>
@@ -53,7 +53,7 @@ export function ExecutionList({
               <tr><td colSpan={10}><div className={shell.emptyState}>销售执行数据加载中...</div></td></tr>
             ) : rows.length ? rows.map((row) => (
               <tr className={shell.clickableRow} key={row.id} onClick={() => onOpen(row)}>
-                <td className={shell.orderNoColumn}><strong>{executionNumber(row) || "-"}</strong></td>
+                <td className={shell.orderNoColumn}><strong>{customerOrderNumber(row) || "-"}</strong></td>
                 <td className={shell.customerColumn}><span className={styles.customerCell}><strong>{executionCustomerName(row)}</strong><small>{row.customer?.fullName || row.customerNameSnapshot || ""}</small></span></td>
                 <td><span className={`${styles.sourcePill} ${row.sourceType === "QUOTATION" ? styles.sourceQuote : ""}`}>{row.sourceType === "QUOTATION" ? "报价转入" : "直接创建"}</span></td>
                 <td>{businessEntityName(row.businessEntity) !== "-" ? businessEntityName(row.businessEntity) : row.businessEntityNameSnapshot || "-"}</td>

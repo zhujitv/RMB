@@ -42,7 +42,7 @@ type QuotationsModuleViewProps = {
   onEdit: (quotation: QuotationRow) => void;
   onVoid: (quotation: QuotationRow) => void;
   onDelete: (quotation: QuotationRow) => void;
-  onOpenSalesExecution: (quotationId: string, quotationNo: string, executionId?: string, executionNo?: string) => void;
+  onOpenSalesExecution: (quotationId: string, quotationNo: string, executionId?: string, customerOrderNo?: string) => void;
   onCloseDetail: () => void;
   onCancelConfirmation: () => void;
   onConfirmConfirmation: () => void;
@@ -146,7 +146,7 @@ export function QuotationsModuleView({
           onEdit={() => actions.onEdit(detailQuotation)}
           onVoid={() => actions.onVoid(detailQuotation)}
           onDelete={() => actions.onDelete(detailQuotation)}
-          onOpenSalesExecution={() => actions.onOpenSalesExecution(detailQuotation.id, detailQuotation.quoteNo || detailQuotation.invoiceNo || "", detailQuotation.salesExecution?.id || "", detailQuotation.salesExecution?.executionNo || "")}
+          onOpenSalesExecution={() => actions.onOpenSalesExecution(detailQuotation.id, detailQuotation.quoteNo || detailQuotation.invoiceNo || "", detailQuotation.salesExecution?.id || "", detailQuotation.salesExecution?.customerOrderNo || "")}
           onSaved={actions.onSaved}
           onClose={actions.onCloseDetail}
         />

@@ -88,9 +88,9 @@ export function WorkspaceModuleContent({
         permissions={payload.permissions}
         initialKeyword={focus.keyword}
         initialOpenToken={focus.token}
-        onOpenSalesExecution={(quotationId, quoteNo, executionId, executionNo) => openWorkspaceMenu("salesExecution", executionId ? {
+        onOpenSalesExecution={(quotationId, quoteNo, executionId, customerOrderNo) => openWorkspaceMenu("salesExecution", executionId ? {
           executionId,
-        } : { action: "convert", quotationId }, { forceNew: true, title: executionId ? `销售执行 · ${executionNo || "未编号"}` : `新建销售执行 · ${quoteNo || "报价"}` })}
+        } : { action: "convert", quotationId }, { forceNew: true, title: executionId ? `销售执行 · ${customerOrderNo || "未填写客户订单号"}` : `新建销售执行 · ${quoteNo || "报价"}` })}
       />
     );
   }

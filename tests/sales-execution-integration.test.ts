@@ -128,9 +128,11 @@ test("accepted quotation detail is wired to a server-validated conversion workfl
 });
 
 test("an already converted quotation opens its linked sales execution", () => {
-  assert.match(quotationQuery, /salesExecution:\s*\{ select:\s*\{ id: true, executionNo: true, status: true \} \}/);
+  assert.match(quotationQuery, /salesExecution:\s*\{ select:\s*\{ id: true, customerOrderNo: true, status: true \} \}/);
   assert.match(quotationQuery, /effectivePermissions\(actor\)\.reads\.salesExecution/);
   assert.match(quotationValues, /includeSalesExecution && salesExecution\.id/);
+  assert.match(quotationValues, /customerOrderNo: String\(salesExecution\.customerOrderNo/);
+  assert.doesNotMatch(quotationValues, /executionNo: String\(salesExecution\.executionNo/);
   assert.match(quotationDrawer, /quotation\.salesExecution\?\.id \? "\u6253\u5f00\u9500\u552e\u6267\u884c" : "\u8f6c\u4e3a\u9500\u552e\u6267\u884c"/);
   assert.match(workspaceContent, /executionId \? \{[\s\S]*executionId,[\s\S]*\} : \{ action: "convert", quotationId \}/);
 });

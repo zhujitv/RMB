@@ -17,7 +17,7 @@ import { useSalesExecutionEmailRetry } from "./sales-execution/use-sales-executi
 import { useSalesExecutionShipping } from "./sales-execution/use-sales-execution-shipping";
 import { useSalesExecutionVoid } from "./sales-execution/use-sales-execution-void";
 import {
-  executionNumber,
+  customerOrderNumber,
   SALES_EXECUTION_PAGE_SIZE,
   type SalesExecutionResponse,
   type SalesExecutionRow,
@@ -217,7 +217,7 @@ export function SalesExecutionModule({
   }, [keyword, status, submittedKeyword, submittedStatus]);
   const active = editExecution || detailExecution;
   useWorkspaceTabPresentation({
-    title: conversionDraft ? "报价转入 · 补充订单凭证" : editExecution ? `编辑销售执行 · ${executionNumber(editExecution) || "未编号"}` : createOpen ? "直接创建销售执行" : detailExecution ? `销售执行 · ${executionNumber(detailExecution) || "未编号"}` : "销售执行",
+    title: conversionDraft ? "报价转入 · 补充订单凭证" : editExecution ? `编辑销售执行 · ${customerOrderNumber(editExecution) || "未填写客户订单号"}` : createOpen ? "直接创建销售执行" : detailExecution ? `销售执行 · ${customerOrderNumber(detailExecution) || "未填写客户订单号"}` : "销售执行",
     view: conversionDraft || editExecution || createOpen ? "edit" : detailExecution ? "detail" : "list",
     contextKey: conversionDraft ? `convert:${conversionDraft.quotationId}` : editExecution ? `edit:${editExecution.id}` : createOpen ? "create:sales-execution" : active ? `detail:${active.id}` : "list:sales-execution",
     ensureListTab: Boolean(conversionDraft || editExecution || createOpen || detailExecution),

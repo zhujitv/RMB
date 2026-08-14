@@ -96,7 +96,7 @@ export type QuotationSalesperson = {
 
 export type QuotationSalesExecution = {
   id: string;
-  executionNo?: string | null;
+  customerOrderNo?: string | null;
   status?: "DRAFT" | "VOIDED" | null;
 };
 

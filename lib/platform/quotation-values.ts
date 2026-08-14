@@ -257,7 +257,7 @@ export function serializeQuotation(
     salespersonName: String(salesperson.name || ""),
     salesExecution: includeSalesExecution && salesExecution.id ? {
       id: String(salesExecution.id),
-      executionNo: String(salesExecution.executionNo || ""),
+      customerOrderNo: String(salesExecution.customerOrderNo || ""),
       status: String(salesExecution.status || "DRAFT"),
     } : null,
     currentVersionNumber,
