@@ -57,6 +57,7 @@
 .detailAmountCell { composes: detailAmountCell from "./logistics-cost-columns.module.css"; }
 .metricGrid { composes: metricGrid from "./logistics-cost-columns.module.css"; }
 .metricCard { composes: metricCard from "./logistics-cost-columns.module.css"; }
+.metricCardButton { composes: metricCardButton from "./logistics-cost-columns.module.css"; }
 .metricValue { composes: metricValue from "./logistics-cost-columns.module.css"; }
 .filterHint { composes: filterHint from "./logistics-cost-columns.module.css"; }
 .dashboardStack { composes: dashboardStack from "./logistics-cost-columns.module.css"; }
@@ -87,6 +88,7 @@
 .trendPaid { composes: trendPaid from "./dashboard-metric-cards.module.css"; }
 .trendUnpaid { composes: trendUnpaid from "./dashboard-metric-cards.module.css"; }
 .rankItem { composes: rankItem from "./dashboard-metric-cards.module.css"; }
+.rankButton { composes: rankButton from "./dashboard-metric-cards.module.css"; }
 .rankIndex { composes: rankIndex from "./dashboard-metric-cards.module.css"; }
 .rankMain { composes: rankMain from "./dashboard-metric-cards.module.css"; }
 .rankValue { composes: rankValue from "./dashboard-metric-cards.module.css"; }

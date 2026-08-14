@@ -6,14 +6,53 @@ export type OverviewGroup = {
   unpaid: number; expectedProfit: number; commissionMonth: number; commissionYear: number;
   commissionPending: number; commissionSettled: number;
 };
+export type OverviewPaymentEvent = {
+  amountCny?: unknown;
+  status?: string | null;
+  paymentDate?: string | Date | null;
+  createdAt?: string | Date | null;
+  salespersonName?: string | null;
+};
+export type OverviewCostEvent = {
+  amountCny?: unknown;
+  status?: string | null;
+  costConfirmed?: boolean | null;
+  costConfirmedAt?: string | Date | null;
+  paymentStatus?: string | null;
+  paymentDate?: string | Date | null;
+  paidAt?: string | Date | null;
+  createdAt?: string | Date | null;
+};
 type OverviewCollectionSummary = Partial<Pick<OrderListRow["summary"],
   "receivableCny" | "arrivedPaymentsCny" | "confirmedPaymentsCny" | "arrivedBalanceCny"
   | "arrivedOutstandingCny" | "outstandingCny" | "exchangeDifferenceCny">>;
 export type OverviewMetric = ReturnType<typeof overviewOrderMetrics>;
 
+const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+export function overviewDateKey(value: unknown) {
+  if (!value) return "";
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const date = value instanceof Date ? value : new Date(text);
+  return Number.isFinite(date.getTime())
+    ? new Date(date.getTime() + CHINA_TIME_OFFSET_MS).toISOString().slice(0, 10)
+    : text.slice(0, 10);
+}
+
+export function overviewMonthKey(value: unknown) {
+  return overviewDateKey(value).slice(0, 7);
+}
+
+export function previousOverviewMonth(month: string) {
+  if (!/^\d{4}-\d{2}$/.test(month)) return "";
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, monthNumber - 2, 1)).toISOString().slice(0, 7);
+}
+
 function overviewDayNumber(value: unknown) {
   if (!value) return null;
-  const date = value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+  const date = overviewDateKey(value);
   const [year, month, day] = date.split("-").map(Number);
   return year && month && day ? Math.floor(Date.UTC(year, month - 1, day) / 86400000) : null;
 }
@@ -29,15 +68,17 @@ export function overviewCollectionMetrics(summary: OverviewCollectionSummary) {
 export function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null = null) {
   const summary = order.summary || {};
   const collection = overviewCollectionMetrics(summary);
-  const cost = Number(summary.confirmedTotalCostCny ?? summary.totalCostCny ?? 0);
+  const recordedCost = Number(summary.totalCostCny || 0);
+  const confirmedCost = Number(summary.confirmedTotalCostCny ?? recordedCost);
+  const cost = confirmedCost;
   const expectedGrossProfit = Number(summary.expectedGrossProfit ?? (collection.receivable - cost));
   const expectedGrossMargin = summary.expectedGrossMargin == null
     ? (collection.receivable > 0 ? expectedGrossProfit / collection.receivable : null)
     : Number(summary.expectedGrossMargin);
   const todayNo = overviewDayNumber(new Date());
   const dueNo = overviewDayNumber(order.dueDate);
-  const month = nonEmpty(query?.get("month")) || new Date().toISOString().slice(0, 7);
-  const createdMonth = String(order.createdAt || "").slice(0, 7);
+  const month = nonEmpty(query?.get("month")) || overviewMonthKey(new Date());
+  const createdMonth = overviewMonthKey(order.createdAt);
   const estimatedCommission = Number(summary.estimatedCommissionCny || 0);
   const settleableCommission = Number(summary.settleableCommissionCny ?? summary.commissionAmountCny ?? 0);
   const commissionSnapshotMissing = Boolean(summary.commissionSnapshotMissing);
@@ -49,7 +90,10 @@ export function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams
     id: order.id, orderNo: order.orderNo, blNo: order.blNo || "", customerName: order.customerName || "",
     customerFullName: order.customerFullName || order.customerName || "", customerShortName: order.customerShortName || "",
     salespersonName: order.salespersonName || "未分配", createdAt: order.createdAt || null, dueDate: order.dueDate || null,
-    status: order.status || "", ...collection, cost, expectedGrossProfit, expectedGrossMargin,
+    status: order.status || "", ...collection, cost, recordedCost, confirmedCost,
+    costPendingConfirmation: Math.max(recordedCost - confirmedCost, 0),
+    costMissing: collection.receivable > 0 && recordedCost <= 0,
+    expectedGrossProfit, expectedGrossMargin,
     realizedGrossProfit: summary.realizedGrossProfit == null ? null : Number(summary.realizedGrossProfit),
     netCashFlowCny: Number(summary.netCashFlowCny || 0), remainingDays: dueNo == null || todayNo == null ? null : dueNo - todayNo,
     commissionMonth: createdMonth === month ? (commissionSettled ? settledCommission : estimatedCommission) : 0,
@@ -58,15 +102,34 @@ export function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams
   };
 }
 
-export function buildOverviewMonthlyTrend(rows: OverviewMetric[]) {
+export function buildOverviewMonthlyTrend(
+  rows: OverviewMetric[],
+  payments: OverviewPaymentEvent[] = [],
+  costs: OverviewCostEvent[] = [],
+) {
   const now = new Date();
-  const labels = Array.from({ length: 12 }, (_, index) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11 + index, 1)).toISOString().slice(0, 7));
-  const monthlyTrend = labels.map((label) => ({ label, receivable: 0, paid: 0, unpaid: 0 }));
+  const chinaNow = new Date(now.getTime() + CHINA_TIME_OFFSET_MS);
+  const labels = Array.from({ length: 12 }, (_, index) => new Date(Date.UTC(chinaNow.getUTCFullYear(), chinaNow.getUTCMonth() - 11 + index, 1)).toISOString().slice(0, 7));
+  const monthlyTrend = labels.map((label) => ({ label, receivable: 0, paid: 0, cost: 0, profit: 0, netCashFlow: 0 }));
   const byMonth = Object.fromEntries(monthlyTrend.map((item) => [item.label, item]));
   rows.forEach((row) => {
-    const target = byMonth[String(row.createdAt || row.dueDate || "").slice(0, 7)];
-    if (target) { target.receivable += row.receivable; target.paid += row.paid; target.unpaid += row.unpaid; }
+    const target = byMonth[overviewMonthKey(row.createdAt)];
+    if (target) {
+      target.receivable += row.receivable;
+      target.profit += row.expectedGrossProfit;
+    }
   });
+  payments.forEach((payment) => {
+    if (payment.status !== "已到账") return;
+    const target = byMonth[overviewMonthKey(payment.paymentDate || payment.createdAt)];
+    if (target) target.paid += Number(payment.amountCny || 0);
+  });
+  costs.forEach((cost) => {
+    if (cost.paymentStatus !== "已支付") return;
+    const target = byMonth[overviewMonthKey(cost.paymentDate || cost.paidAt || cost.createdAt)];
+    if (target) target.cost += Number(cost.amountCny || 0);
+  });
+  monthlyTrend.forEach((row) => { row.netCashFlow = row.paid - row.cost; });
   return monthlyTrend;
 }
 

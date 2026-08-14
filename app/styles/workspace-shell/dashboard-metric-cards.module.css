@@ -4,11 +4,9 @@
   justify-content: space-between;
   gap: 10px;
 }
-
 .reminderRow strong {
   color: #0f172a;
 }
-
 .reminderRow span,
 .reminderRow small {
   color: #64748b;
@@ -19,7 +17,6 @@
   color: #b45309;
   font-size: 13px;
 }
-
 .dashboardTrendPanel {
   min-height: 330px;
 }
@@ -49,7 +46,6 @@
 .legendBlue {
   background: #2563eb;
 }
-
 .legendGreen {
   background: #10b981;
 }
@@ -123,6 +119,28 @@
   align-items: center;
   padding: 11px 0;
   border-top: 1px solid #f1f5f9;
+}
+
+.rankButton {
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rankButton:hover {
+  background: #f8fafc;
+}
+
+.rankButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .rankIndex {

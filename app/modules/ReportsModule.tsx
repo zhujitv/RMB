@@ -8,10 +8,9 @@ import { useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReacti
 import {
   DEFAULT_REPORT_FILTERS,
   PAGE_SIZE,
+  primaryReportColumns,
   REPORT_READ_ROLES,
   REPORT_TYPES,
-  type BusinessEntitiesResponse,
-  type BusinessEntityOption,
   type ExportFormat,
   type ExportScope,
   type OpenMenuTarget,
@@ -19,12 +18,14 @@ import {
   type ReportFilters,
   type ReportResponse,
   type ReportRow,
+  type ReportSummary,
   type SortDirection,
 } from "./reports/model";
+import { reportDatePreset, type ReportDatePreset } from "./reports/report-date-presets";
 import { downloadReport } from "./reports/report-export";
-import { ReportFilterPanel } from "./reports/report-filter-panel";
 import { openReportRecord } from "./reports/report-navigation";
-import { ReportResultsPanel } from "./reports/report-results-panel";
+import { ReportsWorkspace } from "./reports/report-workspace";
+import { useBusinessEntities } from "./reports/use-business-entities";
 
 export function ReportsModule({
   currentUser,
@@ -46,6 +47,8 @@ export function ReportsModule({
   const [submittedFilters, setSubmittedFilters] = useState<ReportFilters>(DEFAULT_REPORT_FILTERS);
   const [columns, setColumns] = useState<ReportColumn[]>([]);
   const [rows, setRows] = useState<ReportRow[]>([]);
+  const [summary, setSummary] = useState<ReportSummary>();
+  const [dataWarnings, setDataWarnings] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -58,10 +61,10 @@ export function ReportsModule({
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [businessEntities, setBusinessEntities] = useState<BusinessEntityOption[]>([]);
+  const businessEntities = useBusinessEntities();
   const queryRequestRef = useRef(0);
 
-  const visibleColumns = useMemo(() => columns.slice(0, 5), [columns]);
+  const visibleColumns = useMemo(() => primaryReportColumns(reportType, columns), [columns, reportType]);
   const allPageSelected = rows.length > 0 && rows.every((row) => row.id && selectedIds.has(String(row.id)));
   const showDeclarationMonth = reportType === "tax-refunds";
   const activeReportLabel = visibleReportTypes.find((type) => type.key === reportType)?.label || "业务报表";
@@ -77,19 +80,6 @@ export function ReportsModule({
   });
 
   useEffect(() => {
-    void loadBusinessEntities();
-  }, []);
-
-  async function loadBusinessEntities() {
-    try {
-      const result = await apiJson<BusinessEntitiesResponse>("/api/business-entities");
-      setBusinessEntities(Array.isArray(result.entities) ? result.entities : []);
-    } catch {
-      setBusinessEntities([]);
-    }
-  }
-
-  useEffect(() => {
     if (!visibleReportTypes.length) return;
     if (!visibleReportTypes.some((type) => type.key === reportType)) {
       setReportType(visibleReportTypes[0].key);
@@ -97,9 +87,13 @@ export function ReportsModule({
   }, [reportType, visibleReportTypes]);
 
   useEffect(() => {
+    const initialFilters = { ...DEFAULT_REPORT_FILTERS };
+    setFilters(initialFilters);
+    setSubmittedFilters(initialFilters);
     clearResults();
     setSortBy("");
     setSortDir("asc");
+    void queryRows(1, initialFilters, "", "asc", reportType);
   }, [reportType]);
 
   function updateFilter(name: keyof ReportFilters, value: string) {
@@ -111,6 +105,7 @@ export function ReportsModule({
     nextFilters = submittedFilters,
     nextSortBy = sortBy,
     nextSortDir = sortDir,
+    nextReportType = reportType,
   ) {
     const requestId = ++queryRequestRef.current;
     setLoading(true);
@@ -123,10 +118,12 @@ export function ReportsModule({
       });
       if (nextSortBy) params.set("sortBy", nextSortBy);
       if (nextSortDir) params.set("sortDir", nextSortDir);
-      const result = await apiJson<ReportResponse>(`/api/reports/${encodeURIComponent(reportType)}?${params}`);
+      const result = await apiJson<ReportResponse>(`/api/reports/${encodeURIComponent(nextReportType)}?${params}`);
       if (requestId !== queryRequestRef.current) return;
       setColumns(Array.isArray(result.columns) ? result.columns : []);
       setRows(Array.isArray(result.rows) ? result.rows : []);
+      setSummary(result.summary);
+      setDataWarnings(Array.isArray(result.dataWarnings) ? result.dataWarnings : []);
       setPage(Number(result.pagination?.page || nextPage));
       setTotal(Number(result.pagination?.total || 0));
       setTotalPages(Math.max(1, Number(result.pagination?.totalPages || 1)));
@@ -149,11 +146,13 @@ export function ReportsModule({
   }
 
   function resetSearch() {
-    setFilters(DEFAULT_REPORT_FILTERS);
-    setSubmittedFilters(DEFAULT_REPORT_FILTERS);
+    const initialFilters = { ...DEFAULT_REPORT_FILTERS };
+    setFilters(initialFilters);
+    setSubmittedFilters(initialFilters);
     clearResults();
     setSortBy("");
     setSortDir("asc");
+    void queryRows(1, initialFilters, "", "asc");
   }
 
   function clearResults() {
@@ -161,6 +160,8 @@ export function ReportsModule({
     setLoading(false);
     setColumns([]);
     setRows([]);
+    setSummary(undefined);
+    setDataWarnings([]);
     setPage(1);
     setTotal(0);
     setTotalPages(1);
@@ -169,6 +170,15 @@ export function ReportsModule({
     setExpandedId("");
     setError("");
     setNotice("");
+  }
+
+  function applyDatePreset(preset: ReportDatePreset) {
+    const range = reportDatePreset(preset);
+    const nextFilters = { ...filters, ...range };
+    setFilters(nextFilters);
+    setSubmittedFilters(nextFilters);
+    setSelectedIds(new Set());
+    void queryRows(1, nextFilters, sortBy, sortDir);
   }
 
   function togglePageSelection() {
@@ -239,44 +249,42 @@ export function ReportsModule({
   }
 
   return (
-    <section>
-      <ReportFilterPanel
-        reportType={reportType}
-        visibleReportTypes={visibleReportTypes}
-        filters={filters}
-        businessEntities={businessEntities}
-        showDeclarationMonth={showDeclarationMonth}
-        loading={loading}
-        onReportTypeChange={setReportType}
-        onFilterChange={updateFilter}
-        onSubmit={submitSearch}
-        onReset={resetSearch}
-      />
-      <ReportResultsPanel
-        columns={columns}
-        visibleColumns={visibleColumns}
-        rows={rows}
-        page={page}
-        total={total}
-        totalPages={totalPages}
-        queried={queried}
-        loading={loading}
-        downloading={downloading}
-        error={error}
-        notice={notice}
-        selectedIds={selectedIds}
-        expandedId={expandedId}
-        sortBy={sortBy}
-        sortDir={sortDir}
-        allPageSelected={allPageSelected}
-        onExport={(scope, format) => void exportRows(scope, format)}
-        onTogglePageSelection={togglePageSelection}
-        onToggleRowSelection={toggleRowSelection}
-        onToggleExpanded={(row) => setExpandedId((current) => current === String(row.id) ? "" : String(row.id))}
-        onToggleSort={toggleSort}
-        onOpenRecord={openRecord}
-        onPage={(nextPage) => void queryRows(nextPage, submittedFilters, sortBy, sortDir)}
-      />
-    </section>
+    <ReportsWorkspace
+      reportType={reportType}
+      visibleReportTypes={visibleReportTypes}
+      filters={filters}
+      businessEntities={businessEntities}
+      showDeclarationMonth={showDeclarationMonth}
+      loading={loading}
+      columns={columns}
+      visibleColumns={visibleColumns}
+      rows={rows}
+      summary={summary}
+      dataWarnings={dataWarnings}
+      page={page}
+      total={total}
+      totalPages={totalPages}
+      queried={queried}
+      downloading={downloading}
+      error={error}
+      notice={notice}
+      selectedIds={selectedIds}
+      expandedId={expandedId}
+      sortBy={sortBy}
+      sortDir={sortDir}
+      allPageSelected={allPageSelected}
+      onReportTypeChange={setReportType}
+      onFilterChange={updateFilter}
+      onSubmit={submitSearch}
+      onReset={resetSearch}
+      onDatePreset={applyDatePreset}
+      onExport={(scope, format) => void exportRows(scope, format)}
+      onTogglePageSelection={togglePageSelection}
+      onToggleRowSelection={toggleRowSelection}
+      onToggleExpanded={(row) => setExpandedId((current) => current === String(row.id) ? "" : String(row.id))}
+      onToggleSort={toggleSort}
+      onOpenRecord={openRecord}
+      onPage={(nextPage) => void queryRows(nextPage, submittedFilters, sortBy, sortDir)}
+    />
   );
 }

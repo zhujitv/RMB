@@ -23,6 +23,7 @@ import {
   type ReportType,
 } from "./report-service-shared";
 import {
+  aggregateProfitReportRows,
   costToRow,
   friendlyReportQueryError,
   orderToCommission,
@@ -34,6 +35,7 @@ import {
   reportQueryForBaseRows,
   safeMapReportRows,
 } from "./report-service-mappers";
+import { buildReportSummary } from "./report-service-summary";
 
 async function baseRows(type: ReportType, query: URLSearchParams, actor: ActorLike): Promise<ReportRow[]> {
   if (!REPORT_TYPES[type]) {
@@ -45,6 +47,9 @@ async function baseRows(type: ReportType, query: URLSearchParams, actor: ActorLi
   if (type === "payments") return safeMapReportRows(await listPayments(query, actor), type, paymentToRow);
   if (type === "costs") return safeMapReportRows(await listCosts(query, actor), type, costToRow);
   if (type === "overdue") return safeMapReportRows(await getReminders(query, actor), type, orderToOverdue);
+  if (type === "customer-analysis" || type === "salesperson-performance") {
+    return safeMapReportRows(await getProfitAnalysis(query, actor), type, orderToProfit);
+  }
   if (type === "profits") return safeMapReportRows(await getProfitAnalysis(query, actor), type, orderToProfit);
   if (type === "commissions") return safeMapReportRows(await getProfitAnalysis(query, actor), type, orderToCommission);
   if (type === "tax-refunds") return safeMapReportRows(await listOrders(query, actor), type, orderToTaxRefund);
@@ -70,7 +75,14 @@ export async function queryReport(typeInput: unknown, query: URLSearchParams, ac
     });
     throw friendlyReportQueryError(error, filters);
   }
-  rows = filterRows(rows, filters);
+  const scanLimit = type === "costs" ? 5000 : 1000;
+  const dataWarnings = rows.length >= scanLimit
+    ? [`基础数据达到 ${scanLimit} 条扫描上限，请缩小筛选范围后复核汇总与导出`]
+    : [];
+  rows = filterRows(rows, filters, type);
+  if (type === "customer-analysis") rows = aggregateProfitReportRows(rows, "customer");
+  if (type === "salesperson-performance") rows = aggregateProfitReportRows(rows, "salesperson");
+  const summary = buildReportSummary(type, rows);
   if (selectedIds.size) rows = rows.filter((row) => selectedIds.has(String(row.id || "")));
   rows = sortRows(rows, sortBy, sortDir);
   const paged = options.noPagination ? { rows, pagination: { page: 1, pageSize: rows.length, total: rows.length, totalPages: 1 } } : pageRows(rows, page, pageSize);
@@ -79,6 +91,8 @@ export async function queryReport(typeInput: unknown, query: URLSearchParams, ac
     label: REPORT_TYPES[type].label,
     columns: columnsFor(type),
     rows: paged.rows,
+    summary,
+    dataWarnings,
     pagination: paged.pagination,
     filters,
     sortBy,

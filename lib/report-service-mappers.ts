@@ -1,7 +1,6 @@
 import { logServerError, codedError } from "./platform-db";
 import { logisticsCostTypeLabel } from "./platform/logistics-cost-types";
 import {
-  dateOnly,
   displayCustomerName,
   moneyNumber,
   nonEmptyText,
@@ -15,6 +14,8 @@ import {
   type ReportRow,
   type ReportType,
 } from "./report-service-shared";
+
+export { aggregateProfitReportRows } from "./report-service-aggregations";
 
 export function domesticLogisticsColumns(order: DomesticLogisticsReportOrder = {}) {
   const info = order.domesticLogisticsInfo || order.documentCompleteness?.domesticLogistics?.info || {};
@@ -200,6 +201,10 @@ export function safeMapReportRows<T>(items: T[], type: ReportType, mapper: (item
 
 export function reportQueryForBaseRows(type: ReportType, query: URLSearchParams, filters: ReportFilters) {
   const next = new URLSearchParams(query);
+  next.delete("page");
+  next.delete("limit");
+  next.delete("pageSize");
+  if (type === "costs") next.set("pageSize", "5000");
   const archiveScope = nonEmptyText(filters.archiveScope || filters.businessScope || query.get("archiveScope") || query.get("businessScope") || "current");
   if (["current", "archive", "all"].includes(archiveScope)) {
     next.set("archiveScope", archiveScope);
