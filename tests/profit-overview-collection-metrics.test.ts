@@ -104,6 +104,7 @@ test("profit report carries original-currency outstanding through calculation, s
   });
 
   assert.equal(serializedSummary.outstandingCny, 350);
+  assert.equal(serializedSummary.profitMarginEligible, false);
   assert.deepEqual({
     receivableCny: report.receivableCny,
     receivedAmountCny: report.receivedAmountCny,
@@ -115,6 +116,31 @@ test("profit report carries original-currency outstanding through calculation, s
     outstandingCny: 350,
     exchangeDifferenceCny: -10,
   });
+});
+
+test("profit summary exposes shipment eligibility and suppresses unshipped margins", () => {
+  const unshipped = serializeProfitAnalysisSummary(summarizeOrder({
+    currency: "CNY",
+    finalReceivableAmount: 1000,
+    finalReceivableAmountCny: 1000,
+    estimatedReceivableAmount: 1000,
+    estimatedReceivableAmountCny: 1000,
+    costs: [{ amountCny: 800, costConfirmed: true }],
+  }));
+  const shipped = serializeProfitAnalysisSummary(summarizeOrder({
+    currency: "CNY",
+    finalReceivableAmount: 1000,
+    finalReceivableAmountCny: 1000,
+    estimatedReceivableAmount: 1000,
+    estimatedReceivableAmountCny: 1000,
+    actualShipmentDate: "2026-08-01",
+    costs: [{ amountCny: 800, costConfirmed: true }],
+  }));
+
+  assert.equal(unshipped.profitMarginEligible, false);
+  assert.equal(unshipped.expectedGrossMargin, null);
+  assert.equal(shipped.profitMarginEligible, true);
+  assert.equal(shipped.expectedGrossMargin, 0.2);
 });
 
 test("commission report reads the serialized summary commission rate", () => {

@@ -4,7 +4,8 @@ import type { OrderListRow } from "./orders-module";
 export type OverviewGroup = {
   label: string; count: number; receivable: number; paid: number; collectionBasisPaid: number;
   unpaid: number; expectedProfit: number; commissionMonth: number; commissionYear: number;
-  commissionPending: number; commissionSettled: number;
+  commissionPending: number; commissionSettled: number; marginEligibleCount: number;
+  marginEligibleReceivable: number; marginEligibleProfit: number;
 };
 export type OverviewPaymentEvent = {
   amountCny?: unknown;
@@ -67,12 +68,18 @@ export function overviewCollectionMetrics(summary: OverviewCollectionSummary) {
 
 export function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams | null = null) {
   const summary = order.summary || {};
+  const summaryRecord = summary as typeof summary & { profitMarginEligible?: boolean; actualShipmentAmount?: unknown };
   const collection = overviewCollectionMetrics(summary);
   const recordedCost = Number(summary.totalCostCny || 0);
   const confirmedCost = Number(summary.confirmedTotalCostCny ?? recordedCost);
   const cost = confirmedCost;
   const expectedGrossProfit = Number(summary.expectedGrossProfit ?? (collection.receivable - cost));
-  const expectedGrossMargin = summary.expectedGrossMargin == null
+  const fallbackProfitMarginEligible = Boolean(order.actualShipmentDate)
+    || summaryRecord.actualShipmentAmount != null;
+  const profitMarginEligible = typeof summaryRecord.profitMarginEligible === "boolean"
+    ? summaryRecord.profitMarginEligible
+    : fallbackProfitMarginEligible;
+  const expectedGrossMargin = !profitMarginEligible ? null : summary.expectedGrossMargin == null
     ? (collection.receivable > 0 ? expectedGrossProfit / collection.receivable : null)
     : Number(summary.expectedGrossMargin);
   const todayNo = overviewDayNumber(new Date());
@@ -93,7 +100,7 @@ export function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams
     status: order.status || "", ...collection, cost, recordedCost, confirmedCost,
     costPendingConfirmation: Math.max(recordedCost - confirmedCost, 0),
     costMissing: collection.receivable > 0 && recordedCost <= 0,
-    expectedGrossProfit, expectedGrossMargin,
+    expectedGrossProfit, expectedGrossMargin, profitMarginEligible,
     realizedGrossProfit: summary.realizedGrossProfit == null ? null : Number(summary.realizedGrossProfit),
     netCashFlowCny: Number(summary.netCashFlowCny || 0), remainingDays: dueNo == null || todayNo == null ? null : dueNo - todayNo,
     commissionMonth: createdMonth === month ? (commissionSettled ? settledCommission : estimatedCommission) : 0,
@@ -137,13 +144,19 @@ export function groupOverviewRows(rows: OverviewMetric[], labelFn: (row: Overvie
   return Object.values(rows.reduce((acc, row) => {
     const label = labelFn(row) || "未填写";
     acc[label] ||= { label, count: 0, receivable: 0, paid: 0, collectionBasisPaid: 0, unpaid: 0,
-      expectedProfit: 0, commissionMonth: 0, commissionYear: 0, commissionPending: 0, commissionSettled: 0 };
+      expectedProfit: 0, commissionMonth: 0, commissionYear: 0, commissionPending: 0, commissionSettled: 0,
+      marginEligibleCount: 0, marginEligibleReceivable: 0, marginEligibleProfit: 0 };
     const group = acc[label];
     group.count += 1; group.receivable += row.receivable; group.paid += row.paid;
     group.collectionBasisPaid += row.collectionBasisPaid; group.unpaid += row.unpaid;
     group.expectedProfit += row.expectedGrossProfit; group.commissionMonth += row.commissionMonth;
     group.commissionYear += row.commissionYear; group.commissionPending += row.commissionPending;
     group.commissionSettled += row.commissionSettled;
+    if (row.profitMarginEligible) {
+      group.marginEligibleCount += 1;
+      group.marginEligibleReceivable += row.receivable;
+      group.marginEligibleProfit += row.expectedGrossProfit;
+    }
     return acc;
   }, {} as Record<string, OverviewGroup>));
 }

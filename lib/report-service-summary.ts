@@ -3,7 +3,7 @@ import { dateOnly, moneyNumber, text, type ReportRow, type ReportType } from "./
 export type ReportSummaryMetric = {
   key: string;
   label: string;
-  value: number;
+  value: number | null;
   format: "money" | "number" | "percent" | "days";
   tone: "neutral" | "positive" | "warning" | "danger";
   note?: string;
@@ -38,6 +38,10 @@ function moneyMetric(key: string, label: string, value: number, tone: ReportSumm
 
 function percentMetric(key: string, label: string, numerator: number, denominator: number, tone: ReportSummaryMetric["tone"] = "neutral", note = ""): ReportSummaryMetric {
   return { key, label, value: denominator > 0 ? numerator / denominator : 0, format: "percent", tone, note };
+}
+
+function nullablePercentMetric(key: string, label: string, numerator: number, denominator: number, tone: ReportSummaryMetric["tone"] = "neutral", note = ""): ReportSummaryMetric {
+  return { key, label, value: denominator > 0 ? numerator / denominator : null, format: "percent", tone, note };
 }
 
 function daysMetric(key: string, label: string, value: number, tone: ReportSummaryMetric["tone"] = "neutral", note = ""): ReportSummaryMetric {
@@ -80,6 +84,24 @@ function isOverdue(row: ReportRow) {
 function completenessRatio(value: unknown) {
   const [completed, total] = text(value).split("/").map(Number);
   return Number.isFinite(completed) && Number.isFinite(total) && total > 0 ? completed / total : null;
+}
+
+function profitMarginBasis(rows: ReportRow[]) {
+  const eligible = rows.filter((row) => row.profitMarginEligible === true);
+  return {
+    eligible,
+    orderCount: eligible.reduce((total, row) => total + (
+      row.profitMarginEligibleOrderCount == null ? 1 : numberField(row, "profitMarginEligibleOrderCount")
+    ), 0),
+    receivable: eligible.reduce((total, row) => total + numberField(
+      row,
+      row.profitMarginReceivableCny == null ? "receivableCny" : "profitMarginReceivableCny",
+    ), 0),
+    profit: eligible.reduce((total, row) => total + numberField(
+      row,
+      row.profitMarginProfitCny == null ? "expectedGrossProfit" : "profitMarginProfitCny",
+    ), 0),
+  };
 }
 
 function receivableSummary(rows: ReportRow[]): ReportSummary {
@@ -140,8 +162,9 @@ function profitSummary(rows: ReportRow[]): ReportSummary {
   const receivable = sum(rows, "receivableCny");
   const cost = sum(rows, "totalCostCny");
   const profit = sum(rows, "expectedGrossProfit");
-  const negative = rows.filter((row) => numberField(row, "expectedGrossProfit") < 0);
-  const lowMargin = rows.filter((row) => {
+  const marginBasis = profitMarginBasis(rows);
+  const negative = marginBasis.eligible.filter((row) => numberField(row, "expectedGrossProfit") < 0);
+  const lowMargin = marginBasis.eligible.filter((row) => {
     const base = numberField(row, "receivableCny");
     return base > 0 && numberField(row, "expectedGrossProfit") / base < 0.08;
   });
@@ -150,7 +173,7 @@ function profitSummary(rows: ReportRow[]): ReportSummary {
       moneyMetric("receivable", "最终应收", receivable),
       moneyMetric("cost", "总成本", cost),
       moneyMetric("profit", "预计毛利", profit, profit >= 0 ? "positive" : "danger"),
-      percentMetric("margin", "预计毛利率", profit, receivable, profit >= 0 ? "positive" : "danger"),
+      nullablePercentMetric("margin", "预计毛利率", marginBasis.profit, marginBasis.receivable, marginBasis.orderCount ? (marginBasis.profit >= 0 ? "positive" : "danger") : "neutral", `仅统计 ${marginBasis.orderCount} 个已发货订单`),
       countMetric("negative", "亏损订单", negative.length, negative.length ? "danger" : "positive"),
       countMetric("lowMargin", "低毛利订单", lowMargin.length, lowMargin.length ? "warning" : "positive", "毛利率低于 8%"),
     ],
@@ -217,6 +240,7 @@ function contributionSummary(type: "customer-analysis" | "salesperson-performanc
   const received = sum(rows, "receivedAmountCny");
   const profit = sum(rows, "expectedGrossProfit");
   const overdue = sum(rows, "overdueAmountCny");
+  const marginBasis = profitMarginBasis(rows);
   const labelKey = type === "customer-analysis" ? "customerName" : "salespersonName";
   return {
     metrics: [
@@ -227,7 +251,7 @@ function contributionSummary(type: "customer-analysis" | "salesperson-performanc
       moneyMetric("profit", "预计毛利", profit, profit >= 0 ? "positive" : "danger"),
       moneyMetric("overdue", "逾期金额", overdue, overdue > 0 ? "danger" : "positive"),
       percentMetric("collectionRate", "回款率", received, receivable, received < receivable ? "warning" : "positive"),
-      percentMetric("grossMargin", "预计毛利率", profit, receivable, profit >= 0 ? "positive" : "danger"),
+      nullablePercentMetric("grossMargin", "预计毛利率", marginBasis.profit, marginBasis.receivable, marginBasis.orderCount ? (marginBasis.profit >= 0 ? "positive" : "danger") : "neutral", `仅统计 ${marginBasis.orderCount} 个已发货订单`),
     ],
     breakdowns: [breakdown(
       type === "customer-analysis" ? "客户毛利贡献 Top10" : "业务员毛利贡献 Top10",

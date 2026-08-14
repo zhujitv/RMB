@@ -11,13 +11,14 @@ function rounded(value: unknown) {
   return Math.round(Number(value) * 100) / 100;
 }
 
-function pv252LikeOrder(payments: Array<Record<string, unknown>> = []) {
+function pv252LikeOrder(payments: Array<Record<string, unknown>> = [], shipped = true) {
   return {
     currency: "CNY",
     receivableAmount: 157191.79,
     receivableAmountCny: 157191.79,
     finalReceivableAmount: 157191.79,
     finalReceivableAmountCny: 157191.79,
+    ...(shipped ? { actualShipmentDate: new Date("2026-08-01T00:00:00.000Z") } : {}),
     exchangeRate: 1,
     salespersonCommissionRate: 0,
     payments,
@@ -37,6 +38,33 @@ function pv252LikeOrder(payments: Array<Record<string, unknown>> = []) {
     ],
   };
 }
+
+test("unshipped orders keep forecast profit but do not calculate or realize margin", () => {
+  const summary = summarizeOrder(pv252LikeOrder([
+    {
+      status: "已到账",
+      currency: "CNY",
+      amount: 157191.79,
+      amountCny: 157191.79,
+    },
+  ], false));
+
+  assert.equal(rounded(summary.expectedGrossProfit), 30604.84);
+  assert.equal(summary.profitMarginEligible, false);
+  assert.equal(summary.expectedGrossMargin, null);
+  assert.equal(summary.realizedGrossProfit, null);
+  assert.equal(summary.realizedGrossMargin, null);
+});
+
+test("legacy actual shipment amount makes an order eligible without a shipment date", () => {
+  const summary = summarizeOrder({
+    ...pv252LikeOrder([], false),
+    actualShipmentAmount: 157191.79,
+  });
+
+  assert.equal(summary.profitMarginEligible, true);
+  assert.equal((Number(summary.expectedGrossMargin) * 100).toFixed(2), "19.47");
+});
 
 test("realized gross profit is hidden until customer revenue is fully collected", () => {
   const summary = summarizeOrder(pv252LikeOrder());

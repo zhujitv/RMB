@@ -10,6 +10,7 @@ function metricTone(metric: ReportSummaryMetric) {
 }
 
 function metricValue(metric: ReportSummaryMetric) {
+  if (metric.value == null) return "--";
   if (metric.format === "money") return formatCny(metric.value);
   if (metric.format === "percent") return formatPercent(metric.value);
   if (metric.format === "days") return `${Number(metric.value || 0).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} 天`;

@@ -127,6 +127,7 @@ export function serializeProfitAnalysisSummary(
     taxLogisticsCostsComplete: summary.taxLogisticsCostsComplete,
     taxLogisticsMissingLabels: summary.taxLogisticsMissingLabels,
     expectedGrossProfit: summary.expectedGrossProfit,
+    profitMarginEligible: summary.profitMarginEligible,
     expectedGrossMargin: summary.expectedGrossMargin,
     realizedGrossProfit: summary.realizedGrossProfit,
     realizedGrossMargin: summary.realizedGrossMargin,

@@ -91,9 +91,11 @@ export async function listProfitTodos(context: WorkbenchTodoContext) {
     const realizedProfit = Number(summary.realizedGrossProfit || 0);
     const expectedMargin = summary.expectedGrossMargin == null ? null : Number(summary.expectedGrossMargin);
     const realizedMargin = summary.realizedGrossMargin == null ? null : Number(summary.realizedGrossMargin);
-    const hasProfitException = expectedProfit < NEGATIVE_PROFIT_THRESHOLD || realizedProfit < NEGATIVE_PROFIT_THRESHOLD
+    const hasProfitException = summary.profitMarginEligible && (
+      expectedProfit < NEGATIVE_PROFIT_THRESHOLD || realizedProfit < NEGATIVE_PROFIT_THRESHOLD
       || (expectedMargin != null && expectedMargin < NEGATIVE_PROFIT_THRESHOLD)
-      || (realizedMargin != null && realizedMargin < NEGATIVE_PROFIT_THRESHOLD);
+      || (realizedMargin != null && realizedMargin < NEGATIVE_PROFIT_THRESHOLD)
+    );
     if (hasProfitException && summary.allCostsConfirmed && summary.logisticsCostConfirmed && taxFinalized) {
       todos.push(todoForOrder({ type: "PROFIT_EXCEPTION_REVIEW", title: "利润异常订单待复核", module: "利润分析", order, context,
         dueAt: order.updatedAt, href: orderHref("/profit", order), owner: financeOwner, updatedAt: order.updatedAt }));

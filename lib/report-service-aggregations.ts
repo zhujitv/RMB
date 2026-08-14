@@ -17,6 +17,9 @@ type ProfitAggregate = {
   outstandingCny: number;
   totalCostCny: number;
   expectedGrossProfit: number;
+  profitMarginEligibleOrderCount: number;
+  profitMarginReceivableCny: number;
+  profitMarginProfitCny: number;
   realizedGrossProfit: number;
   netCashFlowCny: number;
   overdueOrders: number;
@@ -35,6 +38,9 @@ function createProfitAggregate(dimension: "customer" | "salesperson", key: strin
     outstandingCny: 0,
     totalCostCny: 0,
     expectedGrossProfit: 0,
+    profitMarginEligibleOrderCount: 0,
+    profitMarginReceivableCny: 0,
+    profitMarginProfitCny: 0,
     realizedGrossProfit: 0,
     netCashFlowCny: 0,
     overdueOrders: 0,
@@ -62,6 +68,11 @@ export function aggregateProfitReportRows(rows: ReportRow[], dimension: "custome
     group.outstandingCny += outstanding;
     group.totalCostCny += moneyNumber(row.totalCostCny);
     group.expectedGrossProfit += moneyNumber(row.expectedGrossProfit);
+    if (row.profitMarginEligible === true) {
+      group.profitMarginEligibleOrderCount += 1;
+      group.profitMarginReceivableCny += moneyNumber(row.receivableCny);
+      group.profitMarginProfitCny += moneyNumber(row.expectedGrossProfit);
+    }
     group.realizedGrossProfit += moneyNumber(row.realizedGrossProfit);
     group.netCashFlowCny += moneyNumber(row.netCashFlowCny);
     if (dueDate && dueDate < today && outstanding > 0) {
@@ -79,6 +90,9 @@ export function aggregateProfitReportRows(rows: ReportRow[], dimension: "custome
     customerCount: group.customers.size,
     averageOrderValueCny: group.orderCount > 0 ? moneyNumber(group.receivableCny / group.orderCount) : 0,
     collectionRate: group.receivableCny > 0 ? `${((group.receivedAmountCny / group.receivableCny) * 100).toFixed(2)}%` : "--",
-    expectedGrossMargin: group.receivableCny > 0 ? `${((group.expectedGrossProfit / group.receivableCny) * 100).toFixed(2)}%` : "--",
+    profitMarginEligible: group.profitMarginEligibleOrderCount > 0,
+    expectedGrossMargin: group.profitMarginReceivableCny > 0
+      ? `${((group.profitMarginProfitCny / group.profitMarginReceivableCny) * 100).toFixed(2)}%`
+      : "--",
   })).sort((a, b) => b.receivableCny - a.receivableCny);
 }

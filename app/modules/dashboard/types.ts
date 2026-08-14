@@ -7,6 +7,7 @@ export type OverviewTotals = {
   dueSoonOrders?: number;
   expectedProfit?: number;
   expectedGrossMargin?: number | null;
+  profitMarginEligibleOrders?: number;
   realizedProfit?: number;
   netCashFlow?: number;
   realizedGrossMargin?: number | null;
@@ -69,6 +70,7 @@ export type RiskOrder = {
   cost?: number;
   expectedGrossProfit?: number;
   expectedGrossMargin?: number | null;
+  profitMarginEligible?: boolean;
   remainingDays?: number | null;
 };
 
@@ -81,6 +83,9 @@ export type SalespersonRank = {
   collectionRate?: number | null;
   expectedProfit?: number;
   expectedGrossMargin?: number | null;
+  marginEligibleCount?: number;
+  marginEligibleReceivable?: number;
+  marginEligibleProfit?: number;
   commissionMonth?: number;
   commissionYear?: number;
   commissionPending?: number;

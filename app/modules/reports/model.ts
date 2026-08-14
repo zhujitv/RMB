@@ -47,7 +47,7 @@ export type ReportResponse = {
 export type ReportSummaryMetric = {
   key: string;
   label: string;
-  value: number;
+  value: number | null;
   format: "money" | "number" | "percent" | "days";
   tone: "neutral" | "positive" | "warning" | "danger";
   note?: string;
@@ -138,7 +138,10 @@ export const TAX_REFUND_STATUS_LABELS: Record<string, string> = {
   REFUND_RECEIVED: "已提交退税",
 };
 
-export const HIDDEN_DETAIL_KEYS = new Set(["id", "orderId", "customerId", "supplierId", "userId", "paymentId", "costId", "documentId"]);
+export const HIDDEN_DETAIL_KEYS = new Set([
+  "id", "orderId", "customerId", "supplierId", "userId", "paymentId", "costId", "documentId",
+  "profitMarginEligible", "profitMarginEligibleOrderCount", "profitMarginReceivableCny", "profitMarginProfitCny",
+]);
 export const EXPORT_ACTIONS: { scope: ExportScope; format: ExportFormat; label: string }[] = [
   { scope: "currentPage", format: "xlsx", label: "当前页 Excel" },
   { scope: "currentPage", format: "csv", label: "当前页 CSV" },
