@@ -96,6 +96,7 @@ test("workbench reminders exclude logistics while retaining tax refund work", ()
     "BILL_OF_LADING_MISSING",
     "CONTAINER_NO_MISSING",
     "TAX_CUSTOMS_DECLARATION_MISSING",
+    "TAX_TRUCKING_INVOICE_MISSING",
     "LOGISTICS_FEE_ENTRY",
     "LOGISTICS_FEE_REVIEW",
     "LOGISTICS_INVOICE_UPLOAD",
@@ -109,7 +110,6 @@ test("workbench reminders exclude logistics while retaining tax refund work", ()
   ]) {
     assert.equal(workbenchTodoPolicy.isLogisticsWorkbenchTodoType(logisticsType), true);
   }
-  assert.equal(workbenchTodoPolicy.isLogisticsWorkbenchTodoType("TAX_TRUCKING_INVOICE_MISSING"), false);
   assert.equal(workbenchTodoPolicy.isLogisticsWorkbenchTodoType("TAX_REFUND_READY_NOT_ARCHIVED"), false);
   assert.match(workbenchSource, /generatedTodos\.filter\(canActivateTodo\)\.filter\(\(todo\) => !isLogisticsWorkbenchTodoType\(todo\.type\)\)/);
   assert.match(workbenchSource, /completedTodos\.filter\(\(todo\) => !isLogisticsWorkbenchTodoType\(todo\.type\)\)/);
