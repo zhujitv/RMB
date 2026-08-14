@@ -1,6 +1,7 @@
 import type { Pagination, SettingsFilters, SettingsTabKey } from "./types";
 
 export function kebabTab(tab: SettingsTabKey) {
+  if (tab === "customerProducts") return "customers";
   if (tab === "businessEntities") return "business-entities";
   if (tab === "exchangeRates") return "exchange-rates";
   if (tab === "commissionFormula") return "commission-formula";
@@ -13,7 +14,7 @@ export function emptyPagination(pageSize: number): Pagination {
 }
 
 export function filtersForTab(filters: SettingsFilters, tab: SettingsTabKey) {
-  if (tab === "customers") return filters.customers;
+  if (tab === "customers" || tab === "customerProducts") return filters.customers;
   if (tab === "suppliers") return filters.suppliers;
   if (tab === "users") return filters.users;
   return filters.auditLogs;
@@ -38,7 +39,7 @@ export function appendFilterParams(params: URLSearchParams, tab: SettingsTabKey,
 }
 
 export function emptyFiltersForTab(tab: SettingsTabKey) {
-  if (tab === "customers") return { keyword: "" };
+  if (tab === "customers" || tab === "customerProducts") return { keyword: "" };
   if (tab === "suppliers") return { keyword: "", type: "", status: "" };
   if (tab === "users") return { keyword: "", role: "", status: "" };
   return { keyword: "", action: "" };

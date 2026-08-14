@@ -4,6 +4,7 @@ export const SETTINGS_HOME_CARDS: Array<{ tab: SettingsTabKey; title: string; de
   { tab: "companyProfile", title: "公司资料", description: "公司信息、Logo、联系信息", icon: "企" },
   { tab: "businessEntities", title: "业务主体", description: "业务主体管理", icon: "主" },
   { tab: "customers", title: "客户资料", description: "客户管理", icon: "客" },
+  { tab: "customerProducts", title: "产品属性维护", description: "按客户维护产品属性、单位和价格", icon: "品" },
   { tab: "suppliers", title: "供应商资料", description: "供应商管理", icon: "供" },
   { tab: "users", title: "用户与权限", description: "角色权限", icon: "权" },
   { tab: "ocrIntegration", title: "OCR识别", description: "OCR 服务配置", icon: "OCR" },
@@ -19,6 +20,7 @@ export const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTabKey, string> = {
   companyProfile: "维护平台展示所需的公司基础信息。",
   businessEntities: "管理业务主体简称、全称和默认主体。",
   customers: "维护客户资料、自动通知和负责业务员。",
+  customerProducts: "选择客户后维护报价和销售共用的产品属性、单位及最近价格。",
   suppliers: "维护产品供应商、物流供应商和业务权限。",
   users: "维护用户账号、角色权限和供应商绑定。",
   ocrIntegration: "维护 OCR 服务配置、密钥和启用范围。",
@@ -29,4 +31,4 @@ export const SETTINGS_PAGE_DESCRIPTIONS: Record<SettingsTabKey, string> = {
   auditLogs: "查看关键操作日志。",
 };
 
-export const TABLE_SETTING_TABS = new Set<SettingsTabKey>(["customers", "suppliers", "users", "auditLogs"]);
+export const TABLE_SETTING_TABS = new Set<SettingsTabKey>(["customers", "customerProducts", "suppliers", "users", "auditLogs"]);

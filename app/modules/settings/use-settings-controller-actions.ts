@@ -255,7 +255,7 @@ export function useSettingsControllerActions(context: SettingsControllerActionsC
 
   function updateFilter(tab: SettingsTabKey, key: string, value: string) {
     setFilters((current) => {
-      if (tab === "customers") return { ...current, customers: { ...current.customers, [key]: value } };
+      if (tab === "customers" || tab === "customerProducts") return { ...current, customers: { ...current.customers, [key]: value } };
       if (tab === "suppliers") return { ...current, suppliers: { ...current.suppliers, [key]: value } };
       if (tab === "users") return { ...current, users: { ...current.users, [key]: value } };
       return { ...current, auditLogs: { ...current.auditLogs, [key]: value } };

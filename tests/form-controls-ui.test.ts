@@ -234,7 +234,7 @@ test("user list detail action opens the inline user editor directly", () => {
   assert.match(startEditUserSnippet, /setUserForm\(userFormFromRow\(user\)\)/);
   assert.match(settingsRowsSnippet, /if \(tab === "users"\) \{[\s\S]*onEditUser\(row as UserRow\);[\s\S]*return;/);
   assert.match(settingsRowsSnippet, /<tr className=\{styles\.clickableRow\} onClick=\{handlePrimaryAction\}>/);
-  assert.match(settingsRowsSnippet, /\{tab === "users" \|\| tab === "suppliers" \? "编辑" : "详情"\}/);
+  assert.match(settingsRowsSnippet, /tab === "customerProducts" \? "维护产品属性" : tab === "users" \|\| tab === "suppliers" \? "编辑" : "详情"/);
   assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" && tab !== "suppliers" \? \(/);
   assert.doesNotMatch(detailDrawerCallSnippet, /onEditUser=\{onEditUser\}/);
   assert.doesNotMatch(detailDrawerCallSnippet, /onDeleteUser=\{onDeleteUser\}/);
@@ -265,7 +265,7 @@ test("supplier action opens supplier edit modal with editable supplier name", ()
   assert.match(settingsTableRenderSnippet, /if \(activeTab === "suppliers"\) \{[\s\S]*startViewSupplier\(row as SupplierRow\);[\s\S]*return;/);
   assert.match(settingsTableSnippet, /\{detailRow && tab !== "users" && tab !== "suppliers" \? \(/);
   assert.match(settingsRowsSnippet, /onViewDetail\(\)/);
-  assert.match(settingsRowsSnippet, /\{tab === "users" \|\| tab === "suppliers" \? "编辑" : "详情"\}/);
+  assert.match(settingsRowsSnippet, /tab === "customerProducts" \? "维护产品属性" : tab === "users" \|\| tab === "suppliers" \? "编辑" : "详情"/);
   assert.match(supplierPanelRenderSnippet, /<DismissibleLayer/);
   assert.match(supplierPanelRenderSnippet, /ariaLabel=\{supplierModalTitle\}/);
   assert.match(supplierPanelRenderSnippet, /surfaceClassName=\{styles\.supplierSettingsModalCard\}/);

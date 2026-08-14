@@ -191,7 +191,7 @@ async function loadTab(tab = activeTab, page = activePagination.page || 1, nextF
         logs?: AuditLogRow[];
         pagination?: Pagination;
       }>(`/api/settings/${kebabTab(tab)}?${params}`);
-      if (tab === "customers") {
+      if (tab === "customers" || tab === "customerProducts") {
         setCustomers(result.customers || []);
         setSalespeople((result as { salespeople?: SalespersonOption[] }).salespeople || []);
       }

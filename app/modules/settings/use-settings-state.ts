@@ -63,6 +63,7 @@ export function useSettingsState() {
     companyProfile: emptyPagination(PAGE_SIZE),
     businessEntities: emptyPagination(PAGE_SIZE),
     customers: emptyPagination(PAGE_SIZE),
+    customerProducts: emptyPagination(PAGE_SIZE),
     suppliers: emptyPagination(PAGE_SIZE),
     users: emptyPagination(PAGE_SIZE),
     ocrIntegration: emptyPagination(PAGE_SIZE),
@@ -109,7 +110,7 @@ export function useSettingsState() {
   const activePagination = pagination[activeTab] || emptyPagination(PAGE_SIZE);
   const listColumns = useMemo(() => columnsFor(activeTab), [activeTab]);
   const currentRows = useMemo(() => rowsFor(activeTab, { customers, suppliers, users, logs }), [activeTab, customers, suppliers, users, logs]);
-  const activeFilter = activeTab === "customers"
+  const activeFilter = activeTab === "customers" || activeTab === "customerProducts"
     ? filters.customers
     : activeTab === "suppliers"
       ? filters.suppliers
