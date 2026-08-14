@@ -5,6 +5,7 @@ import {
   includeOrderRelations,
   nonEmpty,
   optional,
+  orderStatusAfterShipment,
   permissionError,
   refreshTaxRefundCompletenessForOrder,
   runNonCriticalTask,
@@ -142,6 +143,7 @@ export async function updateTaxRefundStatus(
         updatedAt: mutationVersion,
         ...taxRefundCompletenessData(completeness, mutationVersion),
         ...(status === "SUBMITTED" ? {
+          status: orderStatusAfterShipment(before.status),
           taxArchived: true,
           taxRefundArchivedById: actorId,
           taxRefundArchivedAt: mutationVersion,
@@ -167,6 +169,7 @@ export async function updateTaxRefundStatus(
       after.id,
       {
         orderNo: before.orderNo,
+        status: before.status,
         taxRefundStatus: before.taxRefundStatus,
         taxArchived: beforeArchived,
         taxRefundCompleteness: before.taxRefundCompleteness,
@@ -174,6 +177,7 @@ export async function updateTaxRefundStatus(
       },
       {
         orderNo: after.orderNo,
+        status: after.status,
         taxRefundStatus: after.taxRefundStatus,
         taxArchived: Boolean(after.taxArchived),
         taxRefundCompleteness: completeness,

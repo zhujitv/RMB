@@ -1,7 +1,7 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { ORDER_COST_STATUS_VOID, codedError, deriveOrderCollectionBalance, deriveOrderCollectionStatus,
-  logServerError, nonEmpty, paymentAmountForOrderCurrency, permissionError, requireText } from "./shared";
+  logServerError, nonEmpty, paymentAmountForOrderCurrency, permissionError, profitMarginEligible, requireText } from "./shared";
 import { assertOrderCanReceivePayment, canAccessOrder } from "./order-access";
 import type { ActorLike, PaymentInput } from "./payments-types";
 
@@ -22,7 +22,9 @@ export function actorRole(actor: ActorLike) { return String(actor?.role || ""); 
 
 export async function syncOrderStatusInPaymentTransaction(tx: Prisma.TransactionClient, orderId: string) {
   const order = await tx.receivableOrder.findUnique({ where: { id: orderId }, select: {
-    id: true, status: true, actualShipmentAmount: true, currency: true, exchangeRate: true, finalReceivableAmount: true,
+    id: true, status: true, actualShipmentAmount: true, actualShipmentDate: true,
+    taxArchived: true, taxRefundStatus: true, taxRefundArchivedAt: true, taxSubmittedAt: true,
+    currency: true, exchangeRate: true, finalReceivableAmount: true,
   } });
   if (!order || ["草稿", "已关闭", "已取消"].includes(order.status)) return { order, skippedReason: null } as const;
   const groups = await tx.payment.groupBy({ by: ["currency"], where: { orderId, status: "已到账", deletedAt: null },
@@ -37,6 +39,7 @@ export async function syncOrderStatusInPaymentTransaction(tx: Prisma.Transaction
   const collection = deriveOrderCollectionBalance({ receivableAmount: order.finalReceivableAmount, receivedAmount,
     receivedAmountCny: groups.reduce((sum, group) => sum + Number(group._sum.amountCny || 0), 0), orderExchangeRate: order.exchangeRate });
   const status = deriveOrderCollectionStatus({ currentStatus: order.status, actualShipmentAmount: order.actualShipmentAmount,
+    shipmentCompleted: profitMarginEligible(order),
     receivedAmount, outstandingAmount: collection.outstandingAmount, overpaidAmount: collection.overpaidAmount });
   if (status === order.status) return { order, skippedReason: null } as const;
   const updated = await tx.receivableOrder.update({ where: { id: orderId }, data: { status }, select: { id: true, status: true } });

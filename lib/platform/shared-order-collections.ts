@@ -43,14 +43,24 @@ export function deriveOrderCollectionBalance({ receivableAmount, receivedAmount,
   };
 }
 
-export function deriveOrderCollectionStatus({ currentStatus, actualShipmentAmount, receivedAmount, outstandingAmount, overpaidAmount }: {
-  currentStatus?: string | null; actualShipmentAmount?: unknown; receivedAmount: unknown; outstandingAmount: unknown; overpaidAmount: unknown;
+const SHIPPED_OR_LATER_ORDER_STATUSES = ["已发货", "部分收款", "已收齐", "多收款", "已关闭", "已取消"];
+
+export function orderStatusAfterShipment(currentStatus: unknown) {
+  const status = String(currentStatus || "").trim();
+  return SHIPPED_OR_LATER_ORDER_STATUSES.includes(status) ? status : "已发货";
+}
+
+export function deriveOrderCollectionStatus({ currentStatus, actualShipmentAmount, shipmentCompleted, receivedAmount, outstandingAmount, overpaidAmount }: {
+  currentStatus?: string | null; actualShipmentAmount?: unknown; shipmentCompleted?: boolean;
+  receivedAmount: unknown; outstandingAmount: unknown; overpaidAmount: unknown;
 }) {
   const status = String(currentStatus || "");
   if (["草稿", "已关闭", "已取消"].includes(status)) return status;
   if (roundMoney(overpaidAmount) > 0) return "多收款";
   if (roundMoney(outstandingAmount) <= 0) return "已收齐";
   if (roundMoney(receivedAmount) > 0) return "部分收款";
-  if (["部分收款", "已收齐", "多收款"].includes(status)) return actualShipmentAmount == null ? "已确认" : "已发货";
+  if (["部分收款", "已收齐", "多收款"].includes(status)) {
+    return shipmentCompleted === true || actualShipmentAmount != null ? "已发货" : "已确认";
+  }
   return status;
 }

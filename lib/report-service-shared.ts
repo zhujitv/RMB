@@ -80,6 +80,10 @@ export type BusinessReportRow = DomesticLogisticsReportOrder & {
   customer?: ReportRow;
   summary?: ReportRow;
   documentCompleteness?: CompletenessReport;
+  taxArchived?: boolean | null;
+  taxRefundStatus?: string | null;
+  taxRefundArchivedAt?: Date | string | null;
+  taxSubmittedAt?: Date | string | null;
 };
 
 export function reportTypeFrom(value: unknown): ReportType {

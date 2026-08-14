@@ -74,7 +74,7 @@ export function DashboardModule({ onOpenModule }: { onOpenModule?: (target: Dash
     { label: "实际成本付款", value: formatCny(totals.costPayments), note: "按成本实际支付日期统计", tone: styles.metricOrange, target: "costs" as const },
     { label: "现金净流入", value: formatCny(totals.netCashFlow), note: "实际回款 - 实际成本付款", tone: Number(totals.netCashFlow || 0) >= 0 ? styles.metricGreen : styles.metricRed, target: "payments" as const },
     { label: "新单预计毛利", value: formatCny(totals.expectedProfit), note: "最终应收 - 已确认成本", tone: Number(totals.expectedProfit || 0) >= 0 ? styles.metricGreen : styles.metricRed, target: "profit" as const },
-    { label: "新单预计毛利率", value: formatPercent(totals.expectedGrossMargin), note: `仅统计 ${Number(totals.profitMarginEligibleOrders || 0)} 单已登记实际发货订单`, tone: styles.metricBlue, target: "profit" as const },
+    { label: "新单预计毛利率", value: formatPercent(totals.expectedGrossMargin), note: `统计 ${Number(totals.profitMarginEligibleOrders || 0)} 单已发货或已提交退税归档订单`, tone: styles.metricBlue, target: "profit" as const },
     { label: "本期汇兑差额", value: formatCny(exchangeDifference), note: "正数为收益，负数为损失", tone: exchangeDifference >= 0 ? styles.metricGreen : styles.metricRed, target: "orders" as const },
   ];
   const riskMetrics = [
@@ -83,8 +83,8 @@ export function DashboardModule({ onOpenModule }: { onOpenModule?: (target: Dash
     { label: "未来 7 天到期", value: formatCny(totals.dueSoonAmount), note: `${Number(totals.dueSoonOrders || 0)} 个临期订单`, tone: styles.metricOrange, target: "reports" as const },
     { label: "待确认成本", value: formatCny(totals.pendingCostAmount), note: `${Number(totals.pendingCostOrders || 0)} 个订单存在未确认成本`, tone: Number(totals.pendingCostOrders || 0) > 0 ? styles.metricOrange : styles.metricGreen, target: "costs" as const },
     { label: "缺少成本订单", value: `${Number(totals.missingCostOrders || 0)} 单`, note: "已有应收但未录入有效成本", tone: Number(totals.missingCostOrders || 0) > 0 ? styles.metricRed : styles.metricGreen, target: "costs" as const },
-    { label: "亏损订单", value: `${Number(totals.negativeMarginOrders || 0)} 单`, note: "仅统计已登记实际发货且预计毛利小于 0 的订单", tone: Number(totals.negativeMarginOrders || 0) > 0 ? styles.metricRed : styles.metricGreen, target: "profit" as const },
-    { label: "低毛利订单", value: `${Number(totals.lowMarginOrders || 0)} 单`, note: "仅统计已登记实际发货且毛利率低于 8% 的订单", tone: Number(totals.lowMarginOrders || 0) > 0 ? styles.metricOrange : styles.metricGreen, target: "profit" as const },
+    { label: "亏损订单", value: `${Number(totals.negativeMarginOrders || 0)} 单`, note: "统计已发货或已提交退税归档且预计毛利小于 0 的订单", tone: Number(totals.negativeMarginOrders || 0) > 0 ? styles.metricRed : styles.metricGreen, target: "profit" as const },
+    { label: "低毛利订单", value: `${Number(totals.lowMarginOrders || 0)} 单`, note: "统计已发货或已提交退税归档且毛利率低于 8% 的订单", tone: Number(totals.lowMarginOrders || 0) > 0 ? styles.metricOrange : styles.metricGreen, target: "profit" as const },
     { label: "本期业务员提成", value: formatCny(totals.commissionAmount), note: Number(totals.commissionSnapshotMissingOrders || 0) > 0 ? `${Number(totals.commissionSnapshotMissingOrders)} 单缺少历史快照` : "按当前提成口径统计", tone: styles.metricBlue, target: "profit" as const },
   ];
 

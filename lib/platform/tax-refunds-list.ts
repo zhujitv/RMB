@@ -17,6 +17,7 @@ import {
 } from "./shared";
 import { orderAccessWhere } from "./order-access";
 import { businessEntityFieldsFromOrder, businessEntityWhereFromQuery } from "./business-entities";
+import { isBusinessArchived } from "./business-archive";
 import {
   type ActorLike,
   type QueryLike,
@@ -61,7 +62,12 @@ export function serializeTaxRefundListOrderLight(order: TaxRefundLightListOrder)
     refundStatus,
     taxRefundStatus: refundStatus,
     taxRefundStatusLabel: (TAX_REFUND_STATUS_LABELS as Record<string, string>)[refundStatus] || refundStatus,
-    taxArchived: Boolean(order.taxArchived || refundStatus === "SUBMITTED" || order.taxRefundArchivedAt),
+    taxArchived: isBusinessArchived({
+      taxArchived: order.taxArchived,
+      taxRefundStatus: refundStatus,
+      taxRefundArchivedAt: order.taxRefundArchivedAt,
+      taxSubmittedAt: order.taxSubmittedAt,
+    }),
     taxRefundArchivedAt: order.taxRefundArchivedAt || null,
     taxRefundArchiveRemark: order.taxRefundArchiveRemark || "",
     taxSubmittedAt: order.taxSubmittedAt || order.taxRefundArchivedAt || null,

@@ -15,6 +15,8 @@ export type OrderLike = {
   estimatedReceivableAmount?: NumericLike | null; estimatedReceivableAmountCny?: NumericLike | null;
   actualShipmentAmount?: NumericLike | null; actualShipmentAmountCny?: NumericLike | null;
   actualShipmentDate?: Date | string | null;
+  taxArchived?: boolean | null; taxRefundStatus?: string | null;
+  taxRefundArchivedAt?: Date | string | null; taxSubmittedAt?: Date | string | null;
   finalReceivableAmount?: NumericLike | null; finalReceivableAmountCny?: NumericLike | null;
   exchangeRate?: NumericLike | null; depositRatio?: NumericLike | null; dueDate?: Date | null;
   reminderDays?: NumericLike | null; payments?: PaymentLike[] | null; costs?: CostLike[] | null;

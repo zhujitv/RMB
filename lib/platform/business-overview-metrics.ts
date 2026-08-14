@@ -1,5 +1,6 @@
 import { nonEmpty } from "./shared";
 import type { OrderListRow } from "./orders-module";
+import { isBusinessArchived } from "./business-archive";
 
 export type OverviewGroup = {
   label: string; count: number; receivable: number; paid: number; collectionBasisPaid: number;
@@ -75,7 +76,8 @@ export function overviewOrderMetrics(order: OrderListRow, query: URLSearchParams
   const cost = confirmedCost;
   const expectedGrossProfit = Number(summary.expectedGrossProfit ?? (collection.receivable - cost));
   const fallbackProfitMarginEligible = Boolean(order.actualShipmentDate)
-    || summaryRecord.actualShipmentAmount != null;
+    || summaryRecord.actualShipmentAmount != null
+    || isBusinessArchived(order);
   const profitMarginEligible = typeof summaryRecord.profitMarginEligible === "boolean"
     ? summaryRecord.profitMarginEligible
     : fallbackProfitMarginEligible;

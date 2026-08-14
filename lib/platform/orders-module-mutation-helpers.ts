@@ -129,6 +129,7 @@ export async function syncOrderStatusInTransaction(tx: Prisma.TransactionClient,
   const summary = summarizeOrder(order);
   if (summary.hasArrivedPaymentCurrencyMismatch) return order;
   const status = deriveOrderCollectionStatus({ currentStatus: order.status, actualShipmentAmount: order.actualShipmentAmount,
+    shipmentCompleted: summary.profitMarginEligible,
     receivedAmount: summary.confirmedPaymentsAmount, outstandingAmount: summary.outstandingAmount, overpaidAmount: summary.overpaidAmount });
   return status === order.status ? order : tx.receivableOrder.update({ where: { id: order.id }, data: { status }, include: includeOrderRelations() });
 }

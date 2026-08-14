@@ -17,6 +17,7 @@ import {
 } from "./shared-order-serialization-types";
 import { serializeOrderListRow } from "./shared-order-list-serialization";
 import { shippingDocumentDraft } from "./shared-order-shipping-documents";
+import { isBusinessArchived } from "./business-archive";
 
 export function serializeOrder(
   orderInput: unknown,
@@ -48,7 +49,12 @@ export function serializeOrder(
     )).join("；"),
     taxRefundStatus,
     taxRefundStatusLabel: (TAX_REFUND_STATUS_LABELS as Record<string, string>)[taxRefundStatus] || taxRefundStatus,
-    taxArchived: Boolean(order.taxArchived || taxRefundStatus === "SUBMITTED" || order.taxRefundArchivedAt),
+    taxArchived: isBusinessArchived({
+      taxArchived: order.taxArchived,
+      taxRefundStatus,
+      taxRefundArchivedAt: order.taxRefundArchivedAt,
+      taxSubmittedAt: order.taxSubmittedAt,
+    }),
     taxRefundArchivedById: order.taxRefundArchivedById || "",
     taxRefundArchivedByName: order.taxRefundArchivedBy?.name || "",
     taxRefundArchivedAt: order.taxRefundArchivedAt || null,

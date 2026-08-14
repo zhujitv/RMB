@@ -54,7 +54,7 @@ test("overview suppresses margin when the shared summary marks an order ineligib
   assert.equal(unshipped.expectedGrossMargin, null);
 });
 
-test("overview fallback requires an actual shipment date or amount when the summary flag is absent", () => {
+test("overview fallback ignores collection status alone and accepts shipment evidence", () => {
   const statusOnly = metric({ id: "STATUS-ONLY", status: "已收齐", receivable: 100, profit: 20 });
   const actualAmount = overviewOrderMetrics({
     id: "ACTUAL-AMOUNT",
@@ -74,6 +74,27 @@ test("overview fallback requires an actual shipment date or amount when the summ
   assert.equal(statusOnly.expectedGrossMargin, null);
   assert.equal(actualAmount.profitMarginEligible, true);
   assert.equal(actualAmount.expectedGrossMargin, 0.2);
+});
+
+test("overview fallback accepts a submitted tax archive without shipment fields", () => {
+  const archived = overviewOrderMetrics({
+    id: "TAX-ARCHIVED",
+    orderNo: "TAX-ARCHIVED",
+    status: "已发货",
+    taxRefundStatus: "SUBMITTED",
+    taxArchived: true,
+    createdAt: "2026-08-10T00:00:00.000Z",
+    summary: {
+      receivableCny: 100,
+      outstandingCny: 100,
+      confirmedTotalCostCny: 80,
+      expectedGrossProfit: 20,
+      expectedGrossMargin: 0.2,
+    },
+  } as never);
+
+  assert.equal(archived.profitMarginEligible, true);
+  assert.equal(archived.expectedGrossMargin, 0.2);
 });
 
 test("period and salesperson margin bases exclude unshipped orders while amounts remain complete", () => {

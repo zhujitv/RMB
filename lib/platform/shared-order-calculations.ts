@@ -4,10 +4,12 @@ import { COMMISSION_LOGISTICS_COST_TYPES, NON_PARTICIPATING_COST_TYPES, ORDER_CO
 import { taxDocumentCompleteness } from "./shared-tax-completeness";
 import type { CostLike, NumericLike, OrderLike, OrderSummary, TaxLogisticsMissingItem } from "./shared-order-calculation-types";
 import { calcReminderStatus } from "./shared-order-reminders";
+import { isBusinessArchived } from "./business-archive";
 import {
   confirmedPayment,
   deriveOrderCollectionBalance,
   hasArrivedPaymentCurrencyMismatch,
+  orderStatusAfterShipment,
   paymentAmountForOrderCurrency,
   roundMoney,
 } from "./shared-order-collections";
@@ -18,6 +20,7 @@ export {
   deriveOrderCollectionBalance,
   deriveOrderCollectionStatus,
   hasArrivedPaymentCurrencyMismatch,
+  orderStatusAfterShipment,
   paymentAmountForOrderCurrency,
   roundMoney,
 } from "./shared-order-collections";
@@ -43,7 +46,9 @@ export function commissionRateFromOrder(order: OrderLike) {
 }
 
 export function profitMarginEligible(order: OrderLike) {
-  return Boolean(order.actualShipmentDate) || order.actualShipmentAmount != null;
+  return Boolean(order.actualShipmentDate)
+    || order.actualShipmentAmount != null
+    || isBusinessArchived(order);
 }
 
 export function commissionLogisticsCosts(order: OrderLike) {
