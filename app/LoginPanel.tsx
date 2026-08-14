@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../lib/password-policy";
@@ -154,11 +155,11 @@ export function LoginPanel({
         {footerText ? <span>{footerText}</span> : null}
         <nav aria-label="网站备案信息">
           <a className={styles.loginFilingLink} href={ICP_RECORD_URL} target="_blank" rel="noopener noreferrer">
-            <span className={styles.loginIcpMark} aria-hidden="true">ICP</span>
+            <Image className={styles.loginFilingIcon} src="/icp-beian.png" alt="" width={22} height={22} aria-hidden />
             <span>{ICP_RECORD_NUMBER}</span>
           </a>
           <a className={styles.loginFilingLink} href={PUBLIC_SECURITY_RECORD_URL} target="_blank" rel="noopener noreferrer">
-            <img className={styles.loginFilingIcon} src="/gongan.png" alt="" aria-hidden="true" />
+            <Image className={styles.loginFilingIcon} src="/gongan.png" alt="" width={22} height={22} aria-hidden />
             <span>{PUBLIC_SECURITY_RECORD_NUMBER}</span>
           </a>
         </nav>
