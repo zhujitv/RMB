@@ -103,13 +103,13 @@ export function ReportFilterPanel({
         {showDeclarationMonth ? (
           <label>申报月份<input value={filters.declarationMonth} type="month" onChange={(event) => onFilterChange("declarationMonth", event.target.value)} /></label>
         ) : null}
-        <label>业务范围
+        {reportType !== "overdue" ? <label>业务范围
           <select value={filters.archiveScope} onChange={(event) => onFilterChange("archiveScope", event.target.value)}>
             <option value="current">当前业务</option>
             <option value="archive">已归档业务</option>
             <option value="all">全部业务</option>
           </select>
-        </label>
+        </label> : null}
       </div>
 
       <div className={styles.detailActions}>

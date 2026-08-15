@@ -162,12 +162,15 @@ function buildSalespersonCollections(period: PeriodActivity) {
   return [...byName.values()].sort((a, b) => b.paid - a.paid || b.receivable - a.receivable).slice(0, 10);
 }
 
-export async function getReminders(query: URLSearchParams, actor: ActorLike) {
-  const orders = await listOrders(query, actor);
-  return orders.filter((order) => !order.taxArchived && order.taxRefundStatus !== "SUBMITTED")
-    .filter((order) => ["即将到期", "已逾期"].includes(order.summary.reminderStatus))
+export function receivableReminderRows(orders: OrderListRow[]) {
+  return orders.filter((order) => ["即将到期", "已逾期"].includes(order.summary.reminderStatus))
     .sort((a, b) => b.summary.overdueDays - a.summary.overdueDays
       || String(a.dueDate || "9999-12-31").localeCompare(String(b.dueDate || "9999-12-31")));
+}
+
+export async function getReminders(query: URLSearchParams, actor: ActorLike) {
+  const orders = await listOrders(query, actor);
+  return receivableReminderRows(orders);
 }
 
 export async function getOverview(query: URLSearchParams, actor: ActorLike) {

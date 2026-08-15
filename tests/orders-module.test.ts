@@ -16,6 +16,7 @@ import {
 const ordersModule = readOrdersModuleSource();
 const ordersService = readOrdersServiceSource();
 const ordersListService = readFileSync("lib/platform/orders-module-list.ts", "utf8");
+const businessOverviewService = readFileSync("lib/platform/business-overview.ts", "utf8");
 const orderSearchService = readFileSync("lib/platform/order-receivable-search.ts", "utf8");
 const ordersPaymentsService = readFileSync("lib/platform/orders-payments.ts", "utf8");
 const orderSerialization = readSharedOrderSerializationSource();
@@ -139,6 +140,15 @@ test("tax refund archive never hides receivable orders", () => {
   assert.doesNotMatch(ordersListService, /orderArchiveWhere/);
   assert.doesNotMatch(ordersListService, /taxArchived|taxRefundStatus/);
   assert.match(ordersListService, /const clauses: Prisma\.ReceivableOrderWhereInput\[\] = \[\s*\{ deletedAt: null \},\s*orderAccessWhere\(actor\),\s*\]/);
+});
+
+test("tax refund archive never hides receivable collection reminders", () => {
+  const reminderStart = businessOverviewService.indexOf("export async function getReminders");
+  const reminderEnd = businessOverviewService.indexOf("\nexport async function getOverview", reminderStart);
+  const reminderBlock = businessOverviewService.slice(reminderStart, reminderEnd);
+
+  assert.match(reminderBlock, /receivableReminderRows\(orders\)/);
+  assert.doesNotMatch(reminderBlock, /taxArchived|taxRefundStatus|SUBMITTED/);
 });
 
 test("paginated orders use a DTO that does not expose unloaded detail relations", () => {

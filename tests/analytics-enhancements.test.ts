@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createJiti } from "jiti";
 
@@ -15,6 +16,7 @@ const { buildReportSummary } = jiti("../lib/report-service-summary.ts") as typeo
 const { filterRows } = jiti("../lib/report-service-shared.ts") as typeof import("../lib/report-service-shared.ts");
 const { aggregateProfitReportRows, orderToProfit, reportQueryForBaseRows } = jiti("../lib/report-service-mappers.ts") as typeof import("../lib/report-service-mappers.ts");
 const { columnsFor } = jiti("../lib/report-service-shared.ts") as typeof import("../lib/report-service-shared.ts");
+const reportFilterPanelSource = readFileSync("app/modules/reports/report-filter-panel.tsx", "utf8");
 
 test("overview trend assigns orders, receipts, and payments to their real business months", () => {
   const currentMonth = overviewMonthKey(new Date());
@@ -91,6 +93,23 @@ test("report date filters use the report business date instead of any updated ti
   const filters = { dateFrom: "2026-08-01", dateTo: "2026-08-31" };
 
   assert.equal(filterRows(rows, filters, "payments").length, 0);
+});
+
+test("overdue collection reports keep archived unsettled receivables", () => {
+  const rows = [
+    { id: "current", taxArchived: false, dueDate: "2026-08-01", outstandingCny: 100 },
+    { id: "archived", taxArchived: true, taxRefundStatus: "SUBMITTED", dueDate: "2026-08-01", outstandingCny: 200 },
+  ];
+
+  assert.deepEqual(
+    filterRows(rows, { archiveScope: "current" }, "overdue").map((row) => row.id),
+    ["current", "archived"],
+  );
+  assert.deepEqual(
+    filterRows(rows, { archiveScope: "current" }, "receivables").map((row) => row.id),
+    ["current"],
+  );
+  assert.match(reportFilterPanelSource, /reportType !== "overdue" \? <label>业务范围/);
 });
 
 test("cost report base scan is not accidentally limited to the UI page size", () => {

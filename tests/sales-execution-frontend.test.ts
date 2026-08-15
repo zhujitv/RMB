@@ -97,6 +97,14 @@ test("sales execution surfaces customer order numbers instead of internal execut
   assert.doesNotMatch(salesExecutionUiSource, /executionNumber|\.executionNo/);
 });
 
+test("sales execution list omits version and standalone sales currency columns", () => {
+  assert.doesNotMatch(listSource, />版本<\/th>/);
+  assert.doesNotMatch(listSource, />销售币种<\/th>/);
+  assert.doesNotMatch(listSource, /V\{row\.currentVersionNumber/);
+  assert.doesNotMatch(listSource, /<td>\{row\.currency/);
+  assert.equal((listSource.match(/colSpan=\{8\}/g) || []).length, 2);
+});
+
 test("factory allocations must equal each sales line quantity exactly", () => {
   const draft = validDraft();
   assert.equal(validateSalesExecutionDraft(draft), "");

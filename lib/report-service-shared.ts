@@ -199,8 +199,8 @@ export function filterRows(rows: ReportRow[], filters: ReportFilters = {}, type?
     if (paymentStatus && row.paymentStatus !== paymentStatus && row.status !== paymentStatus) return false;
     if (costType && row.costType !== costType && row.costTypeRaw !== costType) return false;
     if (taxRefundStatus && row.taxRefundStatus !== taxRefundStatus) return false;
-    if (archiveScope === "current" && row.taxArchived === true) return false;
-    if (archiveScope === "archive" && row.taxArchived !== true) return false;
+    if (type !== "overdue" && archiveScope === "current" && row.taxArchived === true) return false;
+    if (type !== "overdue" && archiveScope === "archive" && row.taxArchived !== true) return false;
     if (declarationMonth && !dateOnly(row.customsDeclarationDate).startsWith(declarationMonth)) return false;
     return true;
   });

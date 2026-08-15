@@ -9,7 +9,10 @@ const {
   groupOverviewRows,
   overviewOrderMetrics,
 } = jiti("../lib/platform/business-overview-metrics.ts") as typeof import("../lib/platform/business-overview-metrics.ts");
-const { overviewPeriodActivity } = jiti("../lib/platform/business-overview.ts") as typeof import("../lib/platform/business-overview.ts");
+const {
+  overviewPeriodActivity,
+  receivableReminderRows,
+} = jiti("../lib/platform/business-overview.ts") as typeof import("../lib/platform/business-overview.ts");
 
 function metric({
   id,
@@ -95,6 +98,34 @@ test("overview fallback accepts a submitted tax archive without shipment fields"
 
   assert.equal(archived.profitMarginEligible, true);
   assert.equal(archived.expectedGrossMargin, 0.2);
+});
+
+test("tax refund archive does not remove unsettled receivables from collection reminders", () => {
+  const reminders = receivableReminderRows([
+    {
+      id: "ARCHIVED-OVERDUE",
+      taxArchived: true,
+      taxRefundStatus: "SUBMITTED",
+      dueDate: "2026-08-01",
+      summary: { reminderStatus: "已逾期", overdueDays: 14 },
+    },
+    {
+      id: "ARCHIVED-DUE-SOON",
+      taxArchived: true,
+      taxRefundStatus: "SUBMITTED",
+      dueDate: "2026-08-17",
+      summary: { reminderStatus: "即将到期", overdueDays: 0 },
+    },
+    {
+      id: "ARCHIVED-SETTLED",
+      taxArchived: true,
+      taxRefundStatus: "SUBMITTED",
+      dueDate: "2026-08-01",
+      summary: { reminderStatus: "已结清", overdueDays: 0 },
+    },
+  ] as never);
+
+  assert.deepEqual(reminders.map((order) => order.id), ["ARCHIVED-OVERDUE", "ARCHIVED-DUE-SOON"]);
 });
 
 test("period and salesperson margin bases exclude unshipped orders while amounts remain complete", () => {
