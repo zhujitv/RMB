@@ -26,7 +26,7 @@ import {
 
 export type SettingsActor = Parameters<typeof assertRead>[0];
 export type AuditRequestLike = Parameters<typeof writeAudit>[0];
-const OCR_SECRET_FIELDS = ["accessKeyId", "accessKeySecret", "appCode"] as const;
+const OCR_SECRET_FIELDS = ["accessKeyId", "accessKeySecret", "appCode", "tencentSecretId", "tencentSecretKey"] as const;
 
 function decryptedOcrSettingValue(value: unknown) {
   return decryptSystemSettingSecrets(value, OCR_INTEGRATION_SETTING_KEY, OCR_SECRET_FIELDS);
@@ -71,6 +71,8 @@ export async function saveOcrIntegrationSettings(request: AuditRequestLike, acto
     accessKeyId: cleanSecret(data.accessKeyId) || current.accessKeyId,
     accessKeySecret: cleanSecret(data.accessKeySecret) || current.accessKeySecret,
     appCode: cleanSecret(data.appCode) || current.appCode,
+    tencentSecretId: cleanSecret(data.tencentSecretId) || current.tencentSecretId,
+    tencentSecretKey: cleanSecret(data.tencentSecretKey) || current.tencentSecretKey,
   });
   if (value.enabled && !value.appCode && !(value.accessKeyId && value.accessKeySecret)) {
     throw codedError("启用 OCR 前请先填写 AppCode，或同时填写 AccessKey ID 和 AccessKey Secret。", 400, "OCR_CREDENTIAL_REQUIRED");

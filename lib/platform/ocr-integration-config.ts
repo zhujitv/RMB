@@ -13,6 +13,9 @@ export type OcrIntegrationInput = {
   accessKeyId?: unknown;
   accessKeySecret?: unknown;
   appCode?: unknown;
+  tencentSecretId?: unknown;
+  tencentSecretKey?: unknown;
+  tencentRegion?: unknown;
   customsDeclarationMode?: unknown;
   customsDeclarationEnabled?: unknown;
   invoiceTextEnabled?: unknown;
@@ -87,6 +90,14 @@ export function cleanOptionalUrl(value: unknown, fallback: string) {
 export function cleanTimeoutMs(value: unknown) {
   const timeoutMs = Math.round(num(value, DEFAULT_OCR_INTEGRATION_SETTINGS.timeoutMs));
   return Math.min(60000, Math.max(3000, timeoutMs));
+}
+
+export function cleanTencentOcrRegion(value: unknown) {
+  const region = nonEmpty(value || DEFAULT_OCR_INTEGRATION_SETTINGS.tencentRegion).toLowerCase();
+  if (!/^ap-[a-z]+(?:-[0-9]+)?$/.test(region)) {
+    throw codedError("腾讯云 OCR 地域格式不正确。", 400, "TENCENT_OCR_REGION_INVALID");
+  }
+  return region;
 }
 
 export function customsOcrSettings(settings: ReturnType<typeof normalizeOcrIntegrationSettings>) {
@@ -194,6 +205,9 @@ export function normalizeOcrIntegrationSettings(value: unknown = {}) {
     accessKeyId: cleanSecret(input.accessKeyId),
     accessKeySecret: cleanSecret(input.accessKeySecret),
     appCode: cleanSecret(input.appCode),
+    tencentSecretId: cleanSecret(input.tencentSecretId),
+    tencentSecretKey: cleanSecret(input.tencentSecretKey),
+    tencentRegion: cleanTencentOcrRegion(input.tencentRegion),
     customsDeclarationMode,
     customsDeclarationEnabled: customsDeclarationMode !== "MANUAL" && input.customsDeclarationEnabled !== false,
     invoiceTextEnabled: input.invoiceTextEnabled === true,
@@ -210,9 +224,13 @@ export function serializeOcrIntegrationSetting(setting: unknown) {
     accessKeyId: "",
     accessKeySecret: "",
     appCode: "",
+    tencentSecretId: "",
+    tencentSecretKey: "",
     accessKeyIdConfigured: Boolean(normalized.accessKeyId),
     accessKeySecretConfigured: Boolean(normalized.accessKeySecret),
     appCodeConfigured: Boolean(normalized.appCode),
+    tencentSecretIdConfigured: Boolean(normalized.tencentSecretId),
+    tencentSecretKeyConfigured: Boolean(normalized.tencentSecretKey),
   };
 }
 

@@ -1,0 +1,25 @@
+.intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.intro p { margin: 5px 0 0; color: #64748b; font-size: 13px; line-height: 1.6; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.actions input { min-width: 280px; }
+.primaryButton, .secondaryButton { border-radius: 8px; padding: 9px 14px; font-weight: 600; cursor: pointer; }
+.primaryButton { border: 1px solid #0f766e; background: #0f766e; color: white; }
+.secondaryButton { border: 1px solid #cbd5e1; background: white; color: #334155; }
+.primaryButton:disabled, .secondaryButton:disabled { cursor: not-allowed; opacity: .55; }
+.message, .successMessage, .warningBox { margin-top: 14px; border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.55; }
+.message { background: #f8fafc; color: #475569; }
+.successMessage { background: #ecfdf5; color: #166534; }
+.warningBox { background: #fffbeb; color: #92400e; }
+.results { display: grid; gap: 16px; margin-top: 16px; }
+.summaryGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.summaryGrid span { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; color: #475569; font-size: 13px; }
+.resultSection { display: grid; gap: 8px; }
+.resultSection h3 { margin: 0; font-size: 14px; color: #0f172a; }
+.tableWrap { max-width: 100%; overflow: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.tableWrap table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: pre-wrap; }
+.tableWrap th, .tableWrap td { border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; padding: 7px 8px; text-align: left; vertical-align: top; min-width: 80px; }
+.tableWrap th { position: sticky; top: 0; background: #f8fafc; color: #334155; }
+.details { content-visibility: auto; contain-intrinsic-size: 80px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
+.details summary { cursor: pointer; font-weight: 600; color: #334155; }
+.details pre { max-height: 240px; overflow: auto; padding: 10px; border-radius: 6px; background: #0f172a; color: #e2e8f0; }
+@media (max-width: 800px) { .intro { flex-direction: column; } .summaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .actions input { min-width: 100%; } }

@@ -20,6 +20,7 @@ import type {
   OcrIntegrationSettings
 } from "./types";
 import type { OcrValidationRulesDraft } from "./use-ocr-validation-rules-draft";
+import { TencentCustomsOcrTestCard } from "./tencent-customs-ocr-test-card";
 
 export { useOcrValidationRulesDraft } from "./use-ocr-validation-rules-draft";
 export type { OcrValidationRulesDraft } from "./use-ocr-validation-rules-draft";
@@ -151,6 +152,37 @@ export function OcrIntegrationSettingsCard({
         </div>
       </SettingsCard>
 
+      <SettingsCard title="腾讯云 OCR 测试密钥" icon="腾">
+        <div className={styles.emptyState}>仅供下方报关单实验模块使用，不会切换或影响现有阿里云发票 OCR。</div>
+        <div className={styles.settingsFieldGrid}>
+          <SettingsField label="SecretId">
+            <SecretField
+              value={currentForm.tencentSecretId}
+              onChange={(value) => setField("tencentSecretId", value)}
+              placeholder={currentForm.tencentSecretIdConfigured ? "已配置，留空则保持不变" : "腾讯云 API SecretId"}
+            />
+          </SettingsField>
+          <SettingsField label="SecretKey">
+            <SecretField
+              value={currentForm.tencentSecretKey}
+              onChange={(value) => setField("tencentSecretKey", value)}
+              placeholder={currentForm.tencentSecretKeyConfigured ? "已配置，留空则保持不变" : "腾讯云 API SecretKey"}
+            />
+          </SettingsField>
+          <SettingsField label="地域">
+            <select value={currentForm.tencentRegion} onChange={(event) => setField("tencentRegion", event.target.value)}>
+              <option value="ap-guangzhou">广州</option>
+              <option value="ap-shanghai">上海</option>
+              <option value="ap-beijing">北京</option>
+            </select>
+          </SettingsField>
+        </div>
+      </SettingsCard>
+
+      <TencentCustomsOcrTestCard
+        credentialsConfigured={Boolean(currentForm.tencentSecretIdConfigured && currentForm.tencentSecretKeyConfigured)}
+      />
+
       <SettingsCard title="启用范围" icon="能">
         <div className={styles.commissionDeductionGrid}>
           {OCR_FEATURE_OPTIONS.map((item) => (
@@ -200,7 +232,7 @@ export function OcrIntegrationSettingsCard({
         </div>
       </SettingsCard>
 
-      <div className={styles.emptyState}>增值税发票和物流费用发票识别需要 AccessKey ID / AccessKey Secret。报关单 OCR 已停用，不再提供相关配置。</div>
+      <div className={styles.emptyState}>现有业务中的报关单 OCR 仍保持停用；腾讯云模块只用于样本测试，识别结果不会进入订单或退税数据。</div>
     </SettingsPage>
   );
 }

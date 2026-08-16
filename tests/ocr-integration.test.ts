@@ -37,6 +37,8 @@ test("OCR integration settings are modular and stored in system settings", () =>
   assert.match(service, /accessKeyIdConfigured: Boolean\(normalized\.accessKeyId\)/);
   assert.match(service, /accessKeySecretConfigured: Boolean\(normalized\.accessKeySecret\)/);
   assert.match(service, /appCodeConfigured: Boolean\(normalized\.appCode\)/);
+  assert.match(service, /tencentSecretIdConfigured: Boolean\(normalized\.tencentSecretId\)/);
+  assert.match(service, /tencentSecretKeyConfigured: Boolean\(normalized\.tencentSecretKey\)/);
   assert.match(service, /accessKeyId: ""/);
   assert.match(service, /accessKeySecret: ""/);
   assert.match(service, /appCode: ""/);
@@ -86,7 +88,9 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.doesNotMatch(settingsModule, /PDF 文本兜底/);
   assert.doesNotMatch(settingsModule, /自动模式下仅可用于基础字段兜底/);
   assert.match(settingsModule, /可选：旧版 AppCode/);
-  assert.match(settingsModule, /增值税发票和物流费用发票识别需要 AccessKey ID \/ AccessKey Secret。报关单 OCR 已停用，不再提供相关配置。/);
+  assert.match(settingsModule, /腾讯云报关单 OCR 测试（实验）/);
+  assert.match(settingsModule, /\/api\/settings\/ocr\/tencent-customs-experiment/);
+  assert.match(settingsModule, /现有业务中的报关单 OCR 仍保持停用/);
   assert.match(settingsModule, /setOcrIntegrationSettings/);
   assert.match(settingsModule, /setOcrIntegrationForm\(ocrIntegrationFormFromSettings\(ocrSettings\)\)/);
   assert.match(settingsModule, /markLoaded\("ocrIntegration"\)/);

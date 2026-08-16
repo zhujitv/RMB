@@ -78,6 +78,11 @@ export type OcrIntegrationForm = {
   accessKeySecretConfigured: boolean;
   appCode: string;
   appCodeConfigured: boolean;
+  tencentSecretId: string;
+  tencentSecretIdConfigured: boolean;
+  tencentSecretKey: string;
+  tencentSecretKeyConfigured: boolean;
+  tencentRegion: string;
   invoiceTextEnabled: boolean;
   logisticsInvoiceEnabled: boolean;
   timeoutMs: string;
