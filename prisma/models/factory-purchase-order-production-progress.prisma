@@ -1,0 +1,38 @@
+model FactoryPurchaseOrderProductionReport {
+  id                 String                     @id @default(cuid())
+  purchaseOrderId    String                     @map("purchase_order_id")
+  sequenceNo         Int                        @map("sequence_no")
+  reportedById       String                     @map("reported_by")
+  source             FactoryConfirmationSource  @default(SUPPLIER_PORTAL)
+  channel            FactoryConfirmationChannel @default(PORTAL)
+  supplierContact    String                     @map("supplier_contact")
+  supplierReportedAt DateTime                   @map("supplier_reported_at")
+  reportedAt         DateTime                   @default(now()) @map("reported_at")
+  remark             String?
+  createdAt          DateTime                   @default(now()) @map("created_at")
+
+  purchaseOrder FactoryPurchaseOrder                       @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  reportedBy    User                                       @relation("FactoryPurchaseOrderProductionReports", fields: [reportedById], references: [id], onDelete: Restrict)
+  items         FactoryPurchaseOrderProductionReportItem[]
+
+  @@unique([purchaseOrderId, sequenceNo], map: "fpo_production_report_po_sequence_key")
+  @@unique([id, purchaseOrderId], map: "fpo_production_report_id_po_key")
+  @@index([purchaseOrderId, reportedAt], map: "fpo_production_report_po_time_idx")
+  @@index([reportedById], map: "fpo_production_report_user_idx")
+  @@map("factory_purchase_order_production_reports")
+}
+
+model FactoryPurchaseOrderProductionReportItem {
+  id                  String  @id @default(cuid())
+  reportId            String  @map("report_id")
+  purchaseOrderId     String  @map("purchase_order_id")
+  purchaseOrderItemId String  @map("purchase_order_item_id")
+  completedQuantity   Decimal @map("completed_quantity") @db.Decimal(18, 4)
+
+  report            FactoryPurchaseOrderProductionReport @relation(fields: [reportId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+  purchaseOrderItem FactoryPurchaseOrderItem             @relation(fields: [purchaseOrderItemId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+
+  @@unique([reportId, purchaseOrderItemId], map: "fpo_production_report_item_report_line_key")
+  @@index([purchaseOrderId, purchaseOrderItemId], map: "fpo_production_report_item_po_line_idx")
+  @@map("factory_purchase_order_production_report_items")
+}

@@ -33,7 +33,17 @@ function purchaseOrder(overrides: Record<string, unknown> = {}) {
     productionStatus: "COMPLETED",
     productionCompletedAt: "2026-08-09T08:00:00.000Z",
     actualDeliveryDate: "2026-08-10",
-    items: [{ executionItemId: "item-1", allocatedQuantity: "10" }],
+    items: [{ id: "po-item-1", executionItemId: "item-1", allocatedQuantity: "10", actualDeliveredQuantity: null }],
+    ...overrides,
+  };
+}
+
+function containerLoad(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "container-1",
+    status: "RELEASED",
+    allocations: [{ id: "allocation-1", purchaseOrderId: "po-1", purchaseOrderItemId: "po-item-1", plannedQuantity: "10" }],
+    loadingResults: [{ id: "loading-1", status: "APPROVED", purchaseOrderId: "po-1", items: [{ purchaseOrderItemId: "po-item-1", loadedQuantity: "10" }] }],
     ...overrides,
   };
 }
@@ -44,6 +54,7 @@ function execution(overrides: Record<string, unknown> = {}) {
     status: "DISPATCHED",
     items: [{ id: "item-1", quantity: "10" }],
     purchaseOrders: [purchaseOrder()],
+    containerLoads: [containerLoad()],
     ...overrides,
   };
 }
@@ -66,13 +77,14 @@ test("shipping handoff has one immutable sales-execution to receivable-order lin
 test("backend handoff is locked, permissioned, idempotent and atomic", () => {
   assert.match(service, /assertWrite\(actor, "salesExecution"\)/);
   assert.match(service, /assertWrite\(actor, "orders"\)/);
-  assert.match(service, /lockSalesExecution\(tx, executionId\)[\s\S]*lockFactoryPurchaseOrders\(tx, executionId\)/);
+  assert.match(service, /lockAllExecutionContainerLoading\(tx, executionId\)[\s\S]*loadSalesExecution\(executionId, actor, tx\)/);
   assert.match(service, /if \(before\.receivableOrder\)/);
   assert.match(service, /assertExpectedSalesExecutionRevision\(input, before\.revision\)/);
   assert.match(service, /status: "DISPATCHED"/);
-  assert.match(service, /status !== "VOIDED"/);
+  assert.match(service, /!\["REJECTED", "VOIDED"\]\.includes\(order\.status\)/);
   assert.match(service, /productionStatus !== "COMPLETED"/);
-  assert.match(service, /!order\.actualDeliveryDate/);
+  assert.match(service, /releasedContainerMaterialization\(execution\)/);
+  assert.match(service, /materializeReleasedContainerActuals\(tx, before, materialization/);
   assert.match(service, /sourceSalesExecutionId: before\.id/);
   assert.match(service, /status: "草稿"/);
   assert.match(service, /actualShipmentAmount: null/);
@@ -86,14 +98,18 @@ test("backend handoff is locked, permissioned, idempotent and atomic", () => {
   assert.match(lifecycleGuards, /已进入发货并关联应收订单/);
 });
 
-test("shipping readiness requires exact active allocation, acceptance, completion and actual delivery", () => {
+test("shipping readiness requires exact active allocation, acceptance, completion and released container results", () => {
   assert.equal(salesExecutionShippingReadiness(null).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ status: "DRAFT" }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ status: "DISPATCHED" })] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ status: "VOIDED" })] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ productionStatus: "IN_PRODUCTION" })] }) as never).ready, false);
-  assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ actualDeliveryDate: null })] }) as never).ready, false);
+  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [containerLoad({ status: "OPEN", loadingResults: [{ id: "loading-pending", status: "PENDING", purchaseOrderId: "po-1", items: [] }] })] }) as never).reason, "还有 1 条本柜实装差异待审批");
+  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [containerLoad({ status: "OPEN", loadingResults: [] })] }) as never).reason, "还有 1 个集装箱未最终放行");
+  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [] }) as never).reason, "尚未创建集装箱柜总单");
+  assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ actualDeliveryDate: null })] }) as never).ready, true);
+  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [containerLoad({ loadingResults: [{ id: "loading-1", status: "APPROVED", purchaseOrderId: "po-1", items: [{ purchaseOrderItemId: "po-item-1", loadedQuantity: "9.9999" }] }] })] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ items: [{ executionItemId: "item-1", allocatedQuantity: "9" }] })] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [
     purchaseOrder({ items: [{ executionItemId: "item-1", allocatedQuantity: "5" }] }),
@@ -103,6 +119,41 @@ test("shipping readiness requires exact active allocation, acceptance, completio
     purchaseOrder(),
     purchaseOrder({ id: "po-old", status: "VOIDED", items: [{ executionItemId: "item-1", allocatedQuantity: "10" }] }),
   ] }) as never).ready, true);
+  assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [
+    purchaseOrder(),
+    purchaseOrder({ id: "po-rejected", status: "REJECTED", items: [{ executionItemId: "item-1", allocatedQuantity: "10" }] }),
+  ] }) as never).ready, true);
+  assert.equal(salesExecutionShippingReadiness(execution({
+    purchaseOrders: [purchaseOrder(), purchaseOrder({ id: "po-rejected", status: "REJECTED" })],
+    containerLoads: [containerLoad({ loadingResults: [
+      { id: "loading-1", status: "APPROVED", purchaseOrderId: "po-1", items: [{ purchaseOrderItemId: "po-item-1", loadedQuantity: "10" }] },
+      { id: "loading-old", status: "APPROVED", purchaseOrderId: "po-rejected", items: [{ purchaseOrderItemId: "po-old-item", loadedQuantity: "10" }] },
+    ] })],
+  }) as never).ready, true);
+  assert.equal(salesExecutionShippingReadiness(execution({
+    purchaseOrders: [purchaseOrder(), purchaseOrder({ id: "po-rejected", status: "REJECTED" })],
+    containerLoads: [containerLoad(), containerLoad({
+      id: "container-old",
+      status: "OPEN",
+      allocations: [{ id: "allocation-old", purchaseOrderId: "po-rejected", purchaseOrderItemId: "po-old-item", plannedQuantity: "10" }],
+      loadingResults: [{ id: "loading-old", status: "PENDING", purchaseOrderId: "po-rejected", items: [] }],
+    })],
+  }) as never).ready, true);
+  assert.equal(salesExecutionShippingReadiness(execution({
+    purchaseOrders: [purchaseOrder(), purchaseOrder({ id: "po-rejected", status: "REJECTED" })],
+    containerLoads: [containerLoad({
+      allocations: [
+        { id: "allocation-1", purchaseOrderId: "po-1", purchaseOrderItemId: "po-item-1", plannedQuantity: "10" },
+        { id: "allocation-old", purchaseOrderId: "po-rejected", purchaseOrderItemId: "po-old-item", plannedQuantity: "1" },
+      ],
+    })],
+  }) as never).reason, "有集装箱同时包含有效及已拒绝、已作废或不存在的采购单，请先修正或作废该柜");
+  assert.equal(salesExecutionShippingReadiness(execution({
+    containerLoads: [containerLoad({ allocations: [
+      { id: "allocation-1", purchaseOrderId: "po-1", purchaseOrderItemId: "po-item-1", plannedQuantity: "10" },
+      { id: "allocation-missing", purchaseOrderId: "missing-po", purchaseOrderItemId: "missing-item", plannedQuantity: "1" },
+    ] })],
+  }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ receivableOrder: { id: "order-1" } }) as never).ready, false);
 });
 

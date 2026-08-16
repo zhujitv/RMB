@@ -9,6 +9,8 @@ import {
   notificationTemplateFormFromSettings,
   ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
+  smsIntegrationEnableValidationMessage,
+  smsIntegrationFormFromSettings,
 } from "./helpers";
 import type {
   CommissionFormulaSettings,
@@ -16,6 +18,7 @@ import type {
   NotificationTemplateSettings,
   OcrIntegrationSettings,
   ShipsgoIntegrationSettings,
+  SmsIntegrationSettings,
 } from "./types";
 import type { SettingsSaveActionsContext } from "./use-settings-save-actions";
 
@@ -29,6 +32,7 @@ export function useSettingsSystemSaveActions(context: SettingsSaveActionsContext
     notificationTemplateForm,
     notificationTemplateSettings,
     ocrIntegrationForm,
+    smsIntegrationForm,
     onCompanyProfileSaved,
     selectedNotificationTemplateType,
     setCommissionFormulaForm,
@@ -51,6 +55,10 @@ export function useSettingsSystemSaveActions(context: SettingsSaveActionsContext
     setOcrIntegrationMessage,
     setOcrIntegrationSaving,
     setOcrIntegrationSettings,
+    setSmsIntegrationForm,
+    setSmsIntegrationMessage,
+    setSmsIntegrationSaving,
+    setSmsIntegrationSettings,
     setSelectedNotificationTemplateType,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
@@ -211,6 +219,37 @@ function selectNotificationTemplate(type: string) {
     }
   }
 
+async function saveSmsIntegrationSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!smsIntegrationForm) return;
+    const validationMessage = smsIntegrationEnableValidationMessage(smsIntegrationForm);
+    if (validationMessage) {
+      setSmsIntegrationMessage(validationMessage);
+      return;
+    }
+    setSmsIntegrationSaving(true);
+    setSmsIntegrationMessage("");
+    try {
+      const result = await apiJson<{ success?: boolean; settings?: SmsIntegrationSettings; message?: string }>(
+        "/api/settings/sms",
+        {
+          method: "PATCH",
+          body: JSON.stringify(smsIntegrationForm),
+        },
+      );
+      if (result.success !== true) throw new Error(result.message || "短信通知设置保存失败");
+      const nextSettings = result.settings || smsIntegrationForm;
+      setSmsIntegrationSettings(nextSettings);
+      setSmsIntegrationForm(smsIntegrationFormFromSettings(nextSettings));
+      markLoaded("smsIntegration");
+      setSmsIntegrationMessage(result.message || "短信通知设置已保存");
+    } catch (saveError) {
+      setSmsIntegrationMessage(saveError instanceof Error ? saveError.message : "短信通知设置保存失败");
+    } finally {
+      setSmsIntegrationSaving(false);
+    }
+  }
+
 async function saveOcrIntegrationSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!ocrIntegrationForm) return;
@@ -248,5 +287,6 @@ async function saveOcrIntegrationSettings(event: FormEvent<HTMLFormElement>) {
     selectNotificationTemplate,
     saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
+    saveSmsIntegrationSettings,
   };
 }

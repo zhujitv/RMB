@@ -14,6 +14,10 @@ const notificationRetirement = readFileSync(
   "lib/platform/factory-purchase-order-reassignment-notifications.ts",
   "utf8",
 );
+const reassignmentDelivery = readFileSync(
+  "lib/platform/factory-purchase-order-reassignment-delivery.ts",
+  "utf8",
+);
 const route = readFileSync(
   "app/api/sales-executions/[id]/purchase-orders/[purchaseOrderId]/reassign/route.ts",
   "utf8",
@@ -83,7 +87,8 @@ test("reassignment advances history and queues only the replacement notification
   const transaction = service.match(/transactionResult = await prisma\.\$transaction[\s\S]*?isolationLevel/)?.[0] || "";
   assert.match(transaction, /queueFactoryPurchaseOrderDispatchOutbox/);
   assert.doesNotMatch(transaction, /processFactoryPurchaseOrderDispatchOutbox/);
-  assert.match(service, /processFactoryPurchaseOrderDispatchOutbox\(\{[\s\S]*purchaseOrderIds: \[transactionResult\.replacementPurchaseOrderId\]/);
+  assert.match(service, /processReplacementPurchaseOrderNotifications\(\{[\s\S]*purchaseOrderId: transactionResult\.replacementPurchaseOrderId/);
+  assert.match(reassignmentDelivery, /processFactoryPurchaseOrderDispatchOutbox\(\{[\s\S]*purchaseOrderIds: \[input\.purchaseOrderId\]/);
 });
 
 test("reassignment cancels stale original notifications and blocks a currently sending email", () => {

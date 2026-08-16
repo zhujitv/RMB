@@ -10,10 +10,7 @@ import {
 import styles from "./supplier-purchase-orders/supplier-purchase-orders.module.css";
 import { SupplierPurchaseOrderDetail } from "./supplier-purchase-orders/purchase-order-detail";
 import { SupplierPurchaseOrderList } from "./supplier-purchase-orders/purchase-order-list";
-import {
-  dateInputValue,
-  isValidSupplierUnitPrice,
-} from "./supplier-purchase-orders/presentation";
+import { dateInputValue, isValidSupplierUnitPrice } from "./supplier-purchase-orders/presentation";
 import type {
   SupplierPurchaseOrderDetailResponse,
   SupplierPurchaseOrderDto,
@@ -263,6 +260,12 @@ export function SupplierPurchaseOrdersModule({
         onRemarkChange={setRemark}
         onItemPriceChange={(itemId, value) => setItemPrices((current) => ({ ...current, [itemId]: value }))}
         onSubmit={() => void submitResponse()}
+        onProductionProgressSaved={(saved, message) => {
+          setDetail(saved);
+          setRows((current) => current.map((row) => row.id === saved.id ? saved : row));
+          setNotice(message);
+          void loadRows(page, submittedKeyword, status);
+        }}
         onConfirmProductionCompletion={() => void confirmProductionCompletion()}
       />
     );

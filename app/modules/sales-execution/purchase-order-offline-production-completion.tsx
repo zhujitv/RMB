@@ -6,6 +6,7 @@ import { DismissibleLayer } from "../../components";
 import shell from "../../WorkspaceShell.module.css";
 import { useWorkspaceTabBusy } from "../../workspace/workspace-tab-context";
 import styles from "./offline-confirmation.module.css";
+import actionStyles from "./purchase-order-actions.module.css";
 import {
   CONFIRMATION_EVIDENCE_ACCEPT,
   uploadConfirmationEvidence,
@@ -44,12 +45,15 @@ export function PurchaseOrderOfflineProductionCompletion({
   const canRecord = canManage
     && order.status === "ACCEPTED"
     && order.productionStatus === "IN_PRODUCTION"
+    && Boolean(order.productionProgress?.allCompleted)
     && !order.productionCompletedAt
     && !order.actualDeliveryDate;
   if (!canRecord) return null;
+  const quantityVariancePending = order.deliveryQuantityVariances?.some((entry) => entry.status === "PENDING") === true;
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)}>登记线下生产完成</button>
+      <button type="button" disabled={quantityVariancePending} onClick={() => setOpen(true)}>登记线下生产完成</button>
+      {quantityVariancePending ? <span className={actionStyles.warning}>交付数量差异申请待审批，审批后才能确认完工。</span> : null}
       {open ? <OfflineProductionCompletionDialog
         executionId={executionId}
         order={order}

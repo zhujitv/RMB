@@ -87,34 +87,37 @@ model BusinessEntityBankAccount {
 }
 
 model Supplier {
-  id                          String    @id @default(cuid())
-  supplierName                String    @map("supplier_name")
-  supplierType                String    @default("其他供应商") @map("supplier_type")
-  country                     String?
-  contactPerson               String?   @map("contact_person")
-  phone                       String?
-  email                       String?
-  address                     String?
-  invoiceTitle                String?   @map("invoice_title")
-  taxNumber                   String?   @map("tax_number")
-  bankName                    String?   @map("bank_name")
-  bankAccount                 String?   @map("bank_account")
-  purchasePaymentTerm         String?   @map("purchase_payment_term")
-  purchasePrepaymentRatio     Decimal   @default(0) @map("purchase_prepayment_ratio") @db.Decimal(8, 6)
-  purchasePrepaymentRequiredBeforeProduction Boolean @default(false) @map("purchase_prepayment_required_before_production")
-  remark                      String?
-  status                      String    @default("启用")
-  allowDomesticLogisticsEntry Boolean   @default(false) @map("allow_domestic_logistics_entry")
-  allowLogisticsExpenseEntry  Boolean   @default(false) @map("allow_logistics_expense_entry")
-  allowLogisticsInvoiceUpload Boolean   @default(false) @map("allow_logistics_invoice_upload")
-  allowFactoryDocumentUpload  Boolean   @default(false) @map("allow_factory_document_upload")
-  isDefaultLogisticsSupplier  Boolean   @default(false) @map("is_default_logistics_supplier")
-  allowedLogisticsCostTypes   Json?     @map("allowed_logistics_cost_types")
-  createdById                 String?   @map("created_by")
-  updatedById                 String?   @map("updated_by")
-  createdAt                   DateTime  @default(now()) @map("created_at")
-  updatedAt                   DateTime  @updatedAt @map("updated_at")
-  deletedAt                   DateTime? @map("deleted_at")
+  id                                         String    @id @default(cuid())
+  supplierName                               String    @map("supplier_name")
+  supplierType                               String    @default("其他供应商") @map("supplier_type")
+  country                                    String?
+  contactPerson                              String?   @map("contact_person")
+  phone                                      String?
+  email                                      String?
+  address                                    String?
+  invoiceTitle                               String?   @map("invoice_title")
+  taxNumber                                  String?   @map("tax_number")
+  bankName                                   String?   @map("bank_name")
+  bankAccount                                String?   @map("bank_account")
+  purchasePaymentTerm                        String?   @map("purchase_payment_term")
+  purchasePrepaymentRatio                    Decimal   @default(0) @map("purchase_prepayment_ratio") @db.Decimal(8, 6)
+  purchasePrepaymentRequiredBeforeProduction Boolean   @default(false) @map("purchase_prepayment_required_before_production")
+  purchaseQuantityToleranceRatio             Decimal   @default(0.05) @map("purchase_quantity_tolerance_ratio") @db.Decimal(8, 6)
+  remark                                     String?
+  status                                     String    @default("启用")
+  allowDomesticLogisticsEntry                Boolean   @default(false) @map("allow_domestic_logistics_entry")
+  allowLogisticsExpenseEntry                 Boolean   @default(false) @map("allow_logistics_expense_entry")
+  allowLogisticsInvoiceUpload                Boolean   @default(false) @map("allow_logistics_invoice_upload")
+  allowFactoryDocumentUpload                 Boolean   @default(false) @map("allow_factory_document_upload")
+  dispatchSmsEnabled                         Boolean   @default(false) @map("dispatch_sms_enabled")
+  dispatchSmsPhone                           String?   @map("dispatch_sms_phone")
+  isDefaultLogisticsSupplier                 Boolean   @default(false) @map("is_default_logistics_supplier")
+  allowedLogisticsCostTypes                  Json?     @map("allowed_logistics_cost_types")
+  createdById                                String?   @map("created_by")
+  updatedById                                String?   @map("updated_by")
+  createdAt                                  DateTime  @default(now()) @map("created_at")
+  updatedAt                                  DateTime  @updatedAt @map("updated_at")
+  deletedAt                                  DateTime? @map("deleted_at")
 
   createdBy               User?                     @relation("SuppliersCreated", fields: [createdById], references: [id])
   updatedBy               User?                     @relation("SuppliersUpdated", fields: [updatedById], references: [id])

@@ -6,6 +6,7 @@ import {
   NotificationTemplateSettingsCard,
   OcrIntegrationSettingsCard,
   FreightowerIntegrationSettingsCard,
+  SmsIntegrationSettingsCard,
 } from "./settings-cards";
 import {
   commissionFormulaFormFromSettings,
@@ -14,6 +15,7 @@ import {
   notificationTemplateFormFromSettings,
   ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
+  smsIntegrationFormFromSettings,
 } from "./helpers";
 import { SettingsHomeGrid } from "./settings-home-grid";
 import { SettingsTableContent } from "./module-edit-panels";
@@ -42,6 +44,8 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     ocrIntegrationForm,
     shipsgoIntegrationSettings,
     shipsgoIntegrationForm,
+    smsIntegrationSettings,
+    smsIntegrationForm,
     loadedTabs,
     loading,
     businessEntityForm,
@@ -62,6 +66,8 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     confirmDiscardCurrentSettings,
     shipsgoIntegrationSaving,
     shipsgoIntegrationMessage,
+    smsIntegrationSaving,
+    smsIntegrationMessage,
     selectTab,
     startCreateBusinessEntity,
     startEditBusinessEntity,
@@ -75,6 +81,7 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     selectNotificationTemplate,
     saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
+    saveSmsIntegrationSettings,
     setBusinessEntityForm,
     setCompanyProfileForm,
     setCompanyProfileMessage,
@@ -88,6 +95,8 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     setOcrIntegrationMessage,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationMessage,
+    setSmsIntegrationForm,
+    setSmsIntegrationMessage,
   } = settings;
 
   if (activeTab === "home") return <SettingsHomeGrid onSelect={selectTab} />;
@@ -222,6 +231,23 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
           onSubmit={saveShipsgoIntegrationSettings}
         />
       </>
+    );
+  }
+  if (activeTab === "smsIntegration") {
+    return (
+      <SmsIntegrationSettingsCard
+        settings={smsIntegrationSettings}
+        form={smsIntegrationForm}
+        loading={loading && !smsIntegrationSettings}
+        saving={smsIntegrationSaving}
+        message={smsIntegrationMessage}
+        onChange={setSmsIntegrationForm}
+        onReset={() => {
+          setSmsIntegrationForm(smsIntegrationFormFromSettings(smsIntegrationSettings));
+          setSmsIntegrationMessage("");
+        }}
+        onSubmit={saveSmsIntegrationSettings}
+      />
     );
   }
   return <SettingsTableContent settings={settings} />;

@@ -83,6 +83,19 @@ export type OcrIntegrationForm = {
   timeoutMs: string;
 };
 
+export type SmsIntegrationForm = {
+  enabled: boolean;
+  provider: "TENCENT_CLOUD";
+  tencentSdkAppId: string;
+  signName: string;
+  templateId: string;
+  region: string;
+  secretId: string;
+  secretIdConfigured: boolean;
+  secretKey: string;
+  secretKeyConfigured: boolean;
+};
+
 export type CompanyProfileForm = {
   brandName: string;
   systemName: string;
@@ -133,7 +146,10 @@ export type SupplierForm = {
   bankAccount: string;
   purchasePaymentTerm: string;
   purchasePrepaymentPercent: string;
+  purchaseQuantityTolerancePercent: string;
   purchasePrepaymentRequiredBeforeProduction: boolean;
+  dispatchSmsEnabled: boolean;
+  dispatchSmsPhone: string;
   allowDomesticLogisticsEntry: boolean;
   allowLogisticsExpenseEntry: boolean;
   allowLogisticsInvoiceUpload: boolean;

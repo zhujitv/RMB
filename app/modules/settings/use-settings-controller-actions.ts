@@ -52,6 +52,7 @@ export function useSettingsControllerActions(context: SettingsControllerActionsC
     setOcrIntegrationMessage,
     setSelectedUserId,
     setShipsgoIntegrationMessage,
+    setSmsIntegrationMessage,
     setSupplierForm,
     setSupplierMessage,
     setSupplierPanelMode,
@@ -72,6 +73,7 @@ export function useSettingsControllerActions(context: SettingsControllerActionsC
     setNotificationTemplateMessage("");
     setOcrIntegrationMessage("");
     setShipsgoIntegrationMessage("");
+    setSmsIntegrationMessage("");
   }
 
   function submitSearch() {

@@ -1,0 +1,51 @@
+enum FactoryDeliveryQuantityVarianceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model FactoryPurchaseOrderDeliveryQuantityVariance {
+  id                  String                                @id @default(cuid())
+  purchaseOrderId     String                                @map("purchase_order_id")
+  sequenceNo          Int                                   @map("sequence_no")
+  status              FactoryDeliveryQuantityVarianceStatus @default(PENDING)
+  source              FactoryConfirmationSource
+  channel             FactoryConfirmationChannel
+  supplierContact     String                                @map("supplier_contact")
+  supplierRequestedAt DateTime                              @map("supplier_requested_at")
+  requestedAt         DateTime                              @default(now()) @map("requested_at")
+  requestedById       String                                @map("requested_by")
+  reason              String
+  decidedAt           DateTime?                             @map("decided_at")
+  decidedById         String?                               @map("decided_by")
+  decisionRemark      String?                               @map("decision_remark")
+  createdAt           DateTime                              @default(now()) @map("created_at")
+
+  purchaseOrder FactoryPurchaseOrder                               @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  requestedBy   User                                               @relation("FactoryDeliveryQuantityVariancesRequested", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedBy     User?                                              @relation("FactoryDeliveryQuantityVariancesDecided", fields: [decidedById], references: [id], onDelete: Restrict)
+  items         FactoryPurchaseOrderDeliveryQuantityVarianceItem[]
+
+  @@unique([purchaseOrderId, sequenceNo], map: "fpo_delivery_quantity_variance_po_sequence_key")
+  @@unique([id, purchaseOrderId], map: "fpo_delivery_quantity_variance_id_po_key")
+  @@index([purchaseOrderId, requestedAt], map: "fpo_delivery_quantity_variance_po_time_idx")
+  @@index([requestedById], map: "fpo_delivery_quantity_variance_requester_idx")
+  @@index([decidedById], map: "fpo_delivery_quantity_variance_decider_idx")
+  @@map("factory_purchase_order_delivery_quantity_variances")
+}
+
+model FactoryPurchaseOrderDeliveryQuantityVarianceItem {
+  id                      String  @id @default(cuid())
+  varianceId              String  @map("variance_id")
+  purchaseOrderId         String  @map("purchase_order_id")
+  purchaseOrderItemId     String  @map("purchase_order_item_id")
+  orderedQuantitySnapshot Decimal @map("ordered_quantity_snapshot") @db.Decimal(18, 4)
+  proposedQuantity        Decimal @map("proposed_quantity") @db.Decimal(18, 4)
+
+  variance          FactoryPurchaseOrderDeliveryQuantityVariance @relation(fields: [varianceId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+  purchaseOrderItem FactoryPurchaseOrderItem                     @relation(fields: [purchaseOrderItemId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+
+  @@unique([varianceId, purchaseOrderItemId], map: "fpo_delivery_quantity_variance_item_line_key")
+  @@index([purchaseOrderId, purchaseOrderItemId], map: "fpo_delivery_quantity_variance_item_po_line_idx")
+  @@map("factory_purchase_order_delivery_quantity_variance_items")
+}

@@ -41,6 +41,7 @@ export async function requireFactoryPurchaseOrderReplacementSupplier(
       purchasePaymentTerm: true,
       purchasePrepaymentRatio: true,
       purchasePrepaymentRequiredBeforeProduction: true,
+      purchaseQuantityToleranceRatio: true,
     },
   });
   if (!supplier) {

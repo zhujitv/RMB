@@ -10,6 +10,7 @@ export const SETTINGS_TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "users", label: "用户与权限" },
   { key: "ocrIntegration", label: "OCR识别" },
   { key: "shipsgoIntegration", label: "物流接口" },
+  { key: "smsIntegration", label: "短信通知" },
   { key: "notificationTemplates", label: "通知模板" },
   { key: "exchangeRates", label: "汇率设置" },
   { key: "commissionFormula", label: "提成公式" },

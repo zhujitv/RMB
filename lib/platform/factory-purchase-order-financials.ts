@@ -90,3 +90,25 @@ export function effectiveFactoryPurchaseOrderAmount(items: Array<{
   }
   return total.toDecimalPlaces(2);
 }
+
+export function effectiveFactoryPurchaseOrderDeliveredAmount(items: Array<{
+  actualDeliveredQuantity?: DecimalInput;
+  purchaseUnitPrice?: DecimalInput;
+  supplierPrice?: { unitPrice?: DecimalInput } | null;
+}>) {
+  if (!items.length) return null;
+  let total = new Prisma.Decimal(0);
+  for (const item of items) {
+    if (item.actualDeliveredQuantity === null || item.actualDeliveredQuantity === undefined) {
+      return null;
+    }
+    const unitPrice = item.supplierPrice?.unitPrice ?? item.purchaseUnitPrice;
+    if (unitPrice === null || unitPrice === undefined || String(unitPrice).trim() === "") {
+      return null;
+    }
+    total = total.add(
+      decimal(item.actualDeliveredQuantity).mul(decimal(unitPrice)).toDecimalPlaces(2),
+    );
+  }
+  return total.toDecimalPlaces(2);
+}

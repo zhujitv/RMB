@@ -419,7 +419,7 @@ npm run db:deploy
 
 当前正式版本可在 GitHub Releases 查看：
 
-- `v1.0.4`
+- `v2.0.0`
 
 每次正式发布必须：
 

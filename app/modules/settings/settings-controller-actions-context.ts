@@ -61,6 +61,7 @@ export type SettingsControllerActionsContext = {
   setSelectedNotificationTemplateType: Setter<string>;
   setSelectedUserId: Setter<string>;
   setShipsgoIntegrationMessage: Setter<string>;
+  setSmsIntegrationMessage: Setter<string>;
   setSupplierForm: Setter<SupplierForm | null>;
   setSupplierMessage: Setter<string>;
   setSupplierPanelMode: Setter<"view" | "edit">;

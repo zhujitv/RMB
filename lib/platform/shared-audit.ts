@@ -3,7 +3,7 @@ import { prisma } from "../prisma";
 import { resolveTrustedClientIp } from "../client-ip";
 import { logServerError } from "./shared-base-errors";
 
-export const SENSITIVE_AUDIT_KEY_PATTERN = /(password|passwordHash|token|secret|accessKey|apiKey|appCode|clientId|mapKey|authorization|cookie|session|storageKey|r2Key|r2Bucket|fileUrl|avatarUrl|originalName|originalFilename)/i;
+export const SENSITIVE_AUDIT_KEY_PATTERN = /(password|passwordHash|token|secret|accessKey|apiKey|appCode|clientId|mapKey|authorization|cookie|session|phone|mobile|storageKey|r2Key|r2Bucket|fileUrl|avatarUrl|originalName|originalFilename)/i;
 
 type AuditRequestLike = {
   url?: string;

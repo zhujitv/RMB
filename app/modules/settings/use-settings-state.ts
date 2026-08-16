@@ -24,6 +24,8 @@ import type {
   SettingsTabKey,
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
+  SmsIntegrationForm,
+  SmsIntegrationSettings,
   SupplierForm,
   SupplierRow,
   UserForm,
@@ -56,6 +58,8 @@ export function useSettingsState() {
   const [ocrIntegrationForm, setOcrIntegrationForm] = useState<OcrIntegrationForm | null>(null);
   const [shipsgoIntegrationSettings, setShipsgoIntegrationSettings] = useState<ShipsgoIntegrationSettings | null>(null);
   const [shipsgoIntegrationForm, setShipsgoIntegrationForm] = useState<ShipsgoIntegrationForm | null>(null);
+  const [smsIntegrationSettings, setSmsIntegrationSettings] = useState<SmsIntegrationSettings | null>(null);
+  const [smsIntegrationForm, setSmsIntegrationForm] = useState<SmsIntegrationForm | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
   const [pagination, setPagination] = useState<Record<SettingsTabKey, Pagination>>({
@@ -71,6 +75,7 @@ export function useSettingsState() {
     commissionFormula: emptyPagination(PAGE_SIZE),
     notificationTemplates: emptyPagination(PAGE_SIZE),
     shipsgoIntegration: emptyPagination(PAGE_SIZE),
+    smsIntegration: emptyPagination(PAGE_SIZE),
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
@@ -103,6 +108,8 @@ export function useSettingsState() {
   const [ocrIntegrationMessage, setOcrIntegrationMessage] = useState("");
   const [shipsgoIntegrationSaving, setShipsgoIntegrationSaving] = useState(false);
   const [shipsgoIntegrationMessage, setShipsgoIntegrationMessage] = useState("");
+  const [smsIntegrationSaving, setSmsIntegrationSaving] = useState(false);
+  const [smsIntegrationMessage, setSmsIntegrationMessage] = useState("");
   const [activeSuppliers, setActiveSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -159,6 +166,10 @@ export function useSettingsState() {
     setShipsgoIntegrationSettings,
     shipsgoIntegrationForm,
     setShipsgoIntegrationForm,
+    smsIntegrationSettings,
+    setSmsIntegrationSettings,
+    smsIntegrationForm,
+    setSmsIntegrationForm,
     permissionConfig,
     setPermissionConfig,
     salespeople,
@@ -225,6 +236,10 @@ export function useSettingsState() {
     setShipsgoIntegrationSaving,
     shipsgoIntegrationMessage,
     setShipsgoIntegrationMessage,
+    smsIntegrationSaving,
+    setSmsIntegrationSaving,
+    smsIntegrationMessage,
+    setSmsIntegrationMessage,
     activeSuppliers,
     setActiveSuppliers,
     loading,

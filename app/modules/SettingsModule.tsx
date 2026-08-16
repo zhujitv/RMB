@@ -12,6 +12,7 @@ import {
   notificationTemplateFormFromSettings,
   ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
+  smsIntegrationFormFromSettings,
 } from "./settings/settings-config-helpers";
 import {
   businessEntityFormFromRow,
@@ -44,6 +45,7 @@ export function SettingsModule(props: SettingsModuleProps = {}) {
     || (settings.notificationTemplateForm && !sameForm(settings.notificationTemplateForm, notificationTemplateFormFromSettings(settings.notificationTemplateSettings, settings.selectedNotificationTemplateType)))
     || (settings.ocrIntegrationForm && !sameForm(settings.ocrIntegrationForm, ocrIntegrationFormFromSettings(settings.ocrIntegrationSettings)))
     || (settings.shipsgoIntegrationForm && !sameForm(settings.shipsgoIntegrationForm, shipsgoIntegrationFormFromSettings(settings.shipsgoIntegrationSettings)))
+    || (settings.smsIntegrationForm && !sameForm(settings.smsIntegrationForm, smsIntegrationFormFromSettings(settings.smsIntegrationSettings)))
     || (settings.customerForm && !sameForm(settings.customerForm, activeCustomer ? customerFormFromRow(activeCustomer) : emptyCustomerForm()))
     || (settings.supplierForm && !sameForm(settings.supplierForm, activeSupplier ? supplierFormFromRow(activeSupplier) : emptySupplierForm()))
     || (settings.businessEntityForm && !sameForm(settings.businessEntityForm, activeBusinessEntity ? businessEntityFormFromRow(activeBusinessEntity) : emptyBusinessEntityForm()))
@@ -59,6 +61,7 @@ export function SettingsModule(props: SettingsModuleProps = {}) {
     || settings.notificationTemplateSaving
     || settings.ocrIntegrationSaving
     || settings.shipsgoIntegrationSaving
+    || settings.smsIntegrationSaving
     || settings.exchangeRefreshing
     || Boolean(settings.forceDeletingRejectedUserId);
   const activeEntityEditorDirty = settings.activeTab === "customers"
@@ -76,7 +79,8 @@ export function SettingsModule(props: SettingsModuleProps = {}) {
     || (settings.activeTab === "commissionFormula" && Boolean(settings.commissionFormulaForm && !sameForm(settings.commissionFormulaForm, commissionFormulaFormFromSettings(settings.commissionFormulaSettings))))
     || (settings.activeTab === "notificationTemplates" && Boolean(settings.notificationTemplateForm && !sameForm(settings.notificationTemplateForm, notificationTemplateFormFromSettings(settings.notificationTemplateSettings, settings.selectedNotificationTemplateType))))
     || (settings.activeTab === "ocrIntegration" && Boolean(settings.ocrIntegrationForm && !sameForm(settings.ocrIntegrationForm, ocrIntegrationFormFromSettings(settings.ocrIntegrationSettings))))
-    || (settings.activeTab === "shipsgoIntegration" && Boolean(settings.shipsgoIntegrationForm && !sameForm(settings.shipsgoIntegrationForm, shipsgoIntegrationFormFromSettings(settings.shipsgoIntegrationSettings))));
+    || (settings.activeTab === "shipsgoIntegration" && Boolean(settings.shipsgoIntegrationForm && !sameForm(settings.shipsgoIntegrationForm, shipsgoIntegrationFormFromSettings(settings.shipsgoIntegrationSettings))))
+    || (settings.activeTab === "smsIntegration" && Boolean(settings.smsIntegrationForm && !sameForm(settings.smsIntegrationForm, smsIntegrationFormFromSettings(settings.smsIntegrationSettings))));
   const editorKey = settings.activeTab === "customers" && settings.customerForm
     ? `customer:${settings.customerForm.id || "new"}`
     : settings.activeTab === "suppliers" && settings.supplierForm

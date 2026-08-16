@@ -88,12 +88,14 @@ export function PurchaseOrderDraftList({
         const currency = String(order.purchaseCurrency || order.currency || "CNY");
         const total = purchaseOrderTotal(order);
         const latestResponse = order.supplierResponseHistory?.at(-1);
+        const variancePending = (order.deliveryQuantityVariances || []).some((entry) => entry.status === "PENDING");
         return (
           <article className={styles.purchaseOrderCard} key={order.id}>
             <div className={styles.purchaseOrderHeader}>
               <div className={styles.purchaseOrderTitle}>
                 <strong>{orderSupplierName(order)}</strong>
                 <div><span className={`${shell.statusPill} ${statusClass(order.status)}`}>{factoryPurchaseOrderStatusLabel(order.status)}</span></div>
+                {variancePending ? <small className={styles.balancePending}>交付数量差异待审批</small> : null}
                 <small>采购单号：{purchaseOrderNumber(order)}</small>
                 <small>客户订单号：{customerOrderNo || "-"}</small>
                 <small>{responseHint(order.status)}</small>
@@ -107,6 +109,12 @@ export function PurchaseOrderDraftList({
                 {order.respondedAt ? <small>系统登记：{formatDateTime(order.respondedAt)}{order.respondedBy?.name ? ` · ${order.respondedBy.name}` : ""}</small> : null}
                 {order.dispatchEmailStatus === "FAILED" ? <small className={styles.balancePending}>门户邮件提醒失败：{order.dispatchEmailError || "请检查供应商邮箱"}</small> : null}
                 {order.dispatchEmailStatus === "NO_RECIPIENT" ? <small>未配置供应商门户账号，本单按线下协同，可由内部登记工厂回复。</small> : null}
+                {order.dispatchSmsStatus === "SUBMITTED" ? <small>供应商短信：腾讯云已受理{order.dispatchSmsSentAt ? ` · ${formatDateTime(order.dispatchSmsSentAt)}` : ""}</small> : null}
+                {order.dispatchSmsStatus === "RETRYING" ? <small className={styles.balancePending}>供应商短信暂未受理，系统将自动重试：{order.dispatchSmsError || "腾讯云暂时不可用"}</small> : null}
+                {order.dispatchSmsStatus === "FAILED" ? <small className={styles.balancePending}>供应商短信发送失败：{order.dispatchSmsError || "请检查短信设置与供应商手机号"}</small> : null}
+                {order.dispatchSmsStatus === "UNKNOWN" ? <small className={styles.balancePending}>供应商短信发送结果未知，为避免重复通知已停止自动重试：{order.dispatchSmsError || "请人工确认"}</small> : null}
+                {order.dispatchSmsStatus === "NO_RECIPIENT" ? <small className={styles.balancePending}>供应商已开启短信通知，但未配置有效手机号。</small> : null}
+                {order.dispatchSmsStatus === "CONFIG_ERROR" ? <small className={styles.balancePending}>短信设置未完成，本单未发送短信。</small> : null}
                 {canRetryEmail && order.dispatchEmailStatus === "FAILED" ? (
                   <div><button className={actionStyles.emailRetryButton} type="button" disabled={Boolean(retryingPurchaseOrderId)} onClick={() => onRetryEmail?.(order.id)}>{retryingPurchaseOrderId === order.id ? "重试中..." : "重试门户邮件"}</button></div>
                 ) : null}

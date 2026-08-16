@@ -1,4 +1,9 @@
 import { Prisma } from "../generated/prisma/client.js";
+import { serializeProductionProgress } from "./factory-purchase-order-production-progress-values";
+import {
+  serializeInternalFactoryPurchaseLoadingResult,
+  type FactoryPurchaseLoadingResultRow,
+} from "./factory-purchase-order-loading-result-serialization";
 
 type LooseRecord = Record<string, unknown>;
 
@@ -88,7 +93,88 @@ export function serializePurchaseOrderRelations(order: LooseRecord) {
         status: String(adjustment.status || "PROVISIONAL"),
       };
     }) : [];
-  return { responseHistory, payments, adjustments };
+  const deliveryQuantityVariances = Array.isArray(order.deliveryQuantityVariances)
+    ? order.deliveryQuantityVariances.map((varianceValue) => {
+      const variance = record(varianceValue);
+      const requestedBy = record(variance.requestedBy);
+      const decidedBy = record(variance.decidedBy);
+      return {
+        id: String(variance.id || ""),
+        purchaseOrderId: String(variance.purchaseOrderId || order.id || ""),
+        sequenceNo: Number(variance.sequenceNo || 0),
+        status: String(variance.status || "PENDING"),
+        source: String(variance.source || "SUPPLIER_PORTAL"),
+        channel: String(variance.channel || "PORTAL"),
+        supplierContact: String(variance.supplierContact || ""),
+        supplierRequestedAt: variance.supplierRequestedAt || null,
+        requestedAt: variance.requestedAt || null,
+        requestedBy: requestedBy.id
+          ? { id: String(requestedBy.id), name: String(requestedBy.name || "") }
+          : null,
+        reason: String(variance.reason || ""),
+        decidedAt: variance.decidedAt || null,
+        decidedBy: decidedBy.id
+          ? { id: String(decidedBy.id), name: String(decidedBy.name || "") }
+          : null,
+        decisionRemark: String(variance.decisionRemark || ""),
+        items: Array.isArray(variance.items) ? variance.items.map((itemValue) => {
+          const item = record(itemValue);
+          const ordered = new Prisma.Decimal(decimalText(item.orderedQuantitySnapshot));
+          const proposed = new Prisma.Decimal(decimalText(item.proposedQuantity));
+          return {
+            purchaseOrderItemId: String(item.purchaseOrderItemId || ""),
+            orderedQuantity: ordered.toString(),
+            proposedQuantity: proposed.toString(),
+            differenceQuantity: proposed.sub(ordered).toString(),
+          };
+        }) : [],
+      };
+    }) : [];
+  const approvedVariance = deliveryQuantityVariances.find((variance) => variance.status === "APPROVED");
+  const loadingResults = Array.isArray(order.loadingResults)
+    ? order.loadingResults.map((result) => serializeInternalFactoryPurchaseLoadingResult(
+      result as FactoryPurchaseLoadingResultRow,
+    ))
+    : [];
+  const productionProgress = serializeProductionProgress(
+    Array.isArray(order.productionProgressReports)
+      ? order.productionProgressReports.map((reportValue) => {
+        const report = record(reportValue);
+        const reportedBy = record(report.reportedBy);
+        return {
+          id: String(report.id || ""),
+          sequenceNo: Number(report.sequenceNo || 0),
+          source: String(report.source || "SUPPLIER_PORTAL"),
+          channel: String(report.channel || "PORTAL"),
+          supplierContact: String(report.supplierContact || ""),
+          supplierReportedAt: report.supplierReportedAt as Date | string | null,
+          reportedAt: report.reportedAt as Date | string | null,
+          remark: String(report.remark || "") || null,
+          reportedBy: { id: String(reportedBy.id || ""), name: String(reportedBy.name || "") },
+          items: Array.isArray(report.items) ? report.items.map((itemValue) => {
+            const item = record(itemValue);
+            return {
+              purchaseOrderItemId: String(item.purchaseOrderItemId || ""),
+              completedQuantity: decimalText(item.completedQuantity),
+            };
+          }) : [],
+        };
+      })
+      : [],
+    Array.isArray(order.items) ? order.items.map((itemValue) => {
+      const item = record(itemValue);
+      return { id: String(item.id || ""), allocatedQuantity: decimalText(item.allocatedQuantity) };
+    }) : [],
+    approvedVariance,
+  );
+  return {
+    responseHistory,
+    payments,
+    adjustments,
+    productionProgress,
+    deliveryQuantityVariances,
+    loadingResults,
+  };
 }
 
 export function serializePurchaseOrderSettlement(

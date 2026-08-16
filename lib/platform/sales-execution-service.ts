@@ -39,6 +39,7 @@ import {
   serializeSalesExecution,
 } from "./sales-execution-values";
 import { appendSalesExecutionVersion } from "./sales-execution-version";
+import { retireVoidedSalesExecutionNotifications } from "./sales-execution-void-notifications";
 export { getSalesExecution, listSalesExecutions } from "./sales-execution-query-service";
 type AuditRequest = Parameters<typeof writeAudit>[0];
 type LooseRecord = Record<string, unknown>;
@@ -252,34 +253,7 @@ export async function voidSalesExecution(
     if (changed.count !== 1) {
       throw codedError("销售执行单状态已变化，请刷新后重试", 409, "SALES_EXECUTION_REVISION_CONFLICT");
     }
-    if (purchaseOrderIds.length) {
-      const activeDelivery = await tx.notificationOutbox.findFirst({
-        where: {
-          type: "FACTORY_PURCHASE_ORDER_DISPATCH",
-          relatedEntityType: "factory_purchase_order",
-          relatedEntityId: { in: purchaseOrderIds },
-          status: "sending",
-          updatedAt: { gt: new Date(Date.now() - 5 * 60 * 1000) },
-        },
-        select: { id: true },
-      });
-      if (activeDelivery) {
-        throw codedError(
-          "工厂采购单邮件正在发送，请稍后再作废",
-          409,
-          "FACTORY_PURCHASE_ORDER_EMAIL_SENDING",
-        );
-      }
-      await tx.notificationOutbox.updateMany({
-        where: {
-          type: "FACTORY_PURCHASE_ORDER_DISPATCH",
-          relatedEntityType: "factory_purchase_order",
-          relatedEntityId: { in: purchaseOrderIds },
-          status: { in: ["queued", "failed", "pending", "sending"] },
-        },
-        data: { status: "cancelled", lastError: "销售执行单及工厂采购单已作废" },
-      });
-    }
+    await retireVoidedSalesExecutionNotifications(tx, purchaseOrderIds, voidedAt);
     await tx.factoryPurchaseOrder.updateMany({
       where: { executionId: before.id, status: { not: "VOIDED" } },
       data: {

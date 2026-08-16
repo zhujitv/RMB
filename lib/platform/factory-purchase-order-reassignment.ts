@@ -17,8 +17,9 @@ import {
   requireFactoryPurchaseOrderReplacementSupplier,
 } from "./factory-purchase-order-reassignment-validation";
 import { queueFactoryPurchaseOrderDispatchOutbox } from "./factory-purchase-order-dispatch-outbox";
-import { processFactoryPurchaseOrderDispatchOutbox } from "./factory-purchase-order-dispatch-notifications";
 import { retireRejectedPurchaseOrderNotifications } from "./factory-purchase-order-reassignment-notifications";
+import { queueFactoryPurchaseOrderDispatchSmsOutbox } from "./factory-purchase-order-dispatch-sms-outbox";
+import { processReplacementPurchaseOrderNotifications, summarizeReplacementPurchaseOrderNotifications, type ReplacementPurchaseOrderDispatchResult } from "./factory-purchase-order-reassignment-delivery";
 
 type AuditRequest = Parameters<typeof writeAudit>[0];
 
@@ -40,11 +41,7 @@ export async function reassignRejectedFactoryPurchaseOrder(
     throw codedError("工厂采购单不存在或无权访问", 404, "FACTORY_PURCHASE_ORDER_NOT_FOUND");
   }
 
-  let transactionResult: {
-    replacementPurchaseOrderId: string;
-    queued: number;
-    missingRecipient: number;
-  };
+  let transactionResult: ReplacementPurchaseOrderDispatchResult;
 
   try {
     transactionResult = await prisma.$transaction(async (tx) => {
@@ -167,6 +164,7 @@ export async function reassignRejectedFactoryPurchaseOrder(
           prepaymentRequiredBeforeProduction:
             supplier.purchasePrepaymentRatio.gt(0)
             && supplier.purchasePrepaymentRequiredBeforeProduction,
+          deliveryQuantityToleranceRatio: supplier.purchaseQuantityToleranceRatio,
           delayGraceDays: rejectedOrder.delayGraceDays,
           delayPenaltyRatePerDay: rejectedOrder.delayPenaltyRatePerDay,
           delayPenaltyCapRatio: rejectedOrder.delayPenaltyCapRatio,
@@ -198,6 +196,7 @@ export async function reassignRejectedFactoryPurchaseOrder(
           dispatchedById: actorId,
           dispatchVersionNumber: nextRevision,
           dispatchEmailStatus: "NOT_SENT",
+          dispatchSmsStatus: "NOT_SENT",
           revision: { increment: 1 },
           updatedById: actorId,
         },
@@ -235,6 +234,9 @@ export async function reassignRejectedFactoryPurchaseOrder(
       const queued = await queueFactoryPurchaseOrderDispatchOutbox(tx, before.id, nextRevision, {
         purchaseOrderIds: [replacement.id],
       });
+      const queuedSms = await queueFactoryPurchaseOrderDispatchSmsOutbox(tx, before.id, nextRevision, {
+        purchaseOrderIds: [replacement.id],
+      });
       await appendSalesExecutionVersion(tx, before.id, actor);
       const saved = await loadSalesExecution(before.id, actor, tx);
       await writeAudit(
@@ -251,6 +253,10 @@ export async function reassignRejectedFactoryPurchaseOrder(
         replacementPurchaseOrderId: replacement.id,
         queued: queued.queued,
         missingRecipient: queued.missingRecipient,
+        queuedSms: queuedSms.queued,
+        missingSmsRecipient: queuedSms.missingRecipient,
+        disabledSms: queuedSms.disabled,
+        smsConfigurationError: queuedSms.configurationError,
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error: unknown) {
@@ -272,27 +278,21 @@ export async function reassignRejectedFactoryPurchaseOrder(
     throw error;
   }
 
-  const delivery = await processFactoryPurchaseOrderDispatchOutbox({
-    limit: 20,
-    purchaseOrderIds: [transactionResult.replacementPurchaseOrderId],
-  }).catch(() => ({
-    scanned: 0,
-    sent: 0,
-    failed: 0,
-    skipped: 0,
-    queued: transactionResult.queued,
-    results: [],
-  }));
+  const deliveries = await processReplacementPurchaseOrderNotifications({
+    purchaseOrderId: transactionResult.replacementPurchaseOrderId,
+    queuedEmail: transactionResult.queued,
+    queuedSms: transactionResult.queuedSms,
+  });
   const execution = serializeSalesExecution(await loadSalesExecution(executionId, actor), true);
+  const notificationSummaries = summarizeReplacementPurchaseOrderNotifications(deliveries, {
+    missingEmail: transactionResult.missingRecipient,
+    missingSms: transactionResult.missingSmsRecipient,
+    disabledSms: transactionResult.disabledSms,
+    smsConfigurationError: transactionResult.smsConfigurationError,
+  });
   return {
     execution,
     replacementPurchaseOrderId: transactionResult.replacementPurchaseOrderId,
-    notificationSummary: {
-      total: 1,
-      sent: delivery.sent,
-      failed: delivery.failed,
-      queued: delivery.queued,
-      missingRecipient: transactionResult.missingRecipient,
-    },
+    ...notificationSummaries,
   };
 }

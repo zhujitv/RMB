@@ -1,4 +1,10 @@
+import { Prisma } from "../generated/prisma/client.js";
 import { codedError, isPlainRecord } from "./shared-base-errors";
+import {
+  resolveDeliveryQuantityTargets,
+  type ApprovedDeliveryQuantityVariance,
+  type DeliveryQuantityTargetItem,
+} from "./factory-purchase-order-delivery-quantity-variance-values";
 
 type InternalDecision = "ACCEPTED" | "REJECTED";
 
@@ -50,10 +56,91 @@ function requiredDate(value: unknown) {
   return { date, text };
 }
 
-export function normalizeActualDeliveryInput(input: unknown) {
+function normalizeActualDeliveryItems(
+  value: unknown,
+  targets: DeliveryQuantityTargetItem[],
+  approvedVariance?: ApprovedDeliveryQuantityVariance,
+) {
+  if (!Array.isArray(value) || !targets.length || value.length !== targets.length) {
+    throw codedError(
+      "请完整填写本采购单全部产品的实际交付数量",
+      400,
+      "FACTORY_ACTUAL_DELIVERY_ITEMS_REQUIRED",
+    );
+  }
+  const expectedById = new Map(resolveDeliveryQuantityTargets(targets, approvedVariance)
+    .map((item) => [item.purchaseOrderItemId, item.targetQuantity]));
+  const seen = new Set<string>();
+  return value.map((raw, index) => {
+    if (!isPlainRecord(raw)) {
+      throw codedError(
+        `第 ${index + 1} 行实际交付数量格式错误`,
+        400,
+        "FACTORY_ACTUAL_DELIVERY_ITEM_INVALID",
+      );
+    }
+    const purchaseOrderItemId = typeof raw.purchaseOrderItemId === "string"
+      ? raw.purchaseOrderItemId.trim()
+      : "";
+    const expected = expectedById.get(purchaseOrderItemId);
+    if (!expected) {
+      throw codedError(
+        "实际交付数量包含无效采购明细",
+        400,
+        "FACTORY_ACTUAL_DELIVERY_ITEM_NOT_FOUND",
+      );
+    }
+    if (seen.has(purchaseOrderItemId)) {
+      throw codedError(
+        "同一采购明细不能重复填写实际交付数量",
+        400,
+        "FACTORY_ACTUAL_DELIVERY_ITEM_DUPLICATE",
+      );
+    }
+    seen.add(purchaseOrderItemId);
+    const text = typeof raw.actualDeliveredQuantity === "string"
+      ? raw.actualDeliveredQuantity.trim()
+      : "";
+    if (!/^(?:0|[1-9]\d{0,13})(?:\.\d{1,4})?$/.test(text)) {
+      throw codedError(
+        `第 ${index + 1} 行实际交付数量格式错误，最多 14 位整数和 4 位小数`,
+        400,
+        "FACTORY_ACTUAL_DELIVERY_QUANTITY_INVALID",
+      );
+    }
+    const quantity = new Prisma.Decimal(text);
+    if (!quantity.gt(0)) {
+      throw codedError(
+        `第 ${index + 1} 行实际交付数量必须大于 0`,
+        400,
+        "FACTORY_ACTUAL_DELIVERY_QUANTITY_INVALID",
+      );
+    }
+    if (!quantity.eq(expected)) {
+      throw codedError(
+        `第 ${index + 1} 行实际交付数量必须与批准的交付目标一致`,
+        409,
+        "FACTORY_ACTUAL_DELIVERY_QUANTITY_MISMATCH",
+      );
+    }
+    return { purchaseOrderItemId, actualDeliveredQuantity: quantity };
+  });
+}
+
+export function normalizeActualDeliveryInput(
+  input: unknown,
+  targets?: DeliveryQuantityTargetItem[],
+  approvedVariance?: ApprovedDeliveryQuantityVariance,
+) {
   const body = inputRecord(input, "实际交付登记");
   const actualDelivery = requiredDate(body.actualDeliveryDate ?? body.deliveryDate);
-  return { ...actualDelivery, expectedRevision: expectedRevision(body.expectedRevision) };
+  return {
+    ...actualDelivery,
+    expectedRevision: expectedRevision(body.expectedRevision),
+    items: targets
+      ? normalizeActualDeliveryItems(body.items, targets, approvedVariance)
+      : [],
+  };
 }
 
 export function shanghaiDateText(value: Date) {

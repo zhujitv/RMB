@@ -1,6 +1,6 @@
 import type { UserCustomPermissions } from "./types-integrations";
 
-export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "customerProducts" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
+export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "customerProducts" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "smsIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
 
 export type SettingsFilters = {
   customers: { keyword: string };
@@ -70,7 +70,10 @@ export type SupplierRow = {
   bankAccount?: string;
   purchasePaymentTerm?: string;
   purchasePrepaymentPercent?: string;
+  purchaseQuantityTolerancePercent?: string;
   purchasePrepaymentRequiredBeforeProduction?: boolean;
+  dispatchSmsEnabled?: boolean;
+  dispatchSmsPhone?: string;
   allowDomesticLogisticsEntry?: boolean;
   allowLogisticsExpenseEntry?: boolean;
   allowLogisticsInvoiceUpload?: boolean;

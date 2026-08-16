@@ -12,7 +12,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: "customerCommunication", label: "客户沟通", description: "按订单发送和追踪客户清关资料邮件。" },
   { key: "oceanControlTower", label: "运输监控", description: "集中查看在途海运跟踪和 ETA 预警。", parentKey: "domesticLogistics" },
   { key: "logisticsFees", label: "物流费用", description: "录入、审核、月结和维护物流费用。" },
-  { key: "supplierPurchaseOrders", label: "工厂采购单", description: "查看本工厂已下发采购单并确认或反馈交期。" },
+  { key: "supplierPurchaseOrders", label: "工厂采购单", description: "确认交期、填报生产进度并申请交付数量差异。" },
   { key: "supplierDocuments", label: "资料回传", description: "下载合同样本后回传工厂采购合同和增值税发票 PDF。" },
   { key: "taxRefund", label: "退税资料", description: "汇总资料完整度、打包下载和提交归档。" },
   { key: "reports", label: "报表中心", description: "在线查询后按需导出报表。" },

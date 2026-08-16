@@ -191,6 +191,8 @@
   color: #b91c1c;
 }
 
+.statusStack { display: flex; align-items: flex-start; flex-direction: column; gap: 5px; }
+
 .empty,
 .loading {
   padding: 42px 18px;

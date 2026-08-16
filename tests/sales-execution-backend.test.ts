@@ -60,6 +60,10 @@ const directCreate = readFileSync("lib/platform/sales-execution-create-direct.ts
 const directItemsService = readFileSync("lib/platform/sales-execution-direct-items.ts", "utf8");
 const quoteCreate = readFileSync("lib/platform/sales-execution-create-quotation.ts", "utf8");
 const mutationService = readFileSync("lib/platform/sales-execution-service.ts", "utf8");
+const voidNotificationService = readFileSync(
+  "lib/platform/sales-execution-void-notifications.ts",
+  "utf8",
+);
 const itemWeightsService = readFileSync("lib/platform/sales-execution-item-weights.ts", "utf8");
 const purchaseService = readFileSync("lib/platform/sales-execution-purchase-orders.ts", "utf8");
 const dispatchService = readFileSync("lib/platform/sales-execution-dispatch.ts", "utf8");
@@ -187,8 +191,9 @@ test("dispatch validates exact allocation and atomically queues recoverable per-
       < factoryNotificationDefinition.indexOf('"{itemLines}"'),
   );
   assert.match(dispatchService, /limit: 4/);
-  assert.match(mutationService, /FACTORY_PURCHASE_ORDER_EMAIL_SENDING/);
-  assert.match(mutationService, /status: \{ in: \["queued", "failed", "pending", "sending"\] \}/);
+  assert.match(mutationService, /retireVoidedSalesExecutionNotifications/);
+  assert.match(voidNotificationService, /FACTORY_PURCHASE_ORDER_EMAIL_SENDING/);
+  assert.match(voidNotificationService, /status: \{ in: \["queued", "failed", "pending", "sending"\] \}/);
   assert.match(notificationCronRoute, /processFactoryPurchaseOrderDispatchOutbox/);
   assert.doesNotMatch(dispatchService, /ReceivableOrder|OrderCost|qualityInspection/);
 });

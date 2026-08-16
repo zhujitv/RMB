@@ -63,12 +63,16 @@ test("supplier purchase order DTO is rebuilt from an explicit non-sales whitelis
     "delayPenaltyCapRatio",
     "delayPenaltyRatePerDay",
     "deliveryFrozen",
+    "deliveryQuantityToleranceRatio",
+    "deliveryQuantityVariances",
     "actualDeliveryDate",
     "actualDeliveryRecordedAt",
     "confirmedSupplierDeliveryDate",
+    "containerLoads",
     "id",
     "initialSupplierDeliveryDate",
     "items",
+    "loadingResults",
     "paidPrepaymentAmount",
     "paymentTerm",
     "penaltyBaseAmount",
@@ -82,6 +86,7 @@ test("supplier purchase order DTO is rebuilt from an explicit non-sales whitelis
     "productionCompletionRecordedAt",
     "productionCompletionRemark",
     "productionCompletionSource",
+    "productionProgress",
     "productionStartedAt",
     "productionStatus",
     "purchaseCurrency",
@@ -100,6 +105,7 @@ test("supplier purchase order DTO is rebuilt from an explicit non-sales whitelis
     "id",
     "unitPrice",
     "amount",
+    "actualDeliveredQuantity",
     "priceRequired",
     "supplierFilledPrice",
     "quantity",
@@ -161,6 +167,62 @@ test("supplier purchase order DTO exposes only effective factory-facing price da
   assert.equal(confirmed.items[0]?.unitPrice, "12.5");
   assert.equal(confirmed.items[0]?.amount, "25");
   assert.equal(confirmed.items[0]?.supplierFilledPrice, true);
+});
+
+test("supplier progress DTO never exposes an internal offline recorder", () => {
+  const dto = serializeSupplierPurchaseOrder(purchaseOrderRow({
+    productionProgressReports: [{
+      id: "report-1",
+      sequenceNo: 1,
+      source: "INTERNAL_OFFLINE",
+      channel: "PHONE",
+      supplierContact: "供应商联系人",
+      supplierReportedAt: new Date("2026-08-15T08:00:00.000Z"),
+      reportedAt: new Date("2026-08-15T08:01:00.000Z"),
+      remark: null,
+      reportedBy: { id: "internal-user-secret", name: "内部员工姓名" },
+      items: [{ purchaseOrderItemId: "purchase-order-item-1", completedQuantity: "10" }],
+    }],
+  }));
+  assert.equal(dto.productionProgress.history[0]?.reportedBy.id, "");
+  assert.equal(dto.productionProgress.history[0]?.reportedBy.name, "");
+  assert.equal(JSON.stringify(dto).includes("内部员工姓名"), false);
+  assert.equal(JSON.stringify(dto).includes("internal-user-secret"), false);
+});
+
+test("supplier progress DTO hides its baseline row while preserving the first visible increment", () => {
+  const productionProgressReports = Array.from({ length: 101 }, (_, index) => {
+    const sequenceNo = index + 1;
+    return {
+      id: `report-${sequenceNo}`,
+      sequenceNo,
+      source: "INTERNAL_OFFLINE",
+      channel: "PHONE",
+      supplierContact: sequenceNo === 1 ? "hidden-baseline-contact" : "供应商联系人",
+      supplierReportedAt: new Date(Date.UTC(2026, 7, 1, 0, sequenceNo)),
+      reportedAt: new Date(Date.UTC(2026, 7, 1, 0, sequenceNo)),
+      remark: sequenceNo === 1 ? "hidden-baseline-remark" : null,
+      reportedBy: {
+        id: sequenceNo === 1 ? "hidden-baseline-user" : `internal-${sequenceNo}`,
+        name: sequenceNo === 1 ? "隐藏员工" : `员工 ${sequenceNo}`,
+      },
+      items: [{ purchaseOrderItemId: "purchase-order-item-1", completedQuantity: sequenceNo }],
+    };
+  });
+
+  const dto = serializeSupplierPurchaseOrder(purchaseOrderRow({ productionProgressReports }));
+
+  assert.equal(dto.productionProgress.history.length, 100);
+  assert.equal(dto.productionProgress.history[0]?.sequence, 2);
+  assert.equal(dto.productionProgress.history[0]?.items[0]?.incrementQuantity, "1");
+  assert.equal(dto.productionProgress.latestSequence, 101);
+  assert.equal(dto.productionProgress.history[0]?.reportedBy.id, "");
+  assert.equal(dto.productionProgress.history[0]?.reportedBy.name, "");
+  const serialized = JSON.stringify(dto);
+  assert.equal(serialized.includes("hidden-baseline-contact"), false);
+  assert.equal(serialized.includes("hidden-baseline-remark"), false);
+  assert.equal(serialized.includes("hidden-baseline-user"), false);
+  assert.equal(serialized.includes("隐藏员工"), false);
 });
 
 test("supplier response validation enforces the response field contract", () => {
@@ -265,9 +327,11 @@ test("supplier purchase order service scopes every read and response before seri
   assert.match(responseCore, /before\.confirmedSupplierDeliveryDate \|\| before\.supplierDeliveryDate \|\| before\.requestedDeliveryDate/);
   assert.match(responseCore, /supplierDeliveryDate: response\.action === "ACCEPTED" \? response\.deliveryDate : before\.supplierDeliveryDate/);
   assert.match(responseCore, /const firstAcceptedResponse = response\.action === "ACCEPTED" && !before\.initialSupplierDeliveryDate/);
-  for (const forbidden of ["customer", "businessEntityId", "salespersonUserId", "salesUnitPrice", "salesAmount", "executionId", "executionItemId", "subtotal"]) {
+  for (const forbidden of ["customer", "businessEntityId", "salespersonUserId", "salesUnitPrice", "salesAmount", "executionItemId", "subtotal"]) {
     assert.equal(query.includes(forbidden + ": true"), false, forbidden);
   }
+  assert.match(query, /executionId: true/);
+  assert.doesNotMatch(values, /executionId: row\.executionId/);
 });
 
 test("supplier purchase order API, workspace module, and focused link are independently wired", () => {

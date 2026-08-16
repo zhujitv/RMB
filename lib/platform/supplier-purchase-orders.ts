@@ -28,8 +28,14 @@ export type SupplierPurchaseOrderActor = {
 } | null | undefined;
 type QueryLike = Pick<URLSearchParams, "get">;
 type AuditRequest = Parameters<typeof writeAudit>[0];
-function publicDto(row: SelectedSupplierPurchaseOrder) {
-  return serializeSupplierPurchaseOrder(row as SupplierPurchaseOrderPublicRow);
+function publicDto(
+  row: SelectedSupplierPurchaseOrder,
+  containerLoads: SupplierPurchaseOrderPublicRow["containerLoads"] = [],
+) {
+  return serializeSupplierPurchaseOrder({
+    ...row,
+    containerLoads,
+  } as unknown as SupplierPurchaseOrderPublicRow);
 }
 
 export async function assertActiveSupplierPurchaseOrderActor(
@@ -92,7 +98,7 @@ export async function listSupplierPurchaseOrders(query: QueryLike | null | undef
       take: pageSize,
     }),
   ]);
-  return pageResult(rows.map(publicDto), total, page, pageSize);
+  return pageResult(rows.map((row) => publicDto(row)), total, page, pageSize);
 }
 async function findSupplierPurchaseOrder(
   id: string,
@@ -108,7 +114,70 @@ export async function getSupplierPurchaseOrder(id: string, actor: SupplierPurcha
   assertRead(actor, "supplierPurchaseOrders");
   const row = await findSupplierPurchaseOrder(id, actor);
   if (!row) throw codedError("采购单不存在或不可访问", 404, "SUPPLIER_PURCHASE_ORDER_NOT_FOUND");
-  return publicDto(row);
+  const containerLoads = await prisma.salesExecutionContainerLoad.findMany({
+    where: {
+      executionId: row.executionId,
+      status: { in: ["OPEN", "RELEASED"] },
+      allocations: { some: { purchaseOrderId: row.id } },
+    },
+    orderBy: [{ sequenceNo: "asc" }],
+    select: {
+      id: true,
+      sequenceNo: true,
+      status: true,
+      containerNo: true,
+      containerType: true,
+      sealNo: true,
+      loadingDate: true,
+      revision: true,
+      releasedAt: true,
+      allocations: {
+        where: { purchaseOrderId: row.id },
+        orderBy: [{ purchaseOrderItemId: "asc" }],
+        select: {
+          id: true,
+          purchaseOrderId: true,
+          purchaseOrderItemId: true,
+          plannedQuantity: true,
+        },
+      },
+      loadingResults: {
+        where: { purchaseOrderId: row.id },
+        orderBy: [{ sequenceNo: "desc" }],
+        select: {
+          id: true,
+          containerLoadId: true,
+          executionId: true,
+          purchaseOrderId: true,
+          sequenceNo: true,
+          status: true,
+          reason: true,
+          reasonDetail: true,
+          source: true,
+          channel: true,
+          supplierContact: true,
+          requestedAt: true,
+          decidedAt: true,
+          legacyBackfill: true,
+          containerLoad: { select: { loadingDate: true } },
+          items: {
+            orderBy: [{ purchaseOrderItemId: "asc" }],
+            select: {
+              purchaseOrderItemId: true,
+              plannedQuantitySnapshot: true,
+              deliveryTargetQuantitySnapshot: true,
+              completedQuantitySnapshot: true,
+              previouslyApprovedLoadedQuantitySnapshot: true,
+              loadedQuantity: true,
+              cumulativeApprovedLoadedQuantitySnapshot: true,
+              warehouseRetainedQuantitySnapshot: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  return publicDto(row, containerLoads);
 }
 export async function respondToSupplierPurchaseOrder(
   request: AuditRequest,

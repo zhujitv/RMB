@@ -94,6 +94,7 @@ export type PurchaseOrderItem = {
   descriptionSnapshot?: string | null;
   unitSnapshot?: string | null;
   allocatedQuantity?: string | number | null;
+  actualDeliveredQuantity?: string | number | null;
   quantity?: string | number | null;
   purchaseUnitPrice?: string | number | null;
   supplierConfirmedUnitPrice?: string | number | null;
@@ -128,6 +129,7 @@ export type FactoryPurchaseOrder = {
   prepaymentRequiredAmount?: string | number | null;
   paidPrepaymentAmount?: string | number | null;
   prepaymentRequiredBeforeProduction?: boolean;
+  deliveryQuantityToleranceRatio?: string | number | null;
   initialSupplierDeliveryDate?: string | null;
   confirmedSupplierDeliveryDate?: string | null;
   penaltyBaseAmount?: string | number | null;
@@ -148,6 +150,8 @@ export type FactoryPurchaseOrder = {
   productionCompletionRemark?: string | null;
   productionCompletionEvidenceNote?: string | null;
   productionCompletionEvidence?: string | FactoryConfirmationEvidence | null;
+  productionProgress?: ProductionProgressDto;
+  deliveryQuantityVariances?: DeliveryQuantityVariance[];
   actualDeliveryDate?: string | null;
   actualDeliveryRecordedAt?: string | null;
   actualDeliveryRecordedBy?: { id?: string; name?: string | null } | null;
@@ -157,6 +161,9 @@ export type FactoryPurchaseOrder = {
   dispatchEmailStatus?: string | null;
   dispatchEmailSentAt?: string | null;
   dispatchEmailError?: string | null;
+  dispatchSmsStatus?: string | null;
+  dispatchSmsSentAt?: string | null;
+  dispatchSmsError?: string | null;
   supplierDeliveryDate?: string | null;
   supplierResponseRemark?: string | null;
   supplierResponseSequence?: number | null;
@@ -194,3 +201,5 @@ export type FactoryPurchaseOrder = {
   remark?: string | null;
   items?: PurchaseOrderItem[];
 };
+import type { ProductionProgressDto } from "../../../lib/platform/factory-purchase-order-production-progress-values";
+import type { DeliveryQuantityVariance } from "../delivery-quantity-variance";

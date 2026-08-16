@@ -2,11 +2,9 @@ import { Prisma } from "../generated/prisma/client.js";
 import { calculateFactoryDelayPenalty, factoryPrepaymentRequiredAmount } from "./factory-purchase-order-financials";
 import { productVisibleDescription } from "./quotation-calculations";
 import { serializeSalesExecutionShipping } from "./sales-execution-shipping-serialization";
-import {
-  serializePurchaseOrderRelations,
-  serializePurchaseOrderSettlement,
-} from "./sales-execution-purchase-order-relations";
+import { serializePurchaseOrderRelations, serializePurchaseOrderSettlement } from "./sales-execution-purchase-order-relations";
 import { serializeFactoryConfirmationEvents } from "./sales-execution-confirmation-events";
+import { serializeInternalContainerLoad, type InternalContainerLoadRow } from "./sales-execution-container-load-serialization";
 type LooseRecord = Record<string, unknown>;
 export function executionRecord(value: unknown): LooseRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as LooseRecord : {};
@@ -66,6 +64,7 @@ function serializePurchaseOrderItem(value: unknown) {
     specificationSnapshot,
     unitSnapshot: String(item.unitSnapshot || ""),
     allocatedQuantity: decimalText(item.allocatedQuantity),
+    actualDeliveredQuantity: nullableDecimalText(item.actualDeliveredQuantity),
     purchaseUnitPrice,
     supplierConfirmedUnitPrice,
     effectivePurchaseUnitPrice: supplierConfirmedUnitPrice ?? purchaseUnitPrice,
@@ -96,7 +95,14 @@ function serializePurchaseOrder(value: unknown) {
   const productionCompletedBy = executionRecord(order.productionCompletedBy);
   const actualDeliveryRecordedBy = executionRecord(order.actualDeliveryRecordedBy);
   const items = Array.isArray(order.items) ? order.items.map(serializePurchaseOrderItem) : [];
-  const { responseHistory, payments, adjustments } = serializePurchaseOrderRelations(order);
+  const {
+    responseHistory,
+    payments,
+    adjustments,
+    productionProgress,
+    deliveryQuantityVariances,
+    loadingResults,
+  } = serializePurchaseOrderRelations(order);
   const effectiveSubtotal = effectivePurchaseOrderSubtotal(items);
   const penaltyBaseAmount = nullableDecimalText(order.penaltyBaseAmount) ?? effectiveSubtotal;
   const prepaymentRequiredAmount = factoryPrepaymentRequiredAmount(
@@ -148,6 +154,7 @@ function serializePurchaseOrder(value: unknown) {
     prepaymentRequiredAmount,
     paidPrepaymentAmount,
     prepaymentRequiredBeforeProduction: Boolean(order.prepaymentRequiredBeforeProduction),
+    deliveryQuantityToleranceRatio: decimalText(order.deliveryQuantityToleranceRatio, "0.05"),
     initialSupplierDeliveryDate: order.initialSupplierDeliveryDate || null,
     confirmedSupplierDeliveryDate: order.confirmedSupplierDeliveryDate || null,
     penaltyBaseAmount,
@@ -168,6 +175,9 @@ function serializePurchaseOrder(value: unknown) {
     productionCompletionRemark: String(order.productionCompletionRemark || ""),
     productionCompletionEvidenceNote: String(order.productionCompletionEvidenceNote || ""),
     productionCompletionEvidence: completionEvent?.evidence || null,
+    productionProgress,
+    deliveryQuantityVariances,
+    loadingResults,
     actualDeliveryDate: order.actualDeliveryDate || null,
     actualDeliveryRecordedAt: order.actualDeliveryRecordedAt || null,
     actualDeliveryRecordedBy: actualDeliveryRecordedBy.id ? { id: String(actualDeliveryRecordedBy.id), name: String(actualDeliveryRecordedBy.name || "") } : null,
@@ -179,6 +189,9 @@ function serializePurchaseOrder(value: unknown) {
     dispatchEmailStatus: order.dispatchEmailStatus ? String(order.dispatchEmailStatus) : null,
     dispatchEmailSentAt: order.dispatchEmailSentAt || null,
     dispatchEmailError: String(order.dispatchEmailError || ""),
+    dispatchSmsStatus: order.dispatchSmsStatus ? String(order.dispatchSmsStatus) : null,
+    dispatchSmsSentAt: order.dispatchSmsSentAt || null,
+    dispatchSmsError: String(order.dispatchSmsError || ""),
     supplierDeliveryDate: order.supplierDeliveryDate || null,
     supplierResponseRemark: String(order.supplierResponseRemark || ""),
     supplierResponseSequence: Number(order.supplierResponseSequence || 0),
@@ -204,6 +217,9 @@ export function serializeSalesExecution(value: unknown, includeDetail = false) {
   const versions = Array.isArray(execution.versions) ? execution.versions : [];
   const items = Array.isArray(execution.items) ? execution.items.map(serializeExecutionItem) : [];
   const purchaseOrders = Array.isArray(execution.purchaseOrders) ? execution.purchaseOrders.map(serializePurchaseOrder) : [];
+  const containerLoads = Array.isArray(execution.containerLoads)
+    ? execution.containerLoads.map((container) => serializeInternalContainerLoad(container as InternalContainerLoadRow))
+    : [];
   const customerName = String(customer.name || execution.customerNameSnapshot || "");
   const customerShortName = String(customer.shortName || execution.customerShortNameSnapshot || "");
   const entityName = String(entity.name || execution.businessEntityNameSnapshot || "");
@@ -262,6 +278,7 @@ export function serializeSalesExecution(value: unknown, includeDetail = false) {
     ...(includeDetail ? {
       items,
       purchaseOrders,
+      containerLoads,
       versions: versions.map((versionValue) => {
         const version = executionRecord(versionValue);
         return {
@@ -278,7 +295,6 @@ export function serializeSalesExecution(value: unknown, includeDetail = false) {
   };
 }
 export function salesExecutionSnapshot(value: unknown) {
-  const serialized = serializeSalesExecution(value, true);
-  const { versions: _versions, ...snapshot } = serialized;
+  const { versions: _versions, ...snapshot } = serializeSalesExecution(value, true);
   return snapshot as unknown as Prisma.InputJsonValue;
 }

@@ -1,6 +1,30 @@
 import styles from "../../WorkspaceShell.module.css";
 import type { NotificationDeliveryLogRow } from "./types";
 
+function deliveryTypeLabel(log: NotificationDeliveryLogRow) {
+  if (log.type === "FACTORY_PURCHASE_ORDER_DISPATCH_SMS") return "采购订单短信通知";
+  return log.templateName || log.type;
+}
+
+function deliveryStatusLabel(log: NotificationDeliveryLogRow) {
+  if (String(log.channel || "EMAIL").toUpperCase() === "SMS") {
+    const labels: Record<string, string> = {
+      SUBMITTED: "腾讯云已受理",
+      RETRYING: "待自动重试",
+      FAILED: "失败",
+      UNKNOWN: "发送结果未知",
+      CANCELLED: "已取消",
+      SENDING: "发送中",
+    };
+    return labels[String(log.status || "").toUpperCase()] || log.status;
+  }
+  return log.status === "sent" ? "已发送" : log.status === "failed" ? "失败" : log.status;
+}
+
+function deliveryRecipients(log: NotificationDeliveryLogRow) {
+  return [...(log.recipientEmails || []), ...(log.recipientPhones || [])].join("，") || "-";
+}
+
 export function NotificationDeliveryLogTable({ logs }: { logs: NotificationDeliveryLogRow[] }) {
   return (
     <section className={styles.documentGroupCard}>
@@ -21,9 +45,9 @@ export function NotificationDeliveryLogTable({ logs }: { logs: NotificationDeliv
             {logs.length ? logs.map((log) => (
               <tr key={log.id}>
                 <td>{log.createdAt ? new Date(log.createdAt).toLocaleString("zh-CN", { hour12: false }) : "-"}</td>
-                <td>{log.templateName || log.type}</td>
-                <td>{log.status === "sent" ? "已发送" : log.status === "failed" ? "失败" : log.status}</td>
-                <td>{(log.recipientEmails || []).join("，") || "-"}</td>
+                <td>{deliveryTypeLabel(log)}</td>
+                <td>{deliveryStatusLabel(log)}</td>
+                <td>{deliveryRecipients(log)}</td>
                 <td>{log.subject || "-"}</td>
                 <td>{log.errorMessage || "-"}</td>
               </tr>

@@ -209,6 +209,7 @@ export async function replaceFactoryPurchaseOrderRows(
         prepaymentRatio: supplier.purchasePrepaymentRatio,
         prepaymentRequiredBeforeProduction:
           supplier.purchasePrepaymentRatio.gt(0) && supplier.purchasePrepaymentRequiredBeforeProduction,
+        deliveryQuantityToleranceRatio: supplier.purchaseQuantityToleranceRatio,
         delayGraceDays: 10,
         delayPenaltyRatePerDay: new Prisma.Decimal("0.00003"),
         delayPenaltyCapRatio: null,

@@ -1,4 +1,5 @@
 import type { CustomerAutocompleteOption } from "../../CustomerAutocomplete";
+import type { ContainerLoad } from "../container-load";
 import type { FactoryPurchaseOrder } from "./factory-purchase-order-types";
 export type {
   FactoryPurchaseOrder,
@@ -112,6 +113,7 @@ export type SalesExecutionRow = {
   revision?: number | null;
   items?: SalesExecutionItem[];
   purchaseOrders?: FactoryPurchaseOrder[];
+  containerLoads?: ContainerLoad[];
   versions?: SalesExecutionVersion[];
   dispatchedAt?: string | null;
   dispatchedBy?: { id?: string; name?: string | null } | null;

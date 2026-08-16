@@ -4,6 +4,8 @@ import type {
   FactoryConfirmationChannel,
   FactoryConfirmationSource,
 } from "./factory-purchase-order-response-core";
+import { serializeProductionProgress } from "./factory-purchase-order-production-progress-values";
+import { approvedDeliveryQuantityVariance } from "./factory-purchase-order-delivery-quantity-variance-values";
 import type { SelectedSupplierPurchaseOrder } from "./supplier-purchase-orders-query";
 
 export type FactoryProductionCompletionAttribution = {
@@ -47,6 +49,25 @@ export async function applyFactoryPurchaseOrderProductionCompletion({
   if (before.revision !== expectedRevision) {
     throw codedError("采购单状态已变化，请刷新后重试", 409, "SUPPLIER_PURCHASE_ORDER_REVISION_CONFLICT");
   }
+  if (before.deliveryQuantityVariances.some((variance) => variance.status === "PENDING")) {
+    throw codedError(
+      "交付数量差异申请尚未审批，审批后才能确认生产完成",
+      409,
+      "FACTORY_PRODUCTION_COMPLETION_VARIANCE_PENDING",
+    );
+  }
+  const progress = serializeProductionProgress(
+    before.productionProgressReports,
+    before.items.map((item) => ({ id: item.id, allocatedQuantity: item.allocatedQuantity })),
+    approvedDeliveryQuantityVariance(before.deliveryQuantityVariances),
+  );
+  if (!progress.allCompleted) {
+    throw codedError(
+      "请先将每项产品的累计完成数量填报至当前生产目标，再确认生产完成",
+      409,
+      "FACTORY_PRODUCTION_PROGRESS_INCOMPLETE",
+    );
+  }
 
   const recordedAt = new Date();
   const productionCompletedAt = attribution.productionCompletedAt || recordedAt;
@@ -71,6 +92,7 @@ export async function applyFactoryPurchaseOrderProductionCompletion({
       productionCompletedAt: null,
       productionCompletedById: null,
       revision: expectedRevision,
+      deliveryQuantityVariances: { none: { status: "PENDING" } },
     },
     data: {
       productionStatus: "COMPLETED",

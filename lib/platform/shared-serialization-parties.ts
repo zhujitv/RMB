@@ -1,3 +1,4 @@
+import { Prisma } from "../generated/prisma/client.js";
 import {
   LOGISTICS_COST_TYPES,
   SHIPPING_EMAIL_LANGUAGE_LABELS,
@@ -93,7 +94,12 @@ export function expandLegacyFullLogisticsCostTypeList(value: unknown = []) {
 
 export function serializeSupplier(supplierInput: unknown = {}) {
   const supplier = asLooseRecord<SupplierLike>(supplierInput);
-  const prepaymentRatio = Number(supplier.purchasePrepaymentRatio || 0);
+  const prepaymentPercent = new Prisma.Decimal(
+    String(supplier.purchasePrepaymentRatio || 0),
+  ).mul(100).toString();
+  const tolerancePercent = new Prisma.Decimal(
+    String(supplier.purchaseQuantityToleranceRatio || 0),
+  ).mul(100).toString();
   return {
     id: supplier.id,
     supplierName: supplier.supplierName,
@@ -108,7 +114,8 @@ export function serializeSupplier(supplierInput: unknown = {}) {
     bankName: supplier.bankName || "",
     bankAccount: supplier.bankAccount || "",
     purchasePaymentTerm: supplier.purchasePaymentTerm || "",
-    purchasePrepaymentPercent: Number.isFinite(prepaymentRatio) ? String(prepaymentRatio * 100) : "0",
+    purchasePrepaymentPercent: prepaymentPercent,
+    purchaseQuantityTolerancePercent: tolerancePercent,
     purchasePrepaymentRequiredBeforeProduction: Boolean(supplier.purchasePrepaymentRequiredBeforeProduction),
     remark: supplier.remark || "",
     status: supplier.status,
@@ -116,6 +123,8 @@ export function serializeSupplier(supplierInput: unknown = {}) {
     allowLogisticsExpenseEntry: Boolean(supplier.allowLogisticsExpenseEntry),
     allowLogisticsInvoiceUpload: Boolean(supplier.allowLogisticsInvoiceUpload),
     allowFactoryDocumentUpload: Boolean(supplier.allowFactoryDocumentUpload),
+    dispatchSmsEnabled: Boolean(supplier.dispatchSmsEnabled),
+    dispatchSmsPhone: supplier.dispatchSmsPhone || "",
     isDefaultLogisticsSupplier: Boolean(supplier.isDefaultLogisticsSupplier),
     allowedLogisticsCostTypes: expandLegacyFullLogisticsCostTypeList(supplier.allowedLogisticsCostTypes || []),
     createdBy: serializeUser(supplier.createdBy),

@@ -740,6 +740,10 @@ COS_SECRET_ID="your-cos-secret-id"
 COS_SECRET_KEY="your-cos-secret-key"
 COS_BUCKET="your-private-bucket-name-with-appid"
 
+# 可选：覆盖系统设置中加密保存的腾讯云短信密钥。
+TENCENT_SMS_SECRET_ID=""
+TENCENT_SMS_SECRET_KEY=""
+
 RESEND_API_KEY=""
 RESEND_FROM=""
 RESEND_EMAIL_ENDPOINT=""
@@ -754,6 +758,9 @@ RATE_LIMIT_NAMESPACE="nextwood"
 用 `openssl rand -hex 32` 生成 `SETTINGS_ENCRYPTION_KEY`。轮换密钥时先更换
 `SETTINGS_ENCRYPTION_KEY_ID`，并把旧密钥以 JSON 对象放入
 `SETTINGS_ENCRYPTION_PREVIOUS_KEYS`；系统读取旧配置后会自动用新密钥重加密。
+
+腾讯云短信密钥可在后台系统设置中加密保存；服务器环境中的
+`TENCENT_SMS_SECRET_ID`、`TENCENT_SMS_SECRET_KEY` 如已配置，会优先使用且不会回显到页面。
 
 阿里云 OCR / 文档智能默认只允许官方 HTTPS 域名。确需使用自定义域名时，才配置逗号分隔的
 `ALIYUN_OCR_ALLOWED_HOSTS`、`ALIYUN_DOCMIND_ENDPOINT_ALLOWED_HOSTS` 或
@@ -1021,13 +1028,16 @@ npm run verify:ci
 npm run verify:release
 ```
 
-当前最新迁移：
+当前大版本升级迁移（按顺序执行）：
 
 ```text
-20260815090000_factory_offline_confirmations
+20260816113000_factory_dispatch_sms_outbox
+20260816160000_factory_purchase_production_progress
+20260816190000_factory_purchase_delivery_quantity_variance
+20260816210000_factory_purchase_loading_result
 ```
 
-该迁移在既有采购执行约束上增加供应商门户与内部线下代录的明确来源、实际确认时间、联系人、渠道和完工归属，并保留历史记录与滚动升级兼容。生产执行前必须先备份并检查 migration 状态，禁止使用 `prisma db push` 替代正式 migration。
+这些迁移依次增加采购单短信通知、生产进度流水、交付数量差异审批，以及支持一柜多供应商和一张采购单跨多柜的装柜总账；供应商结算按已放行实装数量计算，留仓货物不计货款。生产执行前必须先备份并检查 migration 状态，禁止使用 `prisma db push` 替代正式 migration。
 
 ### 操作手册与 GitHub 发布说明
 

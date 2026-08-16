@@ -9,6 +9,7 @@ import {
   processFailedFreightowerNotificationOutbox,
   processPendingFreightowerTrackingNotifications,
   processFactoryPurchaseOrderDispatchOutbox,
+  processFactoryPurchaseOrderDispatchSmsOutbox,
   processLogisticsInvoiceNotificationOutbox,
   writeAudit,
 } from "../../../../lib/platform-db";
@@ -31,17 +32,40 @@ export async function GET(request: NextRequest) {
         results: [],
         error: error instanceof Error ? error.message : "物流待通知队列读取失败",
       }));
-    const [notifications, trackingNotifications, factoryPurchaseNotifications, fileDeletions] = await Promise.all([
-      processLogisticsInvoiceNotificationOutbox({ limit: 8 }),
-      processFailedFreightowerNotificationOutbox({ limit: 8 }),
-      processFactoryPurchaseOrderDispatchOutbox({ limit: 20 }),
-      processFileStorageDeletionOutbox(20),
+    const [notifications, trackingNotifications, factoryPurchaseNotifications, factoryPurchaseSmsNotifications, fileDeletions] = await Promise.all([
+      processLogisticsInvoiceNotificationOutbox({ limit: 8 }).catch((error: unknown) => ({
+        scanned: 0, sent: 0, failed: 1, queued: 0, results: [],
+        error: error instanceof Error ? error.message : "物流发票通知队列处理失败",
+      })),
+      processFailedFreightowerNotificationOutbox({ limit: 8 }).catch((error: unknown) => ({
+        scanned: 0, sent: 0, failed: 1, results: [],
+        error: error instanceof Error ? error.message : "物流跟踪通知队列处理失败",
+      })),
+      processFactoryPurchaseOrderDispatchOutbox({ limit: 20 }).catch((error: unknown) => ({
+        scanned: 0, sent: 0, failed: 1, skipped: 0, queued: 0, results: [],
+        error: error instanceof Error ? error.message : "工厂采购单邮件队列处理失败",
+      })),
+      processFactoryPurchaseOrderDispatchSmsOutbox({ limit: 10 }).catch((error: unknown) => ({
+        scanned: 0,
+        submitted: 0,
+        failed: 1,
+        unknown: 0,
+        skipped: 0,
+        queued: 0,
+        results: [],
+        error: error instanceof Error ? error.message : "供应商短信队列处理失败",
+      })),
+      processFileStorageDeletionOutbox(20).catch((error: unknown) => ({
+        scanned: 0, deleted: 0, failed: 1, results: [],
+        error: error instanceof Error ? error.message : "文件清理队列处理失败",
+      })),
     ]);
     const result = {
       notifications,
       pendingTrackingNotifications,
       trackingNotifications,
       factoryPurchaseNotifications,
+      factoryPurchaseSmsNotifications,
       fileDeletions,
     };
     const actor = await getCronActor();

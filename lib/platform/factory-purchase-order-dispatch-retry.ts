@@ -86,6 +86,7 @@ export async function retryFactoryPurchaseOrderDispatchEmail(
       const freshSending = await tx.notificationOutbox.findFirst({
         where: {
           type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+          channel: "EMAIL",
           relatedEntityType: "factory_purchase_order",
           relatedEntityId: order.id,
           idempotencyKey: { startsWith: prefix },
@@ -101,6 +102,7 @@ export async function retryFactoryPurchaseOrderDispatchEmail(
       await tx.notificationOutbox.updateMany({
         where: {
           type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+          channel: "EMAIL",
           relatedEntityType: "factory_purchase_order",
           relatedEntityId: order.id,
           idempotencyKey: { startsWith: prefix, ...(currentKeys.length ? { notIn: currentKeys } : {}) },
@@ -113,6 +115,7 @@ export async function retryFactoryPurchaseOrderDispatchEmail(
         await tx.notificationOutbox.updateMany({
           where: {
             type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+            channel: "EMAIL",
             relatedEntityType: "factory_purchase_order",
             relatedEntityId: order.id,
             idempotencyKey: { in: currentKeys },

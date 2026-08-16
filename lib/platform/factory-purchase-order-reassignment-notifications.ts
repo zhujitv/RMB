@@ -1,6 +1,7 @@
 import type { Prisma } from "../generated/prisma/client.js";
 import { NOTIFICATION_TYPES } from "./notification-definitions";
 import { codedError } from "./shared-base-errors";
+import { retireFactoryPurchaseOrderDispatchSms } from "./factory-purchase-order-dispatch-sms-retirement";
 
 const DISPATCH_LEASE_MS = 5 * 60 * 1000;
 
@@ -13,6 +14,7 @@ export async function retireRejectedPurchaseOrderNotifications(
   const sending = await tx.notificationOutbox.findFirst({
     where: {
       type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+      channel: "EMAIL",
       relatedEntityType: "factory_purchase_order",
       relatedEntityId: purchaseOrderId,
       status: "sending",
@@ -30,6 +32,7 @@ export async function retireRejectedPurchaseOrderNotifications(
   await tx.notificationOutbox.updateMany({
     where: {
       type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+      channel: "EMAIL",
       relatedEntityType: "factory_purchase_order",
       relatedEntityId: purchaseOrderId,
       OR: [
@@ -38,5 +41,12 @@ export async function retireRejectedPurchaseOrderNotifications(
       ],
     },
     data: { status: "cancelled", lastError: "采购单已拒绝并重新选厂，原通知已取消" },
+  });
+  return retireFactoryPurchaseOrderDispatchSms(tx, {
+    purchaseOrderIds: [purchaseOrderId],
+    now,
+    reason: "采购单已拒绝并重新选厂，原短信通知已取消",
+    freshSendingMessage: "原采购单短信正在发送，请稍后再重新选厂",
+    freshSendingCode: "FACTORY_PURCHASE_ORDER_REASSIGN_SMS_SENDING",
   });
 }

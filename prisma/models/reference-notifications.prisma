@@ -69,10 +69,12 @@ model NotificationTemplate {
 model NotificationOutbox {
   id                String    @id @default(cuid())
   type              String
+  channel           String    @default("EMAIL")
   templateId        String?   @map("template_id")
   idempotencyKey    String?   @unique @map("idempotency_key")
   status            String    @default("pending")
   recipientEmails   Json      @map("recipient_emails")
+  recipientPhones   Json?     @map("recipient_phones")
   ccEmails          Json?     @map("cc_emails")
   subject           String
   body              String
@@ -93,6 +95,7 @@ model NotificationOutbox {
   deliveryLogs NotificationDeliveryLog[]
 
   @@index([type])
+  @@index([channel, status, scheduledAt])
   @@index([templateId])
   @@index([status])
   @@index([relatedOrderId])
@@ -106,8 +109,10 @@ model NotificationDeliveryLog {
   outboxId          String?   @map("outbox_id")
   templateId        String?   @map("template_id")
   type              String
+  channel           String    @default("EMAIL")
   status            String
   recipientEmails   Json      @map("recipient_emails")
+  recipientPhones   Json?     @map("recipient_phones")
   ccEmails          Json?     @map("cc_emails")
   subject           String
   bodyPreview       String?   @map("body_preview")

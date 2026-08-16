@@ -10,6 +10,7 @@ import {
   normalizeSupplierPurchaseOrderResponse,
 } from "./supplier-purchase-orders-values";
 import type { SelectedSupplierPurchaseOrder } from "./supplier-purchase-orders-query";
+import { retireFactoryPurchaseOrderDispatchSms } from "./factory-purchase-order-dispatch-sms-retirement";
 
 export type FactoryConfirmationSource = "SUPPLIER_PORTAL" | "INTERNAL_OFFLINE";
 export type FactoryConfirmationChannel = "PORTAL" | "WECHAT" | "PHONE" | "EMAIL" | "PAPER" | "OTHER";
@@ -97,6 +98,7 @@ export async function applyFactoryPurchaseOrderResponse({
     await tx.notificationOutbox.updateMany({
       where: {
         type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+        channel: "EMAIL",
         relatedEntityType: "factory_purchase_order",
         relatedEntityId: before.id,
         OR: [
@@ -105,6 +107,13 @@ export async function applyFactoryPurchaseOrderResponse({
         ],
       },
       data: { status: "cancelled", lastError: "采购单已被供应商拒绝，未发送通知已取消" },
+    });
+    await retireFactoryPurchaseOrderDispatchSms(tx, {
+      purchaseOrderIds: [before.id],
+      now: recordedAt,
+      reason: "采购单已被供应商拒绝，未发送短信已取消",
+      freshSendingMessage: "采购单短信正在发送，请稍后再提交拒绝",
+      freshSendingCode: "FACTORY_PURCHASE_ORDER_SMS_SENDING",
     });
   }
 

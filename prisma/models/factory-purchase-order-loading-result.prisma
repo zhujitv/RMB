@@ -1,0 +1,135 @@
+enum SalesExecutionContainerLoadStatus {
+  DRAFT
+  OPEN
+  RELEASED
+  VOIDED
+}
+
+enum FactoryPurchaseLoadingResultStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum FactoryPurchaseLoadingReason {
+  EXACT
+  WEIGHT_LIMIT
+  VOLUME_LIMIT
+  OTHER
+}
+
+model SalesExecutionContainerLoad {
+  id             String                            @id @default(cuid())
+  executionId    String                            @map("execution_id")
+  sequenceNo     Int                               @map("sequence_no")
+  status         SalesExecutionContainerLoadStatus @default(DRAFT)
+  containerNo    String?                           @map("container_no")
+  containerType  String?                           @map("container_type")
+  sealNo         String?                           @map("seal_no")
+  loadingDate    DateTime?                         @map("loading_date") @db.Date
+  revision       Int                               @default(1)
+  releasedAt     DateTime?                         @map("released_at")
+  releasedById   String?                           @map("released_by")
+  releaseRemark  String?                           @map("release_remark")
+  voidedAt       DateTime?                         @map("voided_at")
+  voidedById     String?                           @map("voided_by")
+  voidReason     String?                           @map("void_reason")
+  legacyBackfill Boolean                           @default(false) @map("legacy_backfill")
+  createdAt      DateTime                          @default(now()) @map("created_at")
+  updatedAt      DateTime                          @updatedAt @map("updated_at")
+
+  execution      SalesExecution                       @relation(fields: [executionId], references: [id], onDelete: Restrict)
+  releasedBy     User?                                @relation("SalesExecutionContainerLoadsReleased", fields: [releasedById], references: [id], onDelete: Restrict)
+  voidedBy       User?                                @relation("SalesExecutionContainerLoadsVoided", fields: [voidedById], references: [id], onDelete: Restrict)
+  allocations    ContainerLoadAllocation[]
+  loadingResults FactoryPurchaseOrderLoadingResult[]
+
+  @@unique([executionId, sequenceNo], map: "container_load_execution_sequence_key")
+  @@unique([id, executionId], map: "container_load_id_execution_key")
+  @@unique([executionId, containerNo], map: "container_load_execution_container_no_key")
+  @@index([executionId, status, updatedAt], map: "container_load_execution_status_idx")
+  @@index([releasedById], map: "container_load_released_by_idx")
+  @@index([voidedById], map: "container_load_voided_by_idx")
+  @@map("sales_execution_container_loads")
+}
+
+model ContainerLoadAllocation {
+  id                  String   @id @default(cuid())
+  containerLoadId     String   @map("container_load_id")
+  executionId         String   @map("execution_id")
+  purchaseOrderId     String   @map("purchase_order_id")
+  purchaseOrderItemId String   @map("purchase_order_item_id")
+  plannedQuantity     Decimal  @map("planned_quantity") @db.Decimal(18, 4)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  containerLoad     SalesExecutionContainerLoad             @relation(fields: [containerLoadId, executionId], references: [id, executionId], onDelete: Restrict)
+  purchaseOrder     FactoryPurchaseOrder                     @relation(fields: [purchaseOrderId, executionId], references: [id, executionId], onDelete: Restrict)
+  purchaseOrderItem FactoryPurchaseOrderItem                 @relation(fields: [purchaseOrderItemId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+  loadingResultItems FactoryPurchaseOrderLoadingResultItem[]
+
+  @@unique([containerLoadId, purchaseOrderItemId], map: "container_load_allocation_container_line_key")
+  @@unique([containerLoadId, purchaseOrderId, purchaseOrderItemId], map: "container_load_allocation_slot_line_key")
+  @@index([purchaseOrderId, purchaseOrderItemId], map: "container_load_allocation_po_line_idx")
+  @@index([executionId, purchaseOrderId], map: "container_load_allocation_execution_po_idx")
+  @@map("container_load_allocations")
+}
+
+model FactoryPurchaseOrderLoadingResult {
+  id              String                             @id @default(cuid())
+  containerLoadId String                             @map("container_load_id")
+  executionId     String                             @map("execution_id")
+  purchaseOrderId String                             @map("purchase_order_id")
+  sequenceNo      Int                                @map("sequence_no")
+  status          FactoryPurchaseLoadingResultStatus @default(PENDING)
+  reason          FactoryPurchaseLoadingReason
+  reasonDetail    String?                            @map("reason_detail")
+  source          FactoryConfirmationSource
+  channel         FactoryConfirmationChannel
+  supplierContact String                             @map("supplier_contact")
+  requestedAt     DateTime                           @default(now()) @map("requested_at")
+  requestedById   String                             @map("requested_by")
+  decidedAt       DateTime?                          @map("decided_at")
+  decidedById     String?                            @map("decided_by")
+  decisionRemark  String?                            @map("decision_remark")
+  legacyBackfill  Boolean                            @default(false) @map("legacy_backfill")
+  createdAt       DateTime                           @default(now()) @map("created_at")
+
+  containerLoad SalesExecutionContainerLoad             @relation(fields: [containerLoadId, executionId], references: [id, executionId], onDelete: Restrict)
+  purchaseOrder FactoryPurchaseOrder                     @relation(fields: [purchaseOrderId, executionId], references: [id, executionId], onDelete: Restrict)
+  requestedBy   User                                     @relation("FactoryPurchaseLoadingResultsRequested", fields: [requestedById], references: [id], onDelete: Restrict)
+  decidedBy     User?                                    @relation("FactoryPurchaseLoadingResultsDecided", fields: [decidedById], references: [id], onDelete: Restrict)
+  items         FactoryPurchaseOrderLoadingResultItem[]
+
+  @@unique([containerLoadId, purchaseOrderId, sequenceNo], map: "fpo_loading_result_slot_sequence_key")
+  @@unique([id, containerLoadId, purchaseOrderId], map: "fpo_loading_result_id_slot_key")
+  @@index([purchaseOrderId, requestedAt], map: "fpo_loading_result_po_time_idx")
+  @@index([containerLoadId, purchaseOrderId, status], map: "fpo_loading_result_slot_status_idx")
+  @@index([executionId, containerLoadId], map: "fpo_loading_result_execution_container_idx")
+  @@index([requestedById], map: "fpo_loading_result_requester_idx")
+  @@index([decidedById], map: "fpo_loading_result_decider_idx")
+  @@map("factory_purchase_order_loading_results")
+}
+
+model FactoryPurchaseOrderLoadingResultItem {
+  id                                       String  @id @default(cuid())
+  loadingResultId                          String  @map("loading_result_id")
+  containerLoadId                          String  @map("container_load_id")
+  purchaseOrderId                          String  @map("purchase_order_id")
+  purchaseOrderItemId                      String  @map("purchase_order_item_id")
+  plannedQuantitySnapshot                  Decimal @map("planned_quantity_snapshot") @db.Decimal(18, 4)
+  deliveryTargetQuantitySnapshot           Decimal @map("delivery_target_quantity_snapshot") @db.Decimal(18, 4)
+  completedQuantitySnapshot                Decimal @map("completed_quantity_snapshot") @db.Decimal(18, 4)
+  previouslyApprovedLoadedQuantitySnapshot Decimal @map("previously_approved_loaded_quantity_snapshot") @db.Decimal(18, 4)
+  loadedQuantity                           Decimal @map("loaded_quantity") @db.Decimal(18, 4)
+  cumulativeApprovedLoadedQuantitySnapshot Decimal @map("cumulative_approved_loaded_quantity_snapshot") @db.Decimal(18, 4)
+  warehouseRetainedQuantitySnapshot        Decimal @map("warehouse_retained_quantity_snapshot") @db.Decimal(18, 4)
+
+  loadingResult     FactoryPurchaseOrderLoadingResult @relation(fields: [loadingResultId, containerLoadId, purchaseOrderId], references: [id, containerLoadId, purchaseOrderId], onDelete: Restrict)
+  allocation        ContainerLoadAllocation             @relation(fields: [containerLoadId, purchaseOrderId, purchaseOrderItemId], references: [containerLoadId, purchaseOrderId, purchaseOrderItemId], onDelete: Restrict)
+  purchaseOrderItem FactoryPurchaseOrderItem            @relation(fields: [purchaseOrderItemId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+
+  @@unique([loadingResultId, purchaseOrderItemId], map: "fpo_loading_result_item_line_key")
+  @@index([containerLoadId, purchaseOrderId, purchaseOrderItemId], map: "fpo_loading_result_item_allocation_idx")
+  @@index([purchaseOrderId, purchaseOrderItemId], map: "fpo_loading_result_item_po_line_idx")
+  @@map("factory_purchase_order_loading_result_items")
+}

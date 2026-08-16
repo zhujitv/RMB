@@ -19,6 +19,8 @@ import { serializeSalesExecution } from "./sales-execution-values";
 import { appendSalesExecutionVersion } from "./sales-execution-version";
 import { queueFactoryPurchaseOrderDispatchOutbox } from "./factory-purchase-order-dispatch-outbox";
 import { processFactoryPurchaseOrderDispatchOutbox } from "./factory-purchase-order-dispatch-notifications";
+import { queueFactoryPurchaseOrderDispatchSmsOutbox } from "./factory-purchase-order-dispatch-sms-outbox";
+import { processFactoryPurchaseOrderDispatchSmsOutbox } from "./factory-purchase-order-dispatch-sms-notifications";
 import { PRODUCT_SUPPLIER_TYPES } from "./shared-party-constants";
 
 type AuditRequest = Parameters<typeof writeAudit>[0];
@@ -95,6 +97,10 @@ export async function dispatchSalesExecution(
     purchaseOrderIds: string[];
     queuedNotifications: number;
     missingRecipient: number;
+    queuedSmsNotifications: number;
+    missingSmsRecipient: number;
+    disabledSms: number;
+    smsConfigurationError: number;
   };
   try {
     transactionResult = await prisma.$transaction(async (tx) => {
@@ -112,6 +118,11 @@ export async function dispatchSalesExecution(
           before.id,
           dispatchVersionNumber,
         );
+        const queuedSms = await queueFactoryPurchaseOrderDispatchSmsOutbox(
+          tx,
+          before.id,
+          dispatchVersionNumber,
+        );
         return {
           execution: serializeSalesExecution(before, true),
           newlyDispatched: false,
@@ -119,6 +130,10 @@ export async function dispatchSalesExecution(
           purchaseOrderIds: queued.purchaseOrderIds,
           queuedNotifications: queued.queued,
           missingRecipient: queued.missingRecipient,
+          queuedSmsNotifications: queuedSms.queued,
+          missingSmsRecipient: queuedSms.missingRecipient,
+          disabledSms: queuedSms.disabled,
+          smsConfigurationError: queuedSms.configurationError,
         };
       }
       assertExpectedSalesExecutionRevision(body, before.revision);
@@ -150,6 +165,7 @@ export async function dispatchSalesExecution(
           dispatchedById: actorId,
           dispatchVersionNumber: nextRevision,
           dispatchEmailStatus: "NOT_SENT",
+          dispatchSmsStatus: "NOT_SENT",
           revision: { increment: 1 },
           updatedById: actorId,
         },
@@ -158,6 +174,7 @@ export async function dispatchSalesExecution(
         throw codedError("部分工厂采购单状态已变化，请刷新后重试", 409, "FACTORY_PURCHASE_ORDER_STATE_CONFLICT");
       }
       const queued = await queueFactoryPurchaseOrderDispatchOutbox(tx, before.id, nextRevision);
+      const queuedSms = await queueFactoryPurchaseOrderDispatchSmsOutbox(tx, before.id, nextRevision);
       await appendSalesExecutionVersion(tx, before.id, actor);
       const saved = await loadSalesExecution(before.id, actor, tx);
       const serialized = serializeSalesExecution(saved, true);
@@ -178,6 +195,10 @@ export async function dispatchSalesExecution(
         purchaseOrderIds: queued.purchaseOrderIds,
         queuedNotifications: queued.queued,
         missingRecipient: queued.missingRecipient,
+        queuedSmsNotifications: queuedSms.queued,
+        missingSmsRecipient: queuedSms.missingRecipient,
+        disabledSms: queuedSms.disabled,
+        smsConfigurationError: queuedSms.configurationError,
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error: unknown) {
@@ -195,14 +216,27 @@ export async function dispatchSalesExecution(
     queued: transactionResult.queuedNotifications,
     results: [] as Array<unknown>,
   };
-  try {
-    delivery = await processFactoryPurchaseOrderDispatchOutbox({
+  let smsDelivery = {
+    scanned: 0,
+    submitted: 0,
+    failed: 0,
+    unknown: 0,
+    skipped: 0,
+    queued: transactionResult.queuedSmsNotifications,
+    results: [] as Array<unknown>,
+  };
+  const [emailDeliveryResult, smsDeliveryResult] = await Promise.allSettled([
+    processFactoryPurchaseOrderDispatchOutbox({
       limit: 4,
       purchaseOrderIds: transactionResult.purchaseOrderIds,
-    });
-  } catch {
-    // The durable outbox remains queued. The cron processor will retry it.
-  }
+    }),
+    processFactoryPurchaseOrderDispatchSmsOutbox({
+      limit: 1,
+      purchaseOrderIds: transactionResult.purchaseOrderIds,
+    }),
+  ]);
+  if (emailDeliveryResult.status === "fulfilled") delivery = emailDeliveryResult.value;
+  if (smsDeliveryResult.status === "fulfilled") smsDelivery = smsDeliveryResult.value;
   const notificationSummary = {
     total: transactionResult.purchaseOrderIds.length,
     sent: delivery.sent,
@@ -211,5 +245,20 @@ export async function dispatchSalesExecution(
     missingRecipient: transactionResult.missingRecipient,
   };
   const execution = serializeSalesExecution(await loadSalesExecution(executionId, actor), true);
-  return { execution, notificationSummary, newlyDispatched: transactionResult.newlyDispatched };
+  const smsNotificationSummary = {
+    total: transactionResult.purchaseOrderIds.length,
+    submitted: smsDelivery.submitted,
+    failed: smsDelivery.failed,
+    unknown: smsDelivery.unknown,
+    queued: smsDelivery.queued,
+    missingRecipient: transactionResult.missingSmsRecipient,
+    disabled: transactionResult.disabledSms,
+    configurationError: transactionResult.smsConfigurationError,
+  };
+  return {
+    execution,
+    notificationSummary,
+    smsNotificationSummary,
+    newlyDispatched: transactionResult.newlyDispatched,
+  };
 }

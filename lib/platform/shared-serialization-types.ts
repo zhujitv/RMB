@@ -108,6 +108,7 @@ export type SupplierLike = Record<string, unknown> & {
   bankAccount?: string | null;
   purchasePaymentTerm?: string | null;
   purchasePrepaymentRatio?: unknown;
+  purchaseQuantityToleranceRatio?: unknown;
   purchasePrepaymentRequiredBeforeProduction?: boolean | null;
   remark?: string | null;
   status?: string | null;
@@ -115,6 +116,8 @@ export type SupplierLike = Record<string, unknown> & {
   allowLogisticsExpenseEntry?: boolean | null;
   allowLogisticsInvoiceUpload?: boolean | null;
   allowFactoryDocumentUpload?: boolean | null;
+  dispatchSmsEnabled?: boolean | null;
+  dispatchSmsPhone?: string | null;
   isDefaultLogisticsSupplier?: boolean | null;
   allowedLogisticsCostTypes?: unknown;
   createdBy?: UserLike | null;

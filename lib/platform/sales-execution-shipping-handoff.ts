@@ -15,13 +15,18 @@ import { MAX_ORDER_NO_LENGTH, resolveSalespersonCommissionRate } from "./orders-
 import type { SalesExecutionActor } from "./sales-execution-access";
 import {
   assertExpectedSalesExecutionRevision,
-  lockFactoryPurchaseOrders,
-  lockSalesExecution,
   requireSalesExecutionActorId,
 } from "./sales-execution-access";
 import { loadSalesExecution } from "./sales-execution-query-service";
 import { serializeSalesExecution } from "./sales-execution-values";
 import { appendSalesExecutionVersion } from "./sales-execution-version";
+import { serializeProductionProgress } from "./factory-purchase-order-production-progress-values";
+import { approvedDeliveryQuantityVariance } from "./factory-purchase-order-delivery-quantity-variance-values";
+import { lockAllExecutionContainerLoading } from "./container-loading-locks";
+import {
+  materializeReleasedContainerActuals,
+  releasedContainerMaterialization,
+} from "./sales-execution-container-shipping";
 
 type AuditRequest = Parameters<typeof writeAudit>[0];
 const PAYMENT_TERM_TYPES = ["COPY_BL", "OA", "AFTER_ARRIVAL", "INSTALLMENT"] as const;
@@ -61,7 +66,7 @@ function assertReadyForShipping(execution: Awaited<ReturnType<typeof loadSalesEx
   if (execution.status !== "DISPATCHED") {
     throw codedError("只有已正式下发的销售执行单可以进入发货", 409, "SALES_EXECUTION_NOT_DISPATCHED");
   }
-  const activePurchaseOrders = execution.purchaseOrders.filter((order) => order.status !== "VOIDED");
+  const activePurchaseOrders = execution.purchaseOrders.filter((order) => !["REJECTED", "VOIDED"].includes(order.status));
   if (!activePurchaseOrders.length) {
     throw codedError("销售执行单没有工厂采购单，不能进入发货", 409, "SHIPPING_PURCHASE_ORDER_REQUIRED");
   }
@@ -90,10 +95,19 @@ function assertReadyForShipping(execution: Awaited<ReturnType<typeof loadSalesEx
   if (unfinished.length) {
     throw codedError("仍有工厂采购单未完成生产，不能进入发货", 409, "SHIPPING_PRODUCTION_NOT_COMPLETED");
   }
-  const undelivered = activePurchaseOrders.filter((order) => !order.actualDeliveryDate);
-  if (undelivered.length) {
-    throw codedError("仍有工厂采购单未登记实际交付日期，不能进入发货", 409, "SHIPPING_ACTUAL_DELIVERY_REQUIRED");
+  const incompleteProgress = activePurchaseOrders.filter((order) => !serializeProductionProgress(
+    order.productionProgressReports,
+    order.items.map((item) => ({ id: item.id, allocatedQuantity: item.allocatedQuantity })),
+    approvedDeliveryQuantityVariance(order.deliveryQuantityVariances),
+  ).allCompleted);
+  if (incompleteProgress.length) {
+    throw codedError(
+      "仍有工厂采购单的产品完成数量未达到采购数量，不能进入发货",
+      409,
+      "SHIPPING_PRODUCTION_PROGRESS_INCOMPLETE",
+    );
   }
+  return releasedContainerMaterialization(execution);
 }
 
 async function runHandoffTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>) {
@@ -125,8 +139,7 @@ export async function enterSalesExecutionShipping(
   let result;
   try {
     result = await runHandoffTransaction(async (tx) => {
-      await lockSalesExecution(tx, executionId);
-      await lockFactoryPurchaseOrders(tx, executionId);
+      await lockAllExecutionContainerLoading(tx, executionId);
       const before = await loadSalesExecution(executionId, actor, tx);
       await assertCustomerScope(actor, before.customerId, tx);
       if (before.receivableOrder) {
@@ -140,7 +153,7 @@ export async function enterSalesExecutionShipping(
         };
       }
       assertExpectedSalesExecutionRevision(input, before.revision);
-      assertReadyForShipping(before);
+      const materialization = assertReadyForShipping(before);
       const orderNo = before.customerOrderNo.trim();
       if (orderNo.length > MAX_ORDER_NO_LENGTH) {
         throw codedError(`客户订单号不能超过 ${MAX_ORDER_NO_LENGTH} 个字符`, 400, "VALIDATION_TEXT_TOO_LONG");
@@ -152,10 +165,11 @@ export async function enterSalesExecutionShipping(
           "ORDER_DUPLICATE",
         );
       }
+      const now = new Date();
+      await materializeReleasedContainerActuals(tx, before, materialization, actorId, now);
       const exchangeRate = before.currency === "CNY" ? new Prisma.Decimal(1) : before.exchangeRate;
       const totalAmountCny = before.totalAmount.mul(exchangeRate).toDecimalPlaces(2);
       const paymentTerm = String(before.paymentTerm || "").trim() || "待确认";
-      const now = new Date();
       const createdOrder = await tx.receivableOrder.create({
         data: {
           orderNo,

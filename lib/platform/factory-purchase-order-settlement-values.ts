@@ -70,6 +70,7 @@ function decimalSum(values: Prisma.Decimal[]) {
 
 export function calculateFactorySettlementAmounts({
   baseAmount: baseAmountInput,
+  penaltyBaseAmount: penaltyBaseAmountInput,
   initialDeliveryDate,
   actualDeliveryDate,
   adjustments,
@@ -78,6 +79,7 @@ export function calculateFactorySettlementAmounts({
   capRatio = null,
 }: {
   baseAmount: Prisma.Decimal | string | number;
+  penaltyBaseAmount?: Prisma.Decimal | string | number;
   initialDeliveryDate: Date | string;
   actualDeliveryDate: Date | string;
   adjustments: Array<{
@@ -90,10 +92,13 @@ export function calculateFactorySettlementAmounts({
   capRatio?: Prisma.Decimal | string | number | null;
 }) {
   const baseAmount = new Prisma.Decimal(baseAmountInput).toDecimalPlaces(2);
+  const penaltyBaseAmount = penaltyBaseAmountInput == null
+    ? baseAmount
+    : new Prisma.Decimal(penaltyBaseAmountInput).toDecimalPlaces(2);
   const penalty = calculateFactoryDelayPenalty({
     initialDeliveryDate,
     actualDeliveryDate,
-    penaltyBaseAmount: baseAmount,
+    penaltyBaseAmount,
     graceDays,
     ratePerDay,
     capRatio,

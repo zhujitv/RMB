@@ -51,6 +51,8 @@ test("audit sanitizer converts unsupported JavaScript values to JSON-safe marker
 test("audit sanitizer keeps sensitive-key redaction and depth limiting", () => {
   const sanitized = sanitizeAuditData({
     apiToken: new Prisma.Decimal("123.45"),
+    dispatchSmsPhone: "+8613800138000",
+    recipientPhones: ["+8613800138000"],
     nested: {
       originalFilename: "secret.pdf",
       level2: {
@@ -69,6 +71,8 @@ test("audit sanitizer keeps sensitive-key redaction and depth limiting", () => {
 
   assert.deepEqual(sanitized, {
     apiToken: "[REDACTED]",
+    dispatchSmsPhone: "[REDACTED]",
+    recipientPhones: "[REDACTED]",
     nested: {
       originalFilename: "[REDACTED]",
       level2: {

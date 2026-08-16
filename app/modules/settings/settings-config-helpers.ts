@@ -1,6 +1,6 @@
 import type { CompanyProfileSettings } from "../../types";
-import { COMMISSION_FORMULA_DEDUCTIONS, COMMISSION_FORMULA_PRESETS, COMMISSION_FORMULA_SOURCES, DEFAULT_NOTIFICATION_TEMPLATE_FORM, DEFAULT_OCR_INTEGRATION_FORM, DEFAULT_SHIPSGO_INTEGRATION_FORM, NOTIFICATION_RECIPIENT_EMAIL_OPTIONS } from "./constants";
-import type { CommissionFormulaForm, CommissionFormulaSettings, CompanyProfileForm, ExchangeRateForm, ExchangeRateSettings, NotificationDeliveryLogRow, NotificationTemplateForm, NotificationTemplateRow, NotificationTemplateSettings, OcrIntegrationForm, OcrIntegrationSettings, ShipsgoIntegrationForm, ShipsgoIntegrationSettings } from "./types";
+import { COMMISSION_FORMULA_DEDUCTIONS, COMMISSION_FORMULA_PRESETS, COMMISSION_FORMULA_SOURCES, DEFAULT_NOTIFICATION_TEMPLATE_FORM, DEFAULT_OCR_INTEGRATION_FORM, DEFAULT_SHIPSGO_INTEGRATION_FORM, DEFAULT_SMS_INTEGRATION_FORM, NOTIFICATION_RECIPIENT_EMAIL_OPTIONS } from "./constants";
+import type { CommissionFormulaForm, CommissionFormulaSettings, CompanyProfileForm, ExchangeRateForm, ExchangeRateSettings, NotificationDeliveryLogRow, NotificationTemplateForm, NotificationTemplateRow, NotificationTemplateSettings, OcrIntegrationForm, OcrIntegrationSettings, ShipsgoIntegrationForm, ShipsgoIntegrationSettings, SmsIntegrationForm, SmsIntegrationSettings } from "./types";
 
 export function companyProfileFormFromSettings(settings: CompanyProfileSettings | null): CompanyProfileForm {
   return {
@@ -126,6 +126,33 @@ export function ocrIntegrationFormFromSettings(settings: OcrIntegrationSettings 
     logisticsInvoiceEnabled: settings?.logisticsInvoiceEnabled === true,
     timeoutMs: String(settings?.timeoutMs ?? DEFAULT_OCR_INTEGRATION_FORM.timeoutMs),
   };
+}
+
+export function smsIntegrationFormFromSettings(settings: SmsIntegrationSettings | null): SmsIntegrationForm {
+  return {
+    enabled: settings?.enabled === true,
+    provider: "TENCENT_CLOUD",
+    tencentSdkAppId: optionalStringSetting(settings, "tencentSdkAppId"),
+    signName: optionalStringSetting(settings, "signName"),
+    templateId: optionalStringSetting(settings, "templateId"),
+    region: stringSetting(settings, "region", DEFAULT_SMS_INTEGRATION_FORM.region),
+    secretId: "",
+    secretIdConfigured: settings?.secretIdConfigured === true,
+    secretKey: "",
+    secretKeyConfigured: settings?.secretKeyConfigured === true,
+  };
+}
+
+export function smsIntegrationEnableValidationMessage(form: SmsIntegrationForm) {
+  if (!form.enabled) return "";
+  if (!form.tencentSdkAppId.trim()) return "启用短信通知前，请填写短信 SDK AppID";
+  if (!form.signName.trim()) return "启用短信通知前，请填写短信签名";
+  if (!form.templateId.trim()) return "启用短信通知前，请填写采购下发模板 ID";
+  const credentialsReady = Boolean(
+    (form.secretIdConfigured || form.secretId.trim())
+    && (form.secretKeyConfigured || form.secretKey.trim()),
+  );
+  return credentialsReady ? "" : "启用短信通知前，请完整配置 SecretId 和 SecretKey";
 }
 
 export function commissionFormulaPreview(form: CommissionFormulaForm) {

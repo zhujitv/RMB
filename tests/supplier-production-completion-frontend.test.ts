@@ -21,9 +21,12 @@ test("supplier completion requires a reusable confirmation dialog and is only ac
   assert.match(completionCardSource, /<ConfirmationDialog/);
   assert.match(completionCardSource, /productionStatus !== "IN_PRODUCTION" && productionStatus !== "COMPLETED"/);
   assert.match(completionCardSource, /productionStatus === "IN_PRODUCTION"[\s\S]*确认生产完成/);
-  assert.match(completionCardSource, /disabled=\{busy\}/);
+  assert.match(completionCardSource, /disabled=\{busy \|\| !allCompleted \|\| quantityVariancePending\}/);
+  assert.match(completionCardSource, /交付数量差异申请待审批，审批后才能确认完工/);
   assert.match(completionCardSource, /确认时间：/);
   assert.match(supplierDetailSource, /<SupplierProductionCompletionCard[\s\S]*productionCompletedAt=\{detail\.productionCompletedAt\}/);
+  assert.match(supplierDetailSource, /allCompleted=\{detail\.productionProgress\.allCompleted\}/);
+  assert.match(supplierDetailSource, /quantityVariancePending=\{detail\.deliveryQuantityVariances\.some/);
   assert.match(supplierDetailSource, /deliveryFrozen \? "生产完成，交期已冻结"/);
   assert.match(supplierModuleSource, /detail\.deliveryFrozen/);
 });
@@ -44,7 +47,7 @@ test("custom read-only supplier permission keeps purchase orders visible without
   assert.match(supplierModuleSource, /if \(!canWrite \|\| !detail \|\| detail\.status !== "ACCEPTED"/);
   assert.match(supplierDetailSource, /<SupplierProductionCompletionCard canWrite=\{canWrite\}/);
   assert.match(supplierDetailSource, /\{!canWrite \? null : rejected \|\| proposalPending \|\| deliveryFrozen \? \(/);
-  assert.match(completionCardSource, /if \(!canWrite \|\| busy\) return/);
+  assert.match(completionCardSource, /if \(!canWrite \|\| busy \|\| !allCompleted \|\| quantityVariancePending\) return/);
   assert.match(completionCardSource, /productionStatus === "IN_PRODUCTION" && canWrite \? \(/);
 });
 
@@ -65,6 +68,10 @@ test("internal execution keeps start production and adds a scoped offline comple
   assert.doesNotMatch(executionPanelSource, /action: "COMPLETE"|标记生产完成|updateProduction/);
   assert.match(offlineCompletionSource, /order\.status === "ACCEPTED"/);
   assert.match(offlineCompletionSource, /order\.productionStatus === "IN_PRODUCTION"/);
+  assert.match(offlineCompletionSource, /order\.productionProgress\?\.allCompleted/);
+  assert.match(offlineCompletionSource, /entry\.status === "PENDING"/);
+  assert.match(offlineCompletionSource, /disabled=\{quantityVariancePending\}/);
+  assert.match(offlineCompletionSource, /交付数量差异申请待审批，审批后才能确认完工/);
   assert.match(offlineCompletionSource, /登记线下生产完成/);
   assert.match(offlineCompletionSource, /\/offline-production-completion`/);
   assert.match(offlineCompletionSource, /supplierContact: supplierContact\.trim\(\)/);

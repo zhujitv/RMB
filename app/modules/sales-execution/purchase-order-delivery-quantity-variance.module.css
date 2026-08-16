@@ -1,0 +1,36 @@
+.card { display: grid; gap: 10px; border: 1px solid #fdba74; border-radius: 11px; background: #fffaf5; padding: 11px; }
+.header, .historyMeta, .decisionRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.header > div { display: grid; gap: 3px; }
+.header strong { color: #7c2d12; font-size: 13px; }
+.header small, .meta, .history p { color: #78716c; font-size: 11px; line-height: 1.45; }
+.pill { border-radius: 999px; background: #ffedd5; color: #9a3412; padding: 4px 8px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.pill[data-status="APPROVED"] { background: #dcfce7; color: #166534; }
+.pill[data-status="REJECTED"] { background: #fee2e2; color: #b91c1c; }
+.tableWrap { overflow-x: auto; border: 1px solid #fed7aa; border-radius: 9px; background: #fff; }
+.table { width: 100%; min-width: 700px; border-collapse: collapse; }
+.table th, .table td { border-bottom: 1px solid #ffedd5; padding: 7px 8px; color: #57534e; font-size: 11px; text-align: left; }
+.table th { background: #fff7ed; color: #7c2d12; font-weight: 800; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table td:first-child { min-width: 210px; color: #292524; font-weight: 700; }
+.decision { display: grid; gap: 7px; border-top: 1px dashed #fdba74; padding-top: 9px; }
+.decision textarea { min-height: 62px; resize: vertical; border: 1px solid #d6d3d1; border-radius: 8px; background: #fff; padding: 7px 8px; color: #292524; font: inherit; font-size: 11px; }
+.decisionRow { align-items: center; }
+.buttons { display: flex; gap: 7px; }
+.buttons button { border: 1px solid #fb923c; border-radius: 8px; background: #fff; color: #9a3412; padding: 6px 9px; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.buttons .reject { border-color: #fca5a5; color: #b91c1c; }
+.buttons button:disabled { cursor: wait; opacity: .5; }
+.error { margin: 0; border-radius: 8px; background: #fef2f2; color: #b91c1c; padding: 7px 9px; font-size: 11px; font-weight: 700; }
+.success { margin: 0; border-radius: 8px; background: #f0fdf4; color: #166534; padding: 7px 9px; font-size: 11px; font-weight: 700; }
+.historyTitle { margin: 2px 0 0; color: #431407; font-size: 12px; }
+.history { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.history > li { display: grid; gap: 5px; border-left: 3px solid #fb923c; border-radius: 7px; background: #fff; padding: 8px 9px; }
+.history > li[data-status="APPROVED"] { border-left-color: #22c55e; }
+.history > li[data-status="REJECTED"] { border-left-color: #ef4444; }
+.historyMeta strong { color: #431407; font-size: 11px; }
+.historyMeta time { color: #78716c; font-size: 10px; }
+.history p { margin: 0; }
+
+@media (max-width: 700px) {
+  .header, .historyMeta, .decisionRow { flex-direction: column; }
+  .buttons, .buttons button { width: 100%; }
+}

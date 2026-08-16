@@ -23,6 +23,7 @@ import {
   ensureNotificationTemplate,
   jsonOrNull,
 } from "./notification-helpers";
+import { maskPhone } from "./sms-phone-utils";
 
 export function notificationTemplateTypeForShippingLanguage(language: unknown) {
   const normalized = String(language || "").toUpperCase();
@@ -93,9 +94,13 @@ export function serializeNotificationDeliveryLog(row: unknown) {
     type: log.type || "",
     templateName: template.name || "",
     module: template.module || "",
+    channel: log.channel || "EMAIL",
     status: log.status || "",
     recipientEmails: Array.isArray(log.recipientEmails) ? log.recipientEmails : [],
     ccEmails: Array.isArray(log.ccEmails) ? log.ccEmails : [],
+    recipientPhones: Array.isArray(log.recipientPhones)
+      ? log.recipientPhones.map(maskPhone)
+      : [],
     subject: log.subject || "",
     bodyPreview: log.bodyPreview || "",
     relatedEntityType: log.relatedEntityType || "",

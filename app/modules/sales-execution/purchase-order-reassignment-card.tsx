@@ -12,6 +12,7 @@ import {
 } from "./types";
 
 type SuppliersResponse = { suppliers?: SupplierOption[]; message?: string };
+type ReassignmentResponse = { message?: string };
 
 export function PurchaseOrderReassignmentCard({
   executionId,
@@ -58,7 +59,7 @@ export function PurchaseOrderReassignmentCard({
     setBusy(true);
     setError("");
     try {
-      await apiJson(`/api/sales-executions/${encodeURIComponent(executionId)}/purchase-orders/${encodeURIComponent(order.id)}/reassign`, {
+      const result = await apiJson<ReassignmentResponse>(`/api/sales-executions/${encodeURIComponent(executionId)}/purchase-orders/${encodeURIComponent(order.id)}/reassign`, {
         method: "POST",
         body: JSON.stringify({
           newSupplierId: selected.id,
@@ -66,6 +67,7 @@ export function PurchaseOrderReassignmentCard({
           expectedPurchaseOrderRevision: Number(order.revision || 1),
         }),
       });
+      window.alert(result.message || "已重新选厂并下发采购单");
       await onChanged();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "重新选厂失败");

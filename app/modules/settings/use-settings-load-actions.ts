@@ -14,6 +14,7 @@ import {
   notificationTemplateRows,
   ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
+  smsIntegrationFormFromSettings,
 } from "./helpers";
 import type {
   AuditLogRow,
@@ -35,6 +36,8 @@ import type {
   SettingsTabKey,
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
+  SmsIntegrationForm,
+  SmsIntegrationSettings,
   SupplierRow,
   UserRow,
 } from "./types";
@@ -72,6 +75,8 @@ type SettingsLoadActionsContext = {
   setSelectedNotificationTemplateType: Setter<string>;
   setShipsgoIntegrationForm: Setter<ShipsgoIntegrationForm | null>;
   setShipsgoIntegrationSettings: Setter<ShipsgoIntegrationSettings | null>;
+  setSmsIntegrationForm: Setter<SmsIntegrationForm | null>;
+  setSmsIntegrationSettings: Setter<SmsIntegrationSettings | null>;
   setSuppliers: Setter<SupplierRow[]>;
   setUsers: Setter<UserRow[]>;
 };
@@ -108,6 +113,8 @@ export function useSettingsLoadActions(context: SettingsLoadActionsContext) {
     setSelectedNotificationTemplateType,
     setShipsgoIntegrationForm,
     setShipsgoIntegrationSettings,
+    setSmsIntegrationForm,
+    setSmsIntegrationSettings,
     setSuppliers,
     setUsers,
   } = context;
@@ -175,6 +182,14 @@ async function loadTab(tab = activeTab, page = activePagination.page || 1, nextF
         const settings = shipsgoResult.settings || {};
         setShipsgoIntegrationSettings(settings);
         setShipsgoIntegrationForm(shipsgoIntegrationFormFromSettings(settings));
+        markLoaded(tab);
+        return;
+      }
+      if (tab === "smsIntegration") {
+        const smsResult = await apiJson<{ settings: SmsIntegrationSettings }>("/api/settings/sms");
+        const settings = smsResult.settings || {};
+        setSmsIntegrationSettings(settings);
+        setSmsIntegrationForm(smsIntegrationFormFromSettings(settings));
         markLoaded(tab);
         return;
       }

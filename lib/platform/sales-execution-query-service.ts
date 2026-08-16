@@ -8,6 +8,8 @@ import {
 } from "./sales-execution-access";
 import { serializeSalesExecution } from "./sales-execution-values";
 import { FILE_ASSET_ROLES, FILE_ASSET_SOURCE_TABLES } from "./file-asset-data";
+import { PRODUCTION_PROGRESS_REPORT_QUERY_LIMIT } from "./factory-purchase-order-production-progress-values";
+import { internalContainerLoadSelect } from "./sales-execution-container-loads";
 
 type QueryLike = { get(key: string): string | null };
 
@@ -62,6 +64,32 @@ export const salesExecutionDetailInclude = {
           },
         },
       },
+      productionProgressReports: {
+        orderBy: [{ sequenceNo: "desc" as const }],
+        take: PRODUCTION_PROGRESS_REPORT_QUERY_LIMIT,
+        include: {
+          reportedBy: { select: userSelect },
+          items: { orderBy: [{ purchaseOrderItemId: "asc" as const }] },
+        },
+      },
+      deliveryQuantityVariances: {
+        orderBy: [{ sequenceNo: "desc" as const }],
+        take: 100,
+        include: {
+          requestedBy: { select: userSelect },
+          decidedBy: { select: userSelect },
+          items: { orderBy: [{ purchaseOrderItemId: "asc" as const }] },
+        },
+      },
+      loadingResults: {
+        orderBy: [{ sequenceNo: "desc" as const }],
+        take: 100,
+        include: {
+          requestedBy: { select: userSelect },
+          decidedBy: { select: userSelect },
+          items: { orderBy: [{ purchaseOrderItemId: "asc" as const }] },
+        },
+      },
       payments: { orderBy: [{ sequenceNo: "asc" as const }] },
       adjustments: { orderBy: [{ sequenceNo: "asc" as const }] },
       settlement: {
@@ -71,6 +99,10 @@ export const salesExecutionDetailInclude = {
         },
       },
     },
+  },
+  containerLoads: {
+    orderBy: [{ sequenceNo: "asc" as const }],
+    select: internalContainerLoadSelect,
   },
   versions: {
     orderBy: [{ versionNumber: "desc" as const }],

@@ -2,6 +2,14 @@ import styles from "./supplier-purchase-orders.module.css";
 import { formatDate, statusLabel } from "./presentation";
 import type { SupplierPurchaseOrderDto } from "./types";
 
+function hasPendingVariance(row: SupplierPurchaseOrderDto) {
+  return row.deliveryQuantityVariances.some((entry) => entry.status === "PENDING");
+}
+
+function hasPendingLoadingResult(row: SupplierPurchaseOrderDto) {
+  return row.containerLoads.some((load) => load.loadingResults.some((entry) => entry.status === "PENDING"));
+}
+
 type Props = {
   rows: SupplierPurchaseOrderDto[];
   loading: boolean;
@@ -90,7 +98,7 @@ export function SupplierPurchaseOrderList({
                 <td>{formatDate(row.requestedDeliveryDate)}</td>
                 <td>{row.purchaseCurrency || "-"}</td>
                 <td>{row.items.length}</td>
-                <td><span className={styles.status} data-status={row.status}>{statusLabel(row.status)}</span></td>
+                <td><div className={styles.statusStack}><span className={styles.status} data-status={row.status}>{statusLabel(row.status)}</span>{hasPendingVariance(row) ? <span className={styles.status}>数量差异待审批</span> : null}{hasPendingLoadingResult(row) ? <span className={styles.status}>本柜实装差异待确认</span> : null}</div></td>
                 <td><button className={styles.linkButton} type="button" onClick={() => onOpen(row.id)}>查看</button></td>
               </tr>
             )) : null}

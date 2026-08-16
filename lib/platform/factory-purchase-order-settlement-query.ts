@@ -21,6 +21,14 @@ export const settlementPurchaseOrderSelect = Prisma.validator<Prisma.FactoryPurc
   delayPenaltyCapRatio: true,
   productionStatus: true,
   productionCompletedAt: true,
+  items: {
+    orderBy: [{ lineNumber: "asc" }],
+    select: {
+      actualDeliveredQuantity: true,
+      purchaseUnitPrice: true,
+      supplierPrice: { select: { unitPrice: true } },
+    },
+  },
   settlement: true,
   payments: {
     where: { status: "CONFIRMED" },

@@ -40,6 +40,17 @@ export const DEFAULT_COMPANY_PROFILE_SETTINGS = {
   footerText: "© 2026 Zhejiang Lainuo Building Materials Co., Ltd.",
 };
 export const OCR_INTEGRATION_SETTING_KEY = "ocr_integration";
+export const SMS_INTEGRATION_SETTING_KEY = "sms_integration";
+export const DEFAULT_SMS_INTEGRATION_SETTINGS = {
+  enabled: false,
+  provider: "TENCENT_CLOUD",
+  tencentSdkAppId: "",
+  signName: "",
+  templateId: "",
+  region: "ap-guangzhou",
+  secretId: "",
+  secretKey: "",
+};
 export const LOGISTICS_INVOICE_VALIDATION_RULES_SETTING_KEY = "logistics_invoice_validation_rules";
 export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
   enabled: false,

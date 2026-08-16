@@ -129,6 +129,7 @@ export async function queueFactoryPurchaseOrderDispatchOutbox(
     for (const recipientEmail of recipientEmails) {
       outboxRows.push({
         type: definition.type,
+        channel: "EMAIL",
         idempotencyKey: factoryDispatchIdempotencyKey(order.id, dispatchVersionNumber, recipientEmail),
         status: "queued",
         recipientEmails: [recipientEmail],

@@ -11,6 +11,7 @@ import {
   createOrReuseSettlementCost,
   settlementOrderCost,
 } from "./factory-purchase-order-settlement-cost";
+import { effectiveFactoryPurchaseOrderDeliveredAmount } from "./factory-purchase-order-financials";
 import { loadPurchaseOrderForSettlement } from "./factory-purchase-order-settlement-query";
 import {
   FACTORY_PURCHASE_SETTLEMENT_PENALTY_SOURCE_TYPE,
@@ -75,6 +76,14 @@ export async function settleFactoryPurchaseOrder(
     if (!purchaseOrder.initialSupplierDeliveryDate || !purchaseOrder.penaltyBaseAmount) {
       throw codedError("采购单缺少冻结交期或结算基准金额", 409, "FACTORY_SETTLEMENT_ANCHOR_REQUIRED");
     }
+    const deliveredGoodsAmount = effectiveFactoryPurchaseOrderDeliveredAmount(purchaseOrder.items);
+    if (deliveredGoodsAmount === null) {
+      throw codedError(
+        "采购单缺少逐项实际交付数量或有效采购单价，不能结算",
+        409,
+        "FACTORY_SETTLEMENT_DELIVERED_GOODS_AMOUNT_INCOMPLETE",
+      );
+    }
 
     const exchangeRate = factorySettlementExchangeRate(input, purchaseOrder.purchaseCurrency);
     const exchangeRateDate = factorySettlementExchangeRateDate(input, purchaseOrder.actualDeliveryDate);
@@ -110,7 +119,8 @@ export async function settleFactoryPurchaseOrder(
     }
 
     const amounts = calculateFactorySettlementAmounts({
-      baseAmount: purchaseOrder.penaltyBaseAmount,
+      baseAmount: deliveredGoodsAmount,
+      penaltyBaseAmount: purchaseOrder.penaltyBaseAmount,
       initialDeliveryDate: purchaseOrder.initialSupplierDeliveryDate,
       actualDeliveryDate: purchaseOrder.actualDeliveryDate,
       adjustments: purchaseOrder.adjustments,

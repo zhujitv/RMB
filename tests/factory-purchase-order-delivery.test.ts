@@ -12,6 +12,12 @@ const {
 } = await jiti.import<typeof import("../lib/platform/factory-purchase-order-delivery.ts")>("../lib/platform/factory-purchase-order-delivery.ts");
 
 const serviceSource = readFileSync("lib/platform/factory-purchase-order-delivery.ts", "utf8");
+const actualDeliverySource = readFileSync("lib/platform/factory-purchase-order-actual-delivery.ts", "utf8");
+const loadingCoreSource = readFileSync("lib/platform/factory-purchase-order-loading-result-core.ts", "utf8");
+const loadingWorkflowSource = readFileSync("lib/platform/factory-purchase-order-loading-result-workflow.ts", "utf8");
+const containerShippingSource = readFileSync("lib/platform/sales-execution-container-shipping.ts", "utf8");
+const shippingHandoffSource = readFileSync("lib/platform/sales-execution-shipping-handoff.ts", "utf8");
+const containerLocksSource = readFileSync("lib/platform/container-loading-locks.ts", "utf8");
 const decisionRouteSource = readFileSync("app/api/sales-executions/[id]/purchase-orders/[purchaseOrderId]/delivery-proposal-decision/route.ts", "utf8");
 const actualRouteSource = readFileSync("app/api/sales-executions/[id]/purchase-orders/[purchaseOrderId]/actual-delivery/route.ts", "utf8");
 
@@ -77,15 +83,16 @@ test("rejecting a proposal restores the last confirmed state without overwriting
   assert.match(serviceSource, /supplierDeliveryDate: input\.decision === "ACCEPTED" \? proposal\.deliveryDate : before\.confirmedSupplierDeliveryDate/);
 });
 
-test("actual delivery is immutable, server-attributed and bounded by completion day and today", () => {
-  assert.match(serviceSource, /before\.status !== "ACCEPTED" \|\| before\.productionStatus !== "COMPLETED"/);
-  assert.match(serviceSource, /before\.actualDeliveryDate/);
-  assert.match(serviceSource, /actualDeliveryDate: null/);
-  assert.match(serviceSource, /actualDeliveryRecordedAt: recordedAt/);
-  assert.match(serviceSource, /actualDeliveryRecordedById: actorId/);
-  assert.match(serviceSource, /input\.text < completedDateText/);
-  assert.match(serviceSource, /input\.text > todayText/);
-  assert.match(serviceSource, /"登记工厂采购单实际交付日期"/);
+test("actual delivery is derived from released containers only at shipping handoff", () => {
+  assert.match(loadingCoreSource, /order\.status !== "ACCEPTED" \|\| order\.productionStatus !== "COMPLETED"/);
+  assert.match(loadingCoreSource, /dateText < shanghaiDateText\(order\.productionCompletedAt\)/);
+  assert.match(loadingCoreSource, /dateText > shanghaiDateText\(new Date\(\)\)/);
+  assert.match(actualDeliverySource, /FACTORY_ACTUAL_DELIVERY_CONTAINER_LEDGER_REQUIRED/);
+  assert.match(containerShippingSource, /actualDeliveryDate: null/);
+  assert.match(containerShippingSource, /actualDeliveryRecordedAt: recordedAt/);
+  assert.match(containerShippingSource, /actualDeliveryRecordedById: actorId/);
+  assert.match(shippingHandoffSource, /materializeReleasedContainerActuals[\s\S]*receivableOrder\.create/);
+  assert.doesNotMatch(loadingWorkflowSource, /actualDeliveredQuantity|actualDeliveryDate/);
 });
 
 test("delivery routes require salesExecution write permission and return compatible payloads", () => {
@@ -101,10 +108,14 @@ test("delivery routes require salesExecution write permission and return compati
   assert.match(actualRouteSource, /recordFactoryPurchaseOrderActualDelivery/);
 });
 
-test("both delivery mutations lock one order, enforce scoped access, audit and use revision CAS", () => {
-  assert.equal((serviceSource.match(/lockFactoryPurchaseOrder\(tx, purchaseOrderId\)/g) || []).length, 2);
+test("delivery proposal uses CAS while container loading uses the global lock order", () => {
+  assert.equal((serviceSource.match(/lockFactoryPurchaseOrder\(tx, purchaseOrderId\)/g) || []).length, 1);
   assert.match(serviceSource, /execution: \{ is: salesExecutionAccessWhere\(actor\) \}/);
-  assert.equal((serviceSource.match(/assertWrite\(actor, "salesExecution"\)/g) || []).length, 2);
-  assert.equal((serviceSource.match(/await writeAudit\(/g) || []).length, 2);
-  assert.ok((serviceSource.match(/revision: input\.expectedRevision/g) || []).length >= 2);
+  assert.match(serviceSource, /revision: input\.expectedRevision/);
+  assert.match(serviceSource, /await writeAudit\(/);
+  const executionLock = containerLocksSource.indexOf("lockSalesExecution");
+  const containerLock = containerLocksSource.indexOf('FROM "sales_execution_container_loads"');
+  const poLock = containerLocksSource.indexOf('FROM "factory_purchase_orders"');
+  const resultLock = containerLocksSource.indexOf('FROM "factory_purchase_order_loading_results"');
+  assert.ok(executionLock < containerLock && containerLock < poLock && poLock < resultLock);
 });

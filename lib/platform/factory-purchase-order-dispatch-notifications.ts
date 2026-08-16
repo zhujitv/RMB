@@ -90,6 +90,7 @@ async function processOutboxRow(outboxId: string, staleBefore: Date) {
       where: {
         id: outboxId,
         type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+        channel: "EMAIL",
         OR: retryableStatusWhere(staleBefore),
       },
       data: {
@@ -104,6 +105,7 @@ async function processOutboxRow(outboxId: string, staleBefore: Date) {
         where: {
           id: outboxId,
           type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+          channel: "EMAIL",
           ...finalAttemptStaleSendingWhere(staleBefore),
         },
         data: {
@@ -220,6 +222,7 @@ export async function processFactoryPurchaseOrderDispatchOutbox(options: {
   const candidates = await prisma.notificationOutbox.findMany({
     where: {
       type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+      channel: "EMAIL",
       scheduledAt: { lte: new Date() },
       OR: [...retryableStatusWhere(staleBefore), finalAttemptStaleSendingWhere(staleBefore)],
       ...(purchaseOrderIds.length ? { relatedEntityId: { in: purchaseOrderIds } } : {}),
@@ -236,6 +239,7 @@ export async function processFactoryPurchaseOrderDispatchOutbox(options: {
   const remaining = await prisma.notificationOutbox.count({
     where: {
       type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+      channel: "EMAIL",
       OR: remainingStatusWhere(),
       ...(purchaseOrderIds.length ? { relatedEntityId: { in: purchaseOrderIds } } : {}),
     },

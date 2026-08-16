@@ -1,4 +1,4 @@
-import type { NotificationTemplateForm, OcrIntegrationForm, ShipsgoIntegrationForm } from "./types";
+import type { NotificationTemplateForm, OcrIntegrationForm, ShipsgoIntegrationForm, SmsIntegrationForm } from "./types";
 
 export { SETTINGS_TABS } from "./settings-tab-options";
 
@@ -179,6 +179,18 @@ export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
   invoiceTextEnabled: false,
   logisticsInvoiceEnabled: false,
   timeoutMs: "15000",
+};
+export const DEFAULT_SMS_INTEGRATION_FORM: SmsIntegrationForm = {
+  enabled: false,
+  provider: "TENCENT_CLOUD",
+  tencentSdkAppId: "",
+  signName: "",
+  templateId: "",
+  region: "ap-guangzhou",
+  secretId: "",
+  secretIdConfigured: false,
+  secretKey: "",
+  secretKeyConfigured: false,
 };
 export const OCR_FEATURE_OPTIONS = [
   {

@@ -5,3 +5,4 @@ export { CommissionFormulaSettingsCard } from "./commission-formula-settings-car
 export { NotificationTemplateSettingsCard } from "./notification-template-settings-card";
 export { OcrIntegrationSettingsCard } from "./ocr-integration-settings-card";
 export { FreightowerIntegrationSettingsCard } from "./freightower-integration-settings-card";
+export { SmsIntegrationSettingsCard } from "./sms-integration-settings-card";

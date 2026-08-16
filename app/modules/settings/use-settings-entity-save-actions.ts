@@ -1,7 +1,7 @@
 import type { FormEvent } from "react";
 import { apiJson } from "../../api";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../../lib/password-policy";
-import { FACTORY_SUPPLIER_ACCOUNT_ROLES } from "./constants";
+import { FACTORY_SUPPLIER_ACCOUNT_ROLES, PRODUCT_SUPPLIER_TYPES } from "./constants";
 import {
   businessEntityFormFromRow,
   isSupplierAccountRole,
@@ -9,7 +9,6 @@ import {
 } from "./helpers";
 import type { BusinessEntityRow, SupplierRow } from "./types";
 import type { SettingsSaveActionsContext } from "./use-settings-save-actions";
-
 export function useSettingsEntitySaveActions(context: SettingsSaveActionsContext) {
   const {
     activePagination,
@@ -84,12 +83,20 @@ async function saveCustomerForm(event: FormEvent<HTMLFormElement>) {
       setCustomerSaving(false);
     }
   }
-
 async function saveSupplierForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supplierForm) return;
     if (!supplierForm.supplierName.trim()) {
       setSupplierMessage("请填写供应商名称");
+      return;
+    }
+    if (PRODUCT_SUPPLIER_TYPES.includes(supplierForm.supplierType) && supplierForm.dispatchSmsEnabled && !supplierForm.dispatchSmsPhone.trim()) {
+      setSupplierMessage("启用采购短信通知后，请填写采购通知手机号");
+      return;
+    }
+    if (PRODUCT_SUPPLIER_TYPES.includes(supplierForm.supplierType)
+      && !/^(?:0(?:\.\d{1,4})?|[1-4](?:\.\d{1,4})?|5(?:\.0{1,4})?)$/.test(supplierForm.purchaseQuantityTolerancePercent.trim())) {
+      setSupplierMessage("交付数量公差必须在 0% 到 5% 之间，最多保留 4 位小数");
       return;
     }
     setSupplierSaving(true);
@@ -115,7 +122,12 @@ async function saveSupplierForm(event: FormEvent<HTMLFormElement>) {
             bankAccount: supplierForm.bankAccount,
             purchasePaymentTerm: supplierForm.purchasePaymentTerm,
             purchasePrepaymentPercent: supplierForm.purchasePrepaymentPercent,
+            purchaseQuantityTolerancePercent: PRODUCT_SUPPLIER_TYPES.includes(supplierForm.supplierType)
+              ? supplierForm.purchaseQuantityTolerancePercent
+              : "0",
             purchasePrepaymentRequiredBeforeProduction: supplierForm.purchasePrepaymentRequiredBeforeProduction,
+            dispatchSmsEnabled: supplierForm.dispatchSmsEnabled,
+            dispatchSmsPhone: supplierForm.dispatchSmsPhone,
             allowDomesticLogisticsEntry: supplierForm.allowDomesticLogisticsEntry,
             allowLogisticsExpenseEntry: supplierForm.allowLogisticsExpenseEntry,
             allowLogisticsInvoiceUpload: supplierForm.allowLogisticsInvoiceUpload,

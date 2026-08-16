@@ -5,6 +5,7 @@ import {
   LEGACY_FACTORY_SUPPLIER_TYPE,
   LOGISTICS_SUPPLIER_TYPE_CODE,
   PRODUCT_SUPPLIER_TYPE_CODE,
+  PRODUCT_SUPPLIER_TYPES,
   SUPPLIER_STATUSES,
   SUPPLIER_TYPES,
   assertRead,
@@ -24,6 +25,7 @@ import {
   supplierTypeStorageValue,
   writeAudit,
 } from "./shared";
+import { normalizeChinaMobilePhone } from "./sms-integration-config";
 import {
   AVAILABLE_SUPPLIER_SELECT,
   canListAvailableSupplierOptions,
@@ -137,8 +139,41 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
   const allowLogisticsExpenseEntry = booleanInput(input.allowLogisticsExpenseEntry, before?.allowLogisticsExpenseEntry || false);
   const allowLogisticsInvoiceUpload = booleanInput(input.allowLogisticsInvoiceUpload, before?.allowLogisticsInvoiceUpload || false);
   const allowFactoryDocumentUpload = booleanInput(input.allowFactoryDocumentUpload, before?.allowFactoryDocumentUpload || false);
+  const requestedDispatchSmsEnabled = booleanInput(
+    input.dispatchSmsEnabled,
+    before?.dispatchSmsEnabled || false,
+  );
   const isDefaultLogisticsSupplier = booleanInput(input.isDefaultLogisticsSupplier, before?.isDefaultLogisticsSupplier || false);
   const isLogisticsSupplierType = DOMESTIC_LOGISTICS_SUPPLIER_TYPES.includes(supplierType);
+  const isProductSupplierType = PRODUCT_SUPPLIER_TYPES.includes(supplierType);
+  const rawDispatchSmsPhone = Object.prototype.hasOwnProperty.call(input, "dispatchSmsPhone")
+    ? optional(input.dispatchSmsPhone)
+    : before?.dispatchSmsPhone || null;
+  const dispatchSmsPhone = rawDispatchSmsPhone
+    ? normalizeChinaMobilePhone(rawDispatchSmsPhone)
+    : null;
+  if (rawDispatchSmsPhone && !dispatchSmsPhone) {
+    throw codedError(
+      "采购通知手机号必须是有效的中国大陆手机号码。",
+      400,
+      "SUPPLIER_DISPATCH_SMS_PHONE_INVALID",
+    );
+  }
+  if (requestedDispatchSmsEnabled && !isProductSupplierType) {
+    throw codedError(
+      "只有产品供应商可以启用采购订单短信通知。",
+      400,
+      "SUPPLIER_DISPATCH_SMS_TYPE_INVALID",
+    );
+  }
+  if (requestedDispatchSmsEnabled && !dispatchSmsPhone) {
+    throw codedError(
+      "启用采购订单短信通知前，请填写有效的中国大陆手机号。",
+      400,
+      "SUPPLIER_DISPATCH_SMS_PHONE_REQUIRED",
+    );
+  }
+  const dispatchSmsEnabled = isProductSupplierType && requestedDispatchSmsEnabled;
   const allowedLogisticsCostTypes = normalizeLogisticsCostTypeList(
     Array.isArray(input.allowedLogisticsCostTypes)
       ? input.allowedLogisticsCostTypes
@@ -165,6 +200,24 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
     input.purchasePrepaymentRequiredBeforeProduction,
     before?.purchasePrepaymentRequiredBeforeProduction || false,
   );
+  const currentTolerancePercent = new Prisma.Decimal(
+    before?.purchaseQuantityToleranceRatio ?? "0.05",
+  ).mul(100).toString();
+  const purchaseQuantityTolerancePercent = isProductSupplierType
+    ? Object.prototype.hasOwnProperty.call(input, "purchaseQuantityTolerancePercent")
+      ? String(input.purchaseQuantityTolerancePercent ?? "").trim()
+      : currentTolerancePercent
+    : "0";
+  if (!/^(?:[0-4](?:\.\d{1,4})?|5(?:\.0{1,4})?)$/.test(purchaseQuantityTolerancePercent)) {
+    throw codedError(
+      "采购数量公差必须是 0 到 5 之间的数字",
+      400,
+      "SUPPLIER_PURCHASE_QUANTITY_TOLERANCE_PERCENT_INVALID",
+    );
+  }
+  const purchaseQuantityToleranceRatio = new Prisma.Decimal(
+    purchaseQuantityTolerancePercent,
+  ).div(100);
   const activeDefaultLogisticsSupplier = isLogisticsSupplierType && isDefaultLogisticsSupplier;
   const data = {
     supplierName,
@@ -181,12 +234,15 @@ export async function saveSupplier(request: AuditRequestLike, actor: ActorLike, 
     purchasePaymentTerm,
     purchasePrepaymentRatio,
     purchasePrepaymentRequiredBeforeProduction,
+    purchaseQuantityToleranceRatio,
     remark: optional(input.remark),
     status: SUPPLIER_STATUSES.includes(nonEmpty(input.status)) ? nonEmpty(input.status) : "启用",
     allowDomesticLogisticsEntry,
     allowLogisticsExpenseEntry,
     allowLogisticsInvoiceUpload,
     allowFactoryDocumentUpload,
+    dispatchSmsEnabled,
+    dispatchSmsPhone,
     isDefaultLogisticsSupplier,
     allowedLogisticsCostTypes,
     updatedById: actorId,

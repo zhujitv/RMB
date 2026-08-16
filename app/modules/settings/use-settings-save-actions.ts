@@ -18,6 +18,8 @@ import type {
   SettingsTabKey,
   ShipsgoIntegrationForm,
   ShipsgoIntegrationSettings,
+  SmsIntegrationForm,
+  SmsIntegrationSettings,
   SupplierForm,
   SupplierRow,
   UserForm,
@@ -41,6 +43,7 @@ export type SettingsSaveActionsContext = {
   notificationTemplateForm: NotificationTemplateForm | null;
   notificationTemplateSettings: NotificationTemplateSettings | null;
   ocrIntegrationForm: OcrIntegrationForm | null;
+  smsIntegrationForm: SmsIntegrationForm | null;
   onCompanyProfileSaved?: (settings: CompanyProfileSettings) => void;
   selectedNotificationTemplateType: string;
   setBusinessEntities: Setter<BusinessEntityRow[]>;
@@ -70,6 +73,10 @@ export type SettingsSaveActionsContext = {
   setOcrIntegrationMessage: Setter<string>;
   setOcrIntegrationSaving: Setter<boolean>;
   setOcrIntegrationSettings: Setter<OcrIntegrationSettings | null>;
+  setSmsIntegrationForm: Setter<SmsIntegrationForm | null>;
+  setSmsIntegrationMessage: Setter<string>;
+  setSmsIntegrationSaving: Setter<boolean>;
+  setSmsIntegrationSettings: Setter<SmsIntegrationSettings | null>;
   setSelectedNotificationTemplateType: Setter<string>;
   setSelectedUserId: Setter<string>;
   setShipsgoIntegrationForm: Setter<ShipsgoIntegrationForm | null>;

@@ -28,8 +28,10 @@ export type NotificationDeliveryLogRow = {
   type: string;
   templateName: string;
   module: string;
+  channel: string;
   status: string;
   recipientEmails: string[];
+  recipientPhones: string[];
   ccEmails: string[];
   subject: string;
   bodyPreview: string;
@@ -50,6 +52,7 @@ export type NotificationTemplateSettings = {
 
 export type OcrIntegrationSettings = Record<string, unknown>;
 export type ShipsgoIntegrationSettings = Record<string, unknown>;
+export type SmsIntegrationSettings = Record<string, unknown>;
 export type LogisticsInvoiceValidationRule = { label: string; keywords: string[] };
 export type LogisticsInvoiceValidationRules = Record<string, LogisticsInvoiceValidationRule>;
 export type PermissionOption = { value: string; label: string };

@@ -7,6 +7,7 @@ export type {
   NotificationTemplateForm,
   OcrIntegrationForm,
   SettingsModuleProps,
+  SmsIntegrationForm,
   ShipsgoIntegrationForm,
   SupplierForm,
   UserForm
@@ -23,6 +24,7 @@ export type {
   OcrIntegrationSettings,
   PermissionConfig,
   PermissionOption,
+  SmsIntegrationSettings,
   ShipsgoIntegrationSettings,
   UserCustomPermissions
 } from "./types-integrations";

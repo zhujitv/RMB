@@ -4,6 +4,7 @@ import { useState } from "react";
 import { DetailField, SideDetailDrawer } from "../../components";
 import { formatCurrencyAmount, formatDate, formatDateTime } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
+import { ContainerLoadsPanel } from "./container-loads-panel";
 import { PurchaseOrderDraftList } from "./purchase-order-draft-list";
 import { salesExecutionShippingReadiness } from "./shipping-readiness";
 import styles from "./sales-execution.module.css";
@@ -160,6 +161,15 @@ export function ExecutionDetailDrawer({
           {view === "factory" ? (
             <section className={styles.detailSection}>
               <div className={styles.privacyNote}>此视图仅包含工厂采购所需资料，不显示客户名称、客户销售价或利润。</div>
+              <ContainerLoadsPanel
+                executionId={execution.id}
+                executionRevision={Number(execution.revision || 1)}
+                loads={execution.containerLoads || []}
+                orders={orders}
+                canManage={canStartProduction}
+                shippingStarted={Boolean(execution.shippingStartedAt || execution.receivableOrder)}
+                onChanged={onFactoryExecutionChanged}
+              />
               <PurchaseOrderDraftList
                 orders={orders}
                 executionId={execution.id}

@@ -61,11 +61,12 @@ export function PurchaseOrderSettlementCard({
         <div><strong>工厂最终结算</strong><small>{settlement ? `结算日 ${formatDate(settlement.exchangeRateDate)}` : "发货流程开始后确认最终成本与违约金"}</small></div>
         {settlement ? <span className={styles.settlementStatus} data-status={settlement.status}>{settlement.status === "SETTLED" ? "采购已结清" : "等待尾款"}</span> : null}
       </div>
+      <p className={styles.auditLine}>结算货款按逐行批准的实际装柜数量计算，留仓不计供应商货款；延误违约金仍按原合同采购基数计算。</p>
 
       {settlement ? (
         <>
           <div className={styles.settlementGrid}>
-            <div><span>采购基数</span><strong>{formatCurrencyAmount(currency, settlement.baseAmount || 0)}</strong></div>
+            <div><span>实际交付货款</span><strong>{formatCurrencyAmount(currency, settlement.baseAmount || 0)}</strong></div>
             <div><span>增加费用</span><strong>+ {formatCurrencyAmount(currency, settlement.increaseAmount || 0)}</strong></div>
             <div><span>其他扣减</span><strong>- {formatCurrencyAmount(currency, settlement.decreaseAmount || 0)}</strong></div>
             <div><span>延误违约金</span><strong>- {formatCurrencyAmount(currency, settlement.delayPenaltyAmount || 0)} · {settlement.delayDays || 0} 天</strong></div>

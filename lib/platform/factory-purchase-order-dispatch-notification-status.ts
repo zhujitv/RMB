@@ -24,6 +24,7 @@ async function refreshPurchaseOrderEmailStatus(
   const rows = await prisma.notificationOutbox.findMany({
     where: {
       type: NOTIFICATION_TYPES.FACTORY_PURCHASE_ORDER_DISPATCH,
+      channel: "EMAIL",
       relatedEntityType: "factory_purchase_order",
       relatedEntityId: purchaseOrderId,
       idempotencyKey: { in: currentKeys },

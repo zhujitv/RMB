@@ -3,11 +3,16 @@
 import { useRef, useState } from "react";
 import { apiJson } from "../../api";
 import { formatCurrencyAmount, formatDate, formatDateTime } from "../../formatters";
+import { formatTolerancePercent } from "../delivery-quantity-variance";
 import styles from "./purchase-order-actions.module.css";
 import { PurchaseOrderConfirmationAudit } from "./purchase-order-confirmation-audit";
 import { PurchaseOrderDeliveryActions } from "./purchase-order-delivery-actions";
+import { PurchaseOrderDeliveryQuantityVariance } from "./purchase-order-delivery-quantity-variance";
+import { PurchaseOrderOfflineQuantityVariance } from "./purchase-order-offline-quantity-variance";
 import { PurchaseOrderOfflineProductionCompletion } from "./purchase-order-offline-production-completion";
+import { PurchaseOrderOfflineProductionProgress } from "./purchase-order-offline-production-progress";
 import { PurchaseOrderOfflineResponse } from "./purchase-order-offline-response";
+import { PurchaseOrderProductionProgressSummary } from "./purchase-order-production-progress-summary";
 import { PurchaseOrderReassignmentCard } from "./purchase-order-reassignment-card";
 import { PurchaseOrderSettlementCard } from "./purchase-order-settlement-card";
 import { factoryProductionStatusLabel } from "./status-values";
@@ -188,9 +193,12 @@ export function PurchaseOrderExecutionPanel({
         <div><span>免罚截止</span><strong>{dateAfter(order.initialSupplierDeliveryDate, Number(order.delayGraceDays || 10))}</strong></div>
         <div><span>预计延误扣款</span><strong>{Number(order.estimatedPenaltyDays || 0)} 天 · {formatCurrencyAmount(currency, order.estimatedPenaltyAmount || 0)}</strong></div>
         <div><span>预付款</span><strong>{formatCurrencyAmount(currency, order.paidPrepaymentAmount || 0)} / {formatCurrencyAmount(currency, order.prepaymentRequiredAmount || 0)}</strong></div>
+        <div><span>交付数量公差</span><strong>±{formatTolerancePercent(order.deliveryQuantityToleranceRatio || "0.05")}%（本单冻结）</strong></div>
       </div>
 
       {order.productionStartedAt ? <p className={styles.auditLine}>开始生产：{formatDateTime(order.productionStartedAt)}{order.productionStartedBy?.name ? ` · ${order.productionStartedBy.name}` : ""}</p> : null}
+      <PurchaseOrderProductionProgressSummary order={order} />
+      <PurchaseOrderDeliveryQuantityVariance executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} />
       <PurchaseOrderConfirmationAudit executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} />
       <PurchaseOrderReassignmentCard executionId={executionId} executionRevision={executionRevision} order={order} canManage={canStartProduction} onChanged={onChanged} />
       <PurchaseOrderDeliveryActions executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} />
@@ -199,9 +207,11 @@ export function PurchaseOrderExecutionPanel({
 
       <div className={styles.actionRow}>
         <PurchaseOrderOfflineResponse executionId={executionId} shippingStarted={shippingStarted} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
+        <PurchaseOrderOfflineProductionProgress executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
+        <PurchaseOrderOfflineQuantityVariance executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
         <PurchaseOrderOfflineProductionCompletion executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
         {canStartProduction && active && order.productionStatus === "READY" ? <button type="button" disabled={busy} onClick={startProduction}>开始生产</button> : null}
-        {order.productionStatus === "IN_PRODUCTION" ? <span className={styles.warning}>等待供应商确认生产完成</span> : null}
+        {order.productionStatus === "IN_PRODUCTION" ? <span className={styles.warning}>{order.productionProgress?.allCompleted ? "进度已达 100%，等待确认生产完成" : "等待供应商持续填报生产进度"}</span> : null}
         {order.productionStatus === "WAITING_PREPAYMENT" ? <span className={styles.warning}>预付款到账后才可生产</span> : null}
         {canRecordPayment && active && !settlementClosed ? <button type="button" disabled={busy} onClick={() => { if (settlementPending) setPaymentKind("BALANCE"); setPaymentOpen((value) => !value); }}>{settlementPending ? "登记尾款" : "登记采购付款"}</button> : null}
         {canAddAdjustment && active && !order.settlement ? <button type="button" disabled={busy} onClick={() => setAdjustmentOpen((value) => !value)}>登记临时费用</button> : null}

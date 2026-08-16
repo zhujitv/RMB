@@ -100,9 +100,17 @@ export function SupplierEditPanel({
               供应商类型
               <select value={form.supplierType} onChange={(event) => {
                 const supplierType = event.target.value;
+                const remainsProductSupplier = PRODUCT_SUPPLIER_TYPES.includes(supplierType);
                 onChange({
                   ...form,
                   supplierType,
+                  ...(remainsProductSupplier ? {
+                    purchaseQuantityTolerancePercent: form.purchaseQuantityTolerancePercent || "5",
+                  } : {
+                    purchaseQuantityTolerancePercent: "0",
+                    dispatchSmsEnabled: false,
+                    dispatchSmsPhone: "",
+                  }),
                 });
               }} disabled={controlsDisabled}>
                 {SUPPLIER_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}

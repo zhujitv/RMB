@@ -1,6 +1,7 @@
 import baseStyles from "./supplier-purchase-orders.module.css";
 import detailStyles from "./supplier-purchase-order-detail.module.css";
 import itemStyles from "./supplier-purchase-order-detail-items.module.css";
+import { formatTolerancePercent } from "../delivery-quantity-variance";
 import {
   dateInputValue,
   formatDate,
@@ -11,14 +12,12 @@ import {
   responseSummary,
   statusLabel,
 } from "./presentation";
-import type {
-  SupplierPurchaseOrderDto,
-  SupplierPurchaseOrderResponseAction,
-} from "./types";
+import type { SupplierPurchaseOrderDto, SupplierPurchaseOrderResponseAction } from "./types";
+import { DeliveryQuantityVarianceCard } from "./delivery-quantity-variance-card";
+import { ProductionProgressCard } from "./production-progress-card";
+import { SupplierContainerLoadsCard } from "./supplier-container-loads-card";
 import { SupplierProductionCompletionCard } from "./supplier-production-completion-card";
-
 const styles = { ...baseStyles, ...detailStyles, ...itemStyles };
-
 type Props = {
   canWrite: boolean;
   detail: SupplierPurchaseOrderDto;
@@ -37,6 +36,7 @@ type Props = {
   onRemarkChange: (value: string) => void;
   onItemPriceChange: (itemId: string, value: string) => void;
   onSubmit: () => void;
+  onProductionProgressSaved: (saved: SupplierPurchaseOrderDto, message: string) => void;
   onConfirmProductionCompletion: () => void;
 };
 
@@ -58,6 +58,7 @@ export function SupplierPurchaseOrderDetail({
   onRemarkChange,
   onItemPriceChange,
   onSubmit,
+  onProductionProgressSaved,
   onConfirmProductionCompletion,
 }: Props) {
   const followUp = detail.status === "ACCEPTED";
@@ -96,6 +97,7 @@ export function SupplierPurchaseOrderDetail({
         <div className={styles.summaryCard}><span>预付款要求</span><strong>{formatPrice(detail.prepaymentRequiredAmount, detail.purchaseCurrency)}</strong></div>
         <div className={styles.summaryCard}><span>已登记预付款</span><strong>{formatPrice(detail.paidPrepaymentAmount, detail.purchaseCurrency)}</strong></div>
         <div className={styles.summaryCard}><span>生产状态</span><strong>{productionStatusLabel(detail.productionStatus)}</strong></div>
+        <div className={styles.summaryCard}><span>交付数量公差</span><strong>±{formatTolerancePercent(detail.deliveryQuantityToleranceRatio)}%（本单冻结）</strong></div>
         <div className={styles.summaryCard}><span>首次确认交期</span><strong>{formatDate(detail.initialSupplierDeliveryDate)}</strong></div>
         <div className={styles.summaryCard}><span>内部确认交期</span><strong>{formatDate(detail.confirmedSupplierDeliveryDate)}</strong></div>
         <div className={styles.summaryCard}><span>实际交付日期</span><strong>{formatDate(detail.actualDeliveryDate)}</strong></div>
@@ -103,7 +105,10 @@ export function SupplierPurchaseOrderDetail({
         <div className={styles.summaryCard}><span>回复时间</span><strong>{formatDate(detail.respondedAt, true)}</strong></div>
       </div>
 
-      <SupplierProductionCompletionCard canWrite={canWrite} productionStatus={proposalPending ? "WAITING_SUPPLIER" : detail.productionStatus} productionCompletedAt={detail.productionCompletedAt} busy={submitting || productionCompleting} onConfirm={onConfirmProductionCompletion} />
+      <ProductionProgressCard canWrite={canWrite} detail={detail} disabled={submitting || productionCompleting} onSaved={onProductionProgressSaved} />
+      <DeliveryQuantityVarianceCard canWrite={canWrite} detail={detail} disabled={submitting || productionCompleting} onSaved={onProductionProgressSaved} />
+      <SupplierProductionCompletionCard canWrite={canWrite} productionStatus={proposalPending ? "WAITING_SUPPLIER" : detail.productionStatus} productionCompletedAt={detail.productionCompletedAt} allCompleted={detail.productionProgress.allCompleted} quantityVariancePending={detail.deliveryQuantityVariances.some((entry) => entry.status === "PENDING")} busy={submitting || productionCompleting} onConfirm={onConfirmProductionCompletion} />
+      <SupplierContainerLoadsCard canWrite={canWrite} detail={detail} disabled={submitting || productionCompleting} onSaved={onProductionProgressSaved} />
 
       <section className={styles.section}>
         <h3>采购备注</h3>

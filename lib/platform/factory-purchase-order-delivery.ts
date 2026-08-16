@@ -16,15 +16,14 @@ import {
 } from "./sales-execution-access";
 import { todayInChina } from "./quotation-date-values";
 import {
-  normalizeActualDeliveryInput,
   normalizeDeliveryProposalDecisionInput,
-  shanghaiDateText,
 } from "./factory-purchase-order-delivery-inputs";
 
 export {
   normalizeActualDeliveryInput,
   normalizeDeliveryProposalDecisionInput,
 } from "./factory-purchase-order-delivery-inputs";
+export { recordFactoryPurchaseOrderActualDelivery } from "./factory-purchase-order-actual-delivery";
 
 type AuditRequest = Parameters<typeof writeAudit>[0];
 async function loadDeliveryOrder(
@@ -206,85 +205,6 @@ export async function decideFactoryPurchaseOrderDeliveryProposal(
         tx,
       );
       return { decision: input.decision, purchaseOrder: deliveryState(saved) };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-  } catch (error: unknown) {
-    if (String((error as { code?: string } | null)?.code || "") === "P2034") {
-      throw codedError("采购单状态已变化，请刷新后重试", 409, "FACTORY_PURCHASE_ORDER_REVISION_CONFLICT");
-    }
-    throw error;
-  }
-}
-
-export async function recordFactoryPurchaseOrderActualDelivery(
-  request: AuditRequest,
-  actor: SalesExecutionActor,
-  executionId: string,
-  purchaseOrderId: string,
-  rawInput: unknown,
-) {
-  assertWrite(actor, "salesExecution");
-  const actorId = requireSalesExecutionActorId(actor);
-  const input = normalizeActualDeliveryInput(rawInput);
-  try {
-    return await prisma.$transaction(async (tx) => {
-      await lockFactoryPurchaseOrder(tx, purchaseOrderId);
-      const before = await loadDeliveryOrder(tx, executionId, purchaseOrderId, actor);
-      if (before.status !== "ACCEPTED" || before.productionStatus !== "COMPLETED") {
-        throw codedError("只有已接受且生产完成的采购单可以登记实际交付日期", 409, "FACTORY_ACTUAL_DELIVERY_NOT_ALLOWED");
-      }
-      if (before.actualDeliveryDate) {
-        throw codedError("实际交付日期已经登记，不能重复修改", 409, "FACTORY_ACTUAL_DELIVERY_ALREADY_RECORDED");
-      }
-      if (before.revision !== input.expectedRevision) {
-        throw codedError("采购单状态已变化，请刷新后重试", 409, "FACTORY_PURCHASE_ORDER_REVISION_CONFLICT");
-      }
-      if (!before.productionCompletedAt) {
-        throw codedError("采购单缺少生产完成时间", 409, "FACTORY_PRODUCTION_COMPLETION_TIME_MISSING");
-      }
-      const completedDateText = shanghaiDateText(before.productionCompletedAt);
-      const todayText = todayInChina().toISOString().slice(0, 10);
-      if (input.text < completedDateText) {
-        throw codedError("实际交付日期不能早于生产完成日期", 400, "FACTORY_ACTUAL_DELIVERY_BEFORE_COMPLETION");
-      }
-      if (input.text > todayText) {
-        throw codedError("实际交付日期不能晚于今天", 400, "FACTORY_ACTUAL_DELIVERY_IN_FUTURE");
-      }
-
-      const recordedAt = new Date();
-      const changed = await tx.factoryPurchaseOrder.updateMany({
-        where: {
-          id: before.id,
-          executionId: before.executionId,
-          status: "ACCEPTED",
-          productionStatus: "COMPLETED",
-          actualDeliveryDate: null,
-          actualDeliveryRecordedAt: null,
-          actualDeliveryRecordedById: null,
-          revision: input.expectedRevision,
-        },
-        data: {
-          actualDeliveryDate: input.date,
-          actualDeliveryRecordedAt: recordedAt,
-          actualDeliveryRecordedById: actorId,
-          revision: { increment: 1 },
-          updatedById: actorId,
-        },
-      });
-      if (changed.count !== 1) {
-        throw codedError("采购单状态已变化，请刷新后重试", 409, "FACTORY_PURCHASE_ORDER_REVISION_CONFLICT");
-      }
-      const saved = await loadDeliveryOrder(tx, executionId, before.id, actor);
-      await writeAudit(
-        request,
-        { id: actorId },
-        "登记工厂采购单实际交付日期",
-        "factory_purchase_orders",
-        before.id,
-        deliveryState(before),
-        deliveryState(saved),
-        tx,
-      );
-      return deliveryState(saved);
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error: unknown) {
     if (String((error as { code?: string } | null)?.code || "") === "P2034") {

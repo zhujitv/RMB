@@ -1,22 +1,38 @@
 import { Prisma } from "../generated/prisma/client.js";
+import {
+  serializeProductionProgress,
+  type ProductionProgressDto,
+  type ProductionProgressReportRow,
+} from "./factory-purchase-order-production-progress-values";
 import { productVisibleDescription } from "./quotation-calculations";
-
+import {
+  serializeSupplierDeliveryQuantityVariances,
+  type SupplierDeliveryQuantityVarianceDto,
+  type SupplierDeliveryQuantityVarianceRow,
+} from "./supplier-delivery-quantity-variance-values";
+import {
+  serializeSupplierFactoryPurchaseLoadingResult,
+  type FactoryPurchaseLoadingResultRow,
+  type SupplierFactoryPurchaseLoadingResultDto,
+} from "./factory-purchase-order-loading-result-serialization";
+import {
+  serializeSupplierContainerLoad,
+  type SupplierContainerLoadRow,
+} from "./sales-execution-container-load-serialization";
 export const SUPPLIER_PURCHASE_ORDER_VISIBLE_STATUSES = [
   "DISPATCHED",
   "ACCEPTED",
   "DELIVERY_PROPOSED",
   "REJECTED",
 ] as const;
-
 export type SupplierPurchaseOrderStatus = typeof SUPPLIER_PURCHASE_ORDER_VISIBLE_STATUSES[number];
 export type SupplierPurchaseOrderResponseAction = Exclude<SupplierPurchaseOrderStatus, "DISPATCHED">;
-
 type DateValue = Date | string | null | undefined;
 type QuantityValue = { toString(): string } | string | number;
 type DecimalValue = QuantityValue | null | undefined;
-
 export type SupplierPurchaseOrderPublicRow = {
   id: string;
+  executionId: string;
   supplierId: string;
   revision: number;
   poNo: string;
@@ -31,6 +47,7 @@ export type SupplierPurchaseOrderPublicRow = {
   confirmedSupplierDeliveryDate: DateValue;
   actualDeliveryDate: DateValue;
   actualDeliveryRecordedAt: DateValue;
+  deliveryQuantityToleranceRatio: DecimalValue;
   penaltyBaseAmount: DecimalValue;
   delayGraceDays: number;
   delayPenaltyRatePerDay: DecimalValue;
@@ -51,6 +68,10 @@ export type SupplierPurchaseOrderPublicRow = {
   supplierResponseRemark: string | null;
   supplierResponseSequence: number;
   respondedAt: DateValue;
+  productionProgressReports: ProductionProgressReportRow[];
+  deliveryQuantityVariances: SupplierDeliveryQuantityVarianceRow[];
+  loadingResults: FactoryPurchaseLoadingResultRow[];
+  containerLoads?: SupplierContainerLoadRow[];
   supplierResponses: Array<{
     id: string;
     responseSequence: number;
@@ -73,6 +94,7 @@ export type SupplierPurchaseOrderPublicRow = {
     specificationSnapshot: string | null;
     unitSnapshot: string;
     allocatedQuantity: QuantityValue;
+    actualDeliveredQuantity: DecimalValue;
     purchaseUnitPrice: DecimalValue;
     amount: DecimalValue;
     supplierPrice: {
@@ -83,7 +105,6 @@ export type SupplierPurchaseOrderPublicRow = {
     remark: string | null;
   }>;
 };
-
 export type SupplierPurchaseOrderDto = {
   id: string;
   revision: number;
@@ -101,6 +122,7 @@ export type SupplierPurchaseOrderDto = {
   confirmedSupplierDeliveryDate: string | null;
   actualDeliveryDate: string | null;
   actualDeliveryRecordedAt: string | null;
+  deliveryQuantityToleranceRatio: string;
   penaltyBaseAmount: string | null;
   delayGraceDays: number;
   delayPenaltyRatePerDay: string;
@@ -113,6 +135,10 @@ export type SupplierPurchaseOrderDto = {
   productionCompletionContact: string;
   productionCompletionRecordedAt: string | null;
   productionCompletionRemark: string;
+  productionProgress: ProductionProgressDto;
+  deliveryQuantityVariances: SupplierDeliveryQuantityVarianceDto[];
+  loadingResults: SupplierFactoryPurchaseLoadingResultDto[];
+  containerLoads: ReturnType<typeof serializeSupplierContainerLoad>[];
   deliveryFrozen: boolean;
   purchaseRemark: string;
   status: SupplierPurchaseOrderStatus;
@@ -140,6 +166,7 @@ export type SupplierPurchaseOrderDto = {
     productDescription: string;
     unit: string;
     quantity: string;
+    actualDeliveredQuantity: string | null;
     unitPrice: string | null;
     amount: string | null;
     priceRequired: boolean;
@@ -160,6 +187,11 @@ function isoDate(value: DateValue) {
  * object spreading or relation serialization.
  */
 export function serializeSupplierPurchaseOrder(row: SupplierPurchaseOrderPublicRow): SupplierPurchaseOrderDto {
+  const deliveryQuantityVariances = row.deliveryQuantityVariances || [];
+  const productionProgressReports = (row.productionProgressReports || []).map((report) => ({
+    ...report,
+    reportedBy: report.source === "SUPPLIER_PORTAL" ? report.reportedBy : undefined,
+  }));
   const prepaymentRatio = row.prepaymentRatio == null ? new Prisma.Decimal(0) : new Prisma.Decimal(row.prepaymentRatio.toString());
   const penaltyBaseAmount = row.penaltyBaseAmount == null ? null : new Prisma.Decimal(row.penaltyBaseAmount.toString());
   const paidPrepaymentAmount = (row.payments || []).reduce(
@@ -167,6 +199,11 @@ export function serializeSupplierPurchaseOrder(row: SupplierPurchaseOrderPublicR
     new Prisma.Decimal(0),
   ).toDecimalPlaces(2);
   const latestResponse = row.supplierResponses.at(-1);
+  const productionProgress = serializeProductionProgress(
+    productionProgressReports,
+    row.items.map((item) => ({ id: item.id, allocatedQuantity: item.allocatedQuantity })),
+    deliveryQuantityVariances.find((variance) => variance.status === "APPROVED"),
+  );
   return {
     id: row.id,
     revision: row.revision,
@@ -184,6 +221,7 @@ export function serializeSupplierPurchaseOrder(row: SupplierPurchaseOrderPublicR
     confirmedSupplierDeliveryDate: isoDate(row.confirmedSupplierDeliveryDate),
     actualDeliveryDate: isoDate(row.actualDeliveryDate),
     actualDeliveryRecordedAt: isoDate(row.actualDeliveryRecordedAt),
+    deliveryQuantityToleranceRatio: row.deliveryQuantityToleranceRatio?.toString() || "0.05",
     penaltyBaseAmount: penaltyBaseAmount?.toString() || null,
     delayGraceDays: Number(row.delayGraceDays ?? 10),
     delayPenaltyRatePerDay: row.delayPenaltyRatePerDay == null ? "0" : row.delayPenaltyRatePerDay.toString(),
@@ -196,6 +234,14 @@ export function serializeSupplierPurchaseOrder(row: SupplierPurchaseOrderPublicR
     productionCompletionContact: row.productionCompletionContact || "",
     productionCompletionRecordedAt: isoDate(row.productionCompletionRecordedAt),
     productionCompletionRemark: row.productionCompletionRemark || "",
+    productionProgress,
+    deliveryQuantityVariances: serializeSupplierDeliveryQuantityVariances(
+      deliveryQuantityVariances,
+    ),
+    loadingResults: (row.loadingResults || []).map(
+      serializeSupplierFactoryPurchaseLoadingResult,
+    ),
+    containerLoads: (row.containerLoads || []).map(serializeSupplierContainerLoad),
     deliveryFrozen: Boolean(row.execution.shippingStartedAt || row.productionStatus === "COMPLETED" || row.actualDeliveryDate),
     purchaseRemark: row.remark || "",
     status: row.status,
@@ -231,6 +277,7 @@ export function serializeSupplierPurchaseOrder(row: SupplierPurchaseOrderPublicR
         ),
         unit: item.unitSnapshot,
         quantity: item.allocatedQuantity.toString(),
+        actualDeliveredQuantity: item.actualDeliveredQuantity?.toString() || null,
         unitPrice: confirmedUnitPrice ?? originalUnitPrice,
         amount: confirmedAmount ?? originalAmount,
         priceRequired: confirmedUnitPrice === null && originalUnitPrice === null,

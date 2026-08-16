@@ -1,0 +1,7 @@
+.dialog { width: min(1040px, calc(100vw - 32px)); }
+.table { min-width: 820px; }
+.table td:first-child { min-width: 280px; color: #0f172a; font-weight: 700; }
+.fillAll { border: 1px solid #93c5fd; border-radius: 8px; background: #eff6ff; color: #1d4ed8; padding: 7px 10px; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.fillAll:disabled { cursor: wait; opacity: .55; }
+.summary { border-radius: 9px; background: #f0f9ff; color: #475569; padding: 9px 11px; font-size: 12px; }
+.summary strong { color: #0369a1; }

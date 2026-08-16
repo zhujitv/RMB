@@ -1,0 +1,7 @@
+.dialog { width: min(1080px, calc(100vw - 32px)); }
+.table { min-width: 900px; }
+.table td:first-child { min-width: 260px; color: #0f172a; font-weight: 700; }
+.table input { width: 140px; }
+.difference { display: grid; gap: 2px; color: #9a3412; font-weight: 700; }
+.difference small { color: #78716c; font-weight: 500; }
+.summary { border-radius: 9px; background: #fff7ed; color: #9a3412; padding: 9px 11px; font-size: 12px; }
