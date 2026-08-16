@@ -7,6 +7,7 @@ export type DeliveryQuantityCoverageExecution = {
   items: Array<{ id: string; quantity: QuantityValue }>;
   purchaseOrders: Array<{
     id: string;
+    status?: string;
     items: Array<{
       id: string;
       executionItemId: string;
@@ -37,6 +38,7 @@ export function deliveryQuantityCoverageShortages(
   ]));
   const deliveredByExecutionItem = new Map<string, Prisma.Decimal>();
   for (const purchaseOrder of execution.purchaseOrders) {
+    if (["REJECTED", "VOIDED"].includes(purchaseOrder.status || "")) continue;
     const approvedByItem = new Map(
       (purchaseOrder.deliveryQuantityVariances[0]?.items || []).map((item) => [
         item.purchaseOrderItemId,
@@ -75,7 +77,7 @@ export async function lockDeliveryQuantityVarianceApprovalScope(
     SELECT "id"
     FROM "factory_purchase_orders"
     WHERE "execution_id" = ${executionId}
-      AND "status" <> 'VOIDED'
+      AND "status" NOT IN ('REJECTED', 'VOIDED')
     ORDER BY "id"
     FOR UPDATE
   `;
@@ -92,9 +94,10 @@ export async function assertDeliveryQuantityApprovalPreservesSalesCoverage(
     select: {
       items: { select: { id: true, quantity: true } },
       purchaseOrders: {
-        where: { status: { not: "VOIDED" } },
+        where: { status: { notIn: ["REJECTED", "VOIDED"] } },
         select: {
           id: true,
+          status: true,
           items: { select: { id: true, executionItemId: true, allocatedQuantity: true } },
           deliveryQuantityVariances: {
             where: { status: "APPROVED" },

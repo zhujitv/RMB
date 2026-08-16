@@ -125,6 +125,23 @@ test("a shortage can be approved only after another factory's approved overage c
     "po-short",
     [{ purchaseOrderItemId: "short-line", proposedQuantity: "95" }],
   ), []);
+  assert.deepEqual(deliveryQuantityCoverageShortages({
+    items: [{ id: "sales-line", quantity: "100" }],
+    purchaseOrders: [
+      {
+        id: "po-rejected",
+        status: "REJECTED",
+        items: [{ id: "rejected-line", executionItemId: "sales-line", allocatedQuantity: "100" }],
+        deliveryQuantityVariances: [],
+      },
+      {
+        id: "po-replacement",
+        status: "ACCEPTED",
+        items: [{ id: "replacement-line", executionItemId: "sales-line", allocatedQuantity: "100" }],
+        deliveryQuantityVariances: [],
+      },
+    ],
+  }, "po-replacement", [{ purchaseOrderItemId: "replacement-line", proposedQuantity: "95" }]), ["sales-line"]);
 });
 
 test("settlement uses actual delivered goods amount while delay penalty keeps contract base", () => {
@@ -175,6 +192,8 @@ test("backend wiring blocks pending delivery and aggregate short shipment withou
   assert.doesNotMatch(varianceDecision, /BELOW_COMPLETED_PROGRESS|NotBelowReportedProgress/);
   assert.match(varianceDecision, /lockDeliveryQuantityVarianceApprovalScope[\s\S]*assertDeliveryQuantityApprovalPreservesSalesCoverage/);
   assert.match(varianceCoverage, /sales_executions[\s\S]*FOR UPDATE[\s\S]*factory_purchase_orders[\s\S]*ORDER BY "id"[\s\S]*FOR UPDATE/);
+  assert.match(varianceCoverage, /status" NOT IN \('REJECTED', 'VOIDED'\)/);
+  assert.match(varianceCoverage, /status: \{ notIn: \["REJECTED", "VOIDED"\] \}/);
   assert.match(varianceCoverage, /FACTORY_DELIVERY_QUANTITY_VARIANCE_EXECUTION_SHORT/);
   assert.doesNotMatch(supplierSelect, /decisionRemark/);
   assert.doesNotMatch(supplierSelect, /reportedBy:\s*\{\s*select/);
