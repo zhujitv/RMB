@@ -87,6 +87,8 @@ test("keyword search covers the required business fields", () => {
   assert.match(services.logistics, /s_keyword\.supplier_name ILIKE \$\{keyword\}/);
   assert.match(services.logistics, /s_keyword\.supplier_type ILIKE \$\{keyword\}/);
   assert.match(services.logistics, /dli_keyword\.remark_text ILIKE \$\{keyword\}/);
+  assert.match(services.logistics, /LEFT JOIN logistics_transport_items dti_keyword/);
+  assert.doesNotMatch(services.logistics, /domestic_logistics_transport_items/);
   assert.match(services.logistics, /dti_keyword\.container_no ILIKE \$\{keyword\}/);
   assert.match(services.logistics, /dti_keyword\.container_type ILIKE \$\{keyword\}/);
   assert.match(services.logistics, /dti_keyword\.seal_no ILIKE \$\{keyword\}/);

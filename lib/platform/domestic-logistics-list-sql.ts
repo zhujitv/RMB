@@ -60,7 +60,7 @@ export function domesticLogisticsListSqlWhere(filters: DomesticLogisticsListFilt
       OR EXISTS (
         SELECT 1
         FROM domestic_logistics_infos dli_keyword
-        LEFT JOIN domestic_logistics_transport_items dti_keyword
+        LEFT JOIN logistics_transport_items dti_keyword
           ON dti_keyword.logistics_info_id = dli_keyword.id
         WHERE dli_keyword.order_id = ro.id
           AND dli_keyword.deleted_at IS NULL
