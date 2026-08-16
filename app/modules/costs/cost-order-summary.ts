@@ -4,8 +4,12 @@ import { FACTORY_DOCUMENT_TYPES, type CostOrderSummary, type CostRow } from "./m
 
 export function recalculateOrderSummary(order: CostOrderSummary, costs: CostRow[]): CostOrderSummary {
   const activeCosts = costs.filter((cost) => Boolean(cost.id));
-  const currencyTotals = summarizeCurrencyTotals(activeCosts);
-  const confirmed = activeCosts.filter((cost) => cost.costConfirmed).length;
+  const participatingCosts = activeCosts.filter((cost) => !cost.excludedFromOrderCost);
+  const excludedFobSeaFreightCostCny = activeCosts
+    .filter((cost) => cost.excludedFromOrderCost)
+    .reduce((sum, cost) => sum + Number(cost.amountCny || 0), 0);
+  const currencyTotals = summarizeCurrencyTotals(participatingCosts);
+  const confirmed = participatingCosts.filter((cost) => cost.costConfirmed).length;
   const documentProgress = activeCosts.reduce((acc, cost) => {
     const successDocs = (cost.documents || []).filter((document) => document.uploadStatus === "SUCCESS");
     if (isFactoryCost(cost)) {
@@ -24,11 +28,12 @@ export function recalculateOrderSummary(order: CostOrderSummary, costs: CostRow[
     costs: activeCosts,
     costCount: activeCosts.length,
     totalCostCny: currencyTotals.totalCny,
+    excludedFobSeaFreightCostCny,
     currencyTotals,
     costConfirmProgress: {
       completed: confirmed,
-      total: activeCosts.length,
-      text: activeCosts.length ? `${confirmed}/${activeCosts.length}` : "无成本",
+      total: participatingCosts.length,
+      text: participatingCosts.length ? `${confirmed}/${participatingCosts.length}` : "无成本",
     },
     documentProgress: {
       ...documentProgress,

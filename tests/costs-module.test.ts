@@ -369,9 +369,10 @@ test("cost order summary separates factory logistics and other cost totals", () 
   assert.match(costsShared, /hasInvalidFactoryCurrency/);
   assert.match(costsShared, /cost-summary-invalid-factory-currency/);
   assert.match(costsShared, /const summaryCosts = summaryDisplayCosts\(costs\)/);
-  assert.match(costsShared, /const currencyTotals = summarizeCurrencyTotals\(summaryCosts\)/);
-  assert.match(costsShared, /costConfirmProgress: costConfirmedProgress\(summaryCosts\)/);
-  assert.match(costsShared, /costs: summaryCosts\.map\(safeSerializeCost\)/);
+  assert.match(costsShared, /const participatingCosts = summaryCosts\.filter/);
+  assert.match(costsShared, /const currencyTotals = summarizeCurrencyTotals\(participatingCosts\)/);
+  assert.match(costsShared, /costConfirmProgress: costConfirmedProgress\(participatingCosts\)/);
+  assert.match(costsShared, /excludedFromOrderCost: isOrderCostExcludedByTradeTerm/);
   assert.match(costsShared, /totalCostCny = Number\(\(factoryTotals\.totalCny \+ logisticsTotals\.totalCny \+ otherTotals\.totalCny\)\.toFixed\(2\)\)/);
   assert.match(costsShared, /costBreakdown:\s*\{[\s\S]*factory: factoryTotals[\s\S]*logistics: logisticsTotals[\s\S]*other: otherTotals/);
   assert.match(costsModule, /function CostOrderAmountCell/);
@@ -387,7 +388,7 @@ test("removed payable summary styles cannot reappear as hidden UI", () => {
 
 test("cost order summary keeps cost items inside shipment detail drawer", () => {
   assert.match(costsModule, /void loadCosts\(1, nextFilters, archiveScope, "invoiceGroups"\)/);
-  assert.match(costsShared, /costs: summaryCosts\.map\(safeSerializeCost\)/);
+  assert.match(costsShared, /costs: summaryCosts\.map\(\(cost\) => \(\{/);
   assert.match(costsModule, /<CostOrderItemsTable[\s\S]*costs=\{order\.costs \|\| \[\]\}[\s\S]*deletingId=\{deletingId\}[\s\S]*onDelete=\{onDelete\}/);
   assert.match(costsModule, /<th className=\{styles\.costInvoiceActionColumn\}>操作<\/th>/);
   assert.match(costsModule, /<CostInvoiceActions cost=\{cost\} onOpenDocuments=\{\(\) => onOpenDocuments\(cost\.id\)\} onOpenPaymentVoucher=\{onOpenPaymentVoucher\} \/>/);
@@ -415,7 +416,7 @@ test("cost order detail can delete a cost item without reloading the page list",
   assert.match(costsModule, /setOrderRows\(\(current\) => \{/);
   assert.match(costsModule, /setDetailOrderSummary\(\(current\) => \{/);
   assert.match(costsModule, /function recalculateOrderSummary\(order: CostOrderSummary, costs: CostRow\[\]\): CostOrderSummary/);
-  assert.match(costsModule, /summarizeCurrencyTotals\(activeCosts\)/);
+  assert.match(costsModule, /summarizeCurrencyTotals\(participatingCosts\)/);
   assert.match(costsModule, /costConfirmProgress: \{/);
   assert.match(costsModule, /documentProgress: \{/);
   assert.doesNotMatch(costsModule, /await loadCosts\(page, submittedFilters, archiveScope, costView\);\s*setNotice\(result\.message \|\| \(result\.action === "voided"/);

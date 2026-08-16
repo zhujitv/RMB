@@ -126,6 +126,7 @@ export function logisticsExpenseOrderSummary(order: LogisticsOrderLike = {}) {
   return {
     orderId: order.id || "",
     orderNo: order.orderNo || "",
+    tradeTerm: order.tradeTerm || "",
     blNo: order.blNo || "",
     billOfLadingNo: order.blNo || "",
     customerShortName: customerShortName(order.customer),

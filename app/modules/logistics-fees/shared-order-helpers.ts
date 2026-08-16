@@ -1,5 +1,6 @@
 
 import { customerDisplayName } from "../../utils";
+import { isOrderCostExcludedByTradeTerm } from "../../../lib/platform/shared-cost-constants";
 import {
   COST_TYPES,
   LOGISTICS_FEE_SUPPLIER_TYPES,
@@ -98,6 +99,10 @@ export function allowedCostTypeOptions(
   return [...baseTypes, "港杂费"].filter((type, index, rows) =>
     COST_TYPES.includes(type) && rows.indexOf(type) === index,
   );
+}
+
+export function costTypeOptionsForOrder(order: ExpenseOrderOption | null | undefined, options: string[]) {
+  return options.filter((costType) => !isOrderCostExcludedByTradeTerm(order?.tradeTerm, costType));
 }
 
 export function normalizeExpenseItemCostType(

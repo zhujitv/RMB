@@ -45,6 +45,10 @@ export function CostOrderSummaryDrawer({
         <DetailField label="订单号" value={order.orderNo || "-"} />
         <DetailField label="提单号" value={order.blNo || order.billOfLadingNo || "-"} />
         <DetailField label="最终应收" value={formatCny(Number(order.receivableAmountCny || 0))} />
+        <DetailField label="贸易条款" value={order.tradeTerm || "-"} />
+        {Number(order.excludedFobSeaFreightCostCny || 0) > 0 ? (
+          <DetailField label="FOB海运费（不计成本）" value={formatCny(order.excludedFobSeaFreightCostCny)} />
+        ) : null}
         <DetailField label="成本确认" value={confirmProgress} />
         <DetailField label="资料状态" value={documentProgress} />
         <DetailField label="成本条数" value={String(Number(order.costCount || 0))} />
@@ -109,7 +113,10 @@ export function CostOrderItemsTable({
           <tbody>
             {costs.length ? costs.map((cost) => (
               <tr key={cost.id}>
-                <td>{logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}</td>
+                <td>
+                  {logisticsCostTypeLabel(cost.costType || "") || cost.costType || "-"}
+                  {cost.excludedFromOrderCost ? <small title="FOB海运费由买方承担"> · 不计订单成本</small> : null}
+                </td>
                 <td className={styles.supplierColumn} title={costSupplierName(cost)}>{costSupplierName(cost)}</td>
                 <td>{String(cost.currency || "CNY").toUpperCase()}</td>
                 <td className={styles.amountColumn}>{formatCurrencyAmount(cost.currency || "CNY", cost.amount ?? cost.amountCny ?? 0)}</td>

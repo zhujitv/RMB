@@ -155,6 +155,7 @@ export type ExpenseOrderOption = {
   id: string;
   orderId?: string;
   orderNo?: string;
+  tradeTerm?: string;
   blNo?: string;
   billOfLadingNo?: string;
   customerName?: string;

@@ -5,6 +5,7 @@ export type ProfitSummary = {
   arrivedPaymentsCny?: number;
   confirmedTotalCostCny?: number;
   totalCostCny?: number;
+  excludedFobSeaFreightCostCny?: number;
   logisticsCostCny?: number;
   commissionBaseCny?: number;
   commissionFormulaLabel?: string;

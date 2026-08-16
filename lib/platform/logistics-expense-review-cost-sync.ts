@@ -16,6 +16,7 @@ import { assertNoSettledLogisticsCostConflict } from "./logistics-expense-cost-s
 import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
 import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 import type { LogisticsExpenseReviewTransactionStep } from "./logistics-expense-review-diagnostics";
+import { assertOrderCostAllowedByTradeTerm } from "./trade-term-cost-policy";
 
 export async function syncApprovedLogisticsBillWorkflowStates(
   tx: Prisma.TransactionClient,
@@ -78,6 +79,7 @@ export async function syncApprovedLogisticsExpenseCosts(
   } = {},
 ) {
   if (!rows.length) throw codedError("物流费用账单缺少费用明细，不能同步成本。", 409, "LOGISTICS_COST_SYNC_ROWS_EMPTY");
+  rows.forEach((row) => assertOrderCostAllowedByTradeTerm(row.order?.tradeTerm, row.costType));
   options.onStep?.("order-scope");
   const orderIds = [...new Set(rows.map((row) => nonEmpty(row.orderId)).filter(Boolean))].sort();
   if (options.orderLocksAlreadyHeld) {

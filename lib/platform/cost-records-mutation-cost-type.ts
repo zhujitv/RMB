@@ -25,6 +25,7 @@ import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 import { assertCommissionOrderWritableInTransaction } from "./commission-settlement-lock";
 import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 import { assertFactoryPurchaseSettlementCostCanBeManagedInCostModule } from "./cost-records-module-guard";
+import { assertOrderCostAllowedByTradeTerm } from "./trade-term-cost-policy";
 
 const COST_TYPE_UPDATE_SCHEMA: InputSchema = {
   costType: { label: "成本类型", kind: "text", required: true },
@@ -56,6 +57,7 @@ export async function updateCostType(request: AuditRequestLike, actor: CostActor
   if (!before) throw permissionError("成本记录不存在、已删除或已作废", 404);
   if (!canAccessOrder(currentActor, before.order)) throw permissionError("无权限修改该成本记录");
   assertFactoryPurchaseSettlementCostCanBeManagedInCostModule(before, "修改成本类型");
+  assertOrderCostAllowedByTradeTerm(before.order.tradeTerm, nextCostType);
 
 	if (isLogisticsGeneratedCostSourceType(before.sourceType) && !isLogisticsCostType(nextCostType)) {
 		throw codedError("物流费用同步成本只能改为物流费用类型。", 400, "LOGISTICS_COST_TYPE_REQUIRED");

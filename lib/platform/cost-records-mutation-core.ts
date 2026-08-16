@@ -22,7 +22,7 @@ export type CostActor = {
   customPermissions?: unknown;
 };
 export type CostInput = Record<string, unknown>;
-export type CostOrderLike = { id: string; currency?: string | null };
+export type CostOrderLike = { id: string; currency?: string | null; tradeTerm?: string | null };
 export type DeletedCostAction = "deleted" | "voided";
 export type CostLifecycleReasonInput = {
   reason?: unknown;

@@ -248,11 +248,11 @@ test("短装、未放行柜和未来装柜日期均在后端阻断", () => {
   assert.throws(() => releasedContainerMaterialization({
     ...base, containerLoads: [{ ...base.containerLoads[0], status: "OPEN" }],
   } as never), /仍有集装箱未放行/);
-  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  const futureDate = "2099-01-01";
   assert.throws(() => validateFactoryPurchaseLoadingDate(
     order({ productionCompletedAt: new Date(Date.now() - 86_400_000) }),
-    container({ loadingDate: new Date(`${tomorrow}T00:00:00.000Z`) }),
-    tomorrow,
+    container({ loadingDate: new Date(`${futureDate}T00:00:00.000Z`) }),
+    futureDate,
   ), /不能晚于今天/);
   assert.match(containerLifecycle, /CONTAINER_LOAD_DATE_IN_FUTURE/);
 });

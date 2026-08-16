@@ -28,6 +28,7 @@ import {
   type LogisticsExpenseUpdateData,
   type UnknownRecord,
 } from "./logistics-expense-workflow-model";
+import { assertOrderCostAllowedByTradeTerm } from "./trade-term-cost-policy";
 
 export function loadLogisticsExpenseBatchBillRow(rowById: Map<string, LogisticsExpenseRow>, id: unknown, index: number, actionLabel = "保存") {
   const expenseId = nonEmpty(id);
@@ -54,6 +55,7 @@ export async function logisticsExpenseBatchUpdateData(item: UnknownRecord, befor
   if (!LOGISTICS_COST_TYPES.includes(costType)) {
     throw codedError(`第 ${index + 1} 行请选择费用类型`, 400, "LOGISTICS_EXPENSE_BATCH_COST_TYPE_INVALID");
   }
+  assertOrderCostAllowedByTradeTerm(before.order?.tradeTerm, costType);
   const rawUnitAmount = item.unitAmount ?? item.unit_amount ?? item.amount;
   if (!nonEmpty(rawUnitAmount)) {
     throw codedError(`第 ${index + 1} 行金额不能为空`, 400, "LOGISTICS_EXPENSE_BATCH_AMOUNT_REQUIRED");

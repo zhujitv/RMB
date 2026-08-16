@@ -109,3 +109,12 @@ export function equivalentCostTypes(costType: string = "") {
 export function isLogisticsCostType(costType: string = "") {
   return LOGISTICS_COST_TYPES.includes(normalizedCostType(costType));
 }
+
+export function normalizedCostTradeTerm(tradeTerm: unknown = "") {
+  return String(tradeTerm || "").trim().toUpperCase();
+}
+
+export function isOrderCostExcludedByTradeTerm(tradeTerm: unknown, costType: unknown) {
+  return normalizedCostTradeTerm(tradeTerm) === "FOB"
+    && normalizedCostType(String(costType || "")) === "海运费";
+}

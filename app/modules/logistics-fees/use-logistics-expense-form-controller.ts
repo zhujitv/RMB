@@ -13,6 +13,7 @@ import {
 } from "./model";
 import {
   allowedCostTypeOptions,
+  costTypeOptionsForOrder,
   filterLogisticsFeeSuppliers,
   logisticsExpenseFormCurrencySummary,
   mergeOrders,
@@ -251,14 +252,21 @@ export function useLogisticsExpenseFormController({
 
   const selectedOrder = orders.find((order) => order.id === form.orderId);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === form.supplierId) || null;
+  const costTypeOptions = costTypeOptionsForOrder(
+    selectedOrder,
+    allowedCostTypeOptions(selectedSupplier, isLockedSupplier),
+  );
   useEffect(() => {
-    const nextCostTypes = allowedCostTypeOptions(selectedSupplier, isLockedSupplier);
+    const nextCostTypes = costTypeOptionsForOrder(
+      selectedOrder,
+      allowedCostTypeOptions(selectedSupplier, isLockedSupplier),
+    );
     setForm((current) => {
       const items = current.items.map((item) => normalizeExpenseItemCostType(item, nextCostTypes));
       if (items.every((item, index) => item.costType === current.items[index]?.costType)) return current;
       return { ...current, items };
     });
-  }, [selectedSupplier?.id, isLockedSupplier]);
+  }, [selectedOrder?.tradeTerm, selectedSupplier?.id, isLockedSupplier]);
 
   return {
     form,
@@ -271,7 +279,7 @@ export function useLogisticsExpenseFormController({
     canSelectTemporarySupplier,
     supplierSummaryText: selectedSupplier ? supplierLabel(selectedSupplier) : isLockedSupplier ? "加载供应商信息中..." : selectedOrder ? "未选择" : "请先选择订单",
     supplierAllowedCostTypes: selectedSupplier?.allowedLogisticsCostTypes?.length ? selectedSupplier.allowedLogisticsCostTypes.map((type) => logisticsCostTypeLabel(type)).join(" / ") : "",
-    costTypeOptions: allowedCostTypeOptions(selectedSupplier, isLockedSupplier),
+    costTypeOptions,
     formCurrencySummary: logisticsExpenseFormCurrencySummary(form.items),
     searchOrders,
     searchSuppliers,

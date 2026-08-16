@@ -9,6 +9,7 @@ import {
   customerFullName,
   customerShortName,
   isLogisticsCostType,
+  isOrderCostExcludedByTradeTerm,
   isTaxRefundFactoryCost,
   isTaxRefundLogisticsInvoiceCost,
   normalizedCostType,
@@ -58,6 +59,7 @@ type CostSummaryOrderLike = {
   businessEntity?: unknown;
   receivableAmountCny?: NumericLike | null;
   finalReceivableAmountCny?: NumericLike | null;
+  tradeTerm?: string | null;
   costs?: CostLike[] | null;
 };
 type CostQuery = {
@@ -182,8 +184,12 @@ function costConfirmedProgress(costs: CostLike[] = []) {
 export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
   const costs = order.costs || [];
   const summaryCosts = summaryDisplayCosts(costs);
-  const buckets = costAmountBuckets(summaryCosts);
-  const currencyTotals = summarizeCurrencyTotals(summaryCosts);
+  const participatingCosts = summaryCosts.filter((cost) => !isOrderCostExcludedByTradeTerm(order.tradeTerm, cost.costType));
+  const excludedFobSeaFreightCostCny = summaryCosts
+    .filter((cost) => isOrderCostExcludedByTradeTerm(order.tradeTerm, cost.costType))
+    .reduce((sum, cost) => sum + Number(cost.amountCny || 0), 0);
+  const buckets = costAmountBuckets(participatingCosts);
+  const currencyTotals = summarizeCurrencyTotals(participatingCosts);
   const fullCustomerName = customerFullName(order.customer, order.customerNameSnapshot || "");
   const shortCustomerName = customerShortName(order.customer);
   return {
@@ -198,11 +204,16 @@ export function serializeCostOrderSummary(order: CostSummaryOrderLike) {
     customerShortName: shortCustomerName,
     ...businessEntityFieldsFromOrder(order),
     receivableAmountCny: Number(order.finalReceivableAmountCny ?? order.receivableAmountCny ?? 0),
-    costConfirmProgress: costConfirmedProgress(summaryCosts),
+    tradeTerm: order.tradeTerm || "",
+    excludedFobSeaFreightCostCny,
+    costConfirmProgress: costConfirmedProgress(participatingCosts),
     documentProgress: costDocumentProgress(summaryCosts),
     costCount: summaryCosts.length,
     currencyTotals,
-    costs: summaryCosts.map(safeSerializeCost),
+    costs: summaryCosts.map((cost) => ({
+      ...safeSerializeCost(cost),
+      excludedFromOrderCost: isOrderCostExcludedByTradeTerm(order.tradeTerm, cost.costType),
+    })),
     ...buckets,
   };
 }

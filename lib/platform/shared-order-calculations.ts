@@ -1,6 +1,6 @@
 import { nonEmpty, normalizeEmail } from "./shared-base-utils";
 import { calculateCommissionFormulaBase } from "./commission-formula";
-import { COMMISSION_LOGISTICS_COST_TYPES, NON_PARTICIPATING_COST_TYPES, ORDER_COST_STATUS_VOID } from "./shared-constants";
+import { COMMISSION_LOGISTICS_COST_TYPES, NON_PARTICIPATING_COST_TYPES, ORDER_COST_STATUS_VOID, isOrderCostExcludedByTradeTerm } from "./shared-constants";
 import { taxDocumentCompleteness } from "./shared-tax-completeness";
 import type { CostLike, NumericLike, OrderLike, OrderSummary, TaxLogisticsMissingItem } from "./shared-order-calculation-types";
 import { calcReminderStatus } from "./shared-order-reminders";
@@ -41,6 +41,10 @@ export function paidConfirmedCost(cost: CostLike) {
   return confirmedCost(cost) && cost.paymentStatus === "已支付";
 }
 
+export function costParticipatesInOrderFinancials(order: OrderLike, cost: CostLike) {
+  return validCost(cost) && !isOrderCostExcludedByTradeTerm(order.tradeTerm, cost.costType);
+}
+
 export function commissionRateFromOrder(order: OrderLike) {
   return Math.max(0, Number(order.salespersonCommissionRate || 0));
 }
@@ -52,15 +56,17 @@ export function profitMarginEligible(order: OrderLike) {
 }
 
 export function commissionLogisticsCosts(order: OrderLike) {
-  return (order.costs || []).filter((cost) => validCost(cost) && COMMISSION_LOGISTICS_COST_TYPES.includes(cost.costType || ""));
+  return (order.costs || []).filter((cost) => costParticipatesInOrderFinancials(order, cost)
+    && COMMISSION_LOGISTICS_COST_TYPES.includes(cost.costType || ""));
 }
 
 export function logisticsCostsConfirmed(costs: CostLike[]) {
   return costs.length > 0 && costs.every((cost) => cost.costConfirmed === true);
 }
 
-export function allCostsConfirmed(costs: CostLike[] = []) {
-  const validCosts = costs.filter(validCost);
+export function allCostsConfirmed(costs: CostLike[] = [], tradeTerm: unknown = "") {
+  const validCosts = costs.filter((cost) => validCost(cost)
+    && !isOrderCostExcludedByTradeTerm(tradeTerm, cost.costType));
   return validCosts.length > 0 && validCosts.every((cost) => cost.costConfirmed === true);
 }
 
@@ -128,13 +134,17 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     .filter((payment) => payment.status === "待确认" && !payment.deletedAt)
     .reduce((sum, payment) => sum + paymentAmountForOrderCurrency(payment, orderCurrency, exchangeRate), 0);
   const totalCostCny = (order.costs || [])
-    .filter(validCost)
+    .filter((cost) => costParticipatesInOrderFinancials(order, cost))
     .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
   const confirmedTotalCostCny = (order.costs || [])
-    .filter(confirmedCost)
+    .filter((cost) => costParticipatesInOrderFinancials(order, cost) && cost.costConfirmed === true)
     .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
   const paidConfirmedCostCny = (order.costs || [])
-    .filter(paidConfirmedCost)
+    .filter((cost) => costParticipatesInOrderFinancials(order, cost)
+      && cost.costConfirmed === true && cost.paymentStatus === "已支付")
+    .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
+  const excludedFobSeaFreightCostCny = (order.costs || [])
+    .filter((cost) => validCost(cost) && isOrderCostExcludedByTradeTerm(order.tradeTerm, cost.costType))
     .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
   const logisticsCosts = commissionLogisticsCosts(order);
   const logisticsCostCny = logisticsCosts.reduce((sum, cost) => sum + Number(cost.amountCny), 0);
@@ -179,7 +189,7 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
   const netCashFlowCny = arrivedPaymentsCny - paidConfirmedCostCny;
   const commissionRate = commissionRateFromOrder(order);
   const realSalespersonSet = hasRealSalesperson(order);
-  const allCostsAreConfirmed = allCostsConfirmed(order.costs || []);
+  const allCostsAreConfirmed = allCostsConfirmed(order.costs || [], order.tradeTerm);
   const logisticsCostConfirmed = logisticsCostsConfirmed(logisticsCosts);
   const commissionFormula = calculateCommissionFormulaBase({
     receivableCny,
@@ -241,6 +251,7 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     totalCostCny,
     confirmedTotalCostCny,
     paidConfirmedCostCny,
+    excludedFobSeaFreightCostCny,
     logisticsCostCny,
     confirmedLogisticsCostCny: logisticsCostConfirmed ? logisticsCostCny : 0,
     expectedTaxRefundIncomeCny,

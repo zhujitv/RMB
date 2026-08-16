@@ -8,6 +8,7 @@ import {
 } from "./shared";
 import { isOwnCostScope, isPaidCost, isProductSupplierPaymentCost,
   type CostActor, type CostInput, type CostOrderLike, type CostWithOrder } from "./cost-records-mutation-core";
+import { assertOrderCostAllowedByTradeTerm } from "./trade-term-cost-policy";
 
 export async function buildCostData(order: CostOrderLike, actor: CostActor, input: CostInput, id: string | null = null, before: CostWithOrder | null = null) {
   const supplierId = nonEmpty(input.supplierId || input.supplier_id);
@@ -18,6 +19,7 @@ export async function buildCostData(order: CostOrderLike, actor: CostActor, inpu
   if (!(amount > 0)) throw codedError("供应商成本金额必须大于 0", 400, "COST_AMOUNT_REQUIRED");
   const inputCostType = normalizedCostType(nonEmpty(input.costType));
   const costType = COST_TYPES.includes(inputCostType) ? inputCostType : "其他费用";
+  assertOrderCostAllowedByTradeTerm(order.tradeTerm, costType);
   const sourceType = nonEmpty(input.sourceType || before?.sourceType || "MANUAL");
   const sourceId = nonEmpty(input.sourceId || before?.sourceId || "");
   if (!id && !isLogisticsGeneratedCostSourceType(sourceType) && isLogisticsCostType(costType)) {
@@ -73,6 +75,7 @@ export async function buildLogisticsCostData(order: CostOrderLike, actor: CostAc
     allowHistoricalSource: before?.exchangeRateSource === "历史录入" });
   const rawType = String(input.costType || "").trim();
   const costType = LOGISTICS_COST_TYPES.includes(rawType) ? rawType : "其他物流费用";
+  assertOrderCostAllowedByTradeTerm(order.tradeTerm, costType);
   const previousConfirmed = before?.costConfirmed || false;
   const requestedConfirmed = booleanInput(input.costConfirmed, previousConfirmed);
   if (inputHasOwn(input, "costConfirmed") && requestedConfirmed !== previousConfirmed && !canConfirmLogisticsCost(actor)) {

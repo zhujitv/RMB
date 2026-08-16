@@ -3,6 +3,7 @@ import type { Prisma } from "../generated/prisma/client.js";
 import {
   assertRead,
   confirmedCost,
+  costParticipatesInOrderFinancials,
   customerFullName,
   customerShortName,
   getCommissionFormulaSettings,
@@ -108,6 +109,7 @@ export function serializeProfitAnalysisSummary(
     outstandingCny: summary.outstandingCny,
     confirmedTotalCostCny: summary.confirmedTotalCostCny,
     totalCostCny: summary.totalCostCny,
+    excludedFobSeaFreightCostCny: summary.excludedFobSeaFreightCostCny,
     logisticsCostCny: summary.logisticsCostCny,
     expectedTaxRefundIncomeCny: summary.expectedTaxRefundIncomeCny,
     commissionBaseCny: summary.commissionBaseCny,
@@ -148,7 +150,7 @@ function serializeProfitAnalysisOrder(order: ProfitOrder, actor: ActorLike, comm
   const fullCustomerName = customerFullName(scoped.customer, scoped.customerNameSnapshot);
   const shortCustomerName = customerShortName(scoped.customer);
   const costGroups = (scoped.costs || [])
-    .filter(confirmedCost)
+    .filter((cost) => confirmedCost(cost) && costParticipatesInOrderFinancials(scoped, cost))
     .reduce<Record<string, number>>((acc, cost: ProfitCost) => {
       const label = logisticsCostTypeLabel(normalizedCostType(cost.costType));
       acc[label] = (acc[label] || 0) + Number(cost.amountCny || 0);

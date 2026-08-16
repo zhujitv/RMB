@@ -68,6 +68,7 @@ export type LogisticsInfoLike = {
 export type LogisticsOrderLike = {
   id?: string;
   orderNo?: string | null;
+  tradeTerm?: string | null;
   blNo?: string | null;
   vesselVoyage?: string | null;
   vessel_voyage?: string | null;

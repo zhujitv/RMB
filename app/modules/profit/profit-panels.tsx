@@ -142,6 +142,9 @@ export function ProfitDetailDrawer({
         <DetailField label="已到账金额" value={formatCny(summary.arrivedPaymentsCny)} />
         <DetailField label="总成本" value={formatCny(summary.confirmedTotalCostCny ?? summary.totalCostCny)} />
         <DetailField label="物流成本" value={formatCny(summary.logisticsCostCny)} />
+        {Number(summary.excludedFobSeaFreightCostCny || 0) > 0 ? (
+          <DetailField label="FOB海运费（不计成本）" value={formatCny(summary.excludedFobSeaFreightCostCny)} />
+        ) : null}
         <DetailField label="预计毛利" value={formatCny(summary.expectedGrossProfit)} />
         <DetailField label="预计毛利率" value={notShipped ? "未发货" : formatPercent(summary.expectedGrossMargin)} />
         <DetailField label={realizedGrossProfitLabel()} value={notShipped ? "未发货" : formatCnyOrDash(summary.realizedGrossProfit)} />

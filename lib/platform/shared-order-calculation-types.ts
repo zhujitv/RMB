@@ -10,6 +10,7 @@ export type CostLike = {
 type SalespersonLike = { name?: string | null; email?: string | null };
 export type OrderLike = {
   currency?: string | null; salespersonUserId?: string | null; salesperson?: SalespersonLike | null;
+  tradeTerm?: string | null;
   salespersonCommissionRate?: NumericLike | null; commissionStatus?: string | null; status?: string | null;
   receivableAmount?: NumericLike | null; receivableAmountCny?: NumericLike | null;
   estimatedReceivableAmount?: NumericLike | null; estimatedReceivableAmountCny?: NumericLike | null;
@@ -38,6 +39,7 @@ export type OrderSummary = {
   overpaidCny: number; overpaidAmount: number; exchangeDifferenceCny: number;
   hasArrivedPaymentCurrencyMismatch: boolean; isOverpaid: boolean; isUnderpaid: boolean;
   totalCostCny: number; confirmedTotalCostCny: number; paidConfirmedCostCny: number;
+  excludedFobSeaFreightCostCny: number;
   logisticsCostCny: number; confirmedLogisticsCostCny: number; expectedTaxRefundIncomeCny: number;
   taxLogisticsCostsComplete: boolean; taxLogisticsMissing: TaxLogisticsMissingItem[]; taxLogisticsMissingLabels: string[];
   allCostsConfirmed: boolean; logisticsCostConfirmed: boolean; realSalespersonSet: boolean; commissionRate: number;

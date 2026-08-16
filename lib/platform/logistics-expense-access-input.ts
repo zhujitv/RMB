@@ -43,6 +43,7 @@ import {
   normalizeLogisticsExpenseBillingQuantity,
   normalizeLogisticsExpenseContainerType,
 } from "./logistics-expense-billing-normalization";
+import { assertOrderCostAllowedByTradeTerm } from "./trade-term-cost-policy";
 
 export async function assertLogisticsExpenseOrder(input: UnknownRecord = {}, actor: LogisticsActor): Promise<LogisticsExpenseOrderForAccess> {
   const role = logisticsExpenseActorRole(actor);
@@ -144,6 +145,7 @@ export async function buildLogisticsExpenseData(
   const inputCostType = String(normalizedCostType(nonEmpty(input.costType)));
   const costType = LOGISTICS_COST_TYPES.includes(inputCostType) ? inputCostType : "";
   if (!costType) throw codedError("请选择有效物流费用类型。", 400, "LOGISTICS_EXPENSE_COST_TYPE_REQUIRED");
+  assertOrderCostAllowedByTradeTerm(order.tradeTerm, costType);
   assertSupplierCostTypeAllowed(actor, supplier, costType);
   const amount = requirePositive(input.amount, "物流费用金额");
   const exchange = await resolveLogisticsExpenseExchange(costType, input, actor, before);

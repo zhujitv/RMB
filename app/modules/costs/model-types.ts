@@ -77,6 +77,7 @@ export type CostRow = {
   documents?: CostDocument[];
   invoiceExceptionType?: string;
   invoiceExceptionLabel?: string;
+  excludedFromOrderCost?: boolean;
 };
 
 export type CostInvoiceGroupRow = {
@@ -225,6 +226,8 @@ export type CostOrderSummary = {
   customerShortName?: string;
   businessEntityIsDefault?: boolean;
   receivableAmountCny?: number;
+  tradeTerm?: string;
+  excludedFobSeaFreightCostCny?: number;
   totalCostCny?: number;
   factoryCostCny?: number;
   logisticsCostCny?: number;
