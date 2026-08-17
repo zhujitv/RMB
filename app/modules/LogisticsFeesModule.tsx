@@ -108,7 +108,7 @@ export function LogisticsFeesModule({
     (canCreateExpenseProp ??
       ["管理员", "物流供应商"].includes(currentUserRole));
   const canReviewExpense = !readOnlyArchive && currentUserRole === "管理员";
-  const canConfirmInvoice = !readOnlyArchive && ["管理员", "财务"].includes(currentUserRole);
+  const canConfirmInvoice = ["管理员", "财务"].includes(currentUserRole);
   const isLogisticsSupplier = currentUserRole === "物流供应商";
 
   const {

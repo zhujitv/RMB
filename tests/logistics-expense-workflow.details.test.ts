@@ -301,6 +301,9 @@ test("logistics paid button is locked by bill state machine", () => {
   );
   assert.doesNotMatch(updateLogisticsExpensePaymentStatusSource, /assertBusinessOrderWritableInTransaction/);
   assert.match(updateLogisticsExpensePaymentStatusSource, /await lockBusinessOrderForUpdate\(tx, orderId\)/);
+  assert.match(logisticsModule, /const canConfirmInvoice = \["管理员", "财务"\]\.includes\(currentUserRole\)/);
+  assert.doesNotMatch(logisticsModule, /const canConfirmInvoice = !readOnlyArchive/);
+  assert.match(logisticsModule, /canConfirmInvoice=\{canConfirmInvoice && !readOnlyArchive\}/);
   assert.match(logisticsModule, /canMarkPaid=\{canConfirmInvoice\}/);
   assert.match(logisticsModule, /未付款账单仍可继续登记付款/);
   assert.match(
