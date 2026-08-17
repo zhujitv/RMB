@@ -39,14 +39,6 @@ const DOCUMENT_TYPE_OPTIONS = [
 ];
 
 const DEFAULT_DOCUMENT_TYPES = DOCUMENT_TYPE_OPTIONS.map((item) => item.value);
-const EXCEL_TEMPLATE_MAX_SIZE = 4 * 1024 * 1024;
-const EXCEL_TEMPLATE_ACCEPT = [
-  ".xls",
-  ".xlsx",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-].join(",");
-
 export function CreateSupplierDocumentRequestDialog({
   onClose,
   onCreated,
@@ -58,7 +50,6 @@ export function CreateSupplierDocumentRequestDialog({
   const [requiredTypes, setRequiredTypes] = useState<string[]>(DEFAULT_DOCUMENT_TYPES);
   const [dueDate, setDueDate] = useState("");
   const [message, setMessage] = useState("");
-  const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const savingRef = useRef(false);
@@ -66,7 +57,6 @@ export function CreateSupplierDocumentRequestDialog({
     selectedCost
     || dueDate
     || message.trim()
-    || templateFile
     || requiredTypes.join("|") !== DEFAULT_DOCUMENT_TYPES.join("|"),
   );
   useWorkspaceTabDirty(formDirty);
@@ -93,11 +83,6 @@ export function CreateSupplierDocumentRequestDialog({
       setError("请至少选择一种需要回传的资料。");
       return;
     }
-    const fileError = validateTemplateFile(templateFile);
-    if (fileError) {
-      setError(fileError);
-      return;
-    }
     const formData = new FormData();
     formData.append("costId", selectedCost.id);
     formData.append("orderId", selectedCost.orderId);
@@ -105,7 +90,6 @@ export function CreateSupplierDocumentRequestDialog({
     formData.append("requiredDocumentTypes", requiredTypes.join(","));
     formData.append("dueDate", dueDate);
     formData.append("message", message);
-    formData.append("templateFile", templateFile as File);
     savingRef.current = true;
     setSaving(true);
     try {
@@ -143,7 +127,7 @@ export function CreateSupplierDocumentRequestDialog({
         <div className={styles.modalHeader}>
           <div>
             <h2 id="supplier-document-request-title">发起资料回传通知</h2>
-            <p>先登记工厂供应商成本，再上传回传表格并邮件通知供应商。</p>
+            <p>系统读取报关单和实际装柜结算数据生成合同草稿，人工确认后才发送供应商。</p>
           </div>
           <button className={styles.secondaryButton} type="button" onClick={requestClose} disabled={saving}>关闭</button>
         </div>
@@ -168,21 +152,6 @@ export function CreateSupplierDocumentRequestDialog({
           <label>
             截止日期
             <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
-          </label>
-          <label>
-            回传表格 Excel
-            <input
-              name="templateFile"
-              type="file"
-              accept={EXCEL_TEMPLATE_ACCEPT}
-              onChange={(event) => {
-                const file = event.target.files?.[0] || null;
-                setTemplateFile(file);
-                const fileError = validateTemplateFile(file);
-                if (fileError) setError(fileError);
-              }}
-              required
-            />
           </label>
           <fieldset className={styles.supplierDocumentRequestTypes}>
             <legend>需要回传的资料</legend>
@@ -224,29 +193,19 @@ export function CreateSupplierDocumentRequestDialog({
 
         <div className={styles.quickCreateMeta}>
           <span>只能基于成本管理中已登记的工厂供应商成本创建。</span>
-          <span>回传表格支持 .xls / .xlsx，单个文件最大 4MB；供应商回传资料仍只支持 PDF。</span>
+          <span>合同品名、数量、单位取自报关单与实际装柜数据；合同金额取自最终采购结算。供应商回传资料仅支持 PDF。</span>
         </div>
 
         <div className={styles.modalFooter}>
           <button className={styles.secondaryButton} type="button" onClick={requestClose} disabled={saving}>取消</button>
           <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>
-            {saving ? "发送中..." : "发送通知"}
+            {saving ? "生成中..." : "生成合同草稿"}
           </button>
         </div>
       </form>
       )}
     </DismissibleLayer>
   );
-}
-
-function validateTemplateFile(file: File | null) {
-  if (!file) return "请上传回传表格 Excel。";
-  const lowerName = file.name.toLowerCase();
-  if (!lowerName.endsWith(".xls") && !lowerName.endsWith(".xlsx")) {
-    return "回传表格仅支持 .xls 或 .xlsx 文件。";
-  }
-  if (file.size > EXCEL_TEMPLATE_MAX_SIZE) return "回传表格不能超过 4MB。";
-  return "";
 }
 
 function costCandidateLabel(cost: FactoryCostCandidate) {

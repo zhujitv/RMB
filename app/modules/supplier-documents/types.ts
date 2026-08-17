@@ -39,6 +39,14 @@ export type SupplierDocumentTask = {
   message?: string;
   templateFileName?: string;
   hasTemplate?: boolean;
+  contractNo?: string;
+  contractStatus?: string;
+  contractDraft?: SupplierTaxContractDraft | null;
+  contractApproved?: SupplierTaxContractDraft | null;
+  contractReviewRemark?: string;
+  invoiceMatchStatus?: string;
+  invoiceMatch?: SupplierInvoiceMatch | null;
+  invoiceNo?: string;
   sendStatus?: string;
   sendError?: string;
   sentAt?: string;
@@ -53,6 +61,32 @@ export type SupplierDocumentTask = {
   detailError?: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type SupplierTaxContractDraft = {
+  contractNo?: string;
+  supplierName?: string;
+  buyerName?: string;
+  buyerTaxNumber?: string;
+  totalAmountWithTax?: string;
+  currency?: string;
+  warnings?: string[];
+  blockingIssues?: string[];
+  items?: Array<{
+    lineNo?: number;
+    productName?: string;
+    quantity?: string;
+    unit?: string;
+    unitPriceWithTax?: string;
+    amountWithTax?: string;
+  }>;
+};
+
+export type SupplierInvoiceMatch = {
+  matched?: boolean;
+  issues?: string[];
+  checkedAt?: string;
+  invoice?: Record<string, unknown>;
 };
 
 export type SupplierDocumentsResponse = {

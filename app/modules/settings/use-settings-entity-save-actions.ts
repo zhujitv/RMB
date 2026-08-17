@@ -158,7 +158,6 @@ async function saveSupplierForm(event: FormEvent<HTMLFormElement>) {
       setSupplierSaving(false);
     }
   }
-
 async function saveBusinessEntityForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!businessEntityForm) return;
@@ -179,6 +178,7 @@ async function saveBusinessEntityForm(event: FormEvent<HTMLFormElement>) {
             name: businessEntityForm.name,
             shortName: businessEntityForm.shortName,
             nameEn: businessEntityForm.nameEn,
+            taxNumber: businessEntityForm.taxNumber,
             address: businessEntityForm.address,
             contactEmail: businessEntityForm.contactEmail,
             contactPhone: businessEntityForm.contactPhone,

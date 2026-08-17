@@ -122,6 +122,23 @@ export async function updateTaxRefundStatus(
       );
     }
     if (status === "SUBMITTED") {
+      const unverifiedInvoice = await tx.supplierDocumentRequest.findFirst({
+        where: {
+          orderId,
+          deletedAt: null,
+          contractStatus: "APPROVED",
+          requiredDocumentTypes: { array_contains: ["SUPPLIER_INVOICE"] },
+          invoiceMatchStatus: { not: "CONFIRMED" },
+        },
+        select: { id: true, contractNo: true, invoiceMatchStatus: true },
+      });
+      if (unverifiedInvoice) {
+        throw codedError(
+          `合同${unverifiedInvoice.contractNo || ""}对应发票尚未通过OCR完整匹配和人工确认，不能递交退税。`,
+          409,
+          "SUPPLIER_INVOICE_REVIEW_REQUIRED",
+        );
+      }
       await assertTaxRefundLogisticsBusinessClosure(orderId, tx);
     }
 

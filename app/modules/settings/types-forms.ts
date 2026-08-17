@@ -169,6 +169,7 @@ export type BusinessEntityForm = {
   name: string;
   shortName: string;
   nameEn: string;
+  taxNumber: string;
   address: string;
   contactEmail: string;
   contactPhone: string;

@@ -23,6 +23,11 @@ function quantityUnitCandidates(value: string) {
     .map((match) => ({ quantity: match[1].replace(/,/g, ""), unit: match[2] }));
 }
 
+function customsProductName(value: string) {
+  const lines = String(value || "").split(/[\r\n]+/).map((line) => line.trim()).filter(Boolean);
+  return lines[0] || String(value || "").trim();
+}
+
 export function candidateItemsFromTencentTables(tables: TencentCustomsExperimentTable[]) {
   return tables.flatMap((table) => {
     const headerIndex = table.rows.findIndex((row) => {
@@ -48,6 +53,7 @@ export function candidateItemsFromTencentTables(tables: TencentCustomsExperiment
         itemNo: itemNoColumn >= 0 ? String(row[itemNoColumn] || "").trim() : "",
         commodityCode,
         nameAndSpecification,
+        productName: customsProductName(nameAndSpecification),
         quantityAndUnit,
         quantityUnits: quantityUnitCandidates(quantityAndUnit),
         priceAmountCurrency: amountColumn >= 0 ? String(row[amountColumn] || "").trim() : "",

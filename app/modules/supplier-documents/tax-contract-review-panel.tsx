@@ -1,0 +1,105 @@
+"use client";
+
+import { useState } from "react";
+import { apiJson } from "../../api";
+import styles from "../../WorkspaceShell.module.css";
+import type { SupplierDocumentTask } from "./types";
+
+const CONTRACT_STATUS_LABELS: Record<string, string> = {
+  LEGACY: "历史合同",
+  PENDING_REVIEW: "合同草稿待人工审核",
+  APPROVED: "合同已确认",
+  REJECTED: "合同草稿已驳回",
+};
+
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  NOT_UPLOADED: "发票未上传",
+  PROCESSING: "发票OCR识别中",
+  MISMATCH: "发票与合同不匹配",
+  AWAITING_REVIEW: "OCR完整匹配，待人工确认",
+  CONFIRMED: "发票已人工确认",
+  REJECTED: "发票已驳回",
+  FAILED: "发票OCR识别失败",
+};
+
+export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: { task: SupplierDocumentTask; isAdmin: boolean; canWrite: boolean; onRefresh: () => void | Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const draft = task.contractDraft || task.contractApproved;
+  const issues = task.invoiceMatch?.issues || [];
+
+  async function reviewContract(decision: "APPROVED" | "REJECTED") {
+    const confirmed = decision === "APPROVED"
+      ? window.confirm("确认已逐行核查报关品名、数量、单位、实际装柜数量及合同总金额？确认后将生成合同并邮件发送供应商。")
+      : window.confirm("确认驳回此合同草稿？");
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      await apiJson(`/api/supplier-document-requests/${encodeURIComponent(task.id)}/contract-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, confirmed: decision === "APPROVED", remark: decision === "REJECTED" ? "人工审核未通过" : "已核查确认" }),
+      });
+      await onRefresh();
+      setBusy(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "合同审核失败");
+      setBusy(false);
+    }
+  }
+
+  async function reviewInvoice(decision: "CONFIRMED" | "REJECTED") {
+    const reason = decision === "REJECTED" ? window.prompt("请输入驳回原因") || "" : "";
+    if (decision === "REJECTED" && !reason.trim()) return;
+    if (decision === "CONFIRMED" && !window.confirm("确认已查看发票原件，并同意OCR核验结果？")) return;
+    setBusy(true);
+    try {
+      await apiJson(`/api/supplier-document-requests/${encodeURIComponent(task.id)}/invoice-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, reason }),
+      });
+      await onRefresh();
+      setBusy(false);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "发票审核失败");
+      setBusy(false);
+    }
+  }
+
+  if (!task.contractStatus || task.contractStatus === "LEGACY") return null;
+  return (
+    <section className={styles.supplierDocumentUploadCard} aria-label="退税合同与发票核验">
+      <div className={styles.supplierDocumentUploadHeader}>
+        <strong>退税合同 {task.contractNo ? `· ${task.contractNo}` : ""}</strong>
+        <span className={styles.statusPill}>{CONTRACT_STATUS_LABELS[task.contractStatus] || task.contractStatus}</span>
+      </div>
+      {draft ? (
+        <div className={styles.supplierDocumentUploadBody}>
+          <p>供方：{draft.supplierName || "-"}　需方：{draft.buyerName || "-"}　总金额：{draft.currency || "CNY"} {draft.totalAmountWithTax || "0.00"}</p>
+          <div className={styles.tableScroll}>
+            <table className={styles.compactTable}>
+              <thead><tr><th>品名（按报关单）</th><th>数量</th><th>单位</th><th>含税单价</th><th>含税金额</th></tr></thead>
+              <tbody>{(draft.items || []).map((item) => <tr key={`${item.lineNo}-${item.productName}`}><td>{item.productName}</td><td>{item.quantity}</td><td>{item.unit}</td><td>{item.unitPriceWithTax}</td><td>{item.amountWithTax}</td></tr>)}</tbody>
+            </table>
+          </div>
+          {(draft.warnings || []).map((warning) => <div className={styles.inlineError} key={warning}>{warning}</div>)}
+          {(draft.blockingIssues || []).map((issue) => <div className={styles.inlineError} key={issue}>禁止通过：{issue}</div>)}
+        </div>
+      ) : null}
+      {isAdmin && canWrite && task.contractStatus === "PENDING_REVIEW" ? (
+        <div className={styles.supplierDocumentNoticeActions}>
+          <button className={styles.primaryButtonCompact} type="button" disabled={busy || Boolean(draft?.blockingIssues?.length)} onClick={() => reviewContract("APPROVED")}>人工核查并通过</button>
+          <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => reviewContract("REJECTED")}>驳回草稿</button>
+        </div>
+      ) : null}
+      {task.contractStatus === "APPROVED" ? <p><b>发票状态：</b>{INVOICE_STATUS_LABELS[task.invoiceMatchStatus || "NOT_UPLOADED"] || task.invoiceMatchStatus}</p> : null}
+      {issues.map((issue) => <div className={styles.inlineError} key={issue}>{issue}</div>)}
+      {isAdmin && canWrite && task.invoiceMatchStatus === "AWAITING_REVIEW" ? (
+        <div className={styles.supplierDocumentNoticeActions}>
+          <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={() => reviewInvoice("CONFIRMED")}>查看原件并确认发票</button>
+          <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => reviewInvoice("REJECTED")}>驳回发票</button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
