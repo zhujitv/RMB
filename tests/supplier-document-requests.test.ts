@@ -12,6 +12,7 @@ const supplierModule = readSupplierDocumentsModuleSource();
 const workspaceModuleContent = readFileSync("app/WorkspaceModuleContent.tsx", "utf8");
 const supplierCreateDialog = readFileSync("app/modules/supplier-documents/create-request-dialog.tsx", "utf8");
 const supplierRequestCreateService = readFileSync("lib/platform/supplier-document-request-create.ts", "utf8");
+const supplierTaxContractWorkflow = readFileSync("lib/platform/supplier-tax-contract-workflow.ts", "utf8");
 const supplierDocumentStyles = readCssModuleGraphSource("app/styles/workspace-shell/supplier-documents.module.css");
 const supplierCostCandidatesRoute = readFileSync("app/api/supplier-document-requests/cost-candidates/route.ts", "utf8");
 const supplierRequestListRoute = readFileSync("app/api/supplier-document-requests/route.ts", "utf8");
@@ -139,7 +140,7 @@ test("custom read-only supplier document access hides and blocks every mutation"
   assert.match(supplierModule, /\{canWrite \? "上传资料" : "查看资料"\}/);
   assert.match(supplierModule, /isAdmin && canWrite && task\.canDelete/);
   assert.match(supplierModule, /isAdmin && canWrite[\s\S]*重新发送邮件/);
-  assert.match(supplierModule, /\{canWrite \? <div className=\{styles\.supplierDocumentUploadControls\}>/);
+  assert.match(supplierModule, /canWrite && task\.contractStatus !== "PENDING_REVIEW"/);
   assert.match(supplierModule, /if \(!canWrite\) \{[\s\S]*不能上传文件/);
   assert.match(supplierModule, /if \(!canWrite \|\| !isAdmin\)/);
 });
@@ -180,10 +181,10 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierModule, /CreateSupplierDocumentRequestDialog/);
   assert.match(supplierCreateDialog, /\/api\/supplier-document-requests/);
   assert.match(supplierCreateDialog, /\/api\/supplier-document-requests\/cost-candidates/);
-  assert.match(supplierCreateDialog, /templateFile/);
-  assert.match(supplierCreateDialog, /EXCEL_TEMPLATE_ACCEPT/);
-  assert.match(supplierCreateDialog, /\.xls/);
-  assert.match(supplierCreateDialog, /\.xlsx/);
+  assert.doesNotMatch(supplierCreateDialog, /templateFile|EXCEL_TEMPLATE_ACCEPT/);
+  assert.match(supplierCreateDialog, /生成合同草稿/);
+  assert.match(supplierTaxContractWorkflow, /buildSupplierTaxContractDraft/);
+  assert.match(supplierTaxContractWorkflow, /contractStatus: "PENDING_REVIEW"/);
   assert.match(supplierCreateDialog, /formData\.append\("costId", selectedCost\.id\)/);
   assert.match(supplierCreateDialog, /请选择已登记的工厂供应商成本/);
   assert.doesNotMatch(supplierCreateDialog, /\/api\/receivables\/search/);
@@ -204,11 +205,8 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCheck/);
   assert.match(supplierCostCandidatesRoute, /listSupplierDocumentRequestCostCandidates/);
   assert.match(supplierRequestListRoute, /costId: String\(formData\.get\("costId"\) \|\| ""\)/);
-  assert.match(supplierRequestListRoute, /SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES/);
-  assert.match(supplierRequestListRoute, /8 \* 1024 \* 1024/);
-  assert.match(supplierRequestListRoute, /assertMultipartRequestWithinLimit\(request/);
-  assert.match(supplierRequestListRoute, /SUPPLIER_DOCUMENT_FORM_PARSE_FAILED/);
-  assert.match(supplierRequestListRoute, /回传表格读取失败，请确认文件小于 4MB/);
+  assert.match(supplierRequestListRoute, /createSupplierTaxContractRequest/);
+  assert.doesNotMatch(supplierRequestListRoute, /templateFile|回传表格读取失败/);
   assert.match(supplierRequestListRoute, /DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE/);
   assert.match(supplierRequestListRoute, /message: \(error as \{ message\?: string \}\)\?\.message \|\| DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_MESSAGE/);
   assert.match(service, /export async function listSupplierDocumentRequestCostCandidates/);
@@ -437,7 +435,7 @@ test("supplier document cards merge upload slots with uploaded files by document
   assert.match(supplierModule, /<PdfPreviewButton documentId=\{document\.id\}/);
   assert.match(supplierModule, /fileDownloadUrl\("order-document", document\.id\)/);
   assert.doesNotMatch(supplierModule, /SupplierDocumentOcrPanel/);
-  assert.doesNotMatch(supplierModule, /OCR 校验结果|查看 OCR 原始文本|人工确认通过|驳回重传/);
+  assert.match(supplierModule, /OCR完整匹配|人工核查并通过|驳回发票/);
   assert.doesNotMatch(supplierModule, /function supplierDocumentUploadSlots/);
   assert.doesNotMatch(supplierModule, /UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID/);
   assert.doesNotMatch(supplierModule, /已上传资料槽|uploadedDocumentSlots/);
@@ -452,9 +450,9 @@ test("supplier document backend normalizes legacy document type aliases before m
   assert.match(service, /const documentType = normalizeSupplierReturnDocumentType\(nonEmpty\(input\.documentType\)\) as OrderDocumentType/);
 });
 
-test("supplier document upload no longer creates OCR tasks", () => {
-  assert.match(uploadService, /message: "上传成功"/);
+test("supplier invoice upload starts Tencent OCR while legacy uploads remain compatible", () => {
+  assert.match(uploadService, /processSupplierInvoiceOcr/);
   assert.match(uploadService, /safeRefreshSupplierDocumentRequestCompletion\(row\.id/);
-  assert.doesNotMatch(uploadService, /ocrScheduled|createSupplierDocumentOcrTask|scheduleSupplierDocumentOcrTask|runSupplierDocumentOcrTask/);
+  assert.doesNotMatch(uploadService, /ocrScheduled|createSupplierDocumentOcrTask|scheduleSupplierDocumentOcrTask/);
   assert.doesNotMatch(uploadService, /OCR正在后台识别/);
 });

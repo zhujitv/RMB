@@ -97,5 +97,6 @@ export function supplierDocumentSendStatusLabel(status = "") {
   if (status === "sent") return "已发送";
   if (status === "failed") return "发送失败";
   if (status === "pending") return "待发送";
+  if (status === "pending_review") return "合同待人工审核，尚未发送";
   return status || "未记录";
 }

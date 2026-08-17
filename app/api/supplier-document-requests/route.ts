@@ -1,19 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, codedError, createSupplierDocumentRequest, listSupplierDocumentRequests, logServerError, ok } from "../../../lib/platform-db";
+import { apiError, createSupplierTaxContractRequest, listSupplierDocumentRequests, ok } from "../../../lib/platform-db";
 import {
   DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE,
   DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_MESSAGE,
 } from "../../../lib/platform/supplier-document-request-types";
 
 import { requireApiActor } from "../../../lib/api-route-guard";
-import {
-  assertMultipartRequestWithinLimit,
-} from "../../../lib/platform/upload-request-guard";
+import { assertMultipartRequestWithinLimit } from "../../../lib/platform/upload-request-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
-const SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES = 8 * 1024 * 1024;
+const REQUEST_BODY_LIMIT_BYTES = 128 * 1024;
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,33 +35,25 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireApiActor(request);
-    const contentLength = assertMultipartRequestWithinLimit(request, {
-      maxBytes: SUPPLIER_DOCUMENT_REQUEST_BODY_LIMIT_BYTES,
-      message: "回传表格请求体过大，请确认 Excel 文件小于 4MB 后重新上传。",
-      code: "SUPPLIER_DOCUMENT_REQUEST_BODY_TOO_LARGE",
+    assertMultipartRequestWithinLimit(request, {
+      maxBytes: REQUEST_BODY_LIMIT_BYTES,
+      message: "合同草稿请求体过大。",
+      code: "SUPPLIER_TAX_CONTRACT_REQUEST_TOO_LARGE",
     });
-    let formData: FormData;
-    try {
-      formData = await request.formData();
-    } catch (error: unknown) {
-      logServerError("供应商资料回传任务表单解析失败", error, { contentLength });
-      throw codedError("回传表格读取失败，请确认文件小于 4MB 且格式为 .xls / .xlsx。", 400, "SUPPLIER_DOCUMENT_FORM_PARSE_FAILED");
-    }
-    const requestRow = await createSupplierDocumentRequest(request, actor, {
+    const formData = await request.formData();
+    const requestRow = await createSupplierTaxContractRequest(request, actor, {
       costId: String(formData.get("costId") || ""),
       orderId: String(formData.get("orderId") || ""),
       supplierId: String(formData.get("supplierId") || ""),
       requiredDocumentTypes: String(formData.get("requiredDocumentTypes") || ""),
       dueDate: String(formData.get("dueDate") || ""),
       message: String(formData.get("message") || ""),
-    }, formData.get("templateFile"));
+    });
     return NextResponse.json({
       success: true,
       request: requestRow,
       data: requestRow,
-      message: requestRow.sendStatus === "sent"
-        ? "已通知供应商回传资料"
-        : "已创建回传任务，但邮件发送失败，请检查邮箱配置后重试",
+      message: "合同草稿已生成，请人工审核确认后发送给供应商",
     }, { status: 201 });
   } catch (error: unknown) {
     if ((error as { code?: string })?.code === DUPLICATE_SUPPLIER_DOCUMENT_REQUEST_CODE) {

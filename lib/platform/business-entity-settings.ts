@@ -148,6 +148,7 @@ function businessEntityPayload(input: BusinessEntityInput) {
     name,
     shortName: optionalBusinessText(input.shortName, "公司简称", 100),
     nameEn: optionalBusinessText(input.nameEn, "英文抬头", 200),
+    taxNumber: optionalBusinessText(input.taxNumber, "纳税人识别号", 50),
     address: optionalBusinessText(input.address, "公司地址", 1000, true),
     contactEmail: optionalBusinessEmail(input.contactEmail),
     contactPhone: optionalBusinessText(input.contactPhone, "联系电话", 100),

@@ -17,6 +17,7 @@ import {
   uniqueRequiredDocumentTypes,
 } from "./helpers";
 import { getBusinessEntityRowClass } from "../business-entity-row-style";
+import { TaxContractReviewPanel } from "./tax-contract-review-panel";
 
 export function SupplierDocumentTaskCard({
   task,
@@ -104,6 +105,7 @@ export function SupplierDocumentTaskCard({
             </div>
           ) : (
             <>
+              <TaxContractReviewPanel task={task} isAdmin={isAdmin} canWrite={canWrite} onRefresh={onOpen} />
               <div className={styles.supplierDocumentTaskMeta}>
                 <span>
                   <small>通知时间</small>
@@ -177,7 +179,7 @@ export function SupplierDocumentTaskCard({
                             </div>
                           ) : null}
                         </div>
-                        {canWrite ? <div className={styles.supplierDocumentUploadControls}>
+                        {canWrite && task.contractStatus !== "PENDING_REVIEW" ? <div className={styles.supplierDocumentUploadControls}>
                           <label className={styles.supplierDocumentUploadButton}>
                             {uploading ? "上传中..." : document ? "重新上传 PDF 文件" : "选择 PDF 文件"}
                             <input

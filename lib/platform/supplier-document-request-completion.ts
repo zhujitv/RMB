@@ -72,11 +72,14 @@ export async function refreshSupplierDocumentRequestCompletion(
   const items = requiredTypes.map((type) => {
     const document = latestByType.get(type);
     const uploaded = document?.uploadStatus === "SUCCESS";
+    const invoiceVerified = type !== "SUPPLIER_INVOICE"
+      || row.contractStatus !== "APPROVED"
+      || row.invoiceMatchStatus === "CONFIRMED";
     return {
       type,
       document,
       started: Boolean(document && hasStartedUpload(document)),
-      qualified: uploaded,
+      qualified: uploaded && invoiceVerified,
     };
   });
 

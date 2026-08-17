@@ -31,6 +31,10 @@ export function serializeSupplierDocumentRequest(
   const taxRefundDocumentCount = documents.filter((document) => (
     document.uploadStatus === "SUCCESS"
   )).length;
+  const supplierActor = isProductSupplierOperatorRole(actor?.role);
+  const invoiceMatch = row.invoiceMatchJson && typeof row.invoiceMatchJson === "object" && !Array.isArray(row.invoiceMatchJson)
+    ? row.invoiceMatchJson as { matched?: unknown; issues?: unknown }
+    : null;
   return {
     id: row.id,
     orderId: row.orderId,
@@ -49,6 +53,16 @@ export function serializeSupplierDocumentRequest(
     message: row.message || "",
     templateFileName: row.templateOriginalName || row.templateFileName || "",
     hasTemplate: Boolean(row.templateStorageKey),
+    contractNo: row.contractNo || "",
+    contractStatus: row.contractStatus || "LEGACY",
+    contractDraft: supplierActor ? null : row.contractDraft,
+    contractApproved: supplierActor ? null : row.contractApproved,
+    contractReviewRemark: supplierActor ? "" : (row.contractReviewRemark || ""),
+    invoiceMatchStatus: row.invoiceMatchStatus || "NOT_UPLOADED",
+    invoiceMatch: supplierActor && invoiceMatch
+      ? { matched: Boolean(invoiceMatch.matched), issues: Array.isArray(invoiceMatch.issues) ? invoiceMatch.issues.map(String) : [] }
+      : row.invoiceMatchJson,
+    invoiceNo: row.invoiceNo || "",
     sendStatus: row.sendStatus || "pending",
     sendError: row.sendError || "",
     sentAt: row.sentAt,

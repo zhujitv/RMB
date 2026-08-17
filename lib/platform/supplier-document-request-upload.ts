@@ -84,6 +84,7 @@ import {
   uniqueEmails,
   resolveUniqueFactoryCostForSupplierReturn,
 } from "./supplier-document-request-serialization";
+import { processSupplierInvoiceOcr } from "./supplier-invoice-review";
 
 export async function uploadSupplierDocumentRequestDocument(request: AuditRequestLike, actor: ActorLike, requestId: string, input: SupplierDocumentUploadInput) {
   assertWrite(actor, "supplierDocuments");
@@ -93,6 +94,9 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
   if (!requiredTypes.includes(documentType)) {
     throw codedError("该任务不需要上传此类资料。", 400, "DOCUMENT_TYPE_NOT_ALLOWED");
+  }
+  if (documentType === "SUPPLIER_INVOICE" && row.contractStatus === "APPROVED" && !row.contractApproved) {
+    throw codedError("退税合同尚未完成审核，不能上传发票。", 409, "SUPPLIER_TAX_CONTRACT_NOT_APPROVED");
   }
   const uploadedFile = await readManagedUploadFile(input.file, "pdf", "supplier-document.pdf");
   const { originalFileName, mimeType, fileSize } = uploadedFile;
@@ -142,9 +146,13 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     await deleteManagedStoredFile(storedFile.storageKey).catch(() => null);
     throw error;
   }
+  let invoiceOcrResult: { matched?: boolean; issues?: string[] } | null = null;
+  if (documentType === "SUPPLIER_INVOICE" && row.contractStatus === "APPROVED") {
+    invoiceOcrResult = await processSupplierInvoiceOcr(row.id, document.id, uploadedFile.body);
+  }
   scheduleTaxRefundCompletenessRefresh(row.orderId);
   await safeRefreshSupplierDocumentRequestCompletion(row.id, { completedById: uploadedById });
-  if (documentType === "SUPPLIER_INVOICE") {
+  if (documentType === "SUPPLIER_INVOICE" && row.contractStatus !== "APPROVED") {
     await runNonCriticalTask("成本发票状态同步", async () => {
       const costs = uniqueFactoryCost
         ? [uniqueFactoryCost]
@@ -172,6 +180,10 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   return {
     request: serializeSupplierDocumentRequest(refreshed, actor),
     document: serializeSupplierDocument(document),
-    message: "上传成功",
+    message: documentType === "SUPPLIER_INVOICE" && row.contractStatus === "APPROVED"
+      ? invoiceOcrResult?.matched
+        ? "上传成功，OCR已完整匹配，等待人工确认"
+        : "上传成功，但OCR核验存在不匹配项，请查看详情"
+      : "上传成功",
   };
 }

@@ -10,6 +10,7 @@ export type BusinessEntityLike = {
   name?: string | null;
   shortName?: string | null;
   nameEn?: string | null;
+  taxNumber?: string | null;
   address?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
@@ -50,6 +51,7 @@ export function serializeBusinessEntitySettings(entity: BusinessEntityLike | nul
   return {
     ...serializeBusinessEntity(entity),
     nameEn: entity?.nameEn || "",
+    taxNumber: entity?.taxNumber || "",
     address: entity?.address || "",
     contactEmail: entity?.contactEmail || "",
     contactPhone: entity?.contactPhone || "",

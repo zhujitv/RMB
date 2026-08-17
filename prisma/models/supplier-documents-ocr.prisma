@@ -11,6 +11,23 @@ model SupplierDocumentRequest {
   completedAt           DateTime? @map("completed_at")
   dueDate               DateTime? @map("due_date") @db.Date
   message               String?
+  contractNo            String?   @map("contract_no")
+  contractStatus        String    @default("LEGACY") @map("contract_status")
+  contractRevision      Int       @default(1) @map("contract_revision")
+  contractDraft         Json?     @map("contract_draft")
+  contractApproved      Json?     @map("contract_approved")
+  contractGeneratedById String?   @map("contract_generated_by")
+  contractGeneratedAt   DateTime? @map("contract_generated_at")
+  contractReviewedById  String?   @map("contract_reviewed_by")
+  contractReviewedAt    DateTime? @map("contract_reviewed_at")
+  contractReviewRemark  String?   @map("contract_review_remark") @db.Text
+  invoiceMatchStatus    String    @default("NOT_UPLOADED") @map("invoice_match_status")
+  invoiceMatchJson      Json?     @map("invoice_match_json")
+  invoiceNo             String?   @map("invoice_no")
+  invoiceOcrTaskId      String?   @map("invoice_ocr_task_id")
+  invoiceConfirmedById  String?   @map("invoice_confirmed_by")
+  invoiceConfirmedAt    DateTime? @map("invoice_confirmed_at")
+  invoiceRejectReason   String?   @map("invoice_reject_reason") @db.Text
   templateFileName      String?   @map("template_file_name")
   templateOriginalName  String?   @map("template_original_name")
   templateMimeType      String?   @map("template_mime_type")
@@ -35,6 +52,9 @@ model SupplierDocumentRequest {
   requestedBy User?           @relation("SupplierDocumentRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   completedBy User?           @relation("SupplierDocumentRequestCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
   deletedBy   User?           @relation("SupplierDocumentRequestDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  contractGeneratedBy User?   @relation("SupplierTaxContractsGeneratedBy", fields: [contractGeneratedById], references: [id], onDelete: SetNull)
+  contractReviewedBy  User?   @relation("SupplierTaxContractsReviewedBy", fields: [contractReviewedById], references: [id], onDelete: SetNull)
+  invoiceConfirmedBy  User?   @relation("SupplierInvoicesConfirmedBy", fields: [invoiceConfirmedById], references: [id], onDelete: SetNull)
   documents   OrderDocument[]
   ocrTasks    OcrTask[]
 
@@ -46,6 +66,11 @@ model SupplierDocumentRequest {
   @@index([completedById])
   @@index([deletedById])
   @@index([status])
+  @@index([contractNo])
+  @@index([contractStatus])
+  @@index([invoiceMatchStatus])
+  @@index([invoiceNo])
+  @@index([invoiceOcrTaskId])
   @@index([sendStatus])
   @@index([dueDate])
   @@index([createdAt])

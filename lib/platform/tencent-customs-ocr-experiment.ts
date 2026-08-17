@@ -38,7 +38,7 @@ function providerError(error: unknown) {
   };
 }
 
-function createClient(settings: Awaited<ReturnType<typeof getOcrIntegrationSettings>>) {
+export function createTencentOcrClient(settings: Awaited<ReturnType<typeof getOcrIntegrationSettings>>) {
   if (!settings.tencentSecretId || !settings.tencentSecretKey) {
     throw codedError("请先保存腾讯云 OCR SecretId 和 SecretKey。", 400, "TENCENT_OCR_CREDENTIAL_REQUIRED");
   }
@@ -145,7 +145,7 @@ export async function runTencentCustomsOcrExperiment(
     throw codedError("PDF编码后超过腾讯云10MB限制，请压缩到约7MB以内再测试。", 413, "TENCENT_OCR_FILE_TOO_LARGE");
   }
   const settings = await getOcrIntegrationSettings();
-  const client = createClient(settings);
+  const client = createTencentOcrClient(settings);
   const [dedicatedSettled, tableSettled] = await Promise.allSettled([
     client.RecognizeGeneralInvoice({
       ImageBase64: imageBase64,
@@ -205,4 +205,26 @@ export async function runTencentCustomsOcrExperiment(
     },
   ));
   return result;
+}
+
+export async function recognizeTencentCustomsGoods(buffer: Buffer) {
+  const imageBase64 = buffer.toString("base64");
+  if (Buffer.byteLength(imageBase64, "utf8") > MAX_TENCENT_PDF_BASE64_BYTES) {
+    throw codedError("报关单编码后超过腾讯云10MB限制，请压缩到约7MB以内。", 413, "TENCENT_CUSTOMS_OCR_FILE_TOO_LARGE");
+  }
+  const settings = await getOcrIntegrationSettings();
+  const client = createTencentOcrClient(settings);
+  const table = await recognizeTables(client, imageBase64);
+  const items = candidateItemsFromTencentTables(table.tables);
+  if (!items.length) {
+    throw codedError("未从报关单识别到商品明细，请检查文件清晰度后重试。", 422, "CUSTOMS_GOODS_NOT_RECOGNIZED");
+  }
+  return {
+    provider: "TENCENT_CLOUD",
+    apiName: "RecognizeTableAccurateOCR",
+    requestIds: table.requestIds,
+    totalPages: table.totalPages,
+    items,
+    warnings: table.warnings,
+  };
 }
