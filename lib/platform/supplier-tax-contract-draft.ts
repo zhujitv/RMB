@@ -52,6 +52,7 @@ export type SupplierTaxContractDraft = {
   warnings: string[];
   blockingIssues: string[];
   generatedAt: string;
+  manualEditedAt?: string;
   ocrRequestIds: string[];
 };
 

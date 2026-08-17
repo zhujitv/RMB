@@ -100,7 +100,7 @@ test("transaction guard locks and reloads the parent order before allowing a wri
   );
 });
 
-test("all direct order, payment, cost, and logistics amount paths use the settlement guard", () => {
+test("amount-changing paths use the settlement guard while pure cost payment progress stays independent", () => {
   assert.match(ordersSource, /if \(id\) \{[\s\S]*assertCommissionOrderWritableInTransaction\(tx, id\)/);
   assert.match(ordersSource, /export async function deleteOrder[\s\S]*assertCommissionOrderWritableInTransaction\(tx, id\)/);
   assert.match(paymentsSource, /affectedOrderIds[\s\S]*\.sort\(\)[\s\S]*assertCommissionOrderWritableInTransaction\(tx, affectedOrderId\)/);
@@ -110,7 +110,7 @@ test("all direct order, payment, cost, and logistics amount paths use the settle
     assert.match(source, /assertCommissionOrderWritableInTransaction/);
   }
   assert.doesNotMatch(costPaymentSource, /assertCommissionOrderWritableInTransaction/);
-  assert.match(costPaymentSource, /assertBusinessOrderWritableInTransaction/);
+  assert.doesNotMatch(costPaymentSource, /assertBusinessOrderWritableInTransaction/);
   assert.match(logisticsExpenseSource, /createOrUpdateCostFromLogisticsExpense[\s\S]*assertCommissionOrderWritableInTransaction\(tx, expense\.orderId\)/);
   assert.match(logisticsBasicSource, /saveLogisticsExpenses[\s\S]*assertCommissionOrderWritableInTransaction\(tx, order\.id\)/);
   assert.match(logisticsBasicSource, /updateLogisticsExpense[\s\S]*assertCommissionOrderWritableInTransaction\(tx, before\.orderId\)/);

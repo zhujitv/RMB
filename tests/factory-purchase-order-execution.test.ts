@@ -324,6 +324,7 @@ test("finance payment reads inside the write transaction keep the sales-executio
     paymentMutation,
     /loadPurchaseOrderForFinance\(tx,\s*before\.id,\s*actor\)/,
   );
+  assert.doesNotMatch(paymentMutation, /assertBusinessOrderWritableInTransaction|BUSINESS_ARCHIVED_READ_ONLY/);
 });
 
 test("factory payment dates cannot be later than today", () => {
@@ -364,6 +365,7 @@ test("payment and adjustment void operations are explicit audited state transiti
   assert.match(paymentVoid, /data:\s*\{[\s\S]*?\bvoidedAt\b/);
   assert.match(paymentVoid, /voidReason:/);
   assert.match(paymentVoid, /writeAudit\(/);
+  assert.doesNotMatch(paymentVoid, /assertBusinessOrderWritableInTransaction|BUSINESS_ARCHIVED_READ_ONLY/);
 
   assert.match(adjustmentVoid, /assertWrite\(actor,\s*"costs"\)/);
   assert.match(adjustmentVoid, /status:\s*"VOIDED"/);

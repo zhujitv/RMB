@@ -474,6 +474,8 @@ test("settled commission still allows pure cost payment progress and voucher rep
   );
   assert.doesNotMatch(paymentStatusBlock, /assertCommissionOrderWritableInTransaction/);
   assert.doesNotMatch(voucherBlock, /assertCommissionOrderWritableInTransaction/);
+  assert.doesNotMatch(paymentStatusBlock, /assertBusinessOrderWritableInTransaction|BUSINESS_ARCHIVED_READ_ONLY/);
+  assert.doesNotMatch(voucherBlock, /assertBusinessOrderWritableInTransaction|BUSINESS_ARCHIVED_READ_ONLY/);
   assert.match(voucherBlock, /updatedAt: before\.updatedAt/);
   assert.match(voucherBlock, /PAYMENT_VOUCHER_REPLACE_CONFLICT/);
   assert.match(voucherBlock, /catch \(error: unknown\) \{\s*await deleteManagedStoredFile\(storedFile\.storageKey\);\s*throw error;/);

@@ -89,13 +89,6 @@ export async function recordFactoryPurchaseOrderPayment(
       throw codedError("该工厂采购单已结清，不能继续登记付款", 409, "FACTORY_SETTLEMENT_ALREADY_SETTLED");
     }
     const orderId = before.execution.receivableOrder?.id || "";
-    if (orderId) {
-      await assertBusinessOrderWritableInTransaction(
-        tx,
-        orderId,
-        "该订单已提交退税并归档，不能登记工厂采购付款。",
-      );
-    }
     if (before.settlement) {
       if (!orderId) {
         throw codedError("销售执行单尚未生成应收订单，不能登记结算尾款", 409, "FACTORY_SETTLEMENT_RECEIVABLE_ORDER_REQUIRED");

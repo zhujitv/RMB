@@ -8,6 +8,7 @@ process.env.DATABASE_URL ||= "postgresql://test:test@localhost:5432/test";
 const jiti = createJiti(import.meta.url);
 const { matchSupplierInvoiceToContract } = jiti("../lib/platform/supplier-invoice-contract-match.ts") as typeof import("../lib/platform/supplier-invoice-contract-match.ts");
 const { generateSupplierTaxContractXlsx } = jiti("../lib/platform/supplier-tax-contract-xlsx.ts") as typeof import("../lib/platform/supplier-tax-contract-xlsx.ts");
+const { applySupplierTaxContractDraftEdits } = jiti("../lib/platform/supplier-tax-contract-draft-edit.ts") as typeof import("../lib/platform/supplier-tax-contract-draft-edit.ts");
 
 const contract = {
   contractNo: "CUSTOMER-01",
@@ -102,6 +103,36 @@ test("generated tax contract workbook contains no specification column and freez
   assert.doesNotMatch(sheet || "", /规格型号/);
 });
 
+test("manual review can correct OCR name, quantity and unit while preserving original evidence", () => {
+  const edited = applySupplierTaxContractDraftEdits(contract as never, [{
+    purchaseOrderItemId: "item-1",
+    productName: "木塑地板",
+    quantity: "10.0000",
+    unit: "平方米（m²）",
+  }], new Date("2026-08-17T01:00:00.000Z"));
+  assert.equal(edited.draft.items[0]?.productName, "木塑地板");
+  assert.equal(edited.draft.items[0]?.quantity, "10");
+  assert.equal(edited.draft.items[0]?.unit, "平方米（m²）");
+  assert.equal(edited.draft.items[0]?.amountWithTax, "1130.00");
+  assert.deepEqual(edited.draft.customsSnapshot, contract.customsSnapshot);
+  assert.equal(edited.draft.generatedAt, contract.generatedAt);
+  assert.equal(edited.draft.manualEditedAt, "2026-08-17T01:00:00.000Z");
+  assert.deepEqual(edited.draft.blockingIssues, []);
+  assert.match(edited.draft.warnings.join("|"), /OCR识别结果已人工修正/);
+});
+
+test("manual quantity correction is saved but blocks approval when the settlement total no longer matches", () => {
+  const edited = applySupplierTaxContractDraftEdits(contract as never, [{
+    purchaseOrderItemId: "item-1",
+    productName: "木塑复合地板",
+    quantity: "9",
+    unit: "平方米",
+  }]);
+  assert.equal(edited.draft.items[0]?.amountWithTax, "1017.00");
+  assert.match(edited.draft.blockingIssues.join("|"), /采购结算金额1130\.00不一致/);
+  assert.throws(() => applySupplierTaxContractDraftEdits(contract as never, []), /完整提交合同中的全部商品行/);
+});
+
 test("workflow requires manual contract review and invoice confirmation before completion and tax submission", () => {
   const workflow = readFileSync("lib/platform/supplier-tax-contract-workflow.ts", "utf8");
   const upload = readFileSync("lib/platform/supplier-document-request-upload.ts", "utf8");
@@ -109,8 +140,21 @@ test("workflow requires manual contract review and invoice confirmation before c
   const taxStatus = readFileSync("lib/platform/tax-refunds-status-actions.ts", "utf8");
   assert.match(workflow, /contractStatus: "PENDING_REVIEW"/);
   assert.match(workflow, /input\.confirmed !== true/);
+  assert.match(workflow, /contractRevision: \{ increment: 1 \}/);
   assert.match(workflow, /generateSupplierTaxContractXlsx/);
   assert.match(upload, /processSupplierInvoiceOcr/);
   assert.match(completion, /invoiceMatchStatus === "CONFIRMED"/);
   assert.match(taxStatus, /SUPPLIER_INVOICE_REVIEW_REQUIRED/);
+});
+
+test("contract review UI requires saving manual OCR corrections before approval", () => {
+  const panel = readFileSync("app/modules/supplier-documents/tax-contract-review-panel.tsx", "utf8");
+  const route = readFileSync("app/api/supplier-document-requests/[id]/contract-review/route.ts", "utf8");
+  assert.match(panel, /保存人工修正/);
+  assert.match(panel, /productName/);
+  assert.match(panel, /quantity/);
+  assert.match(panel, /unit/);
+  assert.match(panel, /draftDirty/);
+  assert.match(route, /decision === "SAVE_DRAFT"/);
+  assert.match(route, /saveSupplierTaxContractDraftEdits/);
 });

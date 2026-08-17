@@ -7,6 +7,7 @@ import { assertWrite } from "./shared-access";
 import { codedError, nonEmpty } from "./shared-base-utils";
 import { writeAudit } from "./shared-audit";
 import { buildSupplierTaxContractDraft, type SupplierTaxContractDraft } from "./supplier-tax-contract-draft";
+import { applySupplierTaxContractDraftEdits } from "./supplier-tax-contract-draft-edit";
 import { generateSupplierTaxContractXlsx } from "./supplier-tax-contract-xlsx";
 import {
   actorId,
@@ -216,4 +217,53 @@ export async function reviewSupplierTaxContract(
     itemCount: draft.items.length,
   });
   return resendSupplierDocumentRequestNotice(request, actor, updated.id);
+}
+
+export async function saveSupplierTaxContractDraftEdits(
+  request: AuditRequestLike,
+  actor: ActorLike,
+  requestId: string,
+  input: Record<string, unknown>,
+) {
+  requireAdmin(actor);
+  const expectedRevision = Number(input.expectedRevision);
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+    throw codedError("合同草稿版本无效，请刷新后重试。", 400, "SUPPLIER_TAX_CONTRACT_REVISION_INVALID");
+  }
+  const row = await prisma.supplierDocumentRequest.findFirst({
+    where: { id: requestId, deletedAt: null },
+    include: supplierDocumentRequestInclude(),
+  });
+  if (!row) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
+  if (row.contractStatus !== "PENDING_REVIEW") {
+    throw codedError("只有待审核合同草稿可以修改。", 409, "SUPPLIER_TAX_CONTRACT_NOT_PENDING");
+  }
+  const edited = applySupplierTaxContractDraftEdits(
+    contractDraft(row.contractDraft),
+    Array.isArray(input.items) ? input.items as Array<Record<string, unknown>> : [],
+  );
+  const claimed = await prisma.supplierDocumentRequest.updateMany({
+    where: { id: row.id, deletedAt: null, contractStatus: "PENDING_REVIEW", contractRevision: expectedRevision },
+    data: {
+      contractDraft: edited.draft as unknown as Prisma.InputJsonValue,
+      contractRevision: { increment: 1 },
+      contractReviewRemark: "合同商品信息已人工核查并保存",
+    },
+  });
+  if (claimed.count !== 1) {
+    throw codedError("合同草稿已被其他人修改，请刷新后重新核查。", 409, "SUPPLIER_TAX_CONTRACT_EDIT_CONFLICT");
+  }
+  const saved = await prisma.supplierDocumentRequest.findUnique({
+    where: { id: row.id },
+    include: supplierDocumentRequestInclude(),
+  });
+  if (!saved) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
+  await writeAudit(request, actor, "人工修正退税合同草稿", "supplier_document_requests", row.id, null, {
+    contractNo: row.contractNo,
+    previousRevision: expectedRevision,
+    revision: expectedRevision + 1,
+    changes: edited.changes,
+    calculatedTotal: edited.calculatedTotal,
+  });
+  return serializeSupplierDocumentRequest(saved, actor);
 }

@@ -426,18 +426,14 @@ test("settlement blocks overpayment and atomically creates the snapshot plus the
   assert.match(service, /writeAudit\([\s\S]*?order_costs/);
 });
 
-test("post-settlement payments are balance-only, capped, and settle both snapshot and generated cost", () => {
+test("post-settlement payments remain archive-independent, balance-only, and capped", () => {
   const paymentMutation = exportedFunctionSource("recordFactoryPurchaseOrderPayment", paymentService);
 
   assert.match(paymentMutation, /before\.settlement\?\.status === "SETTLED"/);
   assert.match(paymentMutation, /kind !== "BALANCE"/);
   assert.match(paymentMutation, /amount\.gt\(remaining\)/);
-  assert.match(paymentMutation, /assertBusinessOrderWritableInTransaction/);
+  assert.doesNotMatch(paymentMutation, /assertBusinessOrderWritableInTransaction/);
   assert.doesNotMatch(paymentMutation, /assertCommissionOrderWritableInTransaction/);
-  assert.ok(
-    paymentMutation.indexOf("assertBusinessOrderWritableInTransaction") < paymentMutation.indexOf("if (before.settlement)"),
-    "archive protection must also cover payments recorded before final settlement",
-  );
   assert.match(paymentMutation, /finalizeFactorySettlementAfterPayment/);
   assert.match(service, /factoryPurchaseOrderSettlement\.updateMany\([\s\S]*?paidAmountAtSettlement: paidAmount,[\s\S]*?status: "SETTLED"/);
   assert.match(service, /syncFactorySettlementCostPayment/);
@@ -455,7 +451,7 @@ test("payment, adjustment and production writes require an internally accepted p
   assert.match(paymentService, /activeSupplierStatuses/);
 });
 
-test("settlement freezes fees and permits only pre-settlement or pending-balance reversals", () => {
+test("settlement freezes fees while payment reversals remain archive-independent", () => {
   const adjustmentMutation = exportedFunctionSource("addFactoryPurchaseOrderAdjustment", paymentService);
   const paymentVoid = exportedFunctionSource("voidFactoryPurchaseOrderPayment", voidService);
   const adjustmentVoid = exportedFunctionSource("voidFactoryPurchaseOrderAdjustment", voidService);
@@ -465,7 +461,7 @@ test("settlement freezes fees and permits only pre-settlement or pending-balance
   assert.match(adjustmentMutation, /assertBusinessOrderWritableInTransaction/);
   assert.match(paymentVoid, /settlement\?\.status === "SETTLED"/);
   assert.match(paymentVoid, /payment\.kind !== "BALANCE"/);
-  assert.match(paymentVoid, /assertBusinessOrderWritableInTransaction/);
+  assert.doesNotMatch(paymentVoid, /assertBusinessOrderWritableInTransaction/);
   assert.doesNotMatch(paymentVoid, /assertCommissionOrderWritableInTransaction/);
   assert.match(paymentVoid, /syncFactorySettlementCostPayment/);
   assert.match(adjustmentVoid, /adjustment\.purchaseOrder\.settlement/);
