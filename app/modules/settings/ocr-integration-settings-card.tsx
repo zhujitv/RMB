@@ -58,14 +58,18 @@ export function OcrIntegrationSettingsCard({
   if (loading) return <div className={styles.emptyState}>数据加载中...</div>;
   if (!settings) return <div className={styles.emptyState}>点击刷新当前页加载 OCR 设置</div>;
   const currentForm = form || ocrIntegrationFormFromSettings(settings);
-  const hasCredential = Boolean(
+  const hasAliyunCredential = Boolean(
     currentForm.appCodeConfigured ||
     currentForm.appCode ||
     currentForm.accessKeyIdConfigured ||
     currentForm.accessKeyId,
   );
-  const statusTone = currentForm.enabled ? (hasCredential ? "success" : "warning") : "muted";
-  const statusLabel = currentForm.enabled ? (hasCredential ? "已启用" : "待填写密钥") : "已关闭";
+  const hasTencentCredential = Boolean(
+    (currentForm.tencentSecretIdConfigured || currentForm.tencentSecretId)
+    && (currentForm.tencentSecretKeyConfigured || currentForm.tencentSecretKey)
+  );
+  const statusTone = hasTencentCredential || (currentForm.enabled && hasAliyunCredential) ? "success" : currentForm.enabled ? "warning" : "muted";
+  const statusLabel = hasTencentCredential ? "腾讯云已启用" : currentForm.enabled ? (hasAliyunCredential ? "阿里云已启用" : "待填写密钥") : "已关闭";
 
   function setField<K extends keyof OcrIntegrationForm>(key: K, value: OcrIntegrationForm[K]) {
     onChange({ ...currentForm, [key]: value });
@@ -152,8 +156,8 @@ export function OcrIntegrationSettingsCard({
         </div>
       </SettingsCard>
 
-      <SettingsCard title="腾讯云 OCR 测试密钥" icon="腾">
-        <div className={styles.emptyState}>仅供下方报关单实验模块使用，不会切换或影响现有阿里云发票 OCR。</div>
+      <SettingsCard title="腾讯云 OCR" icon="腾">
+        <div className={styles.emptyState}>用于报关单商品识别、退税合同生成，以及供应商回传增值税发票的结构化识别与合同匹配。</div>
         <div className={styles.settingsFieldGrid}>
           <SettingsField label="SecretId">
             <SecretField
@@ -232,7 +236,7 @@ export function OcrIntegrationSettingsCard({
         </div>
       </SettingsCard>
 
-      <div className={styles.emptyState}>现有业务中的报关单 OCR 仍保持停用；腾讯云模块只用于样本测试，识别结果不会进入订单或退税数据。</div>
+      <div className={styles.emptyState}>测试区只用于验证报关单识别；正式资料回传会保存腾讯云 OCR 结果，并且必须经过人工核查确认。</div>
     </SettingsPage>
   );
 }

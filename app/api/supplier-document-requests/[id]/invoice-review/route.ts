@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireApiActor } from "../../../../../lib/api-route-guard";
-import { apiError, ok, parseJsonBody, reviewSupplierInvoice } from "../../../../../lib/platform-db";
+import { apiError, ok, parseJsonBody, retrySupplierInvoiceOcr, reviewSupplierInvoice } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,6 +10,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const actor = await requireApiActor(request);
     const { id } = await context.params;
     const input = await parseJsonBody(request);
+    if (input?.decision === "RETRY_OCR") {
+      const result = await retrySupplierInvoiceOcr(request, actor, id);
+      return ok({ request: result, data: result, message: "腾讯云发票OCR已重新执行" });
+    }
     const result = await reviewSupplierInvoice(request, actor, id, input);
     return ok({ request: result, data: result, message: input?.decision === "CONFIRMED" ? "发票已人工确认" : "发票已驳回" });
   } catch (error) {

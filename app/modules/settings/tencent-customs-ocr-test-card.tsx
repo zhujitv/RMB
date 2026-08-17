@@ -93,7 +93,7 @@ export function TencentCustomsOcrTestCard({ credentialsConfigured }: { credentia
   }
 
   return (
-    <SettingsCard title="腾讯云报关单 OCR 测试（实验）" icon="测">
+    <SettingsCard title="腾讯云报关单 OCR 连通测试" icon="测">
       <div className={styles.intro}>
         <div>
           <strong>只做识别测试</strong>

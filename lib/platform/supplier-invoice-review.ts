@@ -1,5 +1,6 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
+import { readR2Object } from "../r2";
 import { assertWrite } from "./shared-access";
 import { codedError, nonEmpty } from "./shared-base-utils";
 import { writeAudit } from "./shared-audit";
@@ -80,6 +81,48 @@ export async function processSupplierInvoiceOcr(requestId: string, documentId: s
     ]);
     return { matched: false, issues: [message], checkedAt: new Date().toISOString() };
   }
+}
+
+export async function retrySupplierInvoiceOcr(
+  request: AuditRequestLike,
+  actor: ActorLike,
+  requestId: string,
+) {
+  if (actor?.role !== "管理员") throw codedError("只有管理员可以重新执行发票OCR。", 403, "SUPPLIER_INVOICE_RETRY_ADMIN_ONLY");
+  assertWrite(actor, "supplierDocuments");
+  const row = await prisma.supplierDocumentRequest.findFirst({ where: { id: requestId, deletedAt: null } });
+  if (!row) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
+  if (row.contractStatus !== "APPROVED" || !row.contractApproved) {
+    throw codedError("退税合同尚未人工审核通过，不能执行发票OCR。", 409, "SUPPLIER_TAX_CONTRACT_NOT_APPROVED");
+  }
+  if (row.invoiceMatchStatus === "PROCESSING") {
+    throw codedError("发票OCR正在识别，请稍后刷新。", 409, "SUPPLIER_INVOICE_OCR_PROCESSING");
+  }
+  const document = await prisma.orderDocument.findFirst({
+    where: {
+      factoryDocumentRequestId: row.id,
+      documentType: "SUPPLIER_INVOICE",
+      uploadStatus: "SUCCESS",
+      deletedAt: null,
+    },
+    orderBy: [{ uploadedAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, storageKey: true },
+  });
+  if (!document?.storageKey) {
+    throw codedError("尚未找到可识别的供应商发票，请先上传PDF。", 409, "SUPPLIER_INVOICE_DOCUMENT_MISSING");
+  }
+  const body = await readR2Object(document.storageKey, { maxBytes: 10 * 1024 * 1024 });
+  const result = await processSupplierInvoiceOcr(row.id, document.id, body);
+  await writeAudit(request, actor, "重新执行供应商发票腾讯云OCR", "supplier_document_requests", row.id, null, {
+    documentId: document.id,
+    matched: Boolean(result.matched),
+    issueCount: result.issues?.length || 0,
+  });
+  const refreshed = await prisma.supplierDocumentRequest.findUnique({
+    where: { id: row.id },
+    include: supplierDocumentRequestInclude(),
+  });
+  return refreshed ? serializeSupplierDocumentRequest(refreshed, actor) : null;
 }
 
 export async function reviewSupplierInvoice(

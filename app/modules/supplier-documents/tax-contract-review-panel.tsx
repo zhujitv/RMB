@@ -80,6 +80,7 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
   const [message, setMessage] = useState("");
   const draft = task.contractDraft || task.contractApproved;
   const issues = task.invoiceMatch?.issues || [];
+  const hasInvoice = (task.documents || []).some((document) => document.documentType === "SUPPLIER_INVOICE");
 
   async function reviewContract(decision: "APPROVED" | "REJECTED") {
     if (decision === "APPROVED" && draftDirty) {
@@ -143,6 +144,25 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
     }
   }
 
+  async function retryInvoiceOcr() {
+    if (!window.confirm("确认使用已上传的发票重新执行腾讯云 OCR？")) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiJson(`/api/supplier-document-requests/${encodeURIComponent(task.id)}/invoice-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: "RETRY_OCR" }),
+      });
+      setMessage("腾讯云发票 OCR 已重新执行。请核对识别结果。");
+      await onRefresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "重新执行腾讯云发票 OCR 失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!task.contractStatus || task.contractStatus === "LEGACY") return null;
   return (
     <section className={styles.supplierDocumentUploadCard} aria-label="退税合同与发票核验">
@@ -172,8 +192,14 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
           <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => reviewContract("REJECTED")}>驳回草稿</button>
         </div>
       ) : null}
-      {task.contractStatus === "APPROVED" ? <p><b>发票状态：</b>{INVOICE_STATUS_LABELS[task.invoiceMatchStatus || "NOT_UPLOADED"] || task.invoiceMatchStatus}</p> : null}
+      {task.contractStatus === "APPROVED" ? <p><b>腾讯云发票 OCR 状态：</b>{INVOICE_STATUS_LABELS[task.invoiceMatchStatus || "NOT_UPLOADED"] || task.invoiceMatchStatus}</p> : null}
       {issues.map((issue) => <div className={styles.inlineError} key={issue}>{issue}</div>)}
+      {isAdmin && canWrite && task.contractStatus === "APPROVED" && hasInvoice
+        && !["PROCESSING", "AWAITING_REVIEW", "CONFIRMED"].includes(task.invoiceMatchStatus || "NOT_UPLOADED") ? (
+        <div className={styles.supplierDocumentNoticeActions}>
+          <button className={styles.secondaryButton} type="button" disabled={busy} onClick={retryInvoiceOcr}>重新执行腾讯云 OCR</button>
+        </div>
+      ) : null}
       {isAdmin && canWrite && task.invoiceMatchStatus === "AWAITING_REVIEW" ? (
         <div className={styles.supplierDocumentNoticeActions}>
           <button className={styles.primaryButtonCompact} type="button" disabled={busy} onClick={() => reviewInvoice("CONFIRMED")}>查看原件并确认发票</button>
