@@ -41,6 +41,7 @@ export type SupplierDocumentTask = {
   hasTemplate?: boolean;
   contractNo?: string;
   contractStatus?: string;
+  contractRevision?: number;
   contractDraft?: SupplierTaxContractDraft | null;
   contractApproved?: SupplierTaxContractDraft | null;
   contractReviewRemark?: string;
@@ -74,6 +75,7 @@ export type SupplierTaxContractDraft = {
   blockingIssues?: string[];
   items?: Array<{
     lineNo?: number;
+    purchaseOrderItemId?: string;
     productName?: string;
     quantity?: string;
     unit?: string;

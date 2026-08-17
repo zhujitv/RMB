@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireApiActor } from "../../../../../lib/api-route-guard";
-import { apiError, ok, parseJsonBody, reviewSupplierTaxContract } from "../../../../../lib/platform-db";
+import { apiError, ok, parseJsonBody, reviewSupplierTaxContract, saveSupplierTaxContractDraftEdits } from "../../../../../lib/platform-db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,6 +11,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const actor = await requireApiActor(request);
     const { id } = await context.params;
     const input = await parseJsonBody(request);
+    if (input?.decision === "SAVE_DRAFT") {
+      const result = await saveSupplierTaxContractDraftEdits(request, actor, id, input);
+      return ok({ request: result, data: result, message: "合同草稿修改已保存" });
+    }
     const result = await reviewSupplierTaxContract(request, actor, id, input);
     return ok({ request: result, data: result, message: input?.decision === "APPROVED" ? "合同已确认并发送给供应商" : "合同草稿已驳回" });
   } catch (error) {

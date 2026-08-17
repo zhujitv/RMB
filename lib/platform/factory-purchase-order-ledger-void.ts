@@ -84,13 +84,6 @@ export async function voidFactoryPurchaseOrderPayment(
       throw codedError("该工厂采购单已结清，付款记录不能冲销", 409, "FACTORY_SETTLEMENT_ALREADY_SETTLED");
     }
     const orderId = payment.purchaseOrder.execution.receivableOrder?.id || "";
-    if (orderId) {
-      await assertBusinessOrderWritableInTransaction(
-        tx,
-        orderId,
-        "该订单已提交退税并归档，不能冲销工厂采购付款。",
-      );
-    }
     if (payment.purchaseOrder.settlement) {
       if (payment.kind !== "BALANCE") {
         throw codedError("最终应付确认后只能冲销尾款记录", 409, "FACTORY_SETTLEMENT_BALANCE_VOID_ONLY");

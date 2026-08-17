@@ -35,7 +35,6 @@ import {
   type CostActorInput,
   type CostInput,
 } from "./cost-records-mutation-shared";
-import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 import { invalidateWorkbenchTodosCache } from "./workbench-todos-cache";
 
 export async function updateProductSupplierCostPayment(request: AuditRequestLike, actor: CostActorInput, id: string, input: CostInput) {
@@ -53,11 +52,6 @@ export async function updateProductSupplierCostPayment(request: AuditRequestLike
     updatedById: currentActor.id,
   } as Prisma.OrderCostUncheckedUpdateInput;
   const updated = await prisma.$transaction(async (tx) => {
-    await assertBusinessOrderWritableInTransaction(
-      tx,
-      before.orderId,
-      "该订单已提交退税并归档，不能修改成本付款状态。",
-    );
     const changed = await tx.orderCost.updateMany({
       where: {
         id,
@@ -107,11 +101,6 @@ export async function uploadProductSupplierCostPaymentVoucher(request: AuditRequ
   let updated;
   try {
     updated = await prisma.$transaction(async (tx) => {
-      await assertBusinessOrderWritableInTransaction(
-        tx,
-        before.orderId,
-        "该订单已提交退税并归档，不能上传或替换成本付款凭证。",
-      );
       const changed = await tx.orderCost.updateMany({
         where: {
           id,

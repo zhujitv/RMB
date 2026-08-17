@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { apiJson } from "../../api";
 import styles from "../../WorkspaceShell.module.css";
-import type { SupplierDocumentTask } from "./types";
+import type { SupplierDocumentTask, SupplierTaxContractDraft } from "./types";
 
 const CONTRACT_STATUS_LABELS: Record<string, string> = {
   LEGACY: "历史合同",
@@ -22,12 +22,70 @@ const INVOICE_STATUS_LABELS: Record<string, string> = {
   FAILED: "发票OCR识别失败",
 };
 
+type DraftItem = NonNullable<SupplierTaxContractDraft["items"]>[number];
+
+function ContractDraftEditor({ items, busy, onSave, onDirtyChange }: {
+  items: DraftItem[];
+  busy: boolean;
+  onSave: (items: DraftItem[]) => void | Promise<void>;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const [rows, setRows] = useState(() => items.map((item) => ({ ...item })));
+  const [dirty, setDirty] = useState(false);
+
+  function updateRow(index: number, field: "productName" | "quantity" | "unit", value: string) {
+    setRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
+    if (!dirty) {
+      setDirty(true);
+      onDirtyChange(true);
+    }
+  }
+
+  async function save() {
+    try {
+      await onSave(rows);
+      setDirty(false);
+      onDirtyChange(false);
+    } catch {
+      // The parent renders the server validation message and keeps the draft dirty.
+    }
+  }
+
+  return (
+    <>
+      <div className={styles.tableScroll}>
+        <table className={styles.compactTable}>
+          <thead><tr><th>品名（按报关单）</th><th>数量</th><th>单位</th><th>含税单价</th><th>含税金额</th></tr></thead>
+          <tbody>{rows.map((item, index) => (
+            <tr key={item.purchaseOrderItemId || `${item.lineNo}-${index}`}>
+              <td><input aria-label={`第${item.lineNo || index + 1}行品名`} value={item.productName || ""} maxLength={200} onChange={(event) => updateRow(index, "productName", event.target.value)} /></td>
+              <td><input aria-label={`第${item.lineNo || index + 1}行数量`} inputMode="decimal" value={item.quantity || ""} onChange={(event) => updateRow(index, "quantity", event.target.value)} /></td>
+              <td><input aria-label={`第${item.lineNo || index + 1}行单位`} value={item.unit || ""} maxLength={40} onChange={(event) => updateRow(index, "unit", event.target.value)} /></td>
+              <td>{item.unitPriceWithTax}</td><td>{item.amountWithTax}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <div className={styles.supplierDocumentNoticeActions}>
+        <button className={styles.secondaryButton} type="button" disabled={busy || !dirty} onClick={save}>保存人工修正</button>
+        {dirty ? <span>修改尚未保存，保存后才能审核通过。</span> : <span>原始 OCR 快照会保留，修改记录写入系统日志。</span>}
+      </div>
+    </>
+  );
+}
+
 export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: { task: SupplierDocumentTask; isAdmin: boolean; canWrite: boolean; onRefresh: () => void | Promise<void> }) {
   const [busy, setBusy] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
+  const [message, setMessage] = useState("");
   const draft = task.contractDraft || task.contractApproved;
   const issues = task.invoiceMatch?.issues || [];
 
   async function reviewContract(decision: "APPROVED" | "REJECTED") {
+    if (decision === "APPROVED" && draftDirty) {
+      setMessage("请先保存人工修正，再审核通过。");
+      return;
+    }
     const confirmed = decision === "APPROVED"
       ? window.confirm("确认已逐行核查报关品名、数量、单位、实际装柜数量及合同总金额？确认后将生成合同并邮件发送供应商。")
       : window.confirm("确认驳回此合同草稿？");
@@ -43,6 +101,25 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
       setBusy(false);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "合同审核失败");
+      setBusy(false);
+    }
+  }
+
+  async function saveDraft(items: DraftItem[]) {
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiJson(`/api/supplier-document-requests/${encodeURIComponent(task.id)}/contract-review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: "SAVE_DRAFT", expectedRevision: task.contractRevision || 1, items }),
+      });
+      setMessage("人工修正已保存，请再次核对金额后审核。");
+      await onRefresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "保存合同草稿失败");
+      throw error;
+    } finally {
       setBusy(false);
     }
   }
@@ -76,19 +153,22 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
       {draft ? (
         <div className={styles.supplierDocumentUploadBody}>
           <p>供方：{draft.supplierName || "-"}　需方：{draft.buyerName || "-"}　总金额：{draft.currency || "CNY"} {draft.totalAmountWithTax || "0.00"}</p>
-          <div className={styles.tableScroll}>
+          {isAdmin && canWrite && task.contractStatus === "PENDING_REVIEW" ? (
+            <ContractDraftEditor key={`${task.id}-${task.contractRevision || 1}`} items={draft.items || []} busy={busy} onSave={saveDraft} onDirtyChange={setDraftDirty} />
+          ) : <div className={styles.tableScroll}>
             <table className={styles.compactTable}>
               <thead><tr><th>品名（按报关单）</th><th>数量</th><th>单位</th><th>含税单价</th><th>含税金额</th></tr></thead>
               <tbody>{(draft.items || []).map((item) => <tr key={`${item.lineNo}-${item.productName}`}><td>{item.productName}</td><td>{item.quantity}</td><td>{item.unit}</td><td>{item.unitPriceWithTax}</td><td>{item.amountWithTax}</td></tr>)}</tbody>
             </table>
-          </div>
+          </div>}
           {(draft.warnings || []).map((warning) => <div className={styles.inlineError} key={warning}>{warning}</div>)}
           {(draft.blockingIssues || []).map((issue) => <div className={styles.inlineError} key={issue}>禁止通过：{issue}</div>)}
+          {message ? <p>{message}</p> : null}
         </div>
       ) : null}
       {isAdmin && canWrite && task.contractStatus === "PENDING_REVIEW" ? (
         <div className={styles.supplierDocumentNoticeActions}>
-          <button className={styles.primaryButtonCompact} type="button" disabled={busy || Boolean(draft?.blockingIssues?.length)} onClick={() => reviewContract("APPROVED")}>人工核查并通过</button>
+          <button className={styles.primaryButtonCompact} type="button" disabled={busy || draftDirty || Boolean(draft?.blockingIssues?.length)} onClick={() => reviewContract("APPROVED")}>人工核查并通过</button>
           <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => reviewContract("REJECTED")}>驳回草稿</button>
         </div>
       ) : null}

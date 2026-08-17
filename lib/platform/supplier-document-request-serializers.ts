@@ -55,6 +55,7 @@ export function serializeSupplierDocumentRequest(
     hasTemplate: Boolean(row.templateStorageKey),
     contractNo: row.contractNo || "",
     contractStatus: row.contractStatus || "LEGACY",
+    contractRevision: row.contractRevision || 1,
     contractDraft: supplierActor ? null : row.contractDraft,
     contractApproved: supplierActor ? null : row.contractApproved,
     contractReviewRemark: supplierActor ? "" : (row.contractReviewRemark || ""),
