@@ -143,8 +143,21 @@ test("workflow requires manual contract review and invoice confirmation before c
   assert.match(workflow, /contractRevision: \{ increment: 1 \}/);
   assert.match(workflow, /generateSupplierTaxContractXlsx/);
   assert.match(upload, /processSupplierInvoiceOcr/);
+  assert.match(upload, /row\.contractStatus !== "LEGACY"/);
+  assert.match(upload, /row\.contractStatus !== "APPROVED" \|\| !row\.contractApproved/);
   assert.match(completion, /invoiceMatchStatus === "CONFIRMED"/);
   assert.match(taxStatus, /SUPPLIER_INVOICE_REVIEW_REQUIRED/);
+});
+
+test("approved contracts can rerun Tencent invoice OCR for an already uploaded PDF", () => {
+  const review = readFileSync("lib/platform/supplier-invoice-review.ts", "utf8");
+  const route = readFileSync("app/api/supplier-document-requests/[id]/invoice-review/route.ts", "utf8");
+  const panel = readFileSync("app/modules/supplier-documents/tax-contract-review-panel.tsx", "utf8");
+  assert.match(review, /retrySupplierInvoiceOcr/);
+  assert.match(review, /readR2Object\(document\.storageKey/);
+  assert.match(review, /processSupplierInvoiceOcr\(row\.id, document\.id, body\)/);
+  assert.match(route, /decision === "RETRY_OCR"/);
+  assert.match(panel, /重新执行腾讯云 OCR/);
 });
 
 test("contract review UI requires saving manual OCR corrections before approval", () => {

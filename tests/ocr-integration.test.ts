@@ -88,9 +88,10 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.doesNotMatch(settingsModule, /PDF 文本兜底/);
   assert.doesNotMatch(settingsModule, /自动模式下仅可用于基础字段兜底/);
   assert.match(settingsModule, /可选：旧版 AppCode/);
-  assert.match(settingsModule, /腾讯云报关单 OCR 测试（实验）/);
+  assert.match(settingsModule, /腾讯云报关单 OCR 连通测试/);
   assert.match(settingsModule, /\/api\/settings\/ocr\/tencent-customs-experiment/);
-  assert.match(settingsModule, /现有业务中的报关单 OCR 仍保持停用/);
+  assert.match(settingsModule, /正式资料回传会保存腾讯云 OCR 结果/);
+  assert.match(settingsModule, /腾讯云已启用/);
   assert.match(settingsModule, /setOcrIntegrationSettings/);
   assert.match(settingsModule, /setOcrIntegrationForm\(ocrIntegrationFormFromSettings\(ocrSettings\)\)/);
   assert.match(settingsModule, /markLoaded\("ocrIntegration"\)/);

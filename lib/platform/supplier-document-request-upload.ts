@@ -95,7 +95,11 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   if (!requiredTypes.includes(documentType)) {
     throw codedError("该任务不需要上传此类资料。", 400, "DOCUMENT_TYPE_NOT_ALLOWED");
   }
-  if (documentType === "SUPPLIER_INVOICE" && row.contractStatus === "APPROVED" && !row.contractApproved) {
+  if (
+    documentType === "SUPPLIER_INVOICE"
+    && row.contractStatus !== "LEGACY"
+    && (row.contractStatus !== "APPROVED" || !row.contractApproved)
+  ) {
     throw codedError("退税合同尚未完成审核，不能上传发票。", 409, "SUPPLIER_TAX_CONTRACT_NOT_APPROVED");
   }
   const uploadedFile = await readManagedUploadFile(input.file, "pdf", "supplier-document.pdf");
