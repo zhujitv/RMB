@@ -139,7 +139,7 @@ export function ExecutionDetailDrawer({
       actions={canEdit || canDispatch || canVoid || canEnterShipping || (linkedOrder && canOpenReceivableOrder) ? <>
         {canEdit ? <button className={shell.secondaryButton} type="button" disabled={loading || dispatching || shippingStarting || voiding} onClick={onEdit}>编辑草稿</button> : null}
         {canDispatch ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding || !orders.length} title={!orders.length ? "请先完成工厂分配" : undefined} onClick={onDispatch}>{dispatching ? "下发中..." : "正式下发工厂"}</button> : null}
-        {canEnterShipping && !linkedOrder ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding || !shippingReadiness.ready} title={shippingReadiness.ready ? undefined : shippingReadiness.reason} onClick={onEnterShipping}>{shippingStarting ? "处理中..." : "进入发货"}</button> : null}
+        {canEnterShipping && !linkedOrder ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding} title={shippingReadiness.ready ? undefined : shippingReadiness.reason} onClick={onEnterShipping}>{shippingStarting ? "处理中..." : "进入发货"}</button> : null}
         {canVoid ? <button className={shell.dangerButton} type="button" disabled={loading || dispatching || shippingStarting || voiding} onClick={onVoid}>{voiding ? "作废中..." : "作废销售执行"}</button> : null}
         {linkedOrder && canOpenReceivableOrder ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || shippingStarting || voiding} onClick={() => onOpenReceivableOrder(linkedOrder.orderNo)}>打开应收订单</button> : null}
       </> : null}
