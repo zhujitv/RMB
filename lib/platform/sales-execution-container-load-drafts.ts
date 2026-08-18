@@ -11,7 +11,6 @@ import {
   assertContainerExecutionOpen,
   assertContainerPlannedTotals,
   containerLoadDto,
-  internalContainerLoadSelect,
   loadContainerAllocationTargets,
   lockContainerPurchaseOrders,
   runContainerMutation,
@@ -46,30 +45,33 @@ export async function createSalesExecutionContainerLoad(
     const latest = await tx.salesExecutionContainerLoad.aggregate({ where: { executionId }, _max: { sequenceNo: true } });
     const container = await tx.salesExecutionContainerLoad.create({
       data: {
-        executionId,
+        execution: { connect: { id: executionId } },
         sequenceNo: (latest._max.sequenceNo || 0) + 1,
         status: "DRAFT",
         containerNo: input.containerNo || null,
         containerType: input.containerType || null,
         sealNo: input.sealNo || null,
         loadingDate: input.loadingDate,
-        allocations: {
-          create: targets.map((target) => ({
-            executionId,
-            purchaseOrderId: target.purchaseOrderId,
-            purchaseOrderItemId: target.purchaseOrderItemId,
-            plannedQuantity: target.plannedQuantity,
-          })),
-        },
       },
-      select: internalContainerLoadSelect,
+      select: { id: true },
+    });
+    await tx.containerLoadAllocation.createMany({
+      data: targets.map((target) => ({
+        containerLoadId: container.id,
+        executionId,
+        purchaseOrderId: target.purchaseOrderId,
+        purchaseOrderItemId: target.purchaseOrderItemId,
+        plannedQuantity: target.plannedQuantity,
+      })),
     });
     const changed = await tx.salesExecution.updateMany({
       where: { id: executionId, revision: input.expectedRevision, shippingStartedAt: null },
       data: { revision: { increment: 1 }, updatedById: validActor.id },
     });
     if (changed.count !== 1) throw codedError("销售执行单已变化，请刷新后重试", 409, "SALES_EXECUTION_REVISION_CONFLICT");
-    const result = containerLoadDto(container);
+    const saved = await scopedInternalContainerLoad(tx, executionId, container.id, validActor);
+    if (!saved) throw codedError("集装箱保存失败", 409, "CONTAINER_LOAD_CREATE_FAILED");
+    const result = containerLoadDto(saved);
     await writeAudit(request, { id: validActor.id }, "创建集装箱装柜草稿", "sales_execution_container_loads", container.id, null, result, tx);
     return result;
   });
