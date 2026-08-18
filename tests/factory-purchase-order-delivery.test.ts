@@ -15,6 +15,7 @@ const serviceSource = readFileSync("lib/platform/factory-purchase-order-delivery
 const actualDeliverySource = readFileSync("lib/platform/factory-purchase-order-actual-delivery.ts", "utf8");
 const loadingCoreSource = readFileSync("lib/platform/factory-purchase-order-loading-result-core.ts", "utf8");
 const loadingWorkflowSource = readFileSync("lib/platform/factory-purchase-order-loading-result-workflow.ts", "utf8");
+const containerLifecycleSource = readFileSync("lib/platform/sales-execution-container-load-lifecycle.ts", "utf8");
 const containerShippingSource = readFileSync("lib/platform/sales-execution-container-shipping.ts", "utf8");
 const shippingHandoffSource = readFileSync("lib/platform/sales-execution-shipping-handoff.ts", "utf8");
 const containerLocksSource = readFileSync("lib/platform/container-loading-locks.ts", "utf8");
@@ -85,8 +86,9 @@ test("rejecting a proposal restores the last confirmed state without overwriting
 
 test("actual delivery is derived from released containers only at shipping handoff", () => {
   assert.match(loadingCoreSource, /order\.status !== "ACCEPTED" \|\| order\.productionStatus !== "COMPLETED"/);
-  assert.match(loadingCoreSource, /dateText < shanghaiDateText\(order\.productionCompletedAt\)/);
-  assert.match(loadingCoreSource, /dateText > shanghaiDateText\(new Date\(\)\)/);
+  assert.doesNotMatch(loadingCoreSource, /validateFactoryPurchaseLoadingDate/);
+  assert.match(containerLifecycleSource, /const loadingDate = new Date\(`\$\{shanghaiDateText\(now\)\}T00:00:00\.000Z`\)/);
+  assert.match(containerLifecycleSource, /status: "RELEASED",[\s\S]*loadingDate,[\s\S]*releasedAt: now/);
   assert.match(actualDeliverySource, /FACTORY_ACTUAL_DELIVERY_CONTAINER_LEDGER_REQUIRED/);
   assert.match(containerShippingSource, /actualDeliveryDate: null/);
   assert.match(containerShippingSource, /actualDeliveryRecordedAt: recordedAt/);

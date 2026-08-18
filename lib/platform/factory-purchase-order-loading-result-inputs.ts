@@ -37,18 +37,6 @@ function expectedRevision(value: unknown) {
   return value;
 }
 
-function loadingDate(value: unknown) {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    throw codedError("装柜日期格式错误", 400, "FACTORY_PURCHASE_LOADING_DATE_INVALID");
-  }
-  const date = new Date(`${text}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text) {
-    throw codedError("装柜日期格式错误", 400, "FACTORY_PURCHASE_LOADING_DATE_INVALID");
-  }
-  return { date, text };
-}
-
 function loadedItems(value: unknown): FactoryPurchaseLoadedItemInput[] {
   if (!Array.isArray(value) || !value.length || value.length > 500) {
     throw codedError(
@@ -102,7 +90,6 @@ export function normalizeFactoryPurchaseLoadingSubmissionInput(input: unknown) {
       "CONTAINER_LOAD_ID_REQUIRED",
     ),
     expectedRevision: expectedRevision(body.expectedRevision),
-    ...loadingDate(body.loadingDate),
     reason: reason(body.reason),
     reasonDetail: optionalText(
       body.reasonDetail,

@@ -7,10 +7,7 @@ const jiti = createJiti(import.meta.url);
 const { Prisma } = jiti("../lib/generated/prisma/client.js") as typeof import(
   "../lib/generated/prisma/client.js"
 );
-const {
-  buildLoadingSnapshot,
-  validateFactoryPurchaseLoadingDate,
-} = jiti("../lib/platform/factory-purchase-order-loading-result-core.ts") as typeof import(
+const { buildLoadingSnapshot } = jiti("../lib/platform/factory-purchase-order-loading-result-core.ts") as typeof import(
   "../lib/platform/factory-purchase-order-loading-result-core"
 );
 const {
@@ -36,6 +33,10 @@ const shipping = readFileSync("lib/platform/sales-execution-shipping-handoff.ts"
 const supplierQuery = readFileSync("lib/platform/supplier-purchase-orders-query.ts", "utf8");
 const bulkWarehouseMigration = readFileSync(
   "prisma/migrations/20260818200000_bulk_warehouse_loading_without_container/migration.sql",
+  "utf8",
+);
+const optionalLoadingDateMigration = readFileSync(
+  "prisma/migrations/20260818213000_optional_container_loading_date/migration.sql",
   "utf8",
 );
 
@@ -100,22 +101,25 @@ test("本柜实装与计划不同时必须填写差异原因和说明", () => {
   assert.equal(snapshot.items[0]?.loadedQuantity.toString(), "9");
 });
 
-test("散货进舱开放只要求日期和分配，数据库同步取消柜号门禁", () => {
-  assert.match(containerLifecycle, /if \(!before\.loadingDate \|\| !before\.allocations\.length\)/);
-  assert.doesNotMatch(containerLifecycle, /!before\.containerNo \|\| !before\.loadingDate/);
+test("装运单开放只要求完成分配，计划日期和柜号均不构成门禁", () => {
+  assert.match(containerLifecycle, /if \(!before\.allocations\.length\)/);
+  assert.doesNotMatch(containerLifecycle, /if \(!before\.loadingDate/);
   assert.match(bulkWarehouseMigration, /pg_get_functiondef\('guard_sales_execution_container_load_update\(\)'::REGPROCEDURE\)/);
   assert.match(bulkWarehouseMigration, /IF NEW\."loading_date" IS NULL[\s\S]*OR allocation_count = 0 THEN/);
   assert.match(bulkWarehouseMigration, /POSITION\(original_fragment IN definition\) = 0/);
+  assert.match(optionalLoadingDateMigration, /IF NEW\."loading_date" IS NULL[\s\S]*OR allocation_count = 0 THEN/);
+  assert.match(optionalLoadingDateMigration, /replacement_fragment TEXT := \$fragment\$IF allocation_count = 0 THEN\$fragment\$/);
+  assert.match(optionalLoadingDateMigration, /'status', 'loading_date', 'revision', 'updated_at', 'released_at', 'released_by', 'release_remark'/);
 });
 
 test("填报和审批输入都强制携带集装箱及其版本", () => {
   const input = normalizeFactoryPurchaseLoadingSubmissionInput({
-    containerLoadId: "container-1", expectedRevision: 3, loadingDate: "2026-08-16",
+    containerLoadId: "container-1", expectedRevision: 3,
     items: [{ purchaseOrderItemId: "line-a", loadedQuantity: "0" }],
   });
   assert.equal(input.containerLoadId, "container-1");
   assert.throws(() => normalizeFactoryPurchaseLoadingSubmissionInput({
-    expectedRevision: 3, loadingDate: "2026-08-16",
+    expectedRevision: 3,
     items: [{ purchaseOrderItemId: "line-a", loadedQuantity: "0" }],
   }), /请选择需要填报的集装箱/);
   assert.throws(() => normalizeFactoryPurchaseLoadingDecisionInput({
@@ -261,7 +265,7 @@ test("重新选厂后只属于已拒绝旧采购单的草稿柜不阻断发货",
   );
 });
 
-test("短装、未放行柜和未来装柜日期均在后端阻断", () => {
+test("短装和未放行柜仍阻断，实际装柜日期在最终放行时自动记录", () => {
   const base = {
     id: "execution-1", items: [{ id: "sale-a", quantity: new Prisma.Decimal("100") }],
     purchaseOrders: [{ id: "po-1", status: "ACCEPTED", items: [{ id: "po-item-1", executionItemId: "sale-a" }] }],
@@ -271,11 +275,7 @@ test("短装、未放行柜和未来装柜日期均在后端阻断", () => {
   assert.throws(() => releasedContainerMaterialization({
     ...base, containerLoads: [{ ...base.containerLoads[0], status: "OPEN" }],
   } as never), /仍有集装箱未放行/);
-  const futureDate = "2099-01-01";
-  assert.throws(() => validateFactoryPurchaseLoadingDate(
-    order({ productionCompletedAt: new Date(Date.now() - 86_400_000) }),
-    container({ loadingDate: new Date(`${futureDate}T00:00:00.000Z`) }),
-    futureDate,
-  ), /不能晚于今天/);
-  assert.match(containerLifecycle, /CONTAINER_LOAD_DATE_IN_FUTURE/);
+  assert.match(containerLifecycle, /const loadingDate = new Date\(`\$\{shanghaiDateText\(now\)\}T00:00:00\.000Z`\)/);
+  assert.match(containerLifecycle, /status: "RELEASED", loadingDate, releasedAt: now/);
+  assert.doesNotMatch(containerLifecycle, /CONTAINER_LOAD_DATE_IN_FUTURE/);
 });

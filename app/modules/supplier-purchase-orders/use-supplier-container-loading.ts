@@ -47,7 +47,7 @@ export function useSupplierContainerLoading({ canWrite, detail, load, disabled, 
   useEffect(() => { setValues(defaults); setReason("EXACT"); setReasonDetail(""); setError(""); }, [defaults]);
   const history = load.loadingResults;
   const active = history.find((result) => result.status === "PENDING" || result.status === "APPROVED");
-  const eligible = canWrite && load.status === "OPEN" && detail.status === "ACCEPTED" && detail.productionStatus === "COMPLETED" && Boolean(load.loadingDate) && !active;
+  const eligible = canWrite && load.status === "OPEN" && detail.status === "ACCEPTED" && detail.productionStatus === "COMPLETED" && !active;
   const validationError = useMemo(() => {
     if (!eligible) return active?.status === "PENDING" ? "本柜实装差异正在等待内部审批" : active?.status === "APPROVED" ? "本柜实装结果已经确认" : "当前不能填报该柜实装结果";
     let differs = false;
@@ -78,7 +78,7 @@ export function useSupplierContainerLoading({ canWrite, detail, load, disabled, 
     try {
       const response = await apiJson<{ message?: string }>(`/api/supplier-purchase-orders/${encodeURIComponent(detail.id)}/loading-result`, {
         method: "POST",
-        body: JSON.stringify({ containerLoadId: load.id, expectedRevision: load.revision, loadingDate: load.loadingDate?.slice(0, 10), reason, reasonDetail: reasonDetail.trim(), items: allocations.map((row) => ({ purchaseOrderItemId: row.purchaseOrderItemId, loadedQuantity: String(values[row.purchaseOrderItemId] || "").trim() })) }),
+        body: JSON.stringify({ containerLoadId: load.id, expectedRevision: load.revision, reason, reasonDetail: reasonDetail.trim(), items: allocations.map((row) => ({ purchaseOrderItemId: row.purchaseOrderItemId, loadedQuantity: String(values[row.purchaseOrderItemId] || "").trim() })) }),
       });
       const refreshed = await apiJson<SupplierPurchaseOrderDetailResponse>(`/api/supplier-purchase-orders/${encodeURIComponent(detail.id)}`);
       const saved = refreshed.purchaseOrder || refreshed.data;

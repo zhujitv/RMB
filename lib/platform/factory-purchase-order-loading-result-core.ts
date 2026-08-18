@@ -1,6 +1,5 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { codedError } from "./shared-base-errors";
-import { shanghaiDateText } from "./factory-purchase-order-delivery-inputs";
 import {
   approvedDeliveryQuantityVariance,
   resolveDeliveryQuantityTargets,
@@ -82,29 +81,6 @@ export function assertFactoryPurchaseLoadingOpen(
       409,
       "FACTORY_PURCHASE_LOADING_OTHER_CONTAINER_PENDING",
     );
-  }
-}
-
-export function validateFactoryPurchaseLoadingDate(
-  order: FactoryPurchaseLoadingOrder,
-  container: ContainerLoadingScope,
-  dateText: string,
-) {
-  if (!container.loadingDate) {
-    throw codedError("集装箱缺少装柜日期，请由内部先完善柜信息", 409, "CONTAINER_LOAD_DATE_REQUIRED");
-  }
-  const containerDate = container.loadingDate.toISOString().slice(0, 10);
-  if (dateText !== containerDate) {
-    throw codedError("装柜日期与本柜计划日期不一致，请刷新后重试", 409, "CONTAINER_LOAD_DATE_MISMATCH");
-  }
-  if (dateText > shanghaiDateText(new Date())) {
-    throw codedError("装柜日期不能晚于今天", 400, "CONTAINER_LOAD_DATE_IN_FUTURE");
-  }
-  if (!order.productionCompletedAt) {
-    throw codedError("采购单缺少生产完成时间", 409, "FACTORY_PRODUCTION_COMPLETION_TIME_MISSING");
-  }
-  if (dateText < shanghaiDateText(order.productionCompletedAt)) {
-    throw codedError("装柜日期不能早于生产完成日期", 400, "FACTORY_PURCHASE_LOADING_BEFORE_COMPLETION");
   }
 }
 

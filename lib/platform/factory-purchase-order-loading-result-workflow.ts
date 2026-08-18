@@ -8,15 +8,12 @@ import {
   type ContainerLoadingScope,
   type FactoryPurchaseLoadingAttribution,
   type FactoryPurchaseLoadingOrder,
-  validateFactoryPurchaseLoadingDate,
 } from "./factory-purchase-order-loading-result-core";
 import type { FactoryPurchaseLoadedItemInput } from "./factory-purchase-order-loading-result-values";
 
 export type AppendFactoryPurchaseLoadingInput = {
   containerLoadId: string;
   expectedRevision: number;
-  date: Date;
-  text: string;
   reason: "EXACT" | "WEIGHT_LIMIT" | "VOLUME_LIMIT" | "OTHER" | null;
   reasonDetail: string;
   loadedItems: FactoryPurchaseLoadedItemInput[];
@@ -60,7 +57,6 @@ export async function appendFactoryPurchaseLoadingResult({
   if (container.id !== input.containerLoadId || container.revision !== input.expectedRevision) {
     throw codedError("集装箱状态已变化，请刷新后重试", 409, "CONTAINER_LOAD_REVISION_CONFLICT");
   }
-  validateFactoryPurchaseLoadingDate(order, container, input.text);
   const snapshot = buildLoadingSnapshot(
     order,
     container,

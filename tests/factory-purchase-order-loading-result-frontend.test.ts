@@ -80,8 +80,13 @@ test("bulk warehouse loading is explicit and does not require a container number
   assert.match(internalPanel, /散货进舱无需柜号/);
   assert.match(editor, /柜号等运输资料可在后续物流环节补充/);
   assert.match(editor, /未知或散货进舱请留空/);
-  assert.match(editor, /装柜 \/ 进舱日期/);
+  assert.match(editor, /预计装柜 \/ 进舱日期（可选）/);
   assert.doesNotMatch(internalCard, /!load\.containerNo \|\| !load\.loadingDate/);
+  assert.doesNotMatch(internalCard, /!load\.loadingDate \|\| !load\.allocations\.length/);
+  assert.doesNotMatch(supplierHook, /Boolean\(load\.loadingDate\)/);
+  assert.doesNotMatch(supplierHook, /loadingDate: load\.loadingDate/);
+  assert.match(internalCard, /待最终放行确认/);
+  assert.match(supplierCard, /最终放行时记录/);
   assert.match(internalCard, /散货进舱（无柜号）/);
   assert.match(supplierCard, /散货进舱（无柜号）/);
 });

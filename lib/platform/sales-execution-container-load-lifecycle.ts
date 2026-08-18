@@ -53,8 +53,8 @@ export async function openSalesExecutionContainerLoad(
     if (before.status !== "DRAFT" || before.revision !== input.expectedRevision) {
       throw codedError("只有当前版本的草稿集装箱可以开放", 409, "CONTAINER_LOAD_REVISION_CONFLICT");
     }
-    if (!before.loadingDate || !before.allocations.length) {
-      throw codedError("开放前必须填写装柜/进舱日期并完成采购明细分配", 409, "CONTAINER_LOAD_OPEN_FIELDS_REQUIRED");
+    if (!before.allocations.length) {
+      throw codedError("开放前必须完成采购明细分配", 409, "CONTAINER_LOAD_OPEN_FIELDS_REQUIRED");
     }
     const poIds = [...new Set(before.allocations.map((row) => row.purchaseOrderId))];
     const eligible = await tx.factoryPurchaseOrder.count({
@@ -114,15 +114,13 @@ export async function releaseSalesExecutionContainerLoad(
     if (before.status !== "OPEN" || before.revision !== input.expectedRevision) {
       throw codedError("只有当前版本的开放集装箱可以放行", 409, "CONTAINER_LOAD_REVISION_CONFLICT");
     }
-    if (!before.loadingDate || before.loadingDate.toISOString().slice(0, 10) > shanghaiDateText(new Date())) {
-      throw codedError("装柜日期不能晚于今天", 400, "CONTAINER_LOAD_DATE_IN_FUTURE");
-    }
     assertReleaseResults(before);
     const now = new Date();
+    const loadingDate = new Date(`${shanghaiDateText(now)}T00:00:00.000Z`);
     const changed = await tx.salesExecutionContainerLoad.updateMany({
       where: { id: containerLoadId, executionId, status: "OPEN", revision: input.expectedRevision },
       data: {
-        status: "RELEASED", releasedAt: now, releasedById: validActor.id,
+        status: "RELEASED", loadingDate, releasedAt: now, releasedById: validActor.id,
         releaseRemark: input.remark || null, revision: { increment: 1 },
       },
     });
