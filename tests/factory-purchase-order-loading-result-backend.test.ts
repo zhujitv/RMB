@@ -34,6 +34,10 @@ const containerLocks = readFileSync("lib/platform/container-loading-locks.ts", "
 const actualDelivery = readFileSync("lib/platform/factory-purchase-order-actual-delivery.ts", "utf8");
 const shipping = readFileSync("lib/platform/sales-execution-shipping-handoff.ts", "utf8");
 const supplierQuery = readFileSync("lib/platform/supplier-purchase-orders-query.ts", "utf8");
+const bulkWarehouseMigration = readFileSync(
+  "prisma/migrations/20260818200000_bulk_warehouse_loading_without_container/migration.sql",
+  "utf8",
+);
 
 function order(overrides: Record<string, unknown> = {}) {
   return {
@@ -94,6 +98,14 @@ test("本柜实装与计划不同时必须填写差异原因和说明", () => {
   const snapshot = buildLoadingSnapshot(order(), container(), loaded, "WEIGHT_LIMIT", "限重少装");
   assert.equal(snapshot.reason, "WEIGHT_LIMIT");
   assert.equal(snapshot.items[0]?.loadedQuantity.toString(), "9");
+});
+
+test("散货进舱开放只要求日期和分配，数据库同步取消柜号门禁", () => {
+  assert.match(containerLifecycle, /if \(!before\.loadingDate \|\| !before\.allocations\.length\)/);
+  assert.doesNotMatch(containerLifecycle, /!before\.containerNo \|\| !before\.loadingDate/);
+  assert.match(bulkWarehouseMigration, /pg_get_functiondef\('guard_sales_execution_container_load_update\(\)'::REGPROCEDURE\)/);
+  assert.match(bulkWarehouseMigration, /IF NEW\."loading_date" IS NULL[\s\S]*OR allocation_count = 0 THEN/);
+  assert.match(bulkWarehouseMigration, /POSITION\(original_fragment IN definition\) = 0/);
 });
 
 test("填报和审批输入都强制携带集装箱及其版本", () => {

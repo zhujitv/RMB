@@ -118,14 +118,14 @@ export function ContainerLoadEditor({
     }
   }
 
-  return <DismissibleLayer ariaLabel={editing ? "编辑柜总单" : "创建柜总单"} overlayClassName={shell.modalOverlay} surfaceClassName={styles.dialog} onClose={onClose} dismissible={!saving} dismissConfirmMessage="柜总单草稿尚未保存，确定关闭吗？">
+  return <DismissibleLayer ariaLabel={editing ? "编辑装运单" : "创建装运单"} overlayClassName={shell.modalOverlay} surfaceClassName={styles.dialog} onClose={onClose} dismissible={!saving} dismissConfirmMessage="装运单草稿尚未保存，确定关闭吗？">
     {({ requestClose }) => <form className={styles.form} onSubmit={submit} inert={saving} aria-busy={saving}>
-      <header className={styles.formHeader}><div><h2>{editing ? `编辑第 ${editing.sequenceNo} 柜` : "创建柜总单"}</h2><p>一个柜可分配多家供应商的采购明细；开放填报后计划冻结。</p></div></header>
+      <header className={styles.formHeader}><div><h2>{editing ? `编辑第 ${editing.sequenceNo} 个装运单` : "创建装运单"}</h2><p>先确认供应商实际装运数量；柜号等运输资料可在后续物流环节补充，散货进舱请直接留空。开放填报后数量计划冻结。</p></div></header>
       <div className={styles.fieldGrid}>
-        <label className={styles.field}>柜号<input autoFocus maxLength={64} value={containerNo} placeholder="草稿可暂不填写" onChange={(event) => setContainerNo(event.target.value)} /></label>
-        <label className={styles.field}>柜型<input maxLength={64} value={containerType} placeholder="例如 40HQ" onChange={(event) => setContainerType(event.target.value)} /></label>
-        <label className={styles.field}>封号<input maxLength={64} value={sealNo} placeholder="可选" onChange={(event) => setSealNo(event.target.value)} /></label>
-        <label className={styles.field}>装柜日期<input type="date" value={loadingDate} onChange={(event) => setLoadingDate(event.target.value)} /></label>
+        <label className={styles.field}>柜号（可后补）<input autoFocus maxLength={64} value={containerNo} placeholder="未知或散货进舱请留空" onChange={(event) => setContainerNo(event.target.value)} /></label>
+        <label className={styles.field}>柜型<input maxLength={64} value={containerType} placeholder="散货可留空；整柜例如 40HQ" onChange={(event) => setContainerType(event.target.value)} /></label>
+        <label className={styles.field}>封号<input maxLength={64} value={sealNo} placeholder="散货可留空" onChange={(event) => setSealNo(event.target.value)} /></label>
+        <label className={styles.field}>装柜 / 进舱日期<input type="date" value={loadingDate} onChange={(event) => setLoadingDate(event.target.value)} /></label>
       </div>
       <section><div className={styles.sectionHeader}><div><h4>按采购明细分配计划装柜量</h4><p>同一明细在所有未作废柜中的计划合计不能超过交付目标。</p></div></div><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>供应商 / 产品</th><th>采购单</th><th>单位</th><th>交付目标</th><th>其它柜已计划</th><th>本柜可分配</th><th>本柜计划</th></tr></thead><tbody>{lines.map((line, index) => <tr key={line.item.id}><td>{orderName(line.order)}<br /><small>{productionItemDescription(line.item, index)}</small></td><td>{line.order.poNo || line.order.purchaseOrderNo || "-"}</td><td>{productionItemUnit(line.item) || "-"}</td><td>{line.target}</td><td>{containerQuantitySum(line.usedElsewhere) || "-"}</td><td>{line.available}</td><td><input aria-label={`${orderName(line.order)} ${productionItemDescription(line.item, index)}本柜计划数量`} inputMode="decimal" maxLength={19} value={values[line.item.id] || ""} placeholder="不装此项请留空" onChange={(event) => setValues((current) => ({ ...current, [line.item.id]: event.target.value }))} /></td></tr>)}</tbody></table></div></section>
       {error ? <div className={styles.error} role="alert">{error}</div> : null}
