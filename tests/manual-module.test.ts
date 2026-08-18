@@ -11,7 +11,7 @@ test("manual explains current tax refund document upload workflow", () => {
   assert.match(manualModule, /操作手册/);
   assert.doesNotMatch(manualModule, /操作说明书/);
   assert.match(manualModule, /MANUAL_VERSION = "v2\.0\.0"/);
-  assert.match(manualModule, /MANUAL_UPDATED_AT = "2026年8月16日"/);
+  assert.match(manualModule, /MANUAL_UPDATED_AT = "2026年8月18日"/);
   assert.match(manualModule, /出口资料上传和报关资料上传区域，按资料卡片上传 PDF/);
   assert.match(manualModule, /退税详情仅显示状态提示和前往资料回传入口/);
   assert.match(manualModule, /预览、下载、删除或替换当前 PDF/);
@@ -112,9 +112,13 @@ test("manual covers the complete workspace application map", () => {
   assert.match(manualModule, /业务主体用于标记数据归属公司/);
   assert.match(manualModule, /正式合同、单据、导出和 PDF 使用业务主体公司全称/);
   assert.match(manualModule, /已有订单如需变更业务主体，必须通过详情里的业务主体转移操作处理/);
-  assert.match(manualModule, /资料回传是产品供应商上传工厂采购合同和工厂增值税发票 PDF 的入口/);
-  assert.match(manualModule, /上传完成后系统立即更新当前任务状态/);
-  assert.match(manualModule, /合同和发票均已上传成功时，任务自动变为已完成/);
+  assert.match(manualModule, /资料回传是产品供应商下载退税合同样本、上传盖章合同和增值税发票 PDF 的入口/);
+  assert.match(manualModule, /左侧菜单名称是“资料回传”，系统没有单独的“发票管理”菜单/);
+  assert.match(manualModule, /资料回传 → 任务详情 → 退税合同与发票核验/);
+  assert.match(manualModule, /发票上传完成后系统自动调用腾讯云发票 OCR/);
+  assert.match(manualModule, /重新执行腾讯云 OCR/);
+  assert.match(manualModule, /OCR 只是辅助识别和匹配工具，识别成功不等于审核完成/);
+  assert.match(manualModule, /历史任务标记为“历史合同”，不会显示该区域/);
   assert.match(manualModule, /上传文件最终归集到退税资料，资料回传不是独立资料库/);
   assert.match(manualModule, /经营总览展示核心经营指标、趋势、风险和绩效/);
   assert.match(manualModule, /利润分析按订单核算应收、已到账、成本、退税、毛利和业务员提成/);
