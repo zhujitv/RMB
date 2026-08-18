@@ -14,6 +14,13 @@
 .supplierDocumentRequestTypeDescription { composes: supplierDocumentRequestTypeDescription from "./supplier-request-dialog.module.css"; }
 .supplierDocumentRequestCostField { composes: supplierDocumentRequestCostField from "./supplier-request-dialog.module.css"; composes: supplierDocumentRequestCostField from "./supplier-request-task-list.module.css"; }
 .supplierDocumentRequestMessage { composes: supplierDocumentRequestMessage from "./supplier-request-dialog.module.css"; composes: supplierDocumentRequestMessage from "./supplier-request-task-list.module.css"; }
+.supplierDocumentTransitionPanel { composes: supplierDocumentTransitionPanel from "./supplier-request-dialog.module.css"; }
+.supplierDocumentTransitionBody { composes: supplierDocumentTransitionBody from "./supplier-request-dialog.module.css"; }
+.supplierDocumentTransitionTableWrap { composes: supplierDocumentTransitionTableWrap from "./supplier-request-dialog.module.css"; }
+.supplierDocumentTransitionTable { composes: supplierDocumentTransitionTable from "./supplier-request-dialog.module.css"; }
+.supplierDocumentTransitionConfirmation { composes: supplierDocumentTransitionConfirmation from "./supplier-request-dialog.module.css"; }
+.supplierDocumentTransitionField { composes: supplierDocumentTransitionField from "./supplier-request-dialog.module.css"; }
+.supplierDocumentTransitionCheckbox { composes: supplierDocumentTransitionCheckbox from "./supplier-request-dialog.module.css"; }
 .supplierDocumentsStats { composes: supplierDocumentsStats from "./supplier-request-task-list.module.css"; }
 .supplierDocumentsStatCard { composes: supplierDocumentsStatCard from "./supplier-request-task-list.module.css"; }
 .supplierDocumentsListToolbar { composes: supplierDocumentsListToolbar from "./supplier-request-task-list.module.css"; }

@@ -99,7 +99,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     increaseAmount = nonNegativeMoney(input.increaseAmount, "增加费用");
     decreaseAmount = nonNegativeMoney(input.decreaseAmount, "扣减金额");
     const seen = new Set<number>();
-    storedItems = parsedItems(input.items).map((raw, index) => {
+    const preparedItems = parsedItems(input.items).map((raw, index) => {
       const customsItemIndex = Number(raw.customsItemIndex);
       if (!Number.isInteger(customsItemIndex) || customsItemIndex < 0 || customsItemIndex >= candidates.length || seen.has(customsItemIndex)) {
         throw codedError(`第${index + 1}行报关商品引用无效或重复。`, 400, "FACTORY_TRANSITION_CUSTOMS_ITEM_INVALID");
@@ -111,21 +111,37 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
       const unit = nonEmpty(raw.unit).slice(0, 40);
       if (!productName || !unit) throw codedError(`第${index + 1}行品名和单位不能为空。`, 400, "FACTORY_TRANSITION_ITEM_TEXT_REQUIRED");
       const quantity = positiveDecimal(raw.quantity, `第${index + 1}行数量`, 4);
-      const unitPrice = positiveDecimal(raw.unitPriceWithTax, `第${index + 1}行含税单价`, 6);
       const declaredText = nonEmpty(declared.quantity).replace(/[,，\s]/g, "");
       if (declaredText && /^\d+(?:\.\d+)?$/.test(declaredText) && quantity.gt(new Prisma.Decimal(declaredText))) {
         throw codedError(`第${index + 1}行供应商数量不能超过报关数量${declaredText}。`, 409, "FACTORY_TRANSITION_QUANTITY_EXCEEDS_CUSTOMS");
       }
       return {
         customsItemIndex,
-        customsItemNo: nonEmpty(candidate.itemNo) || String(customsItemIndex + 1),
-        customsCommodityCode: nonEmpty(candidate.commodityCode),
         productName,
         unit,
-        quantity: decimalText(quantity, 4),
+        quantity,
         declaredQuantity: nonEmpty(declared.quantity),
-        unitPriceWithTax: decimalText(unitPrice, 6),
-        amountWithTax: quantity.mul(unitPrice).toDecimalPlaces(2).toFixed(2),
+      };
+    });
+    const goodsTarget = cost.amount.sub(increaseAmount).add(decreaseAmount).toDecimalPlaces(2);
+    if (!goodsTarget.gt(0)) throw codedError("已登记工厂成本扣除费用调整后必须大于0。", 409, "FACTORY_TRANSITION_GOODS_AMOUNT_INVALID");
+    const totalQuantity = preparedItems.reduce((sum, item) => sum.add(item.quantity), new Prisma.Decimal(0));
+    let allocatedAmount = new Prisma.Decimal(0);
+    storedItems = preparedItems.map((item, index) => {
+      const amount = index === preparedItems.length - 1
+        ? goodsTarget.sub(allocatedAmount)
+        : goodsTarget.mul(item.quantity).div(totalQuantity).toDecimalPlaces(2);
+      allocatedAmount = allocatedAmount.add(amount);
+      return {
+        customsItemIndex: item.customsItemIndex,
+        customsItemNo: String(index + 1),
+        customsCommodityCode: "",
+        productName: item.productName,
+        unit: item.unit,
+        quantity: decimalText(item.quantity, 4),
+        declaredQuantity: item.declaredQuantity,
+        unitPriceWithTax: decimalText(amount.div(item.quantity).toDecimalPlaces(6), 6),
+        amountWithTax: amount.toFixed(2),
       };
     });
   }
@@ -184,6 +200,15 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
   const sequence = Math.max(0, factoryCosts.findIndex((row) => row.id === cost.id)) + 1;
   const entity = cost.order.businessEntity!;
   const cnyAccount = entity.bankAccounts[0];
+  const relevantCustomsSnapshot = candidates.map((candidate, customsItemIndex) => {
+    const quantity = customsQuantity(candidate);
+    return {
+      customsItemIndex,
+      productName: nonEmpty(candidate.productName),
+      quantity: nonEmpty(quantity.quantity),
+      unit: nonEmpty(quantity.unit),
+    };
+  });
   const draft: SupplierTaxContractDraft = {
     contractNo: `${cost.order.orderNo}-T${String(sequence).padStart(2, "0")}`,
     customerOrderNo: cost.order.orderNo,
@@ -213,7 +238,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     currency: cost.currency,
     totalAmountWithTax: goodsAmount.toFixed(2),
     items,
-    customsSnapshot: candidates,
+    customsSnapshot: relevantCustomsSnapshot,
     warnings: [...new Set(warnings)],
     blockingIssues: [],
     generatedAt: new Date().toISOString(),
@@ -236,7 +261,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
         finalPayableAmount: finalPayable,
         currency: cost.currency,
         itemSnapshot: storedItems as Prisma.InputJsonValue,
-        customsSnapshot: candidates as Prisma.InputJsonValue,
+        customsSnapshot: relevantCustomsSnapshot as Prisma.InputJsonValue,
         reason,
       },
     } : {}),

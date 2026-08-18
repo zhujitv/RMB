@@ -40,7 +40,7 @@
   color: #fff !important;
 }
 .supplierDocumentRequestDialog {
-  width: min(820px, calc(100vw - 40px));
+  width: min(1040px, calc(100vw - 40px));
   max-height: min(88vh, 820px);
   overflow-y: auto;
 }
@@ -135,4 +135,124 @@
 }
 .supplierDocumentRequestMessage {
   grid-column: 1 / -1;
+}
+
+.supplierDocumentTransitionPanel {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+
+.supplierDocumentTransitionBody {
+  display: grid;
+  gap: 12px;
+}
+
+.supplierDocumentTransitionPanel p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.supplierDocumentTransitionTableWrap {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.supplierDocumentTransitionTable {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #334155;
+  font-size: 13px;
+}
+
+.supplierDocumentTransitionTable th,
+.supplierDocumentTransitionTable td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.supplierDocumentTransitionTable th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.supplierDocumentTransitionTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.supplierDocumentTransitionTable th:nth-child(1),
+.supplierDocumentTransitionTable td:nth-child(1) {
+  width: 58px;
+  text-align: center;
+}
+
+.supplierDocumentTransitionTable th:nth-child(2),
+.supplierDocumentTransitionTable td:nth-child(2) {
+  width: auto;
+}
+
+.supplierDocumentTransitionTable th:nth-child(3),
+.supplierDocumentTransitionTable td:nth-child(3) {
+  width: 150px;
+}
+
+.supplierDocumentTransitionTable th:nth-child(4),
+.supplierDocumentTransitionTable td:nth-child(4) {
+  width: 120px;
+}
+
+.supplierDocumentTransitionField {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  min-height: 36px;
+}
+
+.supplierDocumentTransitionCheckbox {
+  appearance: auto;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.supplierDocumentTransitionConfirmation {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: flex-start;
+  gap: 9px !important;
+  color: #334155 !important;
+  font-weight: 600 !important;
+  line-height: 1.55;
+}
+
+.supplierDocumentTransitionConfirmation .supplierDocumentTransitionCheckbox {
+  flex: 0 0 auto;
+  margin-top: 2px !important;
+}
+
+.supplierDocumentTransitionConfirmation span {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .supplierDocumentTransitionTable {
+    min-width: 600px;
+  }
 }

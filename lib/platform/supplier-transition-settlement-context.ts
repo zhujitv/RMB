@@ -16,7 +16,6 @@ export type TransitionItemInput = {
   productName?: unknown;
   unit?: unknown;
   quantity?: unknown;
-  unitPriceWithTax?: unknown;
 };
 
 export type TransitionInput = {
@@ -60,7 +59,7 @@ export function parsedItems(value: unknown): TransitionItemInput[] {
     try { return JSON.parse(value); } catch { return null; }
   })() : value;
   if (!Array.isArray(raw) || !raw.length) {
-    throw codedError("请至少选择一行报关商品并填写供应商的实际数量和含税单价。", 400, "FACTORY_TRANSITION_ITEMS_REQUIRED");
+    throw codedError("请至少选择一行报关商品并确认品名、数量和单位。", 400, "FACTORY_TRANSITION_ITEMS_REQUIRED");
   }
   return raw as TransitionItemInput[];
 }
@@ -117,7 +116,7 @@ export async function previewFactoryPurchaseTransitionSettlement(costId: string,
     warnings: customs.warnings,
     items: (customs.items as Array<Record<string, unknown>>).map((candidate, customsItemIndex) => {
       const quantity = customsQuantity(candidate);
-      return { customsItemIndex, customsItemNo: nonEmpty(candidate.itemNo) || String(customsItemIndex + 1), customsCommodityCode: nonEmpty(candidate.commodityCode), productName: nonEmpty(candidate.productName || candidate.nameAndSpecification), unit: nonEmpty(quantity.unit), declaredQuantity: nonEmpty(quantity.quantity), quantity: nonEmpty(quantity.quantity), unitPriceWithTax: "", selected: false };
+      return { customsItemIndex, productName: nonEmpty(candidate.productName), unit: nonEmpty(quantity.unit), quantity: nonEmpty(quantity.quantity), selected: false };
     }),
   };
 }

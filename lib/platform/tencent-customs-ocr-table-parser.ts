@@ -23,9 +23,10 @@ function quantityUnitCandidates(value: string) {
     .map((match) => ({ quantity: match[1].replace(/,/g, ""), unit: match[2] }));
 }
 
-function customsProductName(value: string) {
-  const lines = String(value || "").split(/[\r\n]+/).map((line) => line.trim()).filter(Boolean);
-  return lines[0] || String(value || "").trim();
+export function customsProductName(value: string) {
+  const firstLine = String(value || "").split(/[\r\n]+/).map((line) => line.trim()).find(Boolean) || "";
+  const declarationElementsAt = firstLine.search(/(?:申报要素\s*[:：]?|\s*\d{1,2}\|[^|]{0,80}\|)/);
+  return (declarationElementsAt > 0 ? firstLine.slice(0, declarationElementsAt) : firstLine).trim();
 }
 
 export function candidateItemsFromTencentTables(tables: TencentCustomsExperimentTable[]) {

@@ -61,3 +61,9 @@ test("table candidates retain commodity name, code, quantity/unit and source coo
     { quantity: "80", unit: "平方米" },
   ]);
 });
+
+test("transition product name excludes customs declaration elements", async () => {
+  const { customsProductName } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  assert.equal(customsProductName("塑料制柱子 0|2|杆|58%木粉 37%PE塑料 5%化学助剂|无品牌|无型号"), "塑料制柱子");
+  assert.equal(customsProductName("木塑复合地板\n0|0|室外用|无品牌"), "木塑复合地板");
+});

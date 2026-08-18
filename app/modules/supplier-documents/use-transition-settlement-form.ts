@@ -5,13 +5,9 @@ import { apiJson } from "../../api";
 
 export type TransitionItem = {
   customsItemIndex: number;
-  customsItemNo?: string;
   productName?: string;
   unit?: string;
-  declaredQuantity?: string;
   quantity?: string;
-  unitPriceWithTax?: string;
-  amountWithTax?: string;
   selected?: boolean;
 };
 
@@ -72,8 +68,8 @@ export function useTransitionSettlementForm() {
     if (!preview) return "请先读取报关商品并完成历史过渡结算。";
     if (preview.existing) return "";
     const selected = items.filter((item) => item.selected);
-    if (!selected.length || selected.some((item) => !item.productName?.trim() || !item.unit?.trim() || !item.quantity?.trim() || !item.unitPriceWithTax?.trim())) {
-      return "请选择属于该工厂的报关商品，并完整填写品名、数量、单位和含税单价。";
+    if (!selected.length || selected.some((item) => !item.productName?.trim() || !item.unit?.trim() || !item.quantity?.trim())) {
+      return "请选择属于该工厂的报关商品，并完整填写品名、数量和单位。";
     }
     if (!confirmed || reason.trim().length < 5) return "请填写过渡原因，并确认该订单已发货报关。";
     return "";

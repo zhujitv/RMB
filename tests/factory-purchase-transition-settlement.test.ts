@@ -48,7 +48,8 @@ test("transition confirmation and request creation are atomic and auditable", ()
 
 test("supplier return UI separates normal settlement from historical transition", () => {
   assert.match(dialog, /需过渡结算/);
-  assert.match(dialog, /读取报关商品/);
+  assert.match(dialog, /读取品名、数量和单位/);
+  assert.doesNotMatch(dialog, /报关项号|form\.updateItem\(index, \{ unitPriceWithTax/);
   assert.match(dialog, /确认过渡结算并生成草稿/);
   assert.match(dialog, /transitionIncreaseAmount/);
   assert.match(dialog, /transitionDecreaseAmount/);
