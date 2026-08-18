@@ -142,6 +142,7 @@ export type SalesExecutionResponse = {
 export type SalesExecutionShippingResponse = SalesExecutionResponse & {
   receivableOrder?: ReceivableOrderSummary;
   created?: boolean;
+  finalized?: boolean;
 };
 
 export type AllocationDraft = {

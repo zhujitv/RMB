@@ -12,6 +12,7 @@ const { salesExecutionShippingReadiness } = await jiti.import<
 const schema = readPrismaSchemaSource();
 const migration = readFileSync("prisma/migrations/20260810040000_sales_execution_shipping_handoff/migration.sql", "utf8");
 const hardeningMigration = readFileSync("prisma/migrations/20260810041000_sales_execution_shipping_handoff_hardening/migration.sql", "utf8");
+const stagedHandoffMigration = readFileSync("prisma/migrations/20260818190000_receivable_before_container_loading/migration.sql", "utf8");
 const service = readFileSync("lib/platform/sales-execution-shipping-handoff.ts", "utf8");
 const lifecycleGuards = readFileSync("lib/platform/sales-execution-lifecycle-guards.ts", "utf8");
 const route = readFileSync("app/api/sales-executions/[id]/enter-shipping/route.ts", "utf8");
@@ -98,18 +99,21 @@ test("backend handoff is locked, permissioned, idempotent and atomic", () => {
   assert.match(lifecycleGuards, /已进入发货并关联应收订单/);
 });
 
-test("shipping readiness requires exact active allocation, acceptance, completion and released container results", () => {
+test("receivable creation only requires completed production, then loading finalization requires released containers", () => {
   assert.equal(salesExecutionShippingReadiness(null).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ status: "DRAFT" }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ status: "DISPATCHED" })] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ status: "VOIDED" })] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ productionStatus: "IN_PRODUCTION" })] }) as never).ready, false);
-  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [containerLoad({ status: "OPEN", loadingResults: [{ id: "loading-pending", status: "PENDING", purchaseOrderId: "po-1", items: [] }] })] }) as never).reason, "还有 1 条本柜实装差异待审批");
-  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [containerLoad({ status: "OPEN", loadingResults: [] })] }) as never).reason, "还有 1 个集装箱未最终放行");
-  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [] }) as never).reason, "尚未创建集装箱柜总单");
+  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [] }) as never).ready, true);
+  assert.match(salesExecutionShippingReadiness(execution({ containerLoads: [] }) as never).reason, /柜号可在提柜后补充/);
+  const linked = { id: "order-1", orderNo: "CUSTOMER-ORDER-001", status: "草稿" };
+  assert.equal(salesExecutionShippingReadiness(execution({ receivableOrder: linked, containerLoads: [containerLoad({ status: "OPEN", loadingResults: [{ id: "loading-pending", status: "PENDING", purchaseOrderId: "po-1", items: [] }] })] }) as never).reason, "还有 1 条本柜实装差异待审批");
+  assert.equal(salesExecutionShippingReadiness(execution({ receivableOrder: linked, containerLoads: [containerLoad({ status: "OPEN", loadingResults: [] })] }) as never).reason, "还有 1 个集装箱未最终放行");
+  assert.equal(salesExecutionShippingReadiness(execution({ receivableOrder: linked, containerLoads: [] }) as never).reason, "尚未创建集装箱柜总单");
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ actualDeliveryDate: null })] }) as never).ready, true);
-  assert.equal(salesExecutionShippingReadiness(execution({ containerLoads: [containerLoad({ loadingResults: [{ id: "loading-1", status: "APPROVED", purchaseOrderId: "po-1", items: [{ purchaseOrderItemId: "po-item-1", loadedQuantity: "9.9999" }] }] })] }) as never).ready, false);
+  assert.equal(salesExecutionShippingReadiness(execution({ receivableOrder: linked, containerLoads: [containerLoad({ loadingResults: [{ id: "loading-1", status: "APPROVED", purchaseOrderId: "po-1", items: [{ purchaseOrderItemId: "po-item-1", loadedQuantity: "9.9999" }] }] })] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [purchaseOrder({ items: [{ executionItemId: "item-1", allocatedQuantity: "9" }] })] }) as never).ready, false);
   assert.equal(salesExecutionShippingReadiness(execution({ purchaseOrders: [
     purchaseOrder({ items: [{ executionItemId: "item-1", allocatedQuantity: "5" }] }),
@@ -124,6 +128,7 @@ test("shipping readiness requires exact active allocation, acceptance, completio
     purchaseOrder({ id: "po-rejected", status: "REJECTED", items: [{ executionItemId: "item-1", allocatedQuantity: "10" }] }),
   ] }) as never).ready, true);
   assert.equal(salesExecutionShippingReadiness(execution({
+    receivableOrder: linked,
     purchaseOrders: [purchaseOrder(), purchaseOrder({ id: "po-rejected", status: "REJECTED" })],
     containerLoads: [containerLoad({ loadingResults: [
       { id: "loading-1", status: "APPROVED", purchaseOrderId: "po-1", items: [{ purchaseOrderItemId: "po-item-1", loadedQuantity: "10" }] },
@@ -131,6 +136,7 @@ test("shipping readiness requires exact active allocation, acceptance, completio
     ] })],
   }) as never).ready, true);
   assert.equal(salesExecutionShippingReadiness(execution({
+    receivableOrder: linked,
     purchaseOrders: [purchaseOrder(), purchaseOrder({ id: "po-rejected", status: "REJECTED" })],
     containerLoads: [containerLoad(), containerLoad({
       id: "container-old",
@@ -140,6 +146,7 @@ test("shipping readiness requires exact active allocation, acceptance, completio
     })],
   }) as never).ready, true);
   assert.equal(salesExecutionShippingReadiness(execution({
+    receivableOrder: linked,
     purchaseOrders: [purchaseOrder(), purchaseOrder({ id: "po-rejected", status: "REJECTED" })],
     containerLoads: [containerLoad({
       allocations: [
@@ -149,12 +156,14 @@ test("shipping readiness requires exact active allocation, acceptance, completio
     })],
   }) as never).reason, "有集装箱同时包含有效及已拒绝、已作废或不存在的采购单，请先修正或作废该柜");
   assert.equal(salesExecutionShippingReadiness(execution({
+    receivableOrder: linked,
     containerLoads: [containerLoad({ allocations: [
       { id: "allocation-1", purchaseOrderId: "po-1", purchaseOrderItemId: "po-item-1", plannedQuantity: "10" },
       { id: "allocation-missing", purchaseOrderId: "missing-po", purchaseOrderItemId: "missing-item", plannedQuantity: "1" },
     ] })],
   }) as never).ready, false);
-  assert.equal(salesExecutionShippingReadiness(execution({ receivableOrder: { id: "order-1" } }) as never).ready, false);
+  assert.equal(salesExecutionShippingReadiness(execution({ receivableOrder: linked }) as never).ready, true);
+  assert.equal(salesExecutionShippingReadiness(execution({ receivableOrder: linked, shippingStartedAt: "2026-08-18T00:00:00.000Z" }) as never).ready, false);
 });
 
 test("route and UI expose one explicit manual handoff with linked-order navigation", () => {
@@ -164,10 +173,13 @@ test("route and UI expose one explicit manual handoff with linked-order navigati
   assert.match(hook, /\/enter-shipping/);
   assert.match(hook, /expectedRevision: Number\(execution\.revision \|\| 1\)/);
   assert.match(hook, /不会自动填写实际发货日期或实际发货金额/);
-  assert.match(detail, /shippingStarting \? "处理中\.\.\." : "进入发货"/);
+  assert.match(detail, /linkedOrder \? "确认装柜完成" : "进入发货并创建应收"/);
   assert.doesNotMatch(detail, /disabled=\{[^}]*!shippingReadiness\.ready/);
   assert.match(detail, /title=\{shippingReadiness\.ready \? undefined : shippingReadiness\.reason\}/);
   assert.match(detail, /打开应收订单/);
+  assert.match(detail, /shippingStarted=\{Boolean\(execution\.shippingStartedAt\)\}/);
+  assert.match(stagedHandoffMigration, /CREATE OR REPLACE FUNCTION "validate_receivable_order_sales_execution_lineage"/);
+  assert.doesNotMatch(stagedHandoffMigration, /source_row\."shipping_started_at" IS NULL/);
   assert.doesNotMatch(purchaseList, /onEnterShipping/);
   assert.match(moduleSource, /canWrite && canWriteOrders/);
   assert.match(moduleSource, /canReadOrders/);

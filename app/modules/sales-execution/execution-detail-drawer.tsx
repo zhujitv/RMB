@@ -139,7 +139,7 @@ export function ExecutionDetailDrawer({
       actions={canEdit || canDispatch || canVoid || canEnterShipping || (linkedOrder && canOpenReceivableOrder) ? <>
         {canEdit ? <button className={shell.secondaryButton} type="button" disabled={loading || dispatching || shippingStarting || voiding} onClick={onEdit}>编辑草稿</button> : null}
         {canDispatch ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding || !orders.length} title={!orders.length ? "请先完成工厂分配" : undefined} onClick={onDispatch}>{dispatching ? "下发中..." : "正式下发工厂"}</button> : null}
-        {canEnterShipping && !linkedOrder ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding} title={shippingReadiness.ready ? undefined : shippingReadiness.reason} onClick={onEnterShipping}>{shippingStarting ? "处理中..." : "进入发货"}</button> : null}
+        {canEnterShipping && !execution.shippingStartedAt ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding} title={shippingReadiness.ready ? undefined : shippingReadiness.reason} onClick={onEnterShipping}>{shippingStarting ? "处理中..." : linkedOrder ? "确认装柜完成" : "进入发货并创建应收"}</button> : null}
         {canVoid ? <button className={shell.dangerButton} type="button" disabled={loading || dispatching || shippingStarting || voiding} onClick={onVoid}>{voiding ? "作废中..." : "作废销售执行"}</button> : null}
         {linkedOrder && canOpenReceivableOrder ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || shippingStarting || voiding} onClick={() => onOpenReceivableOrder(linkedOrder.orderNo)}>打开应收订单</button> : null}
       </> : null}
@@ -150,7 +150,7 @@ export function ExecutionDetailDrawer({
       {shippingError ? <div className={shell.inlineError} role="alert">{shippingError}</div> : null}
       {voidError ? <div className={shell.inlineError} role="alert">{voidError}</div> : null}
       {dispatchEmailRetryError ? <div className={shell.inlineError} role="alert">{dispatchEmailRetryError}</div> : null}
-      {linkedOrder ? <div className={shell.infoStrip} role="status">已进入发货 · 应收订单草稿：{linkedOrder.orderNo}（{linkedOrder.status}）</div> : null}
+      {linkedOrder ? <div className={shell.infoStrip} role="status">{execution.shippingStartedAt ? "装柜已最终确认" : "应收订单已创建，柜号可在提柜后补充"} · 应收订单：{linkedOrder.orderNo}（{linkedOrder.status}）</div> : null}
       {!loading && !error ? (
         <>
           <div className={styles.viewTabs} aria-label="销售执行详情视图">
@@ -167,14 +167,14 @@ export function ExecutionDetailDrawer({
                 loads={execution.containerLoads || []}
                 orders={orders}
                 canManage={canStartProduction}
-                shippingStarted={Boolean(execution.shippingStartedAt || execution.receivableOrder)}
+                shippingStarted={Boolean(execution.shippingStartedAt)}
                 onChanged={onFactoryExecutionChanged}
               />
               <PurchaseOrderDraftList
                 orders={orders}
                 executionId={execution.id}
                 executionRevision={Number(execution.revision || 1)}
-                shippingStarted={Boolean(execution.shippingStartedAt || execution.receivableOrder)}
+                shippingStarted={Boolean(execution.shippingStartedAt)}
                 customerOrderNo={execution.customerOrderNo}
                 canRetryEmail={canRetryDispatchEmail}
                 retryingPurchaseOrderId={retryingPurchaseOrderId}

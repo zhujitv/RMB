@@ -62,7 +62,7 @@ function handoffRemark(executionNo: string, requestedDeliveryDate: Date, sourceR
   return source ? `${prefix}\n销售执行备注：${source}`.slice(0, 2000) : prefix;
 }
 
-function assertReadyForShipping(execution: Awaited<ReturnType<typeof loadSalesExecution>>) {
+function assertReadyForReceivable(execution: Awaited<ReturnType<typeof loadSalesExecution>>) {
   if (execution.status !== "DISPATCHED") {
     throw codedError("只有已正式下发的销售执行单可以进入发货", 409, "SALES_EXECUTION_NOT_DISPATCHED");
   }
@@ -107,6 +107,10 @@ function assertReadyForShipping(execution: Awaited<ReturnType<typeof loadSalesEx
       "SHIPPING_PRODUCTION_PROGRESS_INCOMPLETE",
     );
   }
+}
+
+function assertReadyForLoadingFinalization(execution: Awaited<ReturnType<typeof loadSalesExecution>>) {
+  assertReadyForReceivable(execution);
   return releasedContainerMaterialization(execution);
 }
 
@@ -142,18 +146,44 @@ export async function enterSalesExecutionShipping(
       await lockAllExecutionContainerLoading(tx, executionId);
       const before = await loadSalesExecution(executionId, actor, tx);
       await assertCustomerScope(actor, before.customerId, tx);
-      if (before.receivableOrder) {
-        if (before.receivableOrder.deletedAt || !before.shippingStartedAt) {
-          throw codedError("关联应收订单状态异常，请联系管理员处理", 409, "SHIPPING_HANDOFF_INCONSISTENT");
-        }
+      if (before.receivableOrder?.deletedAt) {
+        throw codedError("关联应收订单状态异常，请联系管理员处理", 409, "SHIPPING_HANDOFF_INCONSISTENT");
+      }
+      if (before.receivableOrder && before.shippingStartedAt) {
         return {
           execution: serializeSalesExecution(before, true),
           receivableOrder: receivableOrderSummary(before.receivableOrder),
           created: false,
+          finalized: true,
         };
       }
       assertExpectedSalesExecutionRevision(input, before.revision);
-      const materialization = assertReadyForShipping(before);
+      if (before.receivableOrder) {
+        const materialization = assertReadyForLoadingFinalization(before);
+        const now = new Date();
+        await materializeReleasedContainerActuals(tx, before, materialization, actorId, now);
+        const nextRevision = before.revision + 1;
+        const changed = await tx.salesExecution.updateMany({
+          where: { id: before.id, status: "DISPATCHED", revision: before.revision, shippingStartedAt: null },
+          data: {
+            shippingStartedAt: now,
+            shippingStartedById: actorId,
+            revision: nextRevision,
+            currentVersionNumber: nextRevision,
+            updatedById: actorId,
+          },
+        });
+        if (changed.count !== 1) {
+          throw codedError("销售执行单状态已变化，请刷新后重试", 409, "SALES_EXECUTION_REVISION_CONFLICT");
+        }
+        await appendSalesExecutionVersion(tx, before.id, actor);
+        const saved = await loadSalesExecution(before.id, actor, tx);
+        const execution = serializeSalesExecution(saved, true);
+        const order = receivableOrderSummary(before.receivableOrder);
+        await writeAudit(request, { id: actorId }, "确认装柜完成并锁定实装数量", "sales_executions", before.id, serializeSalesExecution(before, true), execution, tx);
+        return { execution, receivableOrder: order, created: false, finalized: true };
+      }
+      assertReadyForReceivable(before);
       const orderNo = before.customerOrderNo.trim();
       if (orderNo.length > MAX_ORDER_NO_LENGTH) {
         throw codedError(`客户订单号不能超过 ${MAX_ORDER_NO_LENGTH} 个字符`, 400, "VALIDATION_TEXT_TOO_LONG");
@@ -165,8 +195,6 @@ export async function enterSalesExecutionShipping(
           "ORDER_DUPLICATE",
         );
       }
-      const now = new Date();
-      await materializeReleasedContainerActuals(tx, before, materialization, actorId, now);
       const exchangeRate = before.currency === "CNY" ? new Prisma.Decimal(1) : before.exchangeRate;
       const totalAmountCny = before.totalAmount.mul(exchangeRate).toDecimalPlaces(2);
       const paymentTerm = String(before.paymentTerm || "").trim() || "待确认";
@@ -209,13 +237,7 @@ export async function enterSalesExecutionShipping(
       const nextRevision = before.revision + 1;
       const changed = await tx.salesExecution.updateMany({
         where: { id: before.id, status: "DISPATCHED", revision: before.revision, shippingStartedAt: null },
-        data: {
-          shippingStartedAt: now,
-          shippingStartedById: actorId,
-          revision: nextRevision,
-          currentVersionNumber: nextRevision,
-          updatedById: actorId,
-        },
+        data: { revision: nextRevision, currentVersionNumber: nextRevision, updatedById: actorId },
       });
       if (changed.count !== 1) {
         throw codedError("销售执行单状态已变化，请刷新后重试", 409, "SALES_EXECUTION_REVISION_CONFLICT");
@@ -224,9 +246,9 @@ export async function enterSalesExecutionShipping(
       const saved = await loadSalesExecution(before.id, actor, tx);
       const execution = serializeSalesExecution(saved, true);
       const order = receivableOrderSummary(createdOrder);
-      await writeAudit(request, { id: actorId }, "销售执行单手动进入发货", "sales_executions", before.id, serializeSalesExecution(before, true), execution, tx);
+      await writeAudit(request, { id: actorId }, "销售执行单创建发货应收", "sales_executions", before.id, serializeSalesExecution(before, true), execution, tx);
       await writeAudit(request, { id: actorId }, "由销售执行单生成应收订单草稿", "receivable_orders", createdOrder.id, null, { ...order, sourceSalesExecutionId: before.id }, tx);
-      return { execution, receivableOrder: order, created: true };
+      return { execution, receivableOrder: order, created: true, finalized: false };
     });
   } catch (error: unknown) {
     const code = String((error as { code?: string } | null)?.code || "");
