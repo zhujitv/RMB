@@ -270,15 +270,15 @@ test("database connections are bounded for serverless production instances", () 
 
 test("api errors explain logistics expense billing schema mismatches", () => {
   assert.match(sharedBaseUtils, /function prismaSchemaMismatchMessage/);
-  assert.match(
-    sharedBaseUtils,
-    /Unknown argument `\?\(billingMethod\|billingQuantity\)`\?/,
-  );
+  assert.doesNotMatch(sharedBaseUtils, /Unknown argument `\?\(billingMethod\|billingQuantity\)`\?/);
   assert.match(
     sharedBaseUtils,
     /保存失败：本地数据库缺少 \$\{fieldName\} 字段，请执行迁移。/,
   );
   assert.match(sharedBaseUtils, /PRISMA_SCHEMA_MISMATCH/);
+  assert.match(sharedBaseUtils, /PRISMA_CLIENT_VALIDATION_FAILED/);
+  assert.match(sharedBaseUtils, /应用数据写入结构不兼容，请联系管理员更新系统。/);
+  assert.doesNotMatch(sharedBaseUtils, /权限数据结构异常，请执行 Prisma migrate \/ db push。/);
 });
 
 test("anonymous auth posts require same-origin checks before processing input", () => {

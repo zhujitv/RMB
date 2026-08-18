@@ -169,9 +169,9 @@ export async function recordOfflineFactoryProductionProgress(
       ) + 1;
       const report = await tx.factoryPurchaseOrderProductionReport.create({
         data: {
-          purchaseOrderId: before.id,
+          purchaseOrder: { connect: { id: before.id } },
           sequenceNo,
-          reportedById: validActor.id,
+          reportedBy: { connect: { id: validActor.id } },
           source: input.attribution.source,
           channel: input.attribution.channel,
           supplierContact: input.attribution.supplierContact,
@@ -180,7 +180,6 @@ export async function recordOfflineFactoryProductionProgress(
           remark: input.remark || null,
           items: {
             create: input.items.map((item) => ({
-              purchaseOrderId: before.id,
               purchaseOrderItemId: item.purchaseOrderItemId,
               completedQuantity: item.completedQuantity,
             })),
