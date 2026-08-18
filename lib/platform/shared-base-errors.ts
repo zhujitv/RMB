@@ -202,8 +202,9 @@ function shouldLogApiErrorStatus(status: number) {
 function prismaSchemaMismatchMessage(error: unknown) {
   const typedError = (error || {}) as AppError & { name?: string };
   const message = String(typedError.message || "");
-  const fieldMatch = message.match(/Unknown argument `?(billingMethod|billingQuantity)`?/)
-    || message.match(/column .*`?(billing_method|billing_quantity)`?.*(does not exist|not exist)/i);
+  const fieldMatch = message.match(
+    /column .*`?(billing_method|billing_quantity)`?.*(does not exist|not exist)/i,
+  );
   if (!fieldMatch) return "";
   const fieldName = String(fieldMatch[1] || "").includes("Quantity") || String(fieldMatch[1] || "").includes("quantity")
     ? "billingQuantity"
@@ -233,13 +234,23 @@ function prismaInfrastructureError(error: unknown) {
     };
   }
   if (
-    ["P2021", "P2022", "P2009"].includes(code)
-    || /Unknown field|Unknown argument|column .*does not exist|The column .* does not exist|Invalid .*select|has no column/i.test(message)
+    code === "P2009"
+    || /Unknown field|Unknown argument|Invalid .*select/i.test(message)
+  ) {
+    return {
+      status: 500,
+      code: "PRISMA_CLIENT_VALIDATION_FAILED",
+      message: "应用数据写入结构不兼容，请联系管理员更新系统。",
+    };
+  }
+  if (
+    ["P2021", "P2022"].includes(code)
+    || /column .*does not exist|The column .* does not exist|has no column/i.test(message)
   ) {
     return {
       status: 500,
       code: "PRISMA_SCHEMA_MISMATCH",
-      message: "权限数据结构异常，请执行 Prisma migrate / db push。",
+      message: "数据库结构与应用版本不一致，请联系管理员执行正式迁移。",
     };
   }
   return null;

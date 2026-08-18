@@ -439,6 +439,13 @@ test("supplier progress mutation rejects regressions and no-op snapshots before 
   assert.match(mutation, /FACTORY_PRODUCTION_PROGRESS_(?:NO_CHANGE|UNCHANGED)/);
   assert.match(mutation, /factoryPurchaseOrderProductionReport\.create|productionProgressReport\.create/);
   assert.match(mutation, /items:\s*\{\s*create:/);
+  assert.match(mutation, /purchaseOrder:\s*\{\s*connect:\s*\{\s*id:\s*before\.id/);
+  assert.match(mutation, /reportedBy:\s*\{\s*connect:\s*\{\s*id:\s*actorId/);
+  assert.doesNotMatch(mutation, /data:\s*\{\s*purchaseOrderId:/);
+  assert.doesNotMatch(
+    mutation,
+    /create:\s*input\.items\.map\(\(item\)\s*=>\s*\(\{\s*purchaseOrderId:/,
+  );
   assert.match(mutation, /revision:\s*\{\s*increment:\s*1\s*\}/);
   assert.match(mutation, /writeAudit\([\s\S]*?factory_purchase_order_production_reports[\s\S]*?tx,/);
 });
@@ -484,6 +491,13 @@ test("offline progress mutation is internally scoped, locked, revision-safe, and
   assert.match(mutation, /supplierContact:\s*input\.attribution\.supplierContact/);
   assert.match(mutation, /supplierReportedAt:\s*input\.attribution\.supplierReportedAt/);
   assert.match(mutation, /items:\s*\{\s*create:/);
+  assert.match(mutation, /purchaseOrder:\s*\{\s*connect:\s*\{\s*id:\s*before\.id/);
+  assert.match(mutation, /reportedBy:\s*\{\s*connect:\s*\{\s*id:\s*validActor\.id/);
+  assert.doesNotMatch(mutation, /data:\s*\{\s*purchaseOrderId:/);
+  assert.doesNotMatch(
+    mutation,
+    /create:\s*input\.items\.map\(\(item\)\s*=>\s*\(\{\s*purchaseOrderId:/,
+  );
   assert.match(mutation, /writeAudit\([\s\S]*?factory_purchase_order_production_reports[\s\S]*?tx,/);
   assert.doesNotMatch(mutation, /source:\s*rawInput|channel:\s*rawInput|supplierContact:\s*rawInput/);
 });

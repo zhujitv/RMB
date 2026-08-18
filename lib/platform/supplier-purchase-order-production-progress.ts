@@ -139,9 +139,9 @@ export async function recordSupplierPurchaseOrderProductionProgress(
       const reportedAt = new Date();
       await tx.factoryPurchaseOrderProductionReport.create({
         data: {
-          purchaseOrderId: before.id,
+          purchaseOrder: { connect: { id: before.id } },
           sequenceNo,
-          reportedById: actorId,
+          reportedBy: { connect: { id: actorId } },
           source: "SUPPLIER_PORTAL",
           channel: "PORTAL",
           supplierContact: validActor.name.trim().slice(0, 100) || "供应商账号",
@@ -150,7 +150,6 @@ export async function recordSupplierPurchaseOrderProductionProgress(
           remark: input.remark || null,
           items: {
             create: input.items.map((item) => ({
-              purchaseOrderId: before.id,
               purchaseOrderItemId: item.purchaseOrderItemId,
               completedQuantity: item.completedQuantity,
             })),
