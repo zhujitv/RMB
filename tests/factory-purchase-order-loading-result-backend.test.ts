@@ -150,6 +150,17 @@ test("草稿换采购单时仍按 execution、container、全部PO、results 顺
   assert.match(containerLocks, /currentAllocations[\s\S]*purchaseOrderIds[\s\S]*currentAllocations\.map/);
 });
 
+test("创建柜总单使用关系连接并在同一事务批量写入分配明细", () => {
+  const create = containerDrafts.slice(
+    containerDrafts.indexOf("export async function createSalesExecutionContainerLoad"),
+    containerDrafts.indexOf("export async function updateSalesExecutionContainerLoad"),
+  );
+  assert.match(create, /execution: \{ connect: \{ id: executionId \} \}/);
+  assert.match(create, /salesExecutionContainerLoad\.create[\s\S]*containerLoadAllocation\.createMany/);
+  assert.match(create, /scopedInternalContainerLoad\(tx, executionId, container\.id, validActor\)/);
+  assert.doesNotMatch(create, /allocations:\s*\{\s*create:/);
+});
+
 test("供应商查询边界不选择内部审批字段", () => {
   const publicLoadingSelect = supplierQuery.match(/loadingResults:[\s\S]*?\n  payments:/)?.[0] || "";
   assert.doesNotMatch(publicLoadingSelect, /requestedBy(?:Id)?: true/);
