@@ -82,8 +82,6 @@ export async function appendFactoryPurchaseLoadingResult({
       requestedById,
       items: {
         create: snapshot.items.map((item) => ({
-          containerLoadId: container.id,
-          purchaseOrderId: order.id,
           purchaseOrderItemId: item.purchaseOrderItemId,
           plannedQuantitySnapshot: item.plannedQuantitySnapshot,
           deliveryTargetQuantitySnapshot: item.deliveryTargetQuantitySnapshot,

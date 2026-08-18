@@ -128,6 +128,16 @@ test("填报和审批输入都强制携带集装箱及其版本", () => {
   }), /必须填写原因/);
 });
 
+test("装柜结果子明细由父关系提供复合外键，不重复提交 Prisma 禁止的字段", () => {
+  const createStart = workflow.indexOf("items: {", workflow.indexOf("factoryPurchaseOrderLoadingResult.create"));
+  const createEnd = workflow.indexOf("})),\n      },", createStart);
+  assert.ok(createStart >= 0 && createEnd > createStart);
+  const nestedItemCreate = workflow.slice(createStart, createEnd);
+  assert.match(nestedItemCreate, /purchaseOrderItemId: item\.purchaseOrderItemId/);
+  assert.doesNotMatch(nestedItemCreate, /containerLoadId:/);
+  assert.doesNotMatch(nestedItemCreate, /purchaseOrderId:/);
+});
+
 test("供应商结果序列化是白名单，不泄露内部审批人员和备注", () => {
   const serialized = serializeSupplierFactoryPurchaseLoadingResult({
     id: "result-1", containerLoadId: "container-1", executionId: "execution-1",
