@@ -35,7 +35,11 @@ export function SalesExecutionModuleView({
   voiding,
   voidError,
   voidConfirmation,
+  deleting,
+  deleteError,
+  deleteConfirmation,
   canWrite,
+  canDelete,
   canEnterShipping,
   canOpenReceivableOrder,
   canRecordFactoryPayment,
@@ -57,6 +61,7 @@ export function SalesExecutionModuleView({
   onDispatch,
   onEnterShipping,
   onVoid,
+  onDelete,
   onOpenReceivableOrder,
   onRetryDispatchEmail,
   onFactoryExecutionChanged,
@@ -68,6 +73,9 @@ export function SalesExecutionModuleView({
   onCancelVoidConfirmation,
   onConfirmVoidConfirmation,
   onUpdateVoidConfirmationInput,
+  onCancelDeleteConfirmation,
+  onConfirmDeleteConfirmation,
+  onUpdateDeleteConfirmationInput,
 }: {
   rows: SalesExecutionRow[];
   keyword: string;
@@ -96,7 +104,11 @@ export function SalesExecutionModuleView({
   voiding: boolean;
   voidError: string;
   voidConfirmation: ConfirmationDialogState | null;
+  deleting: boolean;
+  deleteError: string;
+  deleteConfirmation: ConfirmationDialogState | null;
   canWrite: boolean;
+  canDelete: boolean;
   canEnterShipping: boolean;
   canOpenReceivableOrder: boolean;
   canRecordFactoryPayment: boolean;
@@ -118,6 +130,7 @@ export function SalesExecutionModuleView({
   onDispatch: () => void;
   onEnterShipping: () => void;
   onVoid: () => void;
+  onDelete: () => void;
   onOpenReceivableOrder: (orderNo: string) => void;
   onRetryDispatchEmail: (purchaseOrderId: string) => void;
   onFactoryExecutionChanged: () => void | Promise<void>;
@@ -129,6 +142,9 @@ export function SalesExecutionModuleView({
   onCancelVoidConfirmation: () => void;
   onConfirmVoidConfirmation: () => void;
   onUpdateVoidConfirmationInput: (value: string) => void;
+  onCancelDeleteConfirmation: () => void;
+  onConfirmDeleteConfirmation: () => void;
+  onUpdateDeleteConfirmationInput: (value: string) => void;
 }) {
   return (
     <section className={shell.moduleCard}>
@@ -166,10 +182,11 @@ export function SalesExecutionModuleView({
       {notice ? <div className={shell.infoStrip} role="status">{notice}</div> : null}
       <ExecutionList rows={rows} loading={loading} page={page} total={total} totalPages={totalPages} onPage={onPage} onOpen={onOpen} />
 
-      {detailExecution ? <ExecutionDetailDrawer execution={detailExecution} loading={detailLoading} error={detailError} canEdit={canWrite && detailExecution.status === "DRAFT" && !detailLoading && !detailError} canDispatch={canWrite && detailExecution.status === "DRAFT" && !detailLoading && !detailError} canVoid={canWrite && ["DRAFT", "DISPATCHED"].includes(String(detailExecution.status || "")) && !detailExecution.receivableOrder && !detailExecution.shippingStartedAt && !detailLoading && !detailError} canRetryDispatchEmail={canWrite && detailExecution.status === "DISPATCHED" && !detailExecution.receivableOrder && !detailLoading && !detailError} canStartProduction={canWrite && detailExecution.status === "DISPATCHED"} canRecordFactoryPayment={canRecordFactoryPayment} canAddFactoryAdjustment={canAddFactoryAdjustment} canEnterShipping={canEnterShipping && !detailLoading && !detailError} canOpenReceivableOrder={canOpenReceivableOrder} dispatching={dispatching} shippingStarting={shippingStarting} voiding={voiding} dispatchError={dispatchError} shippingError={shippingError} voidError={voidError} retryingPurchaseOrderId={retryingPurchaseOrderId} dispatchEmailRetryError={dispatchEmailRetryError} onEdit={onEdit} onDispatch={onDispatch} onEnterShipping={onEnterShipping} onVoid={onVoid} onOpenReceivableOrder={onOpenReceivableOrder} onRetryDispatchEmail={onRetryDispatchEmail} onFactoryExecutionChanged={onFactoryExecutionChanged} onClose={onCloseDetail} /> : null}
+      {detailExecution ? <ExecutionDetailDrawer execution={detailExecution} loading={detailLoading} error={detailError} canEdit={canWrite && detailExecution.status === "DRAFT" && !detailLoading && !detailError} canDispatch={canWrite && detailExecution.status === "DRAFT" && !detailLoading && !detailError} canVoid={canWrite && ["DRAFT", "DISPATCHED"].includes(String(detailExecution.status || "")) && !detailExecution.receivableOrder && !detailExecution.shippingStartedAt && !detailLoading && !detailError} canDelete={canDelete && detailExecution.status === "VOIDED" && !detailLoading && !detailError} canRetryDispatchEmail={canWrite && detailExecution.status === "DISPATCHED" && !detailExecution.receivableOrder && !detailLoading && !detailError} canStartProduction={canWrite && detailExecution.status === "DISPATCHED"} canRecordFactoryPayment={canRecordFactoryPayment} canAddFactoryAdjustment={canAddFactoryAdjustment} canEnterShipping={canEnterShipping && !detailLoading && !detailError} canOpenReceivableOrder={canOpenReceivableOrder} dispatching={dispatching} shippingStarting={shippingStarting} voiding={voiding} deleting={deleting} dispatchError={dispatchError} shippingError={shippingError} voidError={voidError} deleteError={deleteError} retryingPurchaseOrderId={retryingPurchaseOrderId} dispatchEmailRetryError={dispatchEmailRetryError} onEdit={onEdit} onDispatch={onDispatch} onEnterShipping={onEnterShipping} onVoid={onVoid} onDelete={onDelete} onOpenReceivableOrder={onOpenReceivableOrder} onRetryDispatchEmail={onRetryDispatchEmail} onFactoryExecutionChanged={onFactoryExecutionChanged} onClose={onCloseDetail} /> : null}
       {confirmation ? <ConfirmationDialog state={confirmation} onCancel={onCancelConfirmation} onConfirm={onConfirmConfirmation} /> : null}
       {shippingConfirmation ? <ConfirmationDialog state={shippingConfirmation} onCancel={onCancelShippingConfirmation} onConfirm={onConfirmShippingConfirmation} /> : null}
       {voidConfirmation ? <ConfirmationDialog state={voidConfirmation} onCancel={onCancelVoidConfirmation} onConfirm={onConfirmVoidConfirmation} onInputChange={onUpdateVoidConfirmationInput} /> : null}
+      {deleteConfirmation ? <ConfirmationDialog state={deleteConfirmation} onCancel={onCancelDeleteConfirmation} onConfirm={onConfirmDeleteConfirmation} onInputChange={onUpdateDeleteConfirmationInput} /> : null}
     </section>
   );
 }

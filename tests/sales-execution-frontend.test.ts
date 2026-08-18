@@ -315,10 +315,10 @@ test("sales executions can be explicitly voided before shipping with a required 
   assert.match(voidSource, /requireInput: true/);
   assert.match(voidSource, /useWorkspaceTabBusy\(voiding\)/);
   assert.match(moduleSource, /useSalesExecutionVoid\(\{ canWrite, onSaved: executionDispatched \}\)/);
-  assert.match(moduleSource, /!voidAction\.voiding\) closeEditors\(\)/);
+  assert.match(moduleSource, /!voidAction\.voiding && !deleteAction\.deleting\) closeEditors\(\)/);
   assert.match(viewSource, /canVoid=\{canWrite && \["DRAFT", "DISPATCHED"\]\.includes\(String\(detailExecution\.status \|\| ""\)\) && !detailExecution\.receivableOrder && !detailExecution\.shippingStartedAt/);
   assert.match(detailSource, /className=\{shell\.dangerButton\}[\s\S]*作废销售执行/);
-  assert.match(detailSource, /disabled=\{loading \|\| dispatching \|\| shippingStarting \|\| voiding\}/);
+  assert.match(detailSource, /disabled=\{loading \|\| dispatching \|\| shippingStarting \|\| voiding \|\| deleting\}/);
 });
 
 test("failed factory email can be explicitly retried without redispatching the order", () => {

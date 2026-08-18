@@ -139,6 +139,19 @@ export type SalesExecutionResponse = {
   message?: string;
 };
 
+export type SalesExecutionDeleteResponse = {
+  success?: boolean;
+  data?: {
+    id?: string;
+    customerOrderNo?: string;
+    action?: "deleted";
+    deletedPurchaseOrderCount?: number;
+    deletedDocumentCount?: number;
+    cleanupPending?: boolean;
+  };
+  message?: string;
+};
+
 export type SalesExecutionShippingResponse = SalesExecutionResponse & {
   receivableOrder?: ReceivableOrderSummary;
   created?: boolean;

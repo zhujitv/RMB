@@ -49,6 +49,7 @@ export function ExecutionDetailDrawer({
   canEdit,
   canDispatch,
   canVoid,
+  canDelete,
   canRetryDispatchEmail,
   canStartProduction,
   canRecordFactoryPayment,
@@ -58,15 +59,18 @@ export function ExecutionDetailDrawer({
   dispatching,
   shippingStarting,
   voiding,
+  deleting,
   dispatchError,
   shippingError,
   voidError,
+  deleteError,
   retryingPurchaseOrderId,
   dispatchEmailRetryError,
   onEdit,
   onDispatch,
   onEnterShipping,
   onVoid,
+  onDelete,
   onOpenReceivableOrder,
   onRetryDispatchEmail,
   onFactoryExecutionChanged,
@@ -78,6 +82,7 @@ export function ExecutionDetailDrawer({
   canEdit: boolean;
   canDispatch: boolean;
   canVoid: boolean;
+  canDelete: boolean;
   canRetryDispatchEmail: boolean;
   canStartProduction: boolean;
   canRecordFactoryPayment: boolean;
@@ -87,15 +92,18 @@ export function ExecutionDetailDrawer({
   dispatching: boolean;
   shippingStarting: boolean;
   voiding: boolean;
+  deleting: boolean;
   dispatchError: string;
   shippingError: string;
   voidError: string;
+  deleteError: string;
   retryingPurchaseOrderId: string;
   dispatchEmailRetryError: string;
   onEdit: () => void;
   onDispatch: () => void;
   onEnterShipping: () => void;
   onVoid: () => void;
+  onDelete: () => void;
   onOpenReceivableOrder: (orderNo: string) => void;
   onRetryDispatchEmail: (purchaseOrderId: string) => void;
   onFactoryExecutionChanged: () => void | Promise<void>;
@@ -136,12 +144,13 @@ export function ExecutionDetailDrawer({
       title={customerOrderNumber(execution) || "未填写客户订单号"}
       subtitle={`V${execution.currentVersionNumber || 1} · ${execution.sourceType === "QUOTATION" ? "报价转入" : "直接创建"} · ${salesExecutionStatusLabel(execution.status, Boolean(linkedOrder || execution.shippingStartedAt), linkedOrder?.status)}`}
       onClose={onClose}
-      actions={canEdit || canDispatch || canVoid || canEnterShipping || (linkedOrder && canOpenReceivableOrder) ? <>
-        {canEdit ? <button className={shell.secondaryButton} type="button" disabled={loading || dispatching || shippingStarting || voiding} onClick={onEdit}>编辑草稿</button> : null}
-        {canDispatch ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding || !orders.length} title={!orders.length ? "请先完成工厂分配" : undefined} onClick={onDispatch}>{dispatching ? "下发中..." : "正式下发工厂"}</button> : null}
-        {canEnterShipping && !execution.shippingStartedAt ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding} title={shippingReadiness.ready ? undefined : shippingReadiness.reason} onClick={onEnterShipping}>{shippingStarting ? "处理中..." : linkedOrder ? "确认装柜完成" : "进入发货并创建应收"}</button> : null}
-        {canVoid ? <button className={shell.dangerButton} type="button" disabled={loading || dispatching || shippingStarting || voiding} onClick={onVoid}>{voiding ? "作废中..." : "作废销售执行"}</button> : null}
-        {linkedOrder && canOpenReceivableOrder ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || shippingStarting || voiding} onClick={() => onOpenReceivableOrder(linkedOrder.orderNo)}>打开应收订单</button> : null}
+      actions={canEdit || canDispatch || canVoid || canDelete || canEnterShipping || (linkedOrder && canOpenReceivableOrder) ? <>
+        {canEdit ? <button className={shell.secondaryButton} type="button" disabled={loading || dispatching || shippingStarting || voiding || deleting} onClick={onEdit}>编辑草稿</button> : null}
+        {canDispatch ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding || deleting || !orders.length} title={!orders.length ? "请先完成工厂分配" : undefined} onClick={onDispatch}>{dispatching ? "下发中..." : "正式下发工厂"}</button> : null}
+        {canEnterShipping && !execution.shippingStartedAt ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding || deleting} title={shippingReadiness.ready ? undefined : shippingReadiness.reason} onClick={onEnterShipping}>{shippingStarting ? "处理中..." : linkedOrder ? "确认装柜完成" : "进入发货并创建应收"}</button> : null}
+        {canVoid ? <button className={shell.dangerButton} type="button" disabled={loading || dispatching || shippingStarting || voiding || deleting} onClick={onVoid}>{voiding ? "作废中..." : "作废销售执行"}</button> : null}
+        {canDelete ? <button className={shell.dangerButton} type="button" disabled={loading || deleting} onClick={onDelete}>{deleting ? "删除中..." : "永久删除"}</button> : null}
+        {linkedOrder && canOpenReceivableOrder ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || shippingStarting || voiding || deleting} onClick={() => onOpenReceivableOrder(linkedOrder.orderNo)}>打开应收订单</button> : null}
       </> : null}
     >
       {loading ? <div className={shell.emptyState}>正在读取销售执行详情...</div> : null}
@@ -149,6 +158,7 @@ export function ExecutionDetailDrawer({
       {dispatchError ? <div className={shell.inlineError} role="alert">{dispatchError}</div> : null}
       {shippingError ? <div className={shell.inlineError} role="alert">{shippingError}</div> : null}
       {voidError ? <div className={shell.inlineError} role="alert">{voidError}</div> : null}
+      {deleteError ? <div className={shell.inlineError} role="alert">{deleteError}</div> : null}
       {dispatchEmailRetryError ? <div className={shell.inlineError} role="alert">{dispatchEmailRetryError}</div> : null}
       {linkedOrder ? <div className={shell.infoStrip} role="status">{execution.shippingStartedAt ? "装柜已最终确认" : "应收订单已创建，柜号可在提柜后补充"} · 应收订单：{linkedOrder.orderNo}（{linkedOrder.status}）</div> : null}
       {!loading && !error ? (

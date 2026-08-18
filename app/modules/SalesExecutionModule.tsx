@@ -13,6 +13,7 @@ import {
 import { SalesExecutionModuleView } from "./sales-execution/sales-execution-module-view";
 import type { QuotationConversionDraft } from "./sales-execution/quotation-conversion-panel";
 import { useSalesExecutionDispatch } from "./sales-execution/use-sales-execution-dispatch";
+import { useSalesExecutionDeletion } from "./sales-execution/use-sales-execution-deletion";
 import { useSalesExecutionEmailRetry } from "./sales-execution/use-sales-execution-email-retry";
 import { useSalesExecutionShipping } from "./sales-execution/use-sales-execution-shipping";
 import { useSalesExecutionVoid } from "./sales-execution/use-sales-execution-void";
@@ -24,28 +25,13 @@ import {
   type SalesExecutionsResponse,
 } from "./sales-execution/types";
 
-type QuotationFocusResponse = {
-  data?: { id?: string; currentVersionNumber?: number | null };
-  quotation?: { id?: string; currentVersionNumber?: number | null };
-  message?: string;
-};
+type QuotationFocusResponse = { data?: { id?: string; currentVersionNumber?: number | null }; quotation?: { id?: string; currentVersionNumber?: number | null }; message?: string };
 export function SalesExecutionModule({
-  currentUser,
-  permissions,
-  initialKeyword = "",
-  initialAction = "",
-  initialQuotationId = "",
-  initialExecutionId = "",
-  initialOpenToken = 0,
-  onOpenReceivableOrder,
+  currentUser, permissions, initialKeyword = "", initialAction = "", initialQuotationId = "",
+  initialExecutionId = "", initialOpenToken = 0, onOpenReceivableOrder,
 }: {
-  currentUser: User;
-  permissions?: PermissionSnapshot;
-  initialKeyword?: string;
-  initialAction?: string;
-  initialQuotationId?: string;
-  initialExecutionId?: string;
-  initialOpenToken?: number;
+  currentUser: User; permissions?: PermissionSnapshot; initialKeyword?: string; initialAction?: string;
+  initialQuotationId?: string; initialExecutionId?: string; initialOpenToken?: number;
   onOpenReceivableOrder?: (orderNo: string) => void;
 }) {
   const [rows, setRows] = useState<SalesExecutionRow[]>([]);
@@ -69,6 +55,7 @@ export function SalesExecutionModule({
   const listRequestRef = useRef(0), detailRequestRef = useRef(0);
   const handledFocusRef = useRef(""), conversionBusyRef = useRef(false);
   const canWrite = canWritePermission(currentUser, permissions, "salesExecution", ["管理员", "业务员"]);
+  const canDelete = currentUser.role === "管理员" && canWrite;
   const canWriteOrders = canWritePermission(currentUser, permissions, "orders", ["管理员", "业务员"]);
   const canReadOrders = canReadPermission(currentUser, permissions, "orders", ["管理员", "业务员", "财务"]);
   const canRecordFactoryPayment = canWritePermission(currentUser, permissions, "payments", ["管理员", "财务"]);
@@ -76,6 +63,7 @@ export function SalesExecutionModule({
   const dispatch = useSalesExecutionDispatch({ canWrite, onSaved: executionDispatched });
   const shipping = useSalesExecutionShipping({ canWrite: canWrite && canWriteOrders, onSaved: executionDispatched });
   const voidAction = useSalesExecutionVoid({ canWrite, onSaved: executionDispatched });
+  const deleteAction = useSalesExecutionDeletion({ canDelete, onDeleted: executionDeleted });
   const emailRetry = useSalesExecutionEmailRetry({ canWrite, execution: detailExecution, onSaved: executionEmailRetried });
   const confirmDiscard = useWorkspaceTabDiscardGuard("当前销售执行草稿尚未保存，确定放弃吗？");
   useWorkspaceTabBusy(converting || emailRetry.retrying);
@@ -233,6 +221,7 @@ export function SalesExecutionModule({
     emailRetry.clearError();
     dispatch.clearDispatchError();
     shipping.clearError(); voidAction.clearError();
+    deleteAction.clearError();
   }
   function submitSearch() {
     if ((conversionDraft || createOpen || editExecution) && !confirmDiscard()) return;
@@ -266,6 +255,13 @@ export function SalesExecutionModule({
     setRows((current) => current.map((row) => row.id === saved.id ? saved : row));
     setNotice(message);
   }
+  function executionDeleted(executionId: string, message: string) {
+    detailRequestRef.current += 1;
+    setDetailExecution(null); setDetailLoading(false); setDetailError("");
+    setRows((current) => current.filter((row) => row.id !== executionId));
+    setTotal((current) => Math.max(0, current - 1)); setNotice(message);
+    void loadRows(page, submittedKeyword, submittedStatus);
+  }
   const detailGeneration = detailRequestRef.current;
   return (
     <SalesExecutionModuleView
@@ -275,7 +271,8 @@ export function SalesExecutionModule({
       shippingStarting={shipping.starting} shippingError={shipping.error} shippingConfirmation={shipping.confirmation}
       retryingPurchaseOrderId={emailRetry.retryingPurchaseOrderId} dispatchEmailRetryError={emailRetry.error}
       voiding={voidAction.voiding} voidError={voidAction.error} voidConfirmation={voidAction.confirmation}
-      canWrite={canWrite} canEnterShipping={canWrite && canWriteOrders} canOpenReceivableOrder={canReadOrders && Boolean(onOpenReceivableOrder)} canRecordFactoryPayment={canRecordFactoryPayment} canAddFactoryAdjustment={canAddFactoryAdjustment} onKeyword={setKeyword} onStatus={setStatus}
+      deleting={deleteAction.deleting} deleteError={deleteAction.error} deleteConfirmation={deleteAction.confirmation}
+      canWrite={canWrite} canDelete={canDelete} canEnterShipping={canWrite && canWriteOrders} canOpenReceivableOrder={canReadOrders && Boolean(onOpenReceivableOrder)} canRecordFactoryPayment={canRecordFactoryPayment} canAddFactoryAdjustment={canAddFactoryAdjustment} onKeyword={setKeyword} onStatus={setStatus}
       onSearch={submitSearch} onReset={() => { if ((conversionDraft || createOpen || editExecution) && !confirmDiscard()) return; setKeyword(""); setSubmittedKeyword(""); setStatus(""); setSubmittedStatus(""); closeEditors(); void loadRows(1, "", ""); }}
       onRefresh={() => void loadRows(page, submittedKeyword, submittedStatus)}
       onToggleCreate={() => { if ((conversionDraft || createOpen || editExecution) && !confirmDiscard()) return; const nextOpen = !createOpen; closeEditors(); setCreateOpen(nextOpen); setNotice(""); }}
@@ -288,13 +285,15 @@ export function SalesExecutionModule({
       onDispatch={() => { if (detailExecution) void dispatch.dispatchExecution(detailExecution); }}
       onEnterShipping={() => { if (detailExecution) void shipping.enterShipping(detailExecution); }}
       onVoid={() => { if (detailExecution) void voidAction.voidExecution(detailExecution); }}
+      onDelete={() => { if (detailExecution) void deleteAction.deleteExecution(detailExecution); }}
       onOpenReceivableOrder={(orderNo) => onOpenReceivableOrder?.(orderNo)}
       onRetryDispatchEmail={(purchaseOrderId) => void emailRetry.retry(purchaseOrderId)}
       onFactoryExecutionChanged={() => detailExecution && detailGeneration === detailRequestRef.current ? loadDetail(detailExecution.id) : undefined}
-      onCloseDetail={() => { if (!detailLoading && !dispatch.dispatching && !shipping.starting && !emailRetry.retrying && !voidAction.voiding) closeEditors(); }}
+      onCloseDetail={() => { if (!detailLoading && !dispatch.dispatching && !shipping.starting && !emailRetry.retrying && !voidAction.voiding && !deleteAction.deleting) closeEditors(); }}
       onCancelConfirmation={dispatch.cancelConfirmation} onConfirmConfirmation={dispatch.confirmConfirmation}
       onCancelShippingConfirmation={shipping.cancelConfirmation} onConfirmShippingConfirmation={shipping.confirmConfirmation}
       onCancelVoidConfirmation={voidAction.cancelConfirmation} onConfirmVoidConfirmation={voidAction.confirmConfirmation} onUpdateVoidConfirmationInput={voidAction.updateConfirmationInput}
+      onCancelDeleteConfirmation={deleteAction.cancelConfirmation} onConfirmDeleteConfirmation={deleteAction.confirmConfirmation} onUpdateDeleteConfirmationInput={deleteAction.updateConfirmationInput}
     />
   );
 }

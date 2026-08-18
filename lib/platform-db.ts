@@ -14,6 +14,7 @@ export * from "./platform/quotation-status-service";
 export * from "./platform/quotation-documents";
 export * from "./platform/quotation-email-service";
 export * from "./platform/sales-execution-service";
+export * from "./platform/sales-execution-deletion";
 export * from "./platform/sales-execution-purchase-orders";
 export * from "./platform/supplier-tax-contract-workflow";
 export * from "./platform/supplier-invoice-review";
