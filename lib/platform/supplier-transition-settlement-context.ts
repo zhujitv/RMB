@@ -54,6 +54,17 @@ export function customsQuantity(candidate: Record<string, unknown>) {
   return rows[0] || {};
 }
 
+export function selectableCustomsItems(candidates: Array<Record<string, unknown>>) {
+  return candidates.flatMap((candidate, customsItemIndex) => {
+    const quantity = customsQuantity(candidate);
+    const productName = nonEmpty(candidate.productName);
+    const unit = nonEmpty(quantity.unit);
+    const quantityValue = nonEmpty(quantity.quantity);
+    if (!productName || !unit || !quantityValue) return [];
+    return [{ customsItemIndex, productName, unit, quantity: quantityValue }];
+  });
+}
+
 export function parsedItems(value: unknown): TransitionItemInput[] {
   const raw = typeof value === "string" ? (() => {
     try { return JSON.parse(value); } catch { return null; }
@@ -114,9 +125,7 @@ export async function previewFactoryPurchaseTransitionSettlement(costId: string,
     finalPayableAmount: cost.amount.toFixed(2),
     currency: cost.currency,
     warnings: customs.warnings,
-    items: (customs.items as Array<Record<string, unknown>>).map((candidate, customsItemIndex) => {
-      const quantity = customsQuantity(candidate);
-      return { customsItemIndex, productName: nonEmpty(candidate.productName), unit: nonEmpty(quantity.unit), quantity: nonEmpty(quantity.quantity), selected: false };
-    }),
+    items: selectableCustomsItems(customs.items as Array<Record<string, unknown>>)
+      .map((item) => ({ ...item, selected: false })),
   };
 }

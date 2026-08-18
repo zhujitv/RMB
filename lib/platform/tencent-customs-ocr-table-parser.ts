@@ -26,7 +26,11 @@ function quantityUnitCandidates(value: string) {
 export function customsProductName(value: string) {
   const firstLine = String(value || "").split(/[\r\n]+/).map((line) => line.trim()).find(Boolean) || "";
   const declarationElementsAt = firstLine.search(/(?:申报要素\s*[:：]?|\s*\d{1,2}\|[^|]{0,80}\|)/);
-  return (declarationElementsAt > 0 ? firstLine.slice(0, declarationElementsAt) : firstLine).trim();
+  const withoutDeclarationElements = (declarationElementsAt > 0 ? firstLine.slice(0, declarationElementsAt) : firstLine).trim();
+  return withoutDeclarationElements
+    .replace(/^\s*\d{1,3}\s+[0-9]{8,10}\s+/, "")
+    .replace(/^\s*[0-9]{8,10}\s+/, "")
+    .trim();
 }
 
 export function candidateItemsFromTencentTables(tables: TencentCustomsExperimentTable[]) {

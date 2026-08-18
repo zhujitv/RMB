@@ -13,6 +13,7 @@ import {
   parsedItems,
   positiveDecimal,
   recognizedCustoms,
+  selectableCustomsItems,
   type TransitionInput,
 } from "./supplier-transition-settlement-context";
 
@@ -200,15 +201,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
   const sequence = Math.max(0, factoryCosts.findIndex((row) => row.id === cost.id)) + 1;
   const entity = cost.order.businessEntity!;
   const cnyAccount = entity.bankAccounts[0];
-  const relevantCustomsSnapshot = candidates.map((candidate, customsItemIndex) => {
-    const quantity = customsQuantity(candidate);
-    return {
-      customsItemIndex,
-      productName: nonEmpty(candidate.productName),
-      quantity: nonEmpty(quantity.quantity),
-      unit: nonEmpty(quantity.unit),
-    };
-  });
+  const relevantCustomsSnapshot = selectableCustomsItems(candidates);
   const draft: SupplierTaxContractDraft = {
     contractNo: `${cost.order.orderNo}-T${String(sequence).padStart(2, "0")}`,
     customerOrderNo: cost.order.orderNo,

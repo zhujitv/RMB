@@ -66,4 +66,6 @@ test("transition product name excludes customs declaration elements", async () =
   const { customsProductName } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
   assert.equal(customsProductName("塑料制柱子 0|2|杆|58%木粉 37%PE塑料 5%化学助剂|无品牌|无型号"), "塑料制柱子");
   assert.equal(customsProductName("木塑复合地板\n0|0|室外用|无品牌"), "木塑复合地板");
+  assert.equal(customsProductName("1 3916909000 塑料制柱子"), "塑料制柱子");
+  assert.equal(customsProductName("3916909000 木塑复合地板"), "木塑复合地板");
 });
