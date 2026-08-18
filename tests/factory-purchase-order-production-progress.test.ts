@@ -571,7 +571,7 @@ test("production completion requires the latest complete line snapshot", () => {
 
 test("shipping handoff independently verifies every latest production snapshot is complete", () => {
   const readiness = shippingHandoff.match(
-    /function assertReadyForShipping\b[\s\S]*?(?=\n(?:async )?function|\nexport |$)/,
+    /function assertReadyForReceivable\b[\s\S]*?(?=\n(?:async )?function|\nexport |$)/,
   )?.[0] || "";
   assert.ok(readiness);
   assert.match(readiness, /productionProgressReports/);
@@ -580,8 +580,8 @@ test("shipping handoff independently verifies every latest production snapshot i
   assert.match(readiness, /SHIPPING_PRODUCTION_PROGRESS_INCOMPLETE/);
 
   const progressGate = readiness.indexOf("SHIPPING_PRODUCTION_PROGRESS_INCOMPLETE");
-  const containerLedgerGate = readiness.indexOf("releasedContainerMaterialization");
-  assert.ok(progressGate >= 0 && containerLedgerGate > progressGate);
+  assert.ok(progressGate >= 0);
+  assert.match(shippingHandoff, /assertReadyForLoadingFinalization[\s\S]*assertReadyForReceivable\(execution\)[\s\S]*releasedContainerMaterialization\(execution\)/);
 });
 
 test("input and mutation code never perform floating-point quantity arithmetic", () => {

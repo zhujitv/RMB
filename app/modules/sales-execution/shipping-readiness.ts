@@ -8,8 +8,8 @@ export type ShippingReadiness = {
 
 export function salesExecutionShippingReadiness(execution?: SalesExecutionRow | null): ShippingReadiness {
   if (!execution) return { ready: false, reason: "请先打开销售执行单" };
-  if (execution.receivableOrder || execution.shippingStartedAt) {
-    return { ready: false, reason: "该销售执行单已经进入发货" };
+  if (execution.shippingStartedAt) {
+    return { ready: false, reason: "该销售执行单已确认装柜完成" };
   }
   if (execution.status !== "DISPATCHED") {
     return { ready: false, reason: "只有已正式下发的销售执行单可以进入发货" };
@@ -37,6 +37,9 @@ export function salesExecutionShippingReadiness(execution?: SalesExecutionRow | 
   }
   const unfinished = orders.filter((order) => order.productionStatus !== "COMPLETED");
   if (unfinished.length) return { ready: false, reason: `还有 ${unfinished.length} 张采购单未完成生产` };
+  if (!execution.receivableOrder) {
+    return { ready: true, reason: "采购单均已确认并完成生产，可以先创建应收订单；柜号可在提柜后补充" };
+  }
   const orderById = new Map(orders.map((order) => [order.id, order]));
   const containerLoads = (execution.containerLoads || []).filter((load) => (
     load.status !== "VOIDED" && load.allocations.some((allocation) => orderById.has(allocation.purchaseOrderId))
@@ -74,5 +77,5 @@ export function salesExecutionShippingReadiness(execution?: SalesExecutionRow | 
     return salesUnits === null || (deliveredByItem.get(item.id) || BigInt(0)) < salesUnits;
   });
   if (actualQuantityShort) return { ready: false, reason: "整单实装数量不足，需由其它工厂补足后才能进入发货" };
-  return { ready: true, reason: "所有有效采购单均已完工，集装箱已放行且最终实装数量覆盖销售数量" };
+  return { ready: true, reason: "所有集装箱已放行，最终实装数量覆盖销售数量，可以确认装柜完成" };
 }

@@ -77,8 +77,8 @@ export function assertContainerExecutionOpen(
   if (execution.status !== "DISPATCHED") {
     throw codedError("只有已下发的销售执行单可以管理集装箱", 409, "CONTAINER_LOAD_EXECUTION_NOT_DISPATCHED");
   }
-  if (execution.shippingStartedAt || execution.receivableOrder) {
-    throw codedError("销售执行单已进入发货，集装箱已冻结", 409, "CONTAINER_LOAD_EXECUTION_FROZEN");
+  if (execution.shippingStartedAt) {
+    throw codedError("装柜已最终确认，集装箱已冻结", 409, "CONTAINER_LOAD_EXECUTION_FROZEN");
   }
 }
 
