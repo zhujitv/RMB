@@ -53,8 +53,8 @@ export async function openSalesExecutionContainerLoad(
     if (before.status !== "DRAFT" || before.revision !== input.expectedRevision) {
       throw codedError("只有当前版本的草稿集装箱可以开放", 409, "CONTAINER_LOAD_REVISION_CONFLICT");
     }
-    if (!before.containerNo || !before.loadingDate || !before.allocations.length) {
-      throw codedError("开放前必须填写柜号、装柜日期并完成采购明细分配", 409, "CONTAINER_LOAD_OPEN_FIELDS_REQUIRED");
+    if (!before.loadingDate || !before.allocations.length) {
+      throw codedError("开放前必须填写装柜/进舱日期并完成采购明细分配", 409, "CONTAINER_LOAD_OPEN_FIELDS_REQUIRED");
     }
     const poIds = [...new Set(before.allocations.map((row) => row.purchaseOrderId))];
     const eligible = await tx.factoryPurchaseOrder.count({
@@ -70,7 +70,7 @@ export async function openSalesExecutionContainerLoad(
     if (changed.count !== 1) throw codedError("集装箱已变化，请刷新后重试", 409, "CONTAINER_LOAD_REVISION_CONFLICT");
     const saved = await scopedInternalContainerLoad(tx, executionId, containerLoadId, validActor);
     if (!saved) throw codedError("集装箱开放失败", 409, "CONTAINER_LOAD_REVISION_CONFLICT");
-    await writeAudit(request, { id: validActor.id }, "开放集装箱供应商装柜填报", "sales_execution_container_loads", containerLoadId, containerLoadDto(before), containerLoadDto(saved), tx);
+    await writeAudit(request, { id: validActor.id }, before.containerNo ? "开放集装箱供应商装柜填报" : "开放散货进舱供应商填报", "sales_execution_container_loads", containerLoadId, containerLoadDto(before), containerLoadDto(saved), tx);
     return containerLoadDto(saved);
   });
 }

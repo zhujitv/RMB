@@ -62,7 +62,7 @@ test("released short-loading frees retained stock for the next container plan", 
 
 test("internal execution owns one multi-supplier container master workflow", () => {
   assert.match(executionDetail, /<ContainerLoadsPanel/);
-  assert.match(internalPanel, /创建柜总单/);
+  assert.match(internalPanel, /创建装运单/);
   assert.match(editor, /allocations: lines\.flatMap/);
   assert.match(editor, /purchaseOrderItemId/);
   assert.match(editor, /plannedQuantity/);
@@ -74,6 +74,16 @@ test("internal execution owns one multi-supplier container master workflow", () 
   assert.match(offlineResult, /offline-loading-result/);
   assert.match(offlineResult, /expectedRevision: load\.revision/);
   assert.match(offlineResult, /containerLoadId: load\.id/);
+});
+
+test("bulk warehouse loading is explicit and does not require a container number", () => {
+  assert.match(internalPanel, /散货进舱无需柜号/);
+  assert.match(editor, /柜号等运输资料可在后续物流环节补充/);
+  assert.match(editor, /未知或散货进舱请留空/);
+  assert.match(editor, /装柜 \/ 进舱日期/);
+  assert.doesNotMatch(internalCard, /!load\.containerNo \|\| !load\.loadingDate/);
+  assert.match(internalCard, /散货进舱（无柜号）/);
+  assert.match(supplierCard, /散货进舱（无柜号）/);
 });
 
 test("supplier portal receives container-scoped tasks and exposes no other supplier or internal decision data", () => {

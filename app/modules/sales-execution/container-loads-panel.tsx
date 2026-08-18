@@ -26,9 +26,9 @@ export function ContainerLoadsPanel({ executionId, executionRevision, loads, ord
   }
 
   return <section className={styles.panel} aria-labelledby="container-loads-heading">
-    <header className={styles.header}><div><p className={styles.eyebrow}>装柜协同</p><h3 id="container-loads-heading">集装箱柜总单</h3><p>先创建一个柜，再把多家供应商的采购明细分配到同一柜；供应商只会看到自己的部分。</p></div>{canManage && !shippingStarted ? <button className={styles.button} type="button" disabled={!activeOrders.length} onClick={() => setEditing(null)}>创建柜总单</button> : null}</header>
+    <header className={styles.header}><div><p className={styles.eyebrow}>装运协同</p><h3 id="container-loads-heading">装柜 / 散货进舱总单</h3><p>这里先确认多家供应商的实际装运数量，柜号、柜型、封号和提单等资料可在后续物流环节填写；散货进舱无需柜号。</p></div>{canManage && !shippingStarted ? <button className={styles.button} type="button" disabled={!activeOrders.length} onClick={() => setEditing(null)}>创建装运单</button> : null}</header>
     {notice ? <div className={styles.notice} role="status">{notice}</div> : null}
-    {!loads.length ? <div className={styles.empty}>尚未创建柜总单。生产完成后，可按实际装柜计划把多家供应商合并到同一个集装箱。</div> : <div className={styles.resultList}>{loads.map((load) => <ContainerLoadCard key={load.id} executionId={executionId} load={load} allLoads={loads} orders={orders} canManage={canManage} shippingStarted={shippingStarted} onEdit={() => setEditing(load)} onSaved={saved} />)}</div>}
+    {!loads.length ? <div className={styles.empty}>尚未创建装运单。整柜按集装箱登记；散货可直接按进舱批次登记，不需要柜号。</div> : <div className={styles.resultList}>{loads.map((load) => <ContainerLoadCard key={load.id} executionId={executionId} load={load} allLoads={loads} orders={orders} canManage={canManage} shippingStarted={shippingStarted} onEdit={() => setEditing(load)} onSaved={saved} />)}</div>}
     {editing !== undefined ? <ContainerLoadEditor executionId={executionId} executionRevision={executionRevision} orders={orders} loads={loads} editing={editing} onSaved={saved} onClose={() => setEditing(undefined)} /> : null}
   </section>;
 }
