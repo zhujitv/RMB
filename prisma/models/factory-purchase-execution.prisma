@@ -135,3 +135,33 @@ model FactoryPurchaseOrderSettlement {
   @@index([createdById])
   @@map("factory_purchase_order_settlements")
 }
+
+model FactoryPurchaseTransitionSettlement {
+  id                 String   @id @default(cuid())
+  costId             String   @unique @map("cost_id")
+  orderId            String   @map("order_id")
+  supplierId         String   @map("supplier_id")
+  customsDocumentId  String   @map("customs_document_id")
+  goodsAmountWithTax Decimal  @map("goods_amount_with_tax") @db.Decimal(18, 2)
+  increaseAmount     Decimal  @default(0) @map("increase_amount") @db.Decimal(18, 2)
+  decreaseAmount     Decimal  @default(0) @map("decrease_amount") @db.Decimal(18, 2)
+  finalPayableAmount Decimal  @map("final_payable_amount") @db.Decimal(18, 2)
+  currency           String
+  itemSnapshot       Json     @map("item_snapshot")
+  customsSnapshot    Json     @map("customs_snapshot")
+  reason             String   @db.Text
+  confirmedById      String   @map("confirmed_by")
+  confirmedAt        DateTime @default(now()) @map("confirmed_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  cost            OrderCost       @relation(fields: [costId], references: [id], onDelete: Restrict)
+  order           ReceivableOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  supplier        Supplier        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  customsDocument OrderDocument   @relation(fields: [customsDocumentId], references: [id], onDelete: Restrict)
+  confirmedBy     User            @relation("FactoryPurchaseTransitionSettlementsConfirmed", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@index([orderId, supplierId])
+  @@index([customsDocumentId])
+  @@index([confirmedById])
+  @@map("factory_purchase_transition_settlements")
+}

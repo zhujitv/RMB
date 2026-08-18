@@ -131,6 +131,7 @@ model Supplier {
   factoryDocumentRequests SupplierDocumentRequest[]
   ocrTasks                OcrTask[]
   factoryPurchaseOrders   FactoryPurchaseOrder[]
+  factoryTransitionSettlements FactoryPurchaseTransitionSettlement[]
 
   @@index([supplierName])
   @@index([supplierType])

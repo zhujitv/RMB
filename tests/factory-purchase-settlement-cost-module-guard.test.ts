@@ -35,6 +35,7 @@ const paymentUi = readFileSync("app/modules/costs/cost-document-actions-panel.ts
 
 test("factory purchase settlement costs have a distinct cost-module business guard", () => {
   assert.equal(isFactoryPurchaseSettlementCost({ sourceType: "FACTORY_PURCHASE_SETTLEMENT" }), true);
+  assert.equal(isFactoryPurchaseSettlementCost({ sourceType: "FACTORY_PURCHASE_TRANSITION_SETTLEMENT" }), true);
   assert.equal(isFactoryPurchaseSettlementCost({ sourceType: "MANUAL" }), false);
   assert.throws(
     () => assertCostCanBeManagedInCostModule({ sourceType: "FACTORY_PURCHASE_SETTLEMENT" }, "修改"),
@@ -42,8 +43,12 @@ test("factory purchase settlement costs have a distinct cost-module business gua
       const typed = error as { status?: number; code?: string; message?: string };
       return typed.status === 400
         && typed.code === "FACTORY_PURCHASE_SETTLEMENT_COST_MANAGED_BY_PURCHASE"
-        && typed.message === "采购结算生成的成本不能在成本管理修改，请到采购执行模块的结算与付款中操作。";
+        && typed.message === "采购结算或过渡结算已冻结的成本不能在成本管理修改，请到采购执行或资料回传中处理。";
     },
+  );
+  assert.throws(
+    () => assertCostCanBeManagedInCostModule({ sourceType: "FACTORY_PURCHASE_TRANSITION_SETTLEMENT" }, "作废"),
+    (error: unknown) => (error as { code?: string }).code === "FACTORY_PURCHASE_SETTLEMENT_COST_MANAGED_BY_PURCHASE",
   );
   assert.doesNotThrow(() => assertCostCanBeManagedInCostModule({ sourceType: "MANUAL" }, "修改"));
   assert.throws(
@@ -112,8 +117,9 @@ test("generic order-document APIs cannot mutate purchase-settlement cost documen
 });
 
 test("settlement costs serialize and render as read-only while keeping document viewing", () => {
-  assert.match(serialization, /sourceLabel: cost\.sourceType === FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE \? "采购结算生成"/);
-  assert.match(serialization, /采购结算生成成本由采购执行模块管理/);
+  assert.match(serialization, /cost\.sourceType === FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE \? "采购结算生成"/);
+  assert.match(serialization, /采购或过渡结算成本由原业务流程管理/);
+  assert.match(serialization, /历史过渡结算/);
   assert.match(costUi, /function isFactoryPurchaseSettlementCost/);
   assert.match(costUi, /const manualCost = !systemManagedCost/);
   assert.match(costUi, /!logisticsGenerated && !factorySettlementGenerated/);

@@ -31,7 +31,7 @@ export function isLogisticsGeneratedCost(cost: Pick<CostRow, "sourceType">) {
 }
 
 export function isFactoryPurchaseSettlementCost(cost: Pick<CostRow, "sourceType">) {
-  return cost.sourceType === "FACTORY_PURCHASE_SETTLEMENT";
+  return ["FACTORY_PURCHASE_SETTLEMENT", "FACTORY_PURCHASE_TRANSITION_SETTLEMENT"].includes(cost.sourceType || "");
 }
 
 export function isSystemManagedCost(cost: Pick<CostRow, "sourceType">) {

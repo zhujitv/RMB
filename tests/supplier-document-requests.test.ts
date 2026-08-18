@@ -10,9 +10,16 @@ const uploadService = service;
 const notificationEngine = readNotificationEngineSource();
 const supplierModule = readSupplierDocumentsModuleSource();
 const workspaceModuleContent = readFileSync("app/WorkspaceModuleContent.tsx", "utf8");
-const supplierCreateDialog = readFileSync("app/modules/supplier-documents/create-request-dialog.tsx", "utf8");
+const supplierCreateDialog = [
+  "app/modules/supplier-documents/create-request-dialog.tsx",
+  "app/modules/supplier-documents/transition-settlement-panel.tsx",
+  "app/modules/supplier-documents/use-transition-settlement-form.ts",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 const supplierRequestCreateService = readFileSync("lib/platform/supplier-document-request-create.ts", "utf8");
-const supplierTaxContractWorkflow = readFileSync("lib/platform/supplier-tax-contract-workflow.ts", "utf8");
+const supplierTaxContractWorkflow = [
+  "lib/platform/supplier-tax-contract-workflow.ts",
+  "lib/platform/supplier-tax-contract-request-create.ts",
+].map((file) => readFileSync(file, "utf8")).join("\n");
 const supplierDocumentStyles = readCssModuleGraphSource("app/styles/workspace-shell/supplier-documents.module.css");
 const supplierCostCandidatesRoute = readFileSync("app/api/supplier-document-requests/cost-candidates/route.ts", "utf8");
 const supplierRequestListRoute = readFileSync("app/api/supplier-document-requests/route.ts", "utf8");
@@ -197,7 +204,8 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierCreateDialog, /role="checkbox"/);
   assert.match(supplierCreateDialog, /aria-checked=\{requiredTypes\.includes\(item\.value\)\}/);
   assert.match(supplierCreateDialog, /supplierDocumentRequestTypeCardSelected/);
-  assert.doesNotMatch(supplierCreateDialog, /type="checkbox"/);
+  assert.match(supplierCreateDialog, /历史过渡结算/);
+  assert.match(supplierCreateDialog, /transitionItems/);
   assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCard/);
   assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCard:hover/);
   assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCard:focus-visible/);

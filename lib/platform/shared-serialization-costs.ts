@@ -157,7 +157,7 @@ function serializedCostDeleteBlockedReasons(cost: CostLike) {
   if (serializedCostProfitLinked(cost)) reasons.push("已关联利润或提成结算");
   if (cost.costConfirmed) reasons.push("成本已确认");
 	if (isLogisticsGeneratedCostSourceType(cost.sourceType) || cost.generatedLogisticsExpense) reasons.push("物流费用同步成本不能在成本管理物理删除");
-  if (cost.sourceType === FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE) reasons.push("采购结算生成成本由采购执行模块管理");
+  if ([FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE, "FACTORY_PURCHASE_TRANSITION_SETTLEMENT"].includes(cost.sourceType || "")) reasons.push("采购或过渡结算成本由原业务流程管理");
   return [...new Set(reasons)];
 }
 
@@ -199,7 +199,7 @@ export function fallbackSerializedCost(costInput: unknown = {}) {
     sourceType: cost.sourceType || "MANUAL",
     sourceId: cost.sourceId || "",
     logisticsSource: serializeLogisticsCostSource(cost),
-		sourceLabel: cost.sourceType === FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE ? "采购结算生成" : isLogisticsGeneratedCostSourceType(cost.sourceType) ? "物流费用审核生成" : "人工录入",
+		sourceLabel: cost.sourceType === "FACTORY_PURCHASE_TRANSITION_SETTLEMENT" ? "历史过渡结算" : cost.sourceType === FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE ? "采购结算生成" : isLogisticsGeneratedCostSourceType(cost.sourceType) ? "物流费用审核生成" : "人工录入",
     remark: cost.remark || "",
     documents: [],
     createdAt: cost.createdAt,
@@ -280,7 +280,7 @@ export function serializeCost(costInput: unknown) {
     sourceType: cost.sourceType || "MANUAL",
     sourceId: cost.sourceId || "",
     logisticsSource: serializeLogisticsCostSource(cost),
-		sourceLabel: cost.sourceType === FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE ? "采购结算生成" : isLogisticsGeneratedCostSourceType(cost.sourceType) ? "物流费用审核生成" : "人工录入",
+		sourceLabel: cost.sourceType === "FACTORY_PURCHASE_TRANSITION_SETTLEMENT" ? "历史过渡结算" : cost.sourceType === FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE ? "采购结算生成" : isLogisticsGeneratedCostSourceType(cost.sourceType) ? "物流费用审核生成" : "人工录入",
     remark: cost.remark || "",
     createdBy: serializeUser(cost.createdBy),
     updatedBy: serializeUser(cost.updatedBy),

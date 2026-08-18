@@ -81,6 +81,7 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
   const draft = task.contractDraft || task.contractApproved;
   const issues = task.invoiceMatch?.issues || [];
   const hasInvoice = (task.documents || []).some((document) => document.documentType === "SUPPLIER_INVOICE");
+  const isTransitionContract = draft?.sourceType === "FACTORY_PURCHASE_TRANSITION_SETTLEMENT";
 
   async function reviewContract(decision: "APPROVED" | "REJECTED") {
     if (decision === "APPROVED" && draftDirty) {
@@ -173,7 +174,8 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
       {draft ? (
         <div className={styles.supplierDocumentUploadBody}>
           <p>供方：{draft.supplierName || "-"}　需方：{draft.buyerName || "-"}　总金额：{draft.currency || "CNY"} {draft.totalAmountWithTax || "0.00"}</p>
-          {isAdmin && canWrite && task.contractStatus === "PENDING_REVIEW" ? (
+          {isTransitionContract ? <p><b>历史过渡结算：</b>本合同基于已发货报关订单的冻结过渡凭证生成，未补造历史采购和生产记录。</p> : null}
+          {isAdmin && canWrite && task.contractStatus === "PENDING_REVIEW" && !isTransitionContract ? (
             <ContractDraftEditor key={`${task.id}-${task.contractRevision || 1}`} items={draft.items || []} busy={busy} onSave={saveDraft} onDirtyChange={setDraftDirty} />
           ) : <div className={styles.tableScroll}>
             <table className={styles.compactTable}>

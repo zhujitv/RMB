@@ -1,4 +1,5 @@
 import { FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE } from "./factory-purchase-order-settlement-values";
+import { FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE } from "./factory-purchase-transition-settlement-values";
 import { isLogisticsGeneratedCostSourceType } from "./logistics-generated-cost-source-types";
 import { codedError } from "./shared-base-errors";
 
@@ -8,7 +9,10 @@ type CostModuleManagedSource = {
 };
 
 export function isFactoryPurchaseSettlementCost(cost: Pick<CostModuleManagedSource, "sourceType">) {
-  return cost.sourceType === FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE;
+  return [
+    FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE,
+    FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE,
+  ].includes(cost.sourceType || "");
 }
 
 export function assertFactoryPurchaseSettlementCostCanBeManagedInCostModule(
@@ -17,7 +21,7 @@ export function assertFactoryPurchaseSettlementCostCanBeManagedInCostModule(
 ) {
   if (!isFactoryPurchaseSettlementCost(cost)) return;
   throw codedError(
-    `采购结算生成的成本不能在成本管理${action}，请到采购执行模块的结算与付款中操作。`,
+    `采购结算或过渡结算已冻结的成本不能在成本管理${action}，请到采购执行或资料回传中处理。`,
     400,
     "FACTORY_PURCHASE_SETTLEMENT_COST_MANAGED_BY_PURCHASE",
   );

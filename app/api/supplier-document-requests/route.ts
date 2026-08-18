@@ -48,6 +48,11 @@ export async function POST(request: NextRequest) {
       requiredDocumentTypes: String(formData.get("requiredDocumentTypes") || ""),
       dueDate: String(formData.get("dueDate") || ""),
       message: String(formData.get("message") || ""),
+      transitionItems: String(formData.get("transitionItems") || ""),
+      transitionIncreaseAmount: String(formData.get("transitionIncreaseAmount") || "0"),
+      transitionDecreaseAmount: String(formData.get("transitionDecreaseAmount") || "0"),
+      transitionReason: String(formData.get("transitionReason") || ""),
+      transitionConfirmed: String(formData.get("transitionConfirmed") || "") === "true",
     });
     return NextResponse.json({
       success: true,

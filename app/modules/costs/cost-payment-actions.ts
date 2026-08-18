@@ -121,8 +121,8 @@ export function createCostPaymentActions(
   async function uploadPaymentVoucher(cost: CostRow, file: File | null) {
     if (!file) return;
     if (!isPaymentVoucherEvidenceEnabled(cost)) {
-      setDocumentError(cost.sourceType === "FACTORY_PURCHASE_SETTLEMENT"
-        ? "采购结算全额结清后才能上传最终付款凭证。"
+      setDocumentError(["FACTORY_PURCHASE_SETTLEMENT", "FACTORY_PURCHASE_TRANSITION_SETTLEMENT"].includes(cost.sourceType || "")
+        ? "采购或过渡结算成本全额结清后才能上传最终付款凭证。"
         : "付款凭证仅适用于产品供应商货款。");
       return;
     }

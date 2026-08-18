@@ -196,6 +196,7 @@ export function supplierDocumentRequestFactoryCostWhere({
       ...(orderId ? [{ orderId }] : []),
       ...(supplierId ? [{ supplierId }] : []),
       { supplierId: { not: null } },
+      { sourceType: { in: ["MANUAL", "FACTORY_PURCHASE_SETTLEMENT", "FACTORY_PURCHASE_TRANSITION_SETTLEMENT"] } },
     ],
     deletedAt: null,
     status: { not: ORDER_COST_STATUS_VOID },
@@ -235,6 +236,8 @@ export function serializeSupplierDocumentCostCandidate(cost: FactorySupplierRetu
     currency: cost.currency || "CNY",
     amount: Number(cost.amount || 0),
     amountCny: Number(cost.amountCny || 0),
+    sourceType: cost.sourceType || "MANUAL",
+    requiresTransitionSettlement: cost.sourceType !== "FACTORY_PURCHASE_SETTLEMENT",
     createdAt: cost.createdAt,
   };
 }

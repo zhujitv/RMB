@@ -8,6 +8,8 @@ import { SearchAutocomplete } from "../../SearchAutocomplete";
 import styles from "../../WorkspaceShell.module.css";
 import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 import type { SupplierDocumentTask } from "./types";
+import { TransitionSettlementPanel } from "./transition-settlement-panel";
+import { useTransitionSettlementForm } from "./use-transition-settlement-form";
 
 type FactoryCostCandidate = {
   id: string;
@@ -22,6 +24,8 @@ type FactoryCostCandidate = {
   amount?: number;
   amountCny?: number;
   createdAt?: string;
+  sourceType?: string;
+  requiresTransitionSettlement?: boolean;
 };
 
 type CostCandidatesResponse = {
@@ -52,12 +56,14 @@ export function CreateSupplierDocumentRequestDialog({
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const transition = useTransitionSettlementForm();
   const savingRef = useRef(false);
   const formDirty = Boolean(
     selectedCost
     || dueDate
     || message.trim()
-    || requiredTypes.join("|") !== DEFAULT_DOCUMENT_TYPES.join("|"),
+    || requiredTypes.join("|") !== DEFAULT_DOCUMENT_TYPES.join("|")
+    || transition.dirty
   );
   useWorkspaceTabDirty(formDirty);
   useWorkspaceTabBusy(saving);
@@ -83,6 +89,8 @@ export function CreateSupplierDocumentRequestDialog({
       setError("请至少选择一种需要回传的资料。");
       return;
     }
+    const transitionError = transition.validationError(Boolean(selectedCost.requiresTransitionSettlement));
+    if (transitionError) { setError(transitionError); return; }
     const formData = new FormData();
     formData.append("costId", selectedCost.id);
     formData.append("orderId", selectedCost.orderId);
@@ -90,6 +98,9 @@ export function CreateSupplierDocumentRequestDialog({
     formData.append("requiredDocumentTypes", requiredTypes.join(","));
     formData.append("dueDate", dueDate);
     formData.append("message", message);
+    if (selectedCost.requiresTransitionSettlement) {
+      transition.appendFormData(formData);
+    }
     savingRef.current = true;
     setSaving(true);
     try {
@@ -104,6 +115,12 @@ export function CreateSupplierDocumentRequestDialog({
       savingRef.current = false;
       setSaving(false);
     }
+  }
+
+  function selectCost(cost: FactoryCostCandidate | null) {
+    setSelectedCost(cost);
+    transition.reset();
+    setError("");
   }
 
   function toggleRequiredType(value: string, checked: boolean) {
@@ -146,7 +163,7 @@ export function CreateSupplierDocumentRequestDialog({
               getLabel={costCandidateLabel}
               getDescription={costCandidateDescription}
               search={searchFactoryCosts}
-              onSelect={setSelectedCost}
+              onSelect={selectCost}
             />
           </label>
           <label>
@@ -179,6 +196,9 @@ export function CreateSupplierDocumentRequestDialog({
               </button>
             ))}
           </fieldset>
+          {selectedCost?.requiresTransitionSettlement ? (
+            <TransitionSettlementPanel cost={selectedCost} saving={saving} form={transition} onError={setError} />
+          ) : null}
           <label className={styles.supplierDocumentRequestMessage}>
             通知备注
             <textarea
@@ -193,13 +213,13 @@ export function CreateSupplierDocumentRequestDialog({
 
         <div className={styles.quickCreateMeta}>
           <span>只能基于成本管理中已登记的工厂供应商成本创建。</span>
-          <span>合同品名、数量、单位取自报关单与实际装柜数据；合同金额取自最终采购结算。供应商回传资料仅支持 PDF。</span>
+          <span>正常订单取最终采购结算；历史订单取已冻结的过渡结算凭证。供应商回传资料仅支持 PDF。</span>
         </div>
 
         <div className={styles.modalFooter}>
           <button className={styles.secondaryButton} type="button" onClick={requestClose} disabled={saving}>取消</button>
           <button className={styles.primaryButtonCompact} type="submit" disabled={saving}>
-            {saving ? "生成中..." : "生成合同草稿"}
+            {saving ? "生成中..." : selectedCost?.requiresTransitionSettlement && !transition.preview?.existing ? "确认过渡结算并生成草稿" : "生成合同草稿"}
           </button>
         </div>
       </form>
@@ -221,6 +241,7 @@ function costCandidateDescription(cost: FactoryCostCandidate) {
   const parts = [
     cost.billOfLadingNo ? `提单号 ${cost.billOfLadingNo}` : "",
     cost.supplierType || "",
+    cost.requiresTransitionSettlement ? "需过渡结算" : "工厂最终结算",
     `折人民币 ${moneyLabel("CNY", cost.amountCny)}`,
   ].filter(Boolean);
   return parts.join(" / ");

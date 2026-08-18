@@ -89,6 +89,7 @@ model ReceivableOrder {
   shipsgoTrackings              ShipsgoTracking[]
   ocrTasks                      OcrTask[]
   ocrRawResults                 OcrRawResult[]
+  factoryTransitionSettlements  FactoryPurchaseTransitionSettlement[]
 
   @@index([orderNo])
   @@index([blNo])

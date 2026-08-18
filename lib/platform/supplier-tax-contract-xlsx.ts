@@ -83,6 +83,7 @@ function worksheet(draft: SupplierTaxContractDraft) {
   row += 2;
   const clauses = [
     "一、品名、数量和单位以经人工审核确认的报关单商品信息为准。",
+    ...(draft.sourceType === "FACTORY_PURCHASE_TRANSITION_SETTLEMENT" ? ["本合同由已发货报关历史订单的冻结过渡结算凭证生成。"] : []),
     "二、合同金额按本订单实际装柜计价数量计算，留仓及未装运数量不计入货款。",
     "三、供方须按本合同开具增值税发票；发票品名、数量、单位及价税合计必须与本合同一致。",
     "四、付款方式：按双方确认的采购付款条件执行。",

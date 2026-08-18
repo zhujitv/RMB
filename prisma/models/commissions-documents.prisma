@@ -71,6 +71,7 @@ model OrderDocument {
   logisticsExpenseInvoices LogisticsExpense[]       @relation("LogisticsExpenseInvoiceDocument")
   ocrTasks                 OcrTask[]
   ocrRawResults            OcrRawResult[]
+  factoryTransitionSettlements FactoryPurchaseTransitionSettlement[]
 
   @@index([orderId])
   @@index([costId])

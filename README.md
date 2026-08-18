@@ -1040,9 +1040,10 @@ npm run verify:release
 20260816160000_factory_purchase_production_progress
 20260816190000_factory_purchase_delivery_quantity_variance
 20260816210000_factory_purchase_loading_result
+20260819100000_factory_purchase_transition_settlement
 ```
 
-这些迁移依次增加采购单短信通知、生产进度流水、交付数量差异审批，以及支持一柜多供应商和一张采购单跨多柜的装柜总账；供应商结算按已放行实装数量计算，留仓货物不计货款。生产执行前必须先备份并检查 migration 状态，禁止使用 `prisma db push` 替代正式 migration。
+这些迁移依次增加采购单短信通知、生产进度流水、交付数量差异审批、一柜多供应商和一张采购单跨多柜的装柜总账，以及历史订单过渡结算凭证；供应商结算按已放行实装数量计算，留仓货物不计货款。生产执行前必须先备份并检查 migration 状态，禁止使用 `prisma db push` 替代正式 migration。
 
 ### 操作手册与 GitHub 发布说明
 

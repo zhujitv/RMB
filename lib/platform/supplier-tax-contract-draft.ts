@@ -54,6 +54,8 @@ export type SupplierTaxContractDraft = {
   generatedAt: string;
   manualEditedAt?: string;
   ocrRequestIds: string[];
+  sourceType?: string;
+  transitionSettlementId?: string;
 };
 
 function dateText(value: Date | null | undefined) {

@@ -71,6 +71,8 @@ export type SupplierTaxContractDraft = {
   buyerTaxNumber?: string;
   totalAmountWithTax?: string;
   currency?: string;
+  sourceType?: string;
+  transitionSettlementId?: string;
   warnings?: string[];
   blockingIssues?: string[];
   items?: Array<{
