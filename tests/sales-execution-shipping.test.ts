@@ -165,6 +165,8 @@ test("route and UI expose one explicit manual handoff with linked-order navigati
   assert.match(hook, /expectedRevision: Number\(execution\.revision \|\| 1\)/);
   assert.match(hook, /不会自动填写实际发货日期或实际发货金额/);
   assert.match(detail, /shippingStarting \? "处理中\.\.\." : "进入发货"/);
+  assert.doesNotMatch(detail, /disabled=\{[^}]*!shippingReadiness\.ready/);
+  assert.match(detail, /title=\{shippingReadiness\.ready \? undefined : shippingReadiness\.reason\}/);
   assert.match(detail, /打开应收订单/);
   assert.doesNotMatch(purchaseList, /onEnterShipping/);
   assert.match(moduleSource, /canWrite && canWriteOrders/);
