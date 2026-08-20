@@ -4,6 +4,11 @@ import { readR2Object } from "../r2";
 import { recognizeTencentCustomsGoods } from "./tencent-customs-ocr-experiment";
 import { codedError, nonEmpty } from "./shared-base-utils";
 import { domesticContractIssues } from "./business-entity-domestic-bank";
+import {
+  dateText,
+  supplierTaxContractSigningDate,
+  supplierTaxContractSupplierName,
+} from "./supplier-tax-contract-values";
 
 const ACTIVE_PURCHASE_ORDER_STATUSES = ["DISPATCHED", "ACCEPTED", "DELIVERY_PROPOSED"] as const;
 
@@ -58,10 +63,6 @@ export type SupplierTaxContractDraft = {
   sourceType?: string;
   transitionSettlementId?: string;
 };
-
-function dateText(value: Date | null | undefined) {
-  return value ? value.toISOString().slice(0, 10) : "";
-}
 
 function decimalText(value: Prisma.Decimal, places: number) {
   const fixed = value.toFixed(places);
@@ -218,6 +219,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     throw codedError("实际装柜数量乘确认单价与采购结算货款基数不一致，请先修复结算数据。", 409, "SUPPLIER_TAX_CONTRACT_AMOUNT_MISMATCH");
   }
   const contractNo = purchaseOrder.execution.customerOrderNo;
+  const latestDeliveryDateValue = purchaseOrder.confirmedSupplierDeliveryDate || purchaseOrder.requestedDeliveryDate;
   return {
     contractNo,
     customerOrderNo: purchaseOrder.execution.customerOrderNo,
@@ -228,7 +230,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     customsDocumentId: customsDocument.id,
     customsDeclarationNo: purchaseOrder.execution.receivableOrder.customsDeclarationNo || "",
     supplierId: purchaseOrder.supplierId,
-    supplierName: purchaseOrder.supplier.invoiceTitle || purchaseOrder.supplier.supplierName,
+    supplierName: supplierTaxContractSupplierName(purchaseOrder.supplier),
     supplierTaxNumber: purchaseOrder.supplier.taxNumber || "",
     supplierAddress: purchaseOrder.supplier.address || "",
     supplierPhone: purchaseOrder.supplier.phone || "",
@@ -242,8 +244,8 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     buyerBankName: purchaseOrder.execution.businessEntity.domesticBankName || "",
     buyerBankAccount: purchaseOrder.execution.businessEntity.domesticBankAccount || "",
     signingPlace: "浙江诸暨",
-    signingDate: dateText(new Date()),
-    latestDeliveryDate: dateText(purchaseOrder.confirmedSupplierDeliveryDate || purchaseOrder.requestedDeliveryDate),
+    signingDate: supplierTaxContractSigningDate(latestDeliveryDateValue),
+    latestDeliveryDate: dateText(latestDeliveryDateValue),
     currency: purchaseOrder.purchaseCurrency,
     totalAmountWithTax: calculatedTotal.toFixed(2),
     items,

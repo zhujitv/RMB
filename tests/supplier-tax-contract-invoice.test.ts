@@ -10,6 +10,7 @@ const { matchSupplierInvoiceToContract } = jiti("../lib/platform/supplier-invoic
 const { generateSupplierTaxContractXlsx } = jiti("../lib/platform/supplier-tax-contract-xlsx.ts") as typeof import("../lib/platform/supplier-tax-contract-xlsx.ts");
 const { applySupplierTaxContractDraftEdits } = jiti("../lib/platform/supplier-tax-contract-draft-edit.ts") as typeof import("../lib/platform/supplier-tax-contract-draft-edit.ts");
 const { normalizeSupplierTaxContractNumber, supplierTaxContractNumberFromJson } = jiti("../lib/platform/supplier-tax-contract-number.ts") as typeof import("../lib/platform/supplier-tax-contract-number.ts");
+const { normalizeSupplierTaxContractDraftValues, supplierTaxContractSigningDate, supplierTaxContractSupplierName } = jiti("../lib/platform/supplier-tax-contract-values.ts") as typeof import("../lib/platform/supplier-tax-contract-values.ts");
 
 const contract = {
   contractNo: "PV258",
@@ -97,6 +98,7 @@ test("generated tax contract workbook contains no specification column and freez
   assert.equal(body.subarray(0, 2).toString("binary"), "PK");
   const zip = await JSZip.loadAsync(body);
   const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("string");
+  const styles = await zip.file("xl/styles.xml")?.async("string");
   assert.match(sheet || "", /出口产品订货合同/);
   assert.match(sheet || "", /PV258/);
   assert.match(sheet || "", /木塑复合地板/);
@@ -114,6 +116,9 @@ test("generated tax contract workbook contains no specification column and freez
   assert.match(sheet || "", /<sheetFormatPr[^>]*defaultRowHeight="14"/);
   assert.match(sheet || "", /<c r="B9"[^>]*s="8"/);
   assert.match(sheet || "", /<c r="F9"[^>]*s="8"/);
+  assert.match(styles || "", /formatCode="0\.######"/);
+  assert.match(styles || "", /formatCode="0\.00"/);
+  assert.doesNotMatch(styles || "", /#,##/);
   assert.doesNotMatch(sheet || "", /规格型号/);
 });
 
@@ -142,6 +147,38 @@ test("tax contracts use the dedicated domestic buyer account instead of CNY inte
   assert.match(transitionSource, /buyerBankAccount: entity\.domesticBankAccount/);
   assert.doesNotMatch(draftSource, /buyerBankName: cnyAccount/);
   assert.doesNotMatch(transitionSource, /buyerBankName: cnyAccount/);
+});
+
+test("tax contracts use supplier master name and sign one month before delivery", () => {
+  assert.equal(
+    supplierTaxContractSupplierName({ supplierName: "浙江钱隆新材料有限公司", invoiceTitle: "201000277274358" }),
+    "浙江钱隆新材料有限公司",
+  );
+  assert.equal(supplierTaxContractSigningDate(new Date("2026-08-28T00:00:00.000Z")), "2026-07-28");
+  assert.equal(supplierTaxContractSigningDate(new Date("2026-03-31T00:00:00.000Z")), "2026-02-28");
+  assert.equal(supplierTaxContractSigningDate(new Date("2026-01-30T00:00:00.000Z")), "2025-12-30");
+  assert.deepEqual(
+    normalizeSupplierTaxContractDraftValues(
+      { ...contract, supplierName: "201000277274358", signingDate: "2026-08-20", latestDeliveryDate: "2026-08-28" },
+      { supplierName: "浙江钱隆新材料有限公司" },
+    ),
+    { ...contract, supplierName: "浙江钱隆新材料有限公司", signingDate: "2026-07-28", latestDeliveryDate: "2026-08-28" },
+  );
+
+  const draftSource = readFileSync("lib/platform/supplier-tax-contract-draft.ts", "utf8");
+  const transitionSource = readFileSync("lib/platform/supplier-transition-settlement.ts", "utf8");
+  const serializerSource = readFileSync("lib/platform/supplier-document-request-serializers.ts", "utf8");
+  const templateSource = readFileSync("lib/platform/supplier-document-request-template.ts", "utf8");
+  assert.match(draftSource, /supplierTaxContractSupplierName\(purchaseOrder\.supplier\)/);
+  assert.match(transitionSource, /supplierTaxContractSupplierName\(supplier\)/);
+  assert.doesNotMatch(draftSource, /supplierName:\s*purchaseOrder\.supplier\.invoiceTitle \|\| purchaseOrder\.supplier\.supplierName/);
+  assert.doesNotMatch(transitionSource, /supplierName:\s*supplier\.invoiceTitle \|\| supplier\.supplierName/);
+  assert.match(draftSource, /supplierTaxContractSigningDate\(latestDeliveryDateValue\)/);
+  assert.match(transitionSource, /supplierTaxContractSigningDate\(latestDeliveryDateValue\)/);
+  assert.match(transitionSource, /cost\.order\.actualShipmentDate \|\| cost\.order\.blDate \|\| cost\.order\.customsDeclarationDate/);
+  assert.match(serializerSource, /normalizedTaxContractJson\(row\.contractApproved, contractSupplierName\)/);
+  assert.match(templateSource, /normalizedTaxContractTemplateDraft\(row\)/);
+  assert.match(templateSource, /generateSupplierTaxContractXlsx\(taxContractDraft\)/);
 });
 
 test("tax contract adds one bordered product row per item and shifts the remaining template", async () => {

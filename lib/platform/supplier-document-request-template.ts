@@ -81,10 +81,37 @@ import {
   supplierRecipientEmails,
   uniqueEmails,
 } from "./supplier-document-request-serialization";
+import { generateSupplierTaxContractXlsx } from "./supplier-tax-contract-xlsx";
+import type { SupplierTaxContractDraft } from "./supplier-tax-contract-draft";
+import {
+  normalizeSupplierTaxContractDraftValues,
+  supplierTaxContractSupplierName,
+} from "./supplier-tax-contract-values";
+
+function normalizedTaxContractTemplateDraft(row: SupplierDocumentRequestRow) {
+  const draft = row.contractApproved || row.contractDraft;
+  if (!draft || typeof draft !== "object" || Array.isArray(draft) || row.contractStatus === "LEGACY") return null;
+  const supplierName = row.supplier ? supplierTaxContractSupplierName(row.supplier) : "";
+  return normalizeSupplierTaxContractDraftValues(draft as Record<string, unknown>, { supplierName }) as unknown as SupplierTaxContractDraft;
+}
 
 export async function getSupplierDocumentRequestTemplate(request: AuditRequestLike, actor: ActorLike, requestId: string) {
   assertRead(actor, "supplierDocuments");
   const row = await loadSupplierDocumentRequest(requestId, actor);
+  const taxContractDraft = normalizedTaxContractTemplateDraft(row);
+  if (taxContractDraft) {
+    const body = await generateSupplierTaxContractXlsx(taxContractDraft);
+    await runNonCriticalTask("合同样本下载日志写入", () => writeAudit(request, actor, "下载供应商合同样本", "supplier_document_requests", row.id, null, {
+      orderNo: row.order.orderNo,
+      supplierId: row.supplierId,
+      regeneratedFromContractDraft: true,
+    }));
+    return {
+      body,
+      mimeType: EXCEL_TEMPLATE_MIME,
+      fileName: row.templateOriginalName || row.templateFileName || `${taxContractDraft.contractNo || row.order.orderNo || "退税合同"}.xlsx`,
+    };
+  }
   if (!row.templateStorageKey) {
     throw codedError("该任务没有合同样本文件。", 404, "TEMPLATE_NOT_FOUND");
   }

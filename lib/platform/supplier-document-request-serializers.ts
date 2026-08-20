@@ -16,6 +16,15 @@ import {
 } from "./supplier-document-request-types";
 import { supplierDocumentRequestOrderLocked } from "./supplier-document-request-state";
 import { supplierTaxContractNumberFromJson } from "./supplier-tax-contract-number";
+import {
+  normalizeSupplierTaxContractDraftValues,
+  supplierTaxContractSupplierName,
+} from "./supplier-tax-contract-values";
+
+function normalizedTaxContractJson(value: unknown, supplierName: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  return normalizeSupplierTaxContractDraftValues(value as Record<string, unknown>, { supplierName });
+}
 
 export function serializeSupplierDocumentRequest(
   row: SupplierDocumentRequestRow,
@@ -36,6 +45,7 @@ export function serializeSupplierDocumentRequest(
   const invoiceMatch = row.invoiceMatchJson && typeof row.invoiceMatchJson === "object" && !Array.isArray(row.invoiceMatchJson)
     ? row.invoiceMatchJson as { matched?: unknown; issues?: unknown }
     : null;
+  const contractSupplierName = row.supplier ? supplierTaxContractSupplierName(row.supplier) : "";
   return {
     id: row.id,
     orderId: row.orderId,
@@ -59,8 +69,8 @@ export function serializeSupplierDocumentRequest(
       : (row.contractNo || ""),
     contractStatus: row.contractStatus || "LEGACY",
     contractRevision: row.contractRevision || 1,
-    contractDraft: supplierActor ? null : row.contractDraft,
-    contractApproved: supplierActor ? null : row.contractApproved,
+    contractDraft: supplierActor ? null : normalizedTaxContractJson(row.contractDraft, contractSupplierName),
+    contractApproved: supplierActor ? null : normalizedTaxContractJson(row.contractApproved, contractSupplierName),
     contractReviewRemark: supplierActor ? "" : (row.contractReviewRemark || ""),
     invoiceMatchStatus: row.invoiceMatchStatus || "NOT_UPLOADED",
     invoiceMatch: supplierActor && invoiceMatch

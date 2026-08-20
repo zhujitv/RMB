@@ -6,7 +6,6 @@ import type { SupplierTaxContractDraft, SupplierTaxContractItemDraft } from "./s
 import {
   FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE,
   customsQuantity,
-  dateText,
   decimalText,
   loadTransitionContext,
   nonNegativeMoney,
@@ -16,6 +15,11 @@ import {
   selectableCustomsItems,
   type TransitionInput,
 } from "./supplier-transition-settlement-context";
+import {
+  dateText,
+  supplierTaxContractSigningDate,
+  supplierTaxContractSupplierName,
+} from "./supplier-tax-contract-values";
 
 export { FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE, previewFactoryPurchaseTransitionSettlement } from "./supplier-transition-settlement-context";
 
@@ -195,6 +199,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
   }
   const entity = cost.order.businessEntity!;
   const relevantCustomsSnapshot = selectableCustomsItems(candidates);
+  const latestDeliveryDateValue = cost.order.actualShipmentDate || cost.order.blDate || cost.order.customsDeclarationDate || new Date();
   const draft: SupplierTaxContractDraft = {
     contractNo: cost.order.orderNo,
     customerOrderNo: cost.order.orderNo,
@@ -205,7 +210,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     customsDocumentId: customsDocument.id,
     customsDeclarationNo: cost.order.customsDeclarationNo || "",
     supplierId,
-    supplierName: supplier.invoiceTitle || supplier.supplierName,
+    supplierName: supplierTaxContractSupplierName(supplier),
     supplierTaxNumber: supplier.taxNumber || "",
     supplierAddress: supplier.address || "",
     supplierPhone: supplier.phone || "",
@@ -219,8 +224,8 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     buyerBankName: entity.domesticBankName || "",
     buyerBankAccount: entity.domesticBankAccount || "",
     signingPlace: "浙江诸暨",
-    signingDate: dateText(new Date()),
-    latestDeliveryDate: dateText(cost.order.actualShipmentDate || cost.order.customsDeclarationDate || new Date()),
+    signingDate: supplierTaxContractSigningDate(latestDeliveryDateValue),
+    latestDeliveryDate: dateText(latestDeliveryDateValue),
     currency: cost.currency,
     totalAmountWithTax: goodsAmount.toFixed(2),
     items,
