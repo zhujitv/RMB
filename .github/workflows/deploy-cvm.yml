@@ -168,6 +168,13 @@ jobs:
           source "$ENV_FILE"
           set +a
           [[ -n "${DATABASE_URL:-}" ]] || fail "DATABASE_URL is missing from $ENV_FILE"
+          POSTGRES_URL="$(DATABASE_URL="$DATABASE_URL" node <<'NODE'
+          const raw = process.env.DATABASE_URL || "";
+          const url = new URL(raw);
+          url.searchParams.delete("schema");
+          process.stdout.write(url.toString());
+          NODE
+          )"
 
           umask 077
           if ! mkdir -p "$BACKUP_DIR" 2>/dev/null; then
@@ -178,13 +185,13 @@ jobs:
           chmod 700 "$BACKUP_DIR" 2>/dev/null || true
           backup_path="$BACKUP_DIR/$MIGRATION_NAME-$(date -u +%Y%m%dT%H%M%SZ).dump"
           log "creating database backup at $backup_path"
-          pg_dump --format=custom --no-owner --no-privileges --file "$backup_path" "$DATABASE_URL"
+          pg_dump --format=custom --no-owner --no-privileges --file "$backup_path" "$POSTGRES_URL"
 
           checksum="$(sha256sum "$MIGRATION_SQL" | awk '{print $1}')"
           migration_id="$(node -e "console.log(require('crypto').randomUUID())")"
 
           log "applying additive customer_products.material_code migration"
-          psql "$DATABASE_URL" \
+          psql "$POSTGRES_URL" \
             --set=ON_ERROR_STOP=1 \
             --set=migration_id="$migration_id" \
             --set=migration_name="$MIGRATION_NAME" \
