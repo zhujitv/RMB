@@ -15,6 +15,7 @@ import {
   type SupplierDocumentRequestRow,
 } from "./supplier-document-request-types";
 import { supplierDocumentRequestOrderLocked } from "./supplier-document-request-state";
+import { supplierTaxContractNumberFromJson } from "./supplier-tax-contract-number";
 
 export function serializeSupplierDocumentRequest(
   row: SupplierDocumentRequestRow,
@@ -53,7 +54,9 @@ export function serializeSupplierDocumentRequest(
     message: row.message || "",
     templateFileName: row.templateOriginalName || row.templateFileName || "",
     hasTemplate: Boolean(row.templateStorageKey),
-    contractNo: row.contractNo || "",
+    contractNo: row.contractStatus === "PENDING_REVIEW" || row.contractStatus === "REJECTED"
+      ? supplierTaxContractNumberFromJson(row.contractDraft, row.contractNo || "")
+      : (row.contractNo || ""),
     contractStatus: row.contractStatus || "LEGACY",
     contractRevision: row.contractRevision || 1,
     contractDraft: supplierActor ? null : row.contractDraft,

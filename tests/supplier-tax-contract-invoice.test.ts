@@ -9,10 +9,11 @@ const jiti = createJiti(import.meta.url);
 const { matchSupplierInvoiceToContract } = jiti("../lib/platform/supplier-invoice-contract-match.ts") as typeof import("../lib/platform/supplier-invoice-contract-match.ts");
 const { generateSupplierTaxContractXlsx } = jiti("../lib/platform/supplier-tax-contract-xlsx.ts") as typeof import("../lib/platform/supplier-tax-contract-xlsx.ts");
 const { applySupplierTaxContractDraftEdits } = jiti("../lib/platform/supplier-tax-contract-draft-edit.ts") as typeof import("../lib/platform/supplier-tax-contract-draft-edit.ts");
+const { normalizeSupplierTaxContractNumber, supplierTaxContractNumberFromJson } = jiti("../lib/platform/supplier-tax-contract-number.ts") as typeof import("../lib/platform/supplier-tax-contract-number.ts");
 
 const contract = {
-  contractNo: "CUSTOMER-01",
-  customerOrderNo: "CUSTOMER",
+  contractNo: "PV258",
+  customerOrderNo: "PV258",
   orderId: "order",
   costId: "cost",
   purchaseOrderId: "po",
@@ -97,7 +98,7 @@ test("generated tax contract workbook contains no specification column and freez
   const zip = await JSZip.loadAsync(body);
   const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("string");
   assert.match(sheet || "", /出口产品订货合同/);
-  assert.match(sheet || "", /CUSTOMER-01/);
+  assert.match(sheet || "", /PV258/);
   assert.match(sheet || "", /木塑复合地板/);
   assert.match(sheet || "", /平方米/);
   assert.match(sheet || "", /签订地点：浙江诸暨/);
@@ -107,9 +108,29 @@ test("generated tax contract workbook contains no specification column and freez
   assert.match(sheet || "", /税号：91330000987654321X/);
   assert.match(sheet || "", /开户行：工商银行/);
   assert.match(sheet || "", /账号：987654321/);
+  assert.match(sheet || "", /<c r="A7"[^>]*s="8"/);
+  assert.match(sheet || "", /<c r="C7"[^>]*s="8"/);
+  assert.match(sheet || "", /<c r="F7"[^>]*s="6"/);
+  assert.match(sheet || "", /<sheetFormatPr[^>]*defaultRowHeight="14"/);
   assert.match(sheet || "", /<c r="B9"[^>]*s="8"/);
   assert.match(sheet || "", /<c r="F9"[^>]*s="8"/);
   assert.doesNotMatch(sheet || "", /规格型号/);
+});
+
+test("tax contract number is exactly the customer order number without supplier suffixes", () => {
+  assert.equal(normalizeSupplierTaxContractNumber({ contractNo: "PV258-T01", customerOrderNo: "PV258" }).contractNo, "PV258");
+  assert.equal(supplierTaxContractNumberFromJson({ customerOrderNo: "PV258" }, "PV258-T01"), "PV258");
+  const draftSource = readFileSync("lib/platform/supplier-tax-contract-draft.ts", "utf8");
+  const transitionSource = readFileSync("lib/platform/supplier-transition-settlement.ts", "utf8");
+  const workflowSource = readFileSync("lib/platform/supplier-tax-contract-workflow.ts", "utf8");
+  const serializerSource = readFileSync("lib/platform/supplier-document-request-serializers.ts", "utf8");
+  assert.match(draftSource, /const contractNo = purchaseOrder\.execution\.customerOrderNo;/);
+  assert.match(transitionSource, /contractNo: cost\.order\.orderNo,/);
+  assert.doesNotMatch(draftSource, /contractNo[^\n]*padStart/);
+  assert.doesNotMatch(transitionSource, /contractNo[^\n]*-T/);
+  assert.match(workflowSource, /contractNo: draft\.contractNo,/);
+  assert.match(workflowSource, /contractNo: rejectedDraft\.contractNo,/);
+  assert.match(serializerSource, /row\.contractStatus === "PENDING_REVIEW" \|\| row\.contractStatus === "REJECTED"/);
 });
 
 test("tax contracts use the dedicated domestic buyer account instead of CNY international remittance data", () => {
@@ -134,9 +155,14 @@ test("tax contract adds one bordered product row per item and shifts the remaini
   const zip = await JSZip.loadAsync(body);
   const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("string") || "";
   assert.match(sheet, /<dimension ref="A1:F34"/);
-  assert.match(sheet, /<c r="A15"[^>]*s="6"[^>]*>.*产品9/);
+  assert.match(sheet, /<c r="A15"[^>]*s="8"[^>]*>.*产品9/);
   assert.match(sheet, /<c r="A16"[^>]*s="7"[^>]*>.*合计/);
-  assert.match(sheet, /<mergeCell ref="A29:C29"/);
+  assert.match(sheet, /<row r="16" ht="15" customHeight="1"/);
+  for (let footerRow = 29; footerRow <= 34; footerRow += 1) {
+    assert.match(sheet, new RegExp(`<row r="${footerRow}" ht="20" customHeight="1"`));
+    assert.match(sheet, new RegExp(`<mergeCell ref="A${footerRow}:C${footerRow}"`));
+    assert.match(sheet, new RegExp(`<mergeCell ref="D${footerRow}:F${footerRow}"`));
+  }
   assert.match(sheet, /供方（盖章）：浙江供应商有限公司/);
 });
 

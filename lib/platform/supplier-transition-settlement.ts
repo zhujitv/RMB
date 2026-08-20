@@ -2,7 +2,6 @@ import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { codedError, nonEmpty } from "./shared-base-utils";
 import { domesticContractIssues } from "./business-entity-domestic-bank";
-import { FACTORY_SUPPLIER_COST_TYPES } from "./shared-cost-constants";
 import type { SupplierTaxContractDraft, SupplierTaxContractItemDraft } from "./supplier-tax-contract-draft";
 import {
   FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE,
@@ -194,16 +193,10 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
       if (total.lt(declared)) warnings.push(`报关商品“${nonEmpty(item.productName)}”当前累计分配${decimalText(total, 4)}，报关数量${decimalText(declared, 4)}，剩余数量可继续分配给其它工厂成本。`);
     }
   }
-  const factoryCosts = await prisma.orderCost.findMany({
-    where: { orderId: cost.orderId, deletedAt: null, status: "ACTIVE", costType: { in: FACTORY_SUPPLIER_COST_TYPES } },
-    select: { id: true },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-  });
-  const sequence = Math.max(0, factoryCosts.findIndex((row) => row.id === cost.id)) + 1;
   const entity = cost.order.businessEntity!;
   const relevantCustomsSnapshot = selectableCustomsItems(candidates);
   const draft: SupplierTaxContractDraft = {
-    contractNo: `${cost.order.orderNo}-T${String(sequence).padStart(2, "0")}`,
+    contractNo: cost.order.orderNo,
     customerOrderNo: cost.order.orderNo,
     orderId: cost.orderId,
     costId: cost.id,

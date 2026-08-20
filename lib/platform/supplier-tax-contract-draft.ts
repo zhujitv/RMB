@@ -217,8 +217,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
   if (!calculatedTotal.eq(purchaseOrder.settlement.baseAmount)) {
     throw codedError("实际装柜数量乘确认单价与采购结算货款基数不一致，请先修复结算数据。", 409, "SUPPLIER_TAX_CONTRACT_AMOUNT_MISMATCH");
   }
-  const activeIndex = purchaseOrder.execution.purchaseOrders.findIndex((row) => row.id === purchaseOrder.id);
-  const contractNo = `${purchaseOrder.execution.customerOrderNo}-${String(Math.max(0, activeIndex) + 1).padStart(2, "0")}`;
+  const contractNo = purchaseOrder.execution.customerOrderNo;
   return {
     contractNo,
     customerOrderNo: purchaseOrder.execution.customerOrderNo,

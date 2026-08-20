@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { codedError } from "./shared-base-utils";
 import { domesticContractIssues } from "./business-entity-domestic-bank";
 import type { SupplierTaxContractDraft } from "./supplier-tax-contract-draft";
+import { normalizeSupplierTaxContractNumber } from "./supplier-tax-contract-number";
 
 const DOMESTIC_ISSUE_PREFIX = "请先在设置 → 业务主体维护中国地区";
 
@@ -15,7 +16,7 @@ export async function refreshSupplierTaxContractBuyer(draft: SupplierTaxContract
   });
   if (!entity) throw codedError("合同关联的业务主体不存在。", 409, "SUPPLIER_TAX_CONTRACT_BUYER_MISSING");
   const retainedIssues = (draft.blockingIssues || []).filter((issue) => !issue.startsWith(DOMESTIC_ISSUE_PREFIX));
-  return {
+  return normalizeSupplierTaxContractNumber({
     ...draft,
     buyerName: entity.name,
     buyerTaxNumber: entity.taxNumber || "",
@@ -24,5 +25,5 @@ export async function refreshSupplierTaxContractBuyer(draft: SupplierTaxContract
     buyerBankName: entity.domesticBankName || "",
     buyerBankAccount: entity.domesticBankAccount || "",
     blockingIssues: [...retainedIssues, ...domesticContractIssues(entity)],
-  } satisfies SupplierTaxContractDraft;
+  } satisfies SupplierTaxContractDraft);
 }
