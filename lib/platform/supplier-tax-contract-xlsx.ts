@@ -74,11 +74,11 @@ function worksheet(draft: SupplierTaxContractDraft) {
   rows.push(`<row r="6">${["品名", "数量", "单位", "含税单价", "含税金额", "最晚交货日期"].map((value, index) => inlineCell(6, index + 1, value, 3)).join("")}</row>`);
   let row = 7;
   for (const item of draft.items) {
-    rows.push(`<row r="${row}" ht="20" customHeight="1">${inlineCell(row, 1, item.productName, 6)}${numberCell(row, 2, item.quantity)}${inlineCell(row, 3, item.unit, 6)}${numberCell(row, 4, item.unitPriceWithTax)}${numberCell(row, 5, item.amountWithTax)}${inlineCell(row, 6, draft.latestDeliveryDate, 6)}</row>`);
+    rows.push(`<row r="${row}" ht="20" customHeight="1">${inlineCell(row, 1, item.productName, 8)}${numberCell(row, 2, item.quantity)}${inlineCell(row, 3, item.unit, 8)}${numberCell(row, 4, item.unitPriceWithTax)}${numberCell(row, 5, item.amountWithTax)}${inlineCell(row, 6, draft.latestDeliveryDate, 6)}</row>`);
     row += 1;
   }
   const totalRow = row;
-  rows.push(`<row r="${row}">${inlineCell(row, 1, "合计", 7)}${numberCell(row, 5, draft.totalAmountWithTax, 5)}${inlineCell(row, 6, "", 6)}</row>`);
+  rows.push(`<row r="${row}" ht="15" customHeight="1">${inlineCell(row, 1, "合计", 7)}${numberCell(row, 5, draft.totalAmountWithTax, 5)}${inlineCell(row, 6, "", 6)}</row>`);
   row += 1;
   const capitalRow = row;
   rows.push(`<row r="${row}" ht="30" customHeight="1">${inlineCell(row, 1, `人民币大写：${chineseCurrency(draft.totalAmountWithTax)}`, 8)}${[2, 3, 4, 5, 6].map((column) => inlineCell(row, column, "", 8)).join("")}</row>`);
@@ -105,18 +105,25 @@ function worksheet(draft: SupplierTaxContractDraft) {
     row = endRow + 1;
   }
   row += 1;
-  rows.push(`<row r="${row}">${inlineCell(row, 1, `供方（盖章）：${draft.supplierName}`, 10)}${inlineCell(row, 4, `需方（盖章）：${draft.buyerName}`, 10)}</row>`);
-  rows.push(`<row r="${row + 1}">${inlineCell(row + 1, 1, `税号：${draft.supplierTaxNumber || "待补充"}`)}${inlineCell(row + 1, 4, `税号：${draft.buyerTaxNumber || "待补充"}`)}</row>`);
-  rows.push(`<row r="${row + 2}">${inlineCell(row + 2, 1, `地址：${draft.supplierAddress || ""}`)}${inlineCell(row + 2, 4, `地址：${draft.buyerAddress || ""}`)}</row>`);
-  rows.push(`<row r="${row + 3}">${inlineCell(row + 3, 1, `电话：${draft.supplierPhone || ""}`)}${inlineCell(row + 3, 4, `电话：${draft.buyerPhone || ""}`)}</row>`);
-  rows.push(`<row r="${row + 4}">${inlineCell(row + 4, 1, `开户行：${draft.supplierBankName || ""}`)}${inlineCell(row + 4, 4, `开户行：${draft.buyerBankName || ""}`)}</row>`);
-  rows.push(`<row r="${row + 5}">${inlineCell(row + 5, 1, `账号：${draft.supplierBankAccount || ""}`)}${inlineCell(row + 5, 4, `账号：${draft.buyerBankAccount || ""}`)}</row>`);
+  const footerRows = [
+    [`供方（盖章）：${draft.supplierName}`, `需方（盖章）：${draft.buyerName}`, 10],
+    [`税号：${draft.supplierTaxNumber || "待补充"}`, `税号：${draft.buyerTaxNumber || "待补充"}`, 1],
+    [`地址：${draft.supplierAddress || ""}`, `地址：${draft.buyerAddress || ""}`, 1],
+    [`电话：${draft.supplierPhone || ""}`, `电话：${draft.buyerPhone || ""}`, 1],
+    [`开户行：${draft.supplierBankName || ""}`, `开户行：${draft.buyerBankName || ""}`, 1],
+    [`账号：${draft.supplierBankAccount || ""}`, `账号：${draft.buyerBankAccount || ""}`, 1],
+  ] as const;
+  footerRows.forEach(([supplierValue, buyerValue, style], index) => {
+    const footerRow = row + index;
+    rows.push(`<row r="${footerRow}" ht="20" customHeight="1">${inlineCell(footerRow, 1, supplierValue, style)}${inlineCell(footerRow, 4, buyerValue, style)}</row>`);
+  });
   const lastRow = row + 5;
   const merges = [
     "A1:F1", "A2:D2", "A3:D3", "A4:F4", `A${totalRow}:D${totalRow}`,
-    `A${capitalRow}:F${capitalRow}`, ...clauseMerges, `A${row}:C${row}`, `D${row}:F${row}`,
+    `A${capitalRow}:F${capitalRow}`, ...clauseMerges,
+    ...footerRows.flatMap((_, index) => [`A${row + index}:C${row + index}`, `D${row + index}:F${row + index}`]),
   ];
-  return `${XML_HEADER}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:F${lastRow}"/><sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews><sheetFormatPr baseColWidth="10" defaultRowHeight="20"/><cols><col min="1" max="1" width="38" customWidth="1"/><col min="2" max="5" width="16" customWidth="1"/><col min="6" max="6" width="20" customWidth="1"/></cols><sheetData>${rows.join("")}</sheetData><mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup orientation="portrait" paperSize="9"/></worksheet>`;
+  return `${XML_HEADER}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:F${lastRow}"/><sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews><sheetFormatPr baseColWidth="10" defaultRowHeight="14"/><cols><col min="1" max="1" width="38" customWidth="1"/><col min="2" max="5" width="16" customWidth="1"/><col min="6" max="6" width="20" customWidth="1"/></cols><sheetData>${rows.join("")}</sheetData><mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup orientation="portrait" paperSize="9"/></worksheet>`;
 }
 
 export async function generateSupplierTaxContractXlsx(draft: SupplierTaxContractDraft) {

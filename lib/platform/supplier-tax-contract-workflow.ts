@@ -9,6 +9,7 @@ import { type SupplierTaxContractDraft } from "./supplier-tax-contract-draft";
 import { applySupplierTaxContractDraftEdits } from "./supplier-tax-contract-draft-edit";
 import { generateSupplierTaxContractXlsx } from "./supplier-tax-contract-xlsx";
 import { refreshSupplierTaxContractBuyer } from "./supplier-tax-contract-buyer";
+import { normalizeSupplierTaxContractNumber } from "./supplier-tax-contract-number";
 import {
   actorId,
   serializeSupplierDocumentRequest,
@@ -36,7 +37,7 @@ function contractDraft(value: Prisma.JsonValue | null): SupplierTaxContractDraft
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw codedError("合同草稿不存在，请重新创建任务。", 409, "SUPPLIER_TAX_CONTRACT_DRAFT_MISSING");
   }
-  return value as unknown as SupplierTaxContractDraft;
+  return normalizeSupplierTaxContractNumber(value as unknown as SupplierTaxContractDraft);
 }
 
 export async function reviewSupplierTaxContract(
@@ -55,9 +56,17 @@ export async function reviewSupplierTaxContract(
   if (!row) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
   if (row.contractStatus !== "PENDING_REVIEW") throw codedError("当前合同不在待审核状态。", 409, "SUPPLIER_TAX_CONTRACT_NOT_PENDING");
   if (decision === "REJECTED") {
+    const rejectedDraft = contractDraft(row.contractDraft);
     const updated = await prisma.supplierDocumentRequest.update({
       where: { id: row.id },
-      data: { contractStatus: "REJECTED", contractReviewedById: reviewedById, contractReviewedAt: new Date(), contractReviewRemark: remark || "人工审核未通过" },
+      data: {
+        contractNo: rejectedDraft.contractNo,
+        contractDraft: rejectedDraft as unknown as Prisma.InputJsonValue,
+        contractStatus: "REJECTED",
+        contractReviewedById: reviewedById,
+        contractReviewedAt: new Date(),
+        contractReviewRemark: remark || "人工审核未通过",
+      },
       include: supplierDocumentRequestInclude(),
     });
     await writeAudit(request, actor, "退税合同审核不通过", "supplier_document_requests", row.id, null, { remark });
@@ -124,7 +133,9 @@ export async function reviewSupplierTaxContract(
       const claimed = await tx.supplierDocumentRequest.updateMany({
         where: { id: row.id, deletedAt: null, contractStatus: "PENDING_REVIEW" },
         data: {
+          contractNo: draft.contractNo,
           contractStatus: "APPROVED",
+          contractDraft: draft as unknown as Prisma.InputJsonValue,
           contractApproved: draft as unknown as Prisma.InputJsonValue,
           contractReviewedById: reviewedById,
           contractReviewedAt: new Date(),
