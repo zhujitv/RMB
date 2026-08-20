@@ -117,7 +117,7 @@ test("generated tax contract workbook contains no specification column and freez
   assert.match(sheet || "", /开户行：工商银行/);
   assert.match(sheet || "", /账号：987654321/);
   assert.match(sheet || "", /<c r="A7"[^>]*s="8"/);
-  assert.match(sheet || "", /<c r="B7"[^>]*s="4"><v>10<\/v><\/c>/);
+  assert.match(sheet || "", /<c r="B7"[^>]*s="12"><v>10<\/v><\/c>/);
   assert.match(sheet || "", /<c r="B8"[^>]*s="11"><v>2866\.70<\/v><\/c>/);
   assert.match(sheet || "", /<c r="C7"[^>]*s="8"/);
   assert.match(sheet || "", /<c r="F7"[^>]*s="6"/);
@@ -126,6 +126,8 @@ test("generated tax contract workbook contains no specification column and freez
   assert.match(sheet || "", /<c r="F10"[^>]*s="8"/);
   assert.match(styles || "", /formatCode="0\.######"/);
   assert.match(styles || "", /formatCode="0\.00"/);
+  assert.match(styles || "", /cellXfs count="13"/);
+  assert.match(styles || "", /numFmtId="1" applyNumberFormat="1" applyAlignment="1"/);
   assert.doesNotMatch(styles || "", /#,##/);
   assert.doesNotMatch(sheet || "", /规格型号/);
 });
