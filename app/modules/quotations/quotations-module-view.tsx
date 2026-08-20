@@ -1,5 +1,6 @@
 import { ConfirmationDialog, type ConfirmationDialogState } from "../../components";
 import shell from "../../WorkspaceShell.module.css";
+import { QuotationCrmWorkspace, QuotationRecordHeader } from "./quotation-crm-workspace";
 import { QuotationDetailDrawer } from "./quotation-detail-drawer";
 import { QuotationFormContainer } from "./quotation-form-container";
 import { QuotationList } from "./quotation-list";
@@ -97,10 +98,20 @@ export function QuotationsModuleView({
         <QuotationFormContainer initialQuotation={editQuotation} onCancel={actions.onCancelForm} onSaved={actions.onSaved} />
       ) : null}
 
+      <QuotationCrmWorkspace
+        quotations={quotations}
+        loading={loading}
+        createOpen={createOpen}
+        canWriteQuotations={canWriteQuotations}
+        onToggleCreate={actions.onToggleCreate}
+        onRefresh={actions.onRefresh}
+        onViewDetail={actions.onViewDetail}
+      />
+
       <div className={shell.listToolbar}>
         <input
           value={keyword}
-          placeholder="搜索报价号 / 发票号 / 客户 / 业务员"
+          placeholder="搜索客户 / 联系人 / 报价号 / 发票号 / 业务员"
           onChange={(event) => actions.onSetKeyword(event.target.value)}
           onKeyDown={(event) => { if (event.key === "Enter") actions.onSubmitSearch(); }}
         />
@@ -118,6 +129,7 @@ export function QuotationsModuleView({
 
       {error ? <div className={shell.inlineError} role="alert">{error}</div> : null}
       {notice ? <div className={shell.infoStrip} role="status">{notice}</div> : null}
+      <QuotationRecordHeader total={total} />
       <QuotationList
         quotations={quotations}
         loading={loading}

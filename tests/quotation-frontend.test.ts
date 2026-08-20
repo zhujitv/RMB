@@ -26,6 +26,13 @@ const detailActionsSource = readFileSync("app/modules/quotations/quotation-detai
 const emailDialogSource = readFileSync("app/modules/quotations/quotation-email-dialog.tsx", "utf8");
 const quotesModuleSource = readFileSync("app/modules/QuotesModule.tsx", "utf8");
 const quotationsViewSource = readFileSync("app/modules/quotations/quotations-module-view.tsx", "utf8");
+const quotationCrmSource = readFileSync("app/modules/quotations/quotation-crm-workspace.tsx", "utf8");
+const quotationCustomerDetailSource = readFileSync("app/modules/quotations/quotation-customer-detail.tsx", "utf8");
+const quotationCustomerProductsSource = readFileSync("app/modules/quotations/quotation-customer-products-editor.tsx", "utf8");
+const quotationCustomerContactsSource = readFileSync("app/modules/quotations/quotation-customer-contacts.tsx", "utf8");
+const quotationCustomerFollowUpsSource = readFileSync("app/modules/quotations/quotation-customer-follow-ups.tsx", "utf8");
+const customerCrmServiceSource = readFileSync("lib/platform/customer-crm.ts", "utf8");
+const customerFollowUpsMigration = readFileSync("prisma/migrations/20260821120000_customer_follow_ups/migration.sql", "utf8");
 
 test("only the current version internal decision unlocks quotation conversion", () => {
   const base = {
@@ -273,6 +280,83 @@ test("quotation void uses the displayed version as an optimistic concurrency gua
 test("read-only quotation users do not see mutation entry points", () => {
   assert.match(quotationsViewSource, /\{canWriteQuotations \? \([\s\S]*新建报价[\s\S]*\) : null\}/);
   assert.doesNotMatch(quotationsViewSource, /disabled=\{!canWriteQuotations\}/);
+});
+
+test("quotations module opens with a visible CRM workspace before the quote ledger", () => {
+  assert.match(quotationsViewSource, /<QuotationCrmWorkspace/);
+  assert.match(quotationCrmSource, /aria-label="客户与报价 CRM 工作台"/);
+  assert.match(quotationCrmSource, /CRM 工作台/);
+  assert.match(quotationCrmSource, /重点客户/);
+  assert.match(quotationCrmSource, /跟进提醒/);
+  assert.match(quotationCrmSource, /物料编码与固定产品属性/);
+  assert.match(quotationCrmSource, /有物料编码客户/);
+  assert.match(quotationCrmSource, /无物料编码客户/);
+  assert.match(quotationCrmSource, /历史报价明细/);
+  assert.match(quotationsViewSource, /搜索客户 \/ 联系人 \/ 报价号 \/ 发票号 \/ 业务员/);
+});
+
+test("quotation CRM customer cards open a customer detail and product library page", () => {
+  assert.match(quotationCrmSource, /useState\(""\)/);
+  assert.match(quotationCrmSource, /setSelectedCustomerKey\(nextCustomer\.key\)/);
+  assert.match(quotationCrmSource, /<QuotationCustomerDetail/);
+  assert.match(quotationCrmSource, /进入客户详情 \/ 客户产品库/);
+  assert.match(quotationCustomerDetailSource, /aria-label="客户 CRM 详情"/);
+  assert.match(quotationCustomerDetailSource, /返回客户工作台/);
+  assert.match(quotationCustomerProductsSource, /\/api\/customer-products\?\$\{params\}/);
+  assert.match(quotationCustomerProductsSource, /客户产品库读取中/);
+  assert.match(quotationCustomerDetailSource, /物料编码与产品属性/);
+  assert.match(quotationCustomerDetailSource, /该客户报价记录/);
+  assert.match(quotationCustomerDetailSource, /onViewQuotation\(quotation\)/);
+});
+
+test("quotation CRM customer detail can create and edit customer products", () => {
+  assert.match(quotationCustomerProductsSource, /type ProductForm/);
+  assert.match(quotationCustomerProductsSource, /新增产品/);
+  assert.match(quotationCustomerProductsSource, /编辑客户产品/);
+  assert.match(quotationCustomerProductsSource, /保存客户产品/);
+  assert.match(quotationCustomerProductsSource, /method: form\.id \? "PATCH" : "POST"/);
+  assert.match(quotationCustomerProductsSource, /\/api\/customer-products\/\$\{encodeURIComponent\(form\.id\)\}/);
+  assert.match(quotationCustomerProductsSource, /customerId: customer\.customerId/);
+  assert.match(quotationCustomerProductsSource, /setReloadToken\(\(value\) => value \+ 1\)/);
+  assert.match(quotationCustomerProductsSource, /canWriteQuotations \? /);
+  assert.match(quotationCustomerProductsSource, /productFormFromRow\(product\)/);
+  assert.match(quotationCustomerProductsSource, /修改客户产品不会改写历史报价/);
+});
+
+test("quotation CRM customer detail can safely void customer products", () => {
+  assert.match(quotationCustomerProductsSource, /function voidProduct\(product: CustomerProduct\)/);
+  assert.match(quotationCustomerProductsSource, /确认作废\/删除/);
+  assert.match(quotationCustomerProductsSource, /历史报价不会改变/);
+  assert.match(quotationCustomerProductsSource, /method: "DELETE"/);
+  assert.match(quotationCustomerProductsSource, /setForm\(\(current\) => current\?\.id === product\.id \? null : current\)/);
+  assert.match(quotationCustomerProductsSource, /客户产品已作废\/删除/);
+  assert.match(quotationCustomerProductsSource, />作废\/删除<\/button>/);
+});
+
+test("quotation CRM customer detail maintains contacts through a scoped customer API", () => {
+  assert.match(quotationCustomerDetailSource, /<QuotationCustomerContacts/);
+  assert.match(quotationCustomerContactsSource, /联系人维护/);
+  assert.match(quotationCustomerContactsSource, /保存联系人/);
+  assert.match(quotationCustomerContactsSource, /\/api\/customers\/\$\{encodeURIComponent\(customer\.customerId\)\}\/contact/);
+  assert.match(quotationCustomerContactsSource, /method: "PATCH"/);
+  assert.match(customerCrmServiceSource, /updateCustomerContactInfo/);
+  assert.match(customerCrmServiceSource, /assertCustomerScope\(actor, customerId\)/);
+  assert.match(customerCrmServiceSource, /联系邮箱格式错误/);
+});
+
+test("quotation CRM customer detail records follow-ups and next reminders", () => {
+  assert.match(quotationCustomerDetailSource, /<QuotationCustomerFollowUps/);
+  assert.match(quotationCustomerFollowUpsSource, /记录沟通与下次提醒/);
+  assert.match(quotationCustomerFollowUpsSource, /\/api\/customer-follow-ups\?\$\{params\}/);
+  assert.match(quotationCustomerFollowUpsSource, /\/api\/customer-follow-ups"/);
+  assert.match(quotationCustomerFollowUpsSource, /\/api\/customer-follow-ups\/\$\{encodeURIComponent\(id\)\}/);
+  assert.match(quotationCustomerFollowUpsSource, /下次跟进/);
+  assert.match(quotationCustomerFollowUpsSource, />完成<\/button>/);
+  assert.match(customerCrmServiceSource, /listCustomerFollowUps/);
+  assert.match(customerCrmServiceSource, /saveCustomerFollowUp/);
+  assert.match(customerCrmServiceSource, /completeCustomerFollowUp/);
+  assert.match(customerFollowUpsMigration, /CREATE TABLE "customer_follow_ups"/);
+  assert.match(customerFollowUpsMigration, /FOREIGN KEY \("customer_id"\) REFERENCES "customers"/);
 });
 
 test("quotation mutations reject same-tick duplicate submits", () => {

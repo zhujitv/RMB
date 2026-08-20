@@ -6,6 +6,7 @@ export * from "./platform/orders-payments";
 export * from "./platform/costs";
 export * from "./platform/logistics";
 export * from "./platform/customer-communications";
+export * from "./platform/customer-crm";
 export * from "./platform/tax-profit";
 export * from "./platform/quotation-customer-products";
 export * from "./platform/quotation-service";

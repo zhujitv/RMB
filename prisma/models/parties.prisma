@@ -23,6 +23,7 @@ model Customer {
   salesperson                   User?                          @relation("CustomerSalesperson", fields: [salespersonUserId], references: [id])
   orders                        ReceivableOrder[]
   products                      CustomerProduct[]
+  followUps                     CustomerFollowUp[]
   salesQuotations               SalesQuotation[]
   salesExecutions               SalesExecution[]
   shippingDocumentNotifications ShippingDocumentNotification[]
@@ -33,6 +34,29 @@ model Customer {
   @@index([commissionStatus])
   @@index([deletedAt])
   @@map("customers")
+}
+
+model CustomerFollowUp {
+  id             String    @id @default(cuid())
+  customerId     String    @map("customer_id")
+  method         String?
+  note           String
+  nextFollowUpAt DateTime? @map("next_follow_up_at")
+  completedAt    DateTime? @map("completed_at")
+  createdById    String?   @map("created_by")
+  updatedById    String?   @map("updated_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("CustomerFollowUpsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?    @relation("CustomerFollowUpsUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, nextFollowUpAt])
+  @@index([customerId, completedAt])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("customer_follow_ups")
 }
 
 model BusinessEntity {

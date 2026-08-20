@@ -1,0 +1,200 @@
+.crmWorkspace { display: grid; gap: 16px; margin: 18px 0 20px; }
+
+.crmHero {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  overflow: hidden; border: 1px solid #bfdbfe; border-radius: 22px;
+  background: radial-gradient(circle at 12% 20%, rgba(255,255,255,.55), transparent 28%), linear-gradient(135deg, #1d4ed8 0%, #2563eb 48%, #0f766e 100%);
+  box-shadow: 0 20px 40px rgba(37, 99, 235, .18); color: #fff; padding: 22px;
+}
+
+.crmHero h3, .crmHero p, .crmPanelHeader h3, .recordHeader h3 { margin: 0; }
+.crmHero h3 { margin-top: 6px; font-size: 24px; line-height: 1.25; }
+.crmHero p { max-width: 720px; margin-top: 8px; color: rgba(255,255,255,.82); font-size: 14px; line-height: 1.7; }
+
+.crmEyebrow { color: #2563eb; font-size: 12px; font-weight: 900; letter-spacing: .08em; }
+.crmHero .crmEyebrow { color: rgba(255,255,255,.78); }
+
+.crmHeroActions { display: flex; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.crmHeroActions button { border-color: rgba(255,255,255,.42); }
+
+.crmStats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+
+.crmStats article, .crmPanel, .recordHeader {
+  border: 1px solid #dbeafe; border-radius: 18px;
+  background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .05);
+}
+
+.crmStats article { display: grid; gap: 4px; min-height: 104px; padding: 16px; }
+
+.crmStats span, .crmStats small, .crmPanelHeader small, .customerCard small,
+.customerMeta, .customerLatest, .followUpCards small, .productPlaybook p,
+.timelineItem small, .recordHeader small { color: #64748b; }
+
+.crmStats span { font-size: 13px; font-weight: 800; }
+.crmStats strong { color: #0f172a; font-size: 30px; line-height: 1.1; }
+.crmStats small { font-size: 12px; }
+
+.crmGrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr); gap: 16px; }
+.crmPanel { display: grid; align-content: start; gap: 14px; padding: 18px; }
+
+.crmPanelHeader, .recordHeader, .customerCardTop, .timelineItem {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+
+.crmPanelHeader h3, .recordHeader h3 { margin-top: 4px; color: #0f172a; font-size: 18px; }
+.customerCards, .timelineList { display: grid; gap: 10px; }
+
+.customerCard, .timelineItem {
+  width: 100%; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff;
+  color: #0f172a; padding: 14px; text-align: left; font: inherit; cursor: pointer;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.customerCard { display: grid; gap: 12px; }
+.customerCard:hover, .timelineItem:hover { border-color: #93c5fd; box-shadow: 0 12px 24px rgba(37,99,235,.12); transform: translateY(-1px); }
+.customerCardTop strong { display: block; font-size: 16px; }
+
+.customerCardTop small {
+  display: block; margin-top: 3px; max-width: 420px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+
+.crmBadge { flex-shrink: 0; border-radius: 999px; background: #eef2ff; color: #3730a3; padding: 7px 10px; font-size: 12px; font-weight: 900; }
+.customerMeta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
+.customerMeta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.customerMetrics, .followUpCards, .productPlaybook { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.customerMetrics span, .followUpCards article, .productPlaybook article { border: 1px solid #e0f2fe; border-radius: 14px; background: #f8fafc; padding: 10px; }
+.customerMetrics span { color: #64748b; font-size: 12px; }
+.customerMetrics strong { display: block; margin-top: 4px; color: #0f172a; font-size: 18px; }
+.customerLatest { border-top: 1px solid #f1f5f9; padding-top: 10px; font-size: 12px; }
+.openCustomerHint { color: #2563eb; font-size: 12px; font-weight: 900; }
+
+.followUpCards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.followUpCards article { display: grid; gap: 5px; }
+.followUpCards strong { color: #2563eb; font-size: 28px; line-height: 1; }
+.followUpCards span, .productPlaybook strong { color: #0f172a; font-size: 14px; font-weight: 900; }
+
+.productPlaybook article { background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%); }
+.productPlaybook p { margin: 7px 0 0; font-size: 12px; line-height: 1.6; }
+
+.timelineItem strong, .timelineItem small { display: block; }
+.timelineItem strong { color: #0f172a; }
+.timelineItem small { margin-top: 4px; font-size: 12px; }
+.timelineItem > span:last-child { flex-shrink: 0; text-align: right; }
+
+.recordHeader { margin-top: 12px; margin-bottom: 12px; padding: 14px 16px; }
+
+.crmEmpty {
+  border: 1px dashed #bfdbfe; border-radius: 16px; background: #f8fafc;
+  color: #64748b; padding: 18px; font-size: 13px; line-height: 1.6;
+}
+
+.customerDetail { display: grid; gap: 16px; margin: 18px 0 20px; }
+
+.detailHero {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px;
+  border: 1px solid #bfdbfe; border-radius: 22px; background: linear-gradient(135deg, #eff6ff 0%, #fff 50%, #ecfeff 100%);
+  box-shadow: 0 16px 32px rgba(37, 99, 235, .12); padding: 18px;
+}
+
+.detailHero h3, .detailHero p { margin: 0; }
+.detailHero h3 { margin-top: 4px; color: #0f172a; font-size: 24px; line-height: 1.25; }
+.detailHero p { margin-top: 4px; color: #64748b; font-size: 13px; }
+
+.detailMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.detailMetrics article {
+  border: 1px solid #dbeafe; border-radius: 16px; background: #fff; padding: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+}
+.detailMetrics span { display: block; color: #64748b; font-size: 12px; font-weight: 800; }
+.detailMetrics strong { display: block; margin-top: 5px; color: #0f172a; font-size: 26px; line-height: 1; }
+
+.detailGrid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 16px; }
+.profileGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.profileGrid span {
+  border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; color: #64748b;
+  padding: 11px; font-size: 12px;
+}
+.profileGrid strong { display: block; margin-top: 5px; overflow: hidden; color: #0f172a; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+
+.productTableWrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; }
+.productTable { width: 100%; min-width: 620px; border-collapse: collapse; }
+.productTable th, .productTable td { border-bottom: 1px solid #edf2f7; padding: 9px 10px; text-align: left; }
+.productTable th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 900; }
+.productTable td { color: #334155; font-size: 13px; }
+.productTable tr:last-child td { border-bottom: 0; }
+
+.productLibrary, .productForm, .compactForm, .followUpForm, .followUpList { display: grid; gap: 12px; }
+.productToolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 1px solid #e0f2fe; border-radius: 14px; background: #f8fafc; padding: 10px;
+}
+.productToolbar span, .productFormHeader span { color: #64748b; font-size: 12px; line-height: 1.5; }
+
+.productForm {
+  border: 1px solid #bfdbfe; border-radius: 16px; background: linear-gradient(180deg, #fff 0%, #eff6ff 100%);
+  padding: 14px;
+}
+.productFormHeader { display: flex; justify-content: space-between; gap: 12px; }
+.productFormHeader strong { color: #0f172a; font-size: 14px; }
+.productFormGrid, .compactForm, .followUpForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.productFormGrid label, .compactForm label, .followUpForm label { display: grid; gap: 5px; color: #334155; font-size: 12px; font-weight: 800; }
+.productFormGrid input, .productFormGrid textarea, .compactForm input, .followUpForm input, .followUpForm select, .followUpForm textarea {
+  width: 100%; border: 1px solid #dbe1ea; border-radius: 10px; background: #fff;
+  color: #0f172a; padding: 8px 10px; font: inherit; outline: none;
+}
+.productFormGrid input:focus, .productFormGrid textarea:focus, .compactForm input:focus, .followUpForm input:focus, .followUpForm select:focus, .followUpForm textarea:focus {
+  border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+.productRemark { grid-column: 1 / -1; }
+.productFormActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.productActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dangerTextButton {
+  border: 1px solid #fecdd3; border-radius: 999px; background: #fff1f2; color: #be123c;
+  padding: 6px 10px; font: inherit; font-size: 12px; font-weight: 900; cursor: pointer;
+}
+.dangerTextButton:disabled { cursor: not-allowed; opacity: .55; }
+.inlineSuccess {
+  border: 1px solid #bbf7d0; border-radius: 12px; background: #f0fdf4; color: #166534;
+  padding: 10px 12px; font-size: 13px;
+}
+.reminderBox, .reminderOverdue {
+  border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; color: #1e40af;
+  padding: 11px 12px; font-size: 13px; line-height: 1.6;
+}
+.reminderOverdue { border-color: #fed7aa; background: #fff7ed; color: #c2410c; }
+.followUpItem, .followUpDone {
+  display: grid; gap: 8px; border: 1px solid #e2e8f0; border-radius: 15px; background: #fff;
+  padding: 13px; color: #334155;
+}
+.followUpDone { background: #f8fafc; opacity: .78; }
+.followUpItem strong, .followUpDone strong { display: block; color: #0f172a; }
+.followUpItem small, .followUpDone small, .followUpMeta { color: #64748b; font-size: 12px; }
+.followUpItem p, .followUpDone p { margin: 0; line-height: 1.6; white-space: pre-wrap; }
+.followUpMeta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+
+.quoteCards { display: grid; gap: 10px; }
+.quoteCard {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, auto) minmax(140px, auto); gap: 12px;
+  width: 100%; border: 1px solid #e2e8f0; border-radius: 15px; background: #fff; color: #0f172a;
+  padding: 13px; text-align: left; font: inherit; cursor: pointer;
+}
+.quoteCard:hover { border-color: #93c5fd; box-shadow: 0 10px 20px rgba(37,99,235,.1); }
+.quoteCard strong, .quoteCard small { display: block; }
+.quoteCard small { margin-top: 4px; color: #64748b; font-size: 12px; }
+
+@media (max-width: 1100px) {
+  .crmGrid, .detailGrid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+  .crmHero { align-items: stretch; flex-direction: column; }
+  .crmHeroActions { justify-content: stretch; }
+  .crmHeroActions button { width: 100%; }
+  .detailHero, .quoteCard { grid-template-columns: 1fr; }
+  .productToolbar, .productFormHeader { align-items: stretch; flex-direction: column; }
+  .crmStats, .customerMeta, .customerMetrics, .followUpCards, .productPlaybook, .detailMetrics, .profileGrid, .productFormGrid, .compactForm, .followUpForm { grid-template-columns: 1fr; }
+  .recordHeader { align-items: flex-start; flex-direction: column; }
+}

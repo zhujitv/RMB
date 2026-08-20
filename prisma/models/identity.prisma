@@ -31,6 +31,8 @@ model User {
   assignedQuotations                          SalesQuotation[]                               @relation("QuotationSalesperson")
   createdCustomerProducts                     CustomerProduct[]                              @relation("CustomerProductsCreated")
   updatedCustomerProducts                     CustomerProduct[]                              @relation("CustomerProductsUpdated")
+  createdCustomerFollowUps                    CustomerFollowUp[]                             @relation("CustomerFollowUpsCreated")
+  updatedCustomerFollowUps                    CustomerFollowUp[]                             @relation("CustomerFollowUpsUpdated")
   createdQuotations                           SalesQuotation[]                               @relation("QuotationsCreated")
   updatedQuotations                           SalesQuotation[]                               @relation("QuotationsUpdated")
   voidedQuotations                            SalesQuotation[]                               @relation("QuotationsVoided")
