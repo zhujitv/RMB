@@ -32,7 +32,7 @@ type QuotationCrmWorkspaceProps = {
   onViewDetail: (quotation: QuotationRow) => void;
 };
 
-const MAX_VISIBLE_CUSTOMERS = 4;
+const CUSTOMER_PAGE_SIZE = 5;
 type CustomersResponse = { customers?: CustomerMasterSeed[] };
 
 function CustomerCard({ customer, onOpenCustomer }: { customer: CustomerInsight; onOpenCustomer: (customer: CustomerInsight) => void }) {
@@ -91,6 +91,7 @@ export function QuotationCrmWorkspace({
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customersError, setCustomersError] = useState("");
   const [customerReloadToken, setCustomerReloadToken] = useState(0);
+  const [customerPage, setCustomerPage] = useState(1);
   useEffect(() => {
     if (!canReadCustomers) return;
     let cancelled = false;
@@ -105,6 +106,12 @@ export function QuotationCrmWorkspace({
   const selectedCustomer = customerInsights.find((customer) => customer.key === selectedCustomerKey);
   const crmSummary = buildCrmSummary(quotations, customerInsights);
   const recentQuotations = [...quotations].sort((left, right) => latestQuotationTime(right) - latestQuotationTime(left)).slice(0, 4);
+  const customerTotalPages = Math.max(1, Math.ceil(customerInsights.length / CUSTOMER_PAGE_SIZE));
+  const safeCustomerPage = Math.min(customerPage, customerTotalPages);
+  const visibleCustomers = customerInsights.slice((safeCustomerPage - 1) * CUSTOMER_PAGE_SIZE, safeCustomerPage * CUSTOMER_PAGE_SIZE);
+  useEffect(() => {
+    if (customerPage > customerTotalPages) setCustomerPage(customerTotalPages);
+  }, [customerPage, customerTotalPages]);
 
   if (selectedCustomer) {
     return (
@@ -144,13 +151,22 @@ export function QuotationCrmWorkspace({
 
       <div className={styles.crmGrid}>
         <section className={styles.crmPanel}>
-          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户档案</span><h3>业务员客户</h3></div><small>自动带出权限范围内客户</small></div>
+          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户档案</span><h3>业务员客户</h3></div><small>自动带出权限范围内客户 · 共 {customerInsights.length} 位</small></div>
           {customersError ? <div className={styles.crmEmpty}>客户档案读取失败：{customersError}。当前仅显示报价中出现过的客户。</div> : null}
           <div className={styles.customerCards}>
-            {customerInsights.slice(0, MAX_VISIBLE_CUSTOMERS).length
-              ? customerInsights.slice(0, MAX_VISIBLE_CUSTOMERS).map((customer) => <CustomerCard customer={customer} key={customer.key} onOpenCustomer={(nextCustomer) => setSelectedCustomerKey(nextCustomer.key)} />)
+            {visibleCustomers.length
+              ? visibleCustomers.map((customer) => <CustomerCard customer={customer} key={customer.key} onOpenCustomer={(nextCustomer) => setSelectedCustomerKey(nextCustomer.key)} />)
               : <div className={styles.crmEmpty}>当前权限范围内还没有客户档案或报价记录。</div>}
           </div>
+          {customerInsights.length > CUSTOMER_PAGE_SIZE ? (
+            <div className={shell.paginationBar}>
+              <span>共 {customerInsights.length} 位客户，当前第 {safeCustomerPage} / {customerTotalPages} 页</span>
+              <div>
+                <button className={shell.secondaryButton} type="button" disabled={safeCustomerPage <= 1} onClick={() => setCustomerPage((value) => Math.max(1, value - 1))}>上一页</button>
+                <button className={shell.secondaryButton} type="button" disabled={safeCustomerPage >= customerTotalPages} onClick={() => setCustomerPage((value) => Math.min(customerTotalPages, value + 1))}>下一页</button>
+              </div>
+            </div>
+          ) : null}
         </section>
         <section className={styles.crmPanel}>
           <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>销售动作</span><h3>跟进提醒</h3></div><small>报价、订单和应收联动</small></div>

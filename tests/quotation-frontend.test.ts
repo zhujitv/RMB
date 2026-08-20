@@ -317,6 +317,14 @@ test("quotation CRM automatically includes salesperson-owned customer masters", 
   assert.ok(quotationCrmSource.includes('apiJson<CustomersResponse>("/api/customers")'));
   assert.match(quotationCrmSource, /buildCustomerInsights\(quotations, customerMasters\)/);
   assert.match(quotationCrmSource, /自动带出权限范围内客户/);
+  assert.match(quotationCrmSource, /共 \{customerInsights\.length\} 位/);
+  assert.doesNotMatch(quotationCrmSource, /slice\(0,\s*MAX_VISIBLE_CUSTOMERS\)/);
+  assert.doesNotMatch(quotationCrmSource, /MAX_VISIBLE_CUSTOMERS\s*=\s*4/);
+  assert.match(quotationCrmSource, /CUSTOMER_PAGE_SIZE\s*=\s*5/);
+  assert.match(quotationCrmSource, /visibleCustomers = customerInsights\.slice/);
+  assert.match(quotationCrmSource, /共 \{customerInsights\.length\} 位客户，当前第 \{safeCustomerPage\} \/ \{customerTotalPages\} 页/);
+  assert.match(quotationCrmSource, /上一页/);
+  assert.match(quotationCrmSource, /下一页/);
   assert.match(quotesModuleSource, /canReadPermission\(currentUser, permissions, "customers"/);
   assert.match(quotationsViewSource, /canReadCustomers=\{canReadCustomers\}/);
 });
