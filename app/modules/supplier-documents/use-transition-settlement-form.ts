@@ -21,6 +21,26 @@ export type TransitionPreview = {
   items?: TransitionItem[];
 };
 
+export function transitionSettlementValidationError(input: {
+  required: boolean;
+  preview: TransitionPreview | null;
+  items: TransitionItem[];
+  reason: string;
+  confirmed: boolean;
+}) {
+  if (!input.required) return "";
+  if (!input.preview) return "请先读取报关商品并完成历史过渡结算。";
+  if (input.preview.existing) return "";
+  const selected = input.items.filter((item) => item.selected);
+  if (!selected.length) return "请至少勾选一行属于该工厂的报关商品。";
+  if (selected.some((item) => !item.productName?.trim() || !item.unit?.trim() || !item.quantity?.trim())) {
+    return "请完整填写已选商品的品名、数量和单位。";
+  }
+  if (input.reason.trim().length < 5) return "请填写至少5个字的过渡原因。";
+  if (!input.confirmed) return "请勾选“我已核对原始凭证，确认该订单已发货报关”。";
+  return "";
+}
+
 export function useTransitionSettlementForm() {
   const [preview, setPreview] = useState<TransitionPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,15 +84,7 @@ export function useTransitionSettlementForm() {
   }
 
   function validationError(required: boolean) {
-    if (!required) return "";
-    if (!preview) return "请先读取报关商品并完成历史过渡结算。";
-    if (preview.existing) return "";
-    const selected = items.filter((item) => item.selected);
-    if (!selected.length || selected.some((item) => !item.productName?.trim() || !item.unit?.trim() || !item.quantity?.trim())) {
-      return "请选择属于该工厂的报关商品，并完整填写品名、数量和单位。";
-    }
-    if (!confirmed || reason.trim().length < 5) return "请填写过渡原因，并确认该订单已发货报关。";
-    return "";
+    return transitionSettlementValidationError({ required, preview, items, reason, confirmed });
   }
 
   function appendFormData(formData: FormData) {

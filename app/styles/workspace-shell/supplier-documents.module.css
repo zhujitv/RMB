@@ -19,6 +19,7 @@
 .supplierDocumentTransitionTableWrap { composes: supplierDocumentTransitionTableWrap from "./supplier-transition-settlement.module.css"; }
 .supplierDocumentTransitionTable { composes: supplierDocumentTransitionTable from "./supplier-transition-settlement.module.css"; }
 .supplierDocumentTransitionTableRow { composes: supplierDocumentTransitionTableRow from "./supplier-transition-settlement.module.css"; }
+.supplierDocumentTransitionTableRowSelected { composes: supplierDocumentTransitionTableRowSelected from "./supplier-transition-settlement.module.css"; }
 .supplierDocumentTransitionConfirmation { composes: supplierDocumentTransitionConfirmation from "./supplier-transition-settlement.module.css"; }
 .supplierDocumentTransitionAdjustments { composes: supplierDocumentTransitionAdjustments from "./supplier-transition-settlement.module.css"; }
 .supplierDocumentTransitionField { composes: supplierDocumentTransitionField from "./supplier-transition-settlement.module.css"; }
