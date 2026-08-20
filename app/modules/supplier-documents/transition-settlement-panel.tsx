@@ -33,14 +33,14 @@ export function TransitionSettlementPanel({ cost, saving, form, onError }: {
             <thead><tr><th>选择</th><th>品名</th><th>数量</th><th>单位</th></tr></thead>
             <tbody>{form.items.map((item, index) => <tr
               key={`${item.customsItemIndex}-${index}`}
-              className={styles.supplierDocumentTransitionTableRow}
+              className={`${styles.supplierDocumentTransitionTableRow} ${item.selected ? styles.supplierDocumentTransitionTableRowSelected : ""}`}
               onClick={() => {
                 if (!Boolean(form.preview?.existing)) {
                   form.updateItem(index, { selected: !Boolean(item.selected) });
                 }
               }}
             >
-              <td><input className={styles.supplierDocumentTransitionCheckbox} aria-label={`选择第${index + 1}行报关商品`} type="checkbox" checked={Boolean(item.selected)} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { selected: event.target.checked })} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} /></td>
+              <td><input className={styles.supplierDocumentTransitionCheckbox} aria-label={`选择第${index + 1}行报关商品`} type="checkbox" checked={Boolean(item.selected)} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { selected: event.target.checked })} onClick={(event) => event.stopPropagation()} /></td>
               <td><input className={styles.supplierDocumentTransitionField} aria-label={`过渡结算第${index + 1}行品名`} value={item.productName || ""} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { productName: event.target.value })} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} /></td>
               <td><input className={styles.supplierDocumentTransitionField} aria-label={`过渡结算第${index + 1}行数量`} inputMode="decimal" value={item.quantity || ""} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { quantity: event.target.value })} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} /></td>
               <td><input className={styles.supplierDocumentTransitionField} aria-label={`过渡结算第${index + 1}行单位`} value={item.unit || ""} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { unit: event.target.value })} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} /></td>
@@ -53,7 +53,7 @@ export function TransitionSettlementPanel({ cost, saving, form, onError }: {
               <label>扣减金额<input inputMode="decimal" value={form.decreaseAmount} onChange={(event) => form.setDecreaseAmount(event.target.value)} /></label>
               <label className={styles.supplierDocumentRequestMessage}>过渡原因<textarea rows={3} maxLength={1000} value={form.reason} onChange={(event) => form.setReason(event.target.value)} placeholder="例：新采购流程上线前已发货并完成报关" /></label>
             </div>
-            <label className={styles.supplierDocumentTransitionConfirmation}><input className={styles.supplierDocumentTransitionCheckbox} type="checkbox" checked={form.confirmed} onChange={(event) => form.setConfirmed(event.target.checked)} /> <span>我已核对原始凭证，确认该订单已发货报关，上述数量和金额为真实过渡数据。</span></label>
+            <label className={styles.supplierDocumentTransitionConfirmation}><input className={styles.supplierDocumentTransitionCheckbox} aria-label="确认订单已发货报关" type="checkbox" checked={form.confirmed} onChange={(event) => form.setConfirmed(event.target.checked)} /> <span>我已核对原始凭证，确认该订单已发货报关，上述数量和金额为真实过渡数据。</span></label>
           </> : <p>该过渡结算凭证已冻结，本次将直接重建资料回传合同草稿。</p>}
         </> : null}
       </div>

@@ -2,7 +2,13 @@ import { readPrismaSchemaSource } from "./prisma-schema-source.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createJiti } from "jiti";
 import { readCssModuleGraphSource, readNotificationEngineSource, readRepairTaxRelationsSource, readSettingsModuleSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
+
+const jiti = createJiti(import.meta.url);
+const { transitionSettlementValidationError } = await jiti.import<
+  typeof import("../app/modules/supplier-documents/use-transition-settlement-form.ts")
+>("../app/modules/supplier-documents/use-transition-settlement-form.ts");
 
 const schema = readPrismaSchemaSource();
 const service = readSupplierDocumentRequestsSource();
@@ -35,6 +41,36 @@ const repairSupplierReturnDocumentsScript = readFileSync("scripts/repair-supplie
 const repairTaxRelationService = readRepairTaxRelationsSource();
 const legacyProductSupplierRole = `产品供应商${"账号"}`;
 const legacyProductSupplierMenuPattern = new RegExp(`${legacyProductSupplierRole}: \\["supplierPurchaseOrders", "supplierDocuments", "manual"\\]`);
+
+test("transition settlement reports the exact missing confirmation instead of a combined error", () => {
+  const base = {
+    required: true,
+    preview: { items: [] },
+    items: [{ customsItemIndex: 0, selected: true, productName: "塑料制柱子", quantity: "1922", unit: "千克" }],
+    reason: "历史订单已发货报关",
+    confirmed: false,
+  };
+  assert.equal(
+    transitionSettlementValidationError(base),
+    "请勾选“我已核对原始凭证，确认该订单已发货报关”。",
+  );
+  assert.equal(transitionSettlementValidationError({ ...base, confirmed: true }), "");
+});
+
+test("transition settlement distinguishes unselected OCR rows and a short reason", () => {
+  const input = {
+    required: true,
+    preview: { items: [] },
+    items: [{ customsItemIndex: 0, selected: false, productName: "塑料制柱子", quantity: "1922", unit: "千克" }],
+    reason: "历史",
+    confirmed: true,
+  };
+  assert.equal(transitionSettlementValidationError(input), "请至少勾选一行属于该工厂的报关商品。");
+  assert.equal(
+    transitionSettlementValidationError({ ...input, items: [{ ...input.items[0], selected: true }] }),
+    "请填写至少5个字的过渡原因。",
+  );
+});
 
 test("supplier document template uses a Web-compatible binary response body", () => {
   assert.match(supplierRequestTemplateRoute, /new Response\(new Uint8Array\(body\)/);
@@ -211,6 +247,10 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCard:focus-visible/);
   assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCardSelected/);
   assert.match(supplierDocumentStyles, /\.supplierDocumentRequestTypeCheck/);
+  assert.match(supplierDocumentStyles, /\.supplierDocumentTransitionTableRowSelected/);
+  assert.match(supplierDocumentStyles, /\.supplierDocumentTransitionCheckbox[\s\S]*appearance: auto !important/);
+  assert.match(supplierDocumentStyles, /\.supplierDocumentTransitionConfirmation[\s\S]*display: flex !important/);
+  assert.match(supplierCreateDialog, /aria-label="确认订单已发货报关"/);
   assert.match(supplierCostCandidatesRoute, /listSupplierDocumentRequestCostCandidates/);
   assert.match(supplierRequestListRoute, /costId: String\(formData\.get\("costId"\) \|\| ""\)/);
   assert.match(supplierRequestListRoute, /createSupplierTaxContractRequest/);

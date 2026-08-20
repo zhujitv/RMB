@@ -50,6 +50,14 @@
   cursor: pointer;
 }
 
+.supplierDocumentTransitionTableRow:hover td {
+  background: #f8fbff;
+}
+
+.supplierDocumentTransitionTableRowSelected td {
+  background: #eff6ff;
+}
+
 .supplierDocumentTransitionTable th,
 .supplierDocumentTransitionTable td {
   border-bottom: 1px solid #e2e8f0;
@@ -100,17 +108,24 @@
 }
 
 .supplierDocumentTransitionCheckbox {
-  appearance: auto;
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
-  min-height: 18px;
-  margin: 0;
-  padding: 0;
-  box-shadow: none;
+  appearance: auto !important;
+  width: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  accent-color: #2563eb;
+  cursor: pointer;
 }
 
 .supplierDocumentTransitionConfirmation {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
   display: flex !important;
@@ -120,6 +135,11 @@
   color: #334155 !important;
   font-weight: 600 !important;
   line-height: 1.55;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  padding: 12px 14px;
+  cursor: pointer;
 }
 
 .supplierDocumentTransitionConfirmation .supplierDocumentTransitionCheckbox {
