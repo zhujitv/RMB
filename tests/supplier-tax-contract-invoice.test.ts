@@ -33,7 +33,7 @@ const contract = {
   buyerPhone: "0575-12345678",
   buyerBankName: "工商银行",
   buyerBankAccount: "987654321",
-  signingPlace: "浙江省诸暨市",
+  signingPlace: "中国",
   signingDate: "2026-08-17",
   latestDeliveryDate: "2026-08-20",
   currency: "CNY",
@@ -100,7 +100,31 @@ test("generated tax contract workbook contains no specification column and freez
   assert.match(sheet || "", /CUSTOMER-01/);
   assert.match(sheet || "", /木塑复合地板/);
   assert.match(sheet || "", /平方米/);
+  assert.match(sheet || "", /签订地点：浙江诸暨/);
+  assert.doesNotMatch(sheet || "", /签订地点：中国/);
+  assert.match(sheet || "", /二、交（提）货地点、方式：需方指定船公司仓库。允许溢短装。/);
+  assert.match(sheet || "", /十、未尽事宜，协商解决。/);
+  assert.match(sheet || "", /税号：91330000987654321X/);
+  assert.match(sheet || "", /开户行：工商银行/);
+  assert.match(sheet || "", /账号：987654321/);
   assert.doesNotMatch(sheet || "", /规格型号/);
+});
+
+test("tax contract adds one bordered product row per item and shifts the remaining template", async () => {
+  const items = Array.from({ length: 9 }, (_, index) => ({
+    ...contract.items[0],
+    lineNo: index + 1,
+    purchaseOrderItemId: `item-${index + 1}`,
+    productName: `产品${index + 1}`,
+  }));
+  const body = await generateSupplierTaxContractXlsx({ ...contract, items } as never);
+  const zip = await JSZip.loadAsync(body);
+  const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("string") || "";
+  assert.match(sheet, /<dimension ref="A1:F34"/);
+  assert.match(sheet, /<c r="A15"[^>]*s="6"[^>]*>.*产品9/);
+  assert.match(sheet, /<c r="A16"[^>]*s="7"[^>]*>.*合计/);
+  assert.match(sheet, /<mergeCell ref="A29:C29"/);
+  assert.match(sheet, /供方（盖章）：浙江供应商有限公司/);
 });
 
 test("manual review can correct OCR name, quantity and unit while preserving original evidence", () => {

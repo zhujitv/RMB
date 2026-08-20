@@ -67,41 +67,56 @@ function chineseCurrency(value: string) {
 
 function worksheet(draft: SupplierTaxContractDraft) {
   const rows: string[] = [];
-  rows.push(`<row r="1" ht="28" customHeight="1">${inlineCell(1, 1, "出口产品订货合同", 2)}</row>`);
-  rows.push(`<row r="2">${inlineCell(2, 1, `供方：${draft.supplierName}`)}${inlineCell(2, 5, `合同编号：${draft.contractNo}`)}</row>`);
-  rows.push(`<row r="3">${inlineCell(3, 1, `需方：${draft.buyerName}`)}${inlineCell(3, 5, `签订日期：${draft.signingDate}`)}</row>`);
-  rows.push(`<row r="4">${inlineCell(4, 1, `签订地点：${draft.signingPlace || "中国"}`)}</row>`);
+  rows.push(`<row r="1" ht="37.25" customHeight="1">${inlineCell(1, 1, "出口产品订货合同", 2)}</row>`);
+  rows.push(`<row r="2" ht="20" customHeight="1">${inlineCell(2, 1, `供方：${draft.supplierName}`)}${inlineCell(2, 5, "合同编号：")}${inlineCell(2, 6, draft.contractNo)}</row>`);
+  rows.push(`<row r="3" ht="20" customHeight="1">${inlineCell(3, 1, `需方：${draft.buyerName}`)}${inlineCell(3, 5, "签订日期：")}${inlineCell(3, 6, draft.signingDate)}</row>`);
+  rows.push(`<row r="4">${inlineCell(4, 1, "签订地点：浙江诸暨")}</row>`);
   rows.push(`<row r="6">${["品名", "数量", "单位", "含税单价", "含税金额", "最晚交货日期"].map((value, index) => inlineCell(6, index + 1, value, 3)).join("")}</row>`);
   let row = 7;
   for (const item of draft.items) {
-    rows.push(`<row r="${row}">${inlineCell(row, 1, item.productName)}${numberCell(row, 2, item.quantity)}${inlineCell(row, 3, item.unit)}${numberCell(row, 4, item.unitPriceWithTax)}${numberCell(row, 5, item.amountWithTax)}${inlineCell(row, 6, draft.latestDeliveryDate)}</row>`);
+    rows.push(`<row r="${row}" ht="20" customHeight="1">${inlineCell(row, 1, item.productName, 6)}${numberCell(row, 2, item.quantity)}${inlineCell(row, 3, item.unit, 6)}${numberCell(row, 4, item.unitPriceWithTax)}${numberCell(row, 5, item.amountWithTax)}${inlineCell(row, 6, draft.latestDeliveryDate, 6)}</row>`);
     row += 1;
   }
-  rows.push(`<row r="${row}">${inlineCell(row, 1, "合计", 3)}${numberCell(row, 5, draft.totalAmountWithTax, 5)}</row>`);
+  const totalRow = row;
+  rows.push(`<row r="${row}">${inlineCell(row, 1, "合计", 7)}${numberCell(row, 5, draft.totalAmountWithTax, 5)}${inlineCell(row, 6, "", 6)}</row>`);
   row += 1;
-  rows.push(`<row r="${row}">${inlineCell(row, 1, `人民币大写：${chineseCurrency(draft.totalAmountWithTax)}`)}${inlineCell(row, 5, `币种：${draft.currency}`)}</row>`);
-  row += 2;
+  const capitalRow = row;
+  rows.push(`<row r="${row}" ht="30" customHeight="1">${inlineCell(row, 1, `人民币大写：${chineseCurrency(draft.totalAmountWithTax)}`, 8)}</row>`);
+  row += 1;
   const clauses = [
-    "一、品名、数量和单位以经人工审核确认的报关单商品信息为准。",
-    ...(draft.sourceType === "FACTORY_PURCHASE_TRANSITION_SETTLEMENT" ? ["本合同由已发货报关历史订单的冻结过渡结算凭证生成。"] : []),
-    "二、合同金额按本订单实际装柜计价数量计算，留仓及未装运数量不计入货款。",
-    "三、供方须按本合同开具增值税发票；发票品名、数量、单位及价税合计必须与本合同一致。",
-    "四、付款方式：按双方确认的采购付款条件执行。",
-    "五、本合同经双方确认并签章后生效，扫描件与原件具有同等效力。",
+    { text: "二、交（提）货地点、方式：需方指定船公司仓库。允许溢短装。", rows: 1 },
+    { text: "三、运杂费负担：运费由需方承担。", rows: 1 },
+    { text: "四、包装要求及费用负担：包装必须符合出口商检要求,包装和装箱数量如不符,需方有权暂不付款。", rows: 1 },
+    { text: "五、验收标准、方法及提出异议期限：属于国家法定商检的商品，需经商检合格后方可进仓。不属国家法定商检的商品，由需方按客户要求检验，合格后进仓。", rows: 2 },
+    { text: "六、结算方式及期限：报关出口后,凭供方提供的增值税发票,30天内支付全部货款。", rows: 1 },
+    { text: "七、质量要求、技术标准、供方对质量负责的条件和期限：需方订购的上列产品出口后，如因质量问题、包装等问题引起客户拒付、索赔，由供方承担所有损失。", rows: 1 },
+    { text: "八、违约责任：违约方承担相应的违约责任。", rows: 1 },
+    { text: "九、解决合同纠纷的方式：双方协商解决。如协商不成，任何一方均应向需方所在地人民法院起诉。", rows: 1 },
+    { text: "十、未尽事宜，协商解决。", rows: 1 },
   ];
+  const clauseMerges: string[] = [];
   for (const clause of clauses) {
-    rows.push(`<row r="${row}" ht="24" customHeight="1">${inlineCell(row, 1, clause)}</row>`);
-    row += 1;
+    const endRow = row + clause.rows - 1;
+    rows.push(`<row r="${row}" ht="26.25" customHeight="1">${inlineCell(row, 1, clause.text, 9)}</row>`);
+    for (let continuation = row + 1; continuation <= endRow; continuation += 1) {
+      rows.push(`<row r="${continuation}" ht="26.25" customHeight="1"></row>`);
+    }
+    clauseMerges.push(`A${row}:F${endRow}`);
+    row = endRow + 1;
   }
   row += 1;
-  rows.push(`<row r="${row}">${inlineCell(row, 1, `供方（盖章）：${draft.supplierName}`)}${inlineCell(row, 4, `需方（盖章）：${draft.buyerName}`)}</row>`);
+  rows.push(`<row r="${row}">${inlineCell(row, 1, `供方（盖章）：${draft.supplierName}`, 10)}${inlineCell(row, 4, `需方（盖章）：${draft.buyerName}`, 10)}</row>`);
   rows.push(`<row r="${row + 1}">${inlineCell(row + 1, 1, `税号：${draft.supplierTaxNumber || "待补充"}`)}${inlineCell(row + 1, 4, `税号：${draft.buyerTaxNumber || "待补充"}`)}</row>`);
   rows.push(`<row r="${row + 2}">${inlineCell(row + 2, 1, `地址：${draft.supplierAddress || ""}`)}${inlineCell(row + 2, 4, `地址：${draft.buyerAddress || ""}`)}</row>`);
   rows.push(`<row r="${row + 3}">${inlineCell(row + 3, 1, `电话：${draft.supplierPhone || ""}`)}${inlineCell(row + 3, 4, `电话：${draft.buyerPhone || ""}`)}</row>`);
   rows.push(`<row r="${row + 4}">${inlineCell(row + 4, 1, `开户行：${draft.supplierBankName || ""}`)}${inlineCell(row + 4, 4, `开户行：${draft.buyerBankName || ""}`)}</row>`);
   rows.push(`<row r="${row + 5}">${inlineCell(row + 5, 1, `账号：${draft.supplierBankAccount || ""}`)}${inlineCell(row + 5, 4, `账号：${draft.buyerBankAccount || ""}`)}</row>`);
   const lastRow = row + 5;
-  return `${XML_HEADER}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="38" customWidth="1"/><col min="2" max="5" width="16" customWidth="1"/><col min="6" max="6" width="20" customWidth="1"/></cols><sheetData>${rows.join("")}</sheetData><mergeCells count="${clauses.length + 7}"><mergeCell ref="A1:F1"/><mergeCell ref="A2:D2"/><mergeCell ref="A3:D3"/><mergeCell ref="A4:F4"/><mergeCell ref="A${7 + draft.items.length}:D${7 + draft.items.length}"/>${clauses.map((_, index) => `<mergeCell ref="A${10 + draft.items.length + index}:F${10 + draft.items.length + index}"/>`).join("")}<mergeCell ref="A${row}:C${row}"/><mergeCell ref="D${row}:F${row}"/></mergeCells><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup orientation="portrait" paperSize="9" fitToWidth="1" fitToHeight="1"/></worksheet>`;
+  const merges = [
+    "A1:F1", "A2:D2", "A3:D3", "A4:F4", `A${totalRow}:D${totalRow}`,
+    `A${capitalRow}:F${capitalRow}`, ...clauseMerges, `A${row}:C${row}`, `D${row}:F${row}`,
+  ];
+  return `${XML_HEADER}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:F${lastRow}"/><sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews><sheetFormatPr baseColWidth="10" defaultRowHeight="20"/><cols><col min="1" max="1" width="38" customWidth="1"/><col min="2" max="5" width="16" customWidth="1"/><col min="6" max="6" width="20" customWidth="1"/></cols><sheetData>${rows.join("")}</sheetData><mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup orientation="portrait" paperSize="9"/></worksheet>`;
 }
 
 export async function generateSupplierTaxContractXlsx(draft: SupplierTaxContractDraft) {
@@ -110,7 +125,7 @@ export async function generateSupplierTaxContractXlsx(draft: SupplierTaxContract
   zip.folder("_rels")?.file(".rels", `${XML_HEADER}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
   zip.folder("xl")?.file("workbook.xml", `${XML_HEADER}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="退税合同" sheetId="1" r:id="rId1"/></sheets></workbook>`);
   zip.folder("xl")?.folder("_rels")?.file("workbook.xml.rels", `${XML_HEADER}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
-  zip.folder("xl")?.file("styles.xml", `${XML_HEADER}<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="宋体"/></font><font><b/><sz val="16"/><name val="宋体"/></font><font><b/><sz val="11"/><name val="宋体"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9EAF7"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/></border></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="6"><xf fontId="0" fillId="0" borderId="0"/><xf fontId="0" fillId="0" borderId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf fontId="1" fillId="0" borderId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="2" fillId="1" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="0" fillId="0" borderId="1" numFmtId="4" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="2" fillId="0" borderId="1" numFmtId="4" applyNumberFormat="1"/></cellXfs></styleSheet>`);
+  zip.folder("xl")?.file("styles.xml", `${XML_HEADER}<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="11"/><name val="宋体"/></font><font><b/><sz val="16"/><name val="宋体"/></font><font><b/><sz val="11"/><name val="宋体"/></font><font><sz val="12"/><name val="宋体"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="2"><border/><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/></border></borders><cellStyleXfs count="1"><xf fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="11"><xf fontId="0" fillId="0" borderId="0"/><xf fontId="0" fillId="0" borderId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf fontId="1" fillId="0" borderId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="2" fillId="0" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="0" fillId="0" borderId="1" numFmtId="4" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="2" fillId="0" borderId="1" numFmtId="4" applyNumberFormat="1"/><xf fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf fontId="2" fillId="0" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf fontId="0" fillId="0" borderId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf fontId="3" fillId="0" borderId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="常规" xfId="0" builtinId="0"/></cellStyles></styleSheet>`);
   zip.folder("xl")?.folder("worksheets")?.file("sheet1.xml", worksheet(draft));
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }

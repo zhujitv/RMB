@@ -105,11 +105,15 @@ function bankAccountPayload(input: BusinessEntityInput) {
     const bankName = optionalBusinessText(account.bankName, `${currency} 银行名称`, 300);
     const accountNumber = optionalBusinessText(account.accountNumber, `${currency} 银行账号`, 100);
     const swiftCode = optionalBusinessText(account.swiftCode, `${currency} SWIFT / BIC Code`, 11)?.replace(/\s+/g, "").toUpperCase() || null;
-    const fields = [beneficiaryName, beneficiaryAddress, bankName, accountNumber, swiftCode];
+    const fields = currency === "CNY"
+      ? [bankName, accountNumber]
+      : [beneficiaryName, beneficiaryAddress, bankName, accountNumber, swiftCode];
     if (fields.every((field) => !field)) continue;
     if (fields.some((field) => !field)) {
       throw codedError(
-        `${currency} 收款账户请完整填写收款人名称、收款人地址、银行名称、银行账号和 SWIFT / BIC Code`,
+        currency === "CNY"
+          ? "人民币收款账户请同时填写开户行和银行账号"
+          : "USD 收款账户请完整填写收款人名称、收款人地址、银行名称、银行账号和 SWIFT / BIC Code",
         400,
         "BUSINESS_ENTITY_BANK_ACCOUNT_INCOMPLETE",
       );
@@ -117,16 +121,16 @@ function bankAccountPayload(input: BusinessEntityInput) {
     if (!/^[A-Za-z0-9][A-Za-z0-9 .\-/]{0,99}$/.test(accountNumber || "")) {
       throw codedError(`${currency} 银行账号格式错误`, 400, "BUSINESS_ENTITY_ACCOUNT_NUMBER_INVALID");
     }
-    if (!/^[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$/.test(swiftCode || "")) {
+    if ((currency === "USD" || swiftCode) && !/^[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$/.test(swiftCode || "")) {
       throw codedError(`${currency} SWIFT / BIC Code 应为 8 或 11 位`, 400, "BUSINESS_ENTITY_SWIFT_INVALID");
     }
     accounts.push({
       currency,
-      beneficiaryName: beneficiaryName as string,
-      beneficiaryAddress: beneficiaryAddress as string,
+      beneficiaryName: beneficiaryName || (currency === "CNY" ? nonEmpty(input.name) : ""),
+      beneficiaryAddress: beneficiaryAddress || (currency === "CNY" ? nonEmpty(input.address) : ""),
       bankName: bankName as string,
       accountNumber: accountNumber as string,
-      swiftCode: swiftCode as string,
+      swiftCode: swiftCode || "",
     });
   }
   return {

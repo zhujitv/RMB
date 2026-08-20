@@ -176,10 +176,6 @@ export function BusinessEntitySettingsCard({
               <input maxLength={200} value={currentForm.nameEn} onChange={(event) => setField("nameEn", event.target.value)} />
             </label>
             <label>
-              纳税人识别号
-              <input maxLength={50} value={currentForm.taxNumber} onChange={(event) => setField("taxNumber", event.target.value)} />
-            </label>
-            <label>
               联系邮箱
               <input type="email" maxLength={254} value={currentForm.contactEmail} onChange={(event) => setField("contactEmail", event.target.value)} />
             </label>
