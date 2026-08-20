@@ -165,10 +165,12 @@ jobs:
           current_group="$(id -gn)"
           if mkdir -p "$backup_dir" 2>/dev/null; then
             chmod 700 "$backup_dir" 2>/dev/null || true
-          elif command -v sudo >/dev/null 2>&1; then
-            sudo install -d -m 700 -o "$current_user" -g "$current_group" "$backup_dir"
+          elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            if ! sudo -n install -d -m 700 -o "$current_user" -g "$current_group" "$backup_dir"; then
+              echo "::warning::Cannot prepare shared backup directory with sudo; migrations will use the deploy user's private fallback."
+            fi
           else
-            echo "::warning::Cannot create shared backup directory; migrations will use the deploy user's private fallback."
+            echo "::warning::Shared backup directory is not writable and passwordless sudo is unavailable; migrations will use the deploy user's private fallback."
           fi
           if [[ -d "$backup_dir" && -w "$backup_dir" ]]; then
             printf '[rmb-cvm-deploy] shared DB backup directory ready: %s\n' "$backup_dir"
