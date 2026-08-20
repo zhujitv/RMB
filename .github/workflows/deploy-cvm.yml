@@ -163,7 +163,16 @@ jobs:
         run: |
           set -euo pipefail
           public_url="${PUBLIC_HEALTH_URL:-https://www.nextwood.net}"
-          curl --fail --silent --show-error --head --max-time 20 "$public_url" >/dev/null
+          public_health_ok=0
+          for attempt in {1..20}; do
+            if curl --fail --silent --show-error --head --max-time 20 "$public_url" >/dev/null; then
+              public_health_ok=1
+              break
+            fi
+            echo "Public health not ready yet; retrying ($attempt/20)"
+            sleep 2
+          done
+          [[ "$public_health_ok" == "1" ]]
           echo "Public health check passed: $public_url"
 
       - name: Already up to date

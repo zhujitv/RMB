@@ -16,6 +16,8 @@ ENV_FILE="${RMB_ENV_FILE:-/srv/rmb/shared/app.env}"
 BUNDLE="${RMB_DEPLOY_BUNDLE:-}"
 DEPLOY_SHA="${RMB_DEPLOY_SHA:-}"
 HEALTH_URL="${RMB_HEALTH_URL:-http://127.0.0.1:3000/}"
+HEALTH_ATTEMPTS="${RMB_HEALTH_ATTEMPTS:-20}"
+HEALTH_SLEEP_SECONDS="${RMB_HEALTH_SLEEP_SECONDS:-2}"
 NPM_INSTALL_MODE="${RMB_NPM_INSTALL:-auto}"
 SUDO_CMD="${RMB_SUDO:-}"
 
@@ -83,7 +85,16 @@ $SUDO_CMD systemctl status "$SERVICE" --no-pager -n 20
 
 if command -v curl >/dev/null 2>&1; then
   log "checking local health: $HEALTH_URL"
-  curl --fail --silent --show-error --head --max-time 15 "$HEALTH_URL" >/dev/null
+  health_ok=0
+  for ((attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt += 1)); do
+    if curl --fail --silent --show-error --head --max-time 15 "$HEALTH_URL" >/dev/null; then
+      health_ok=1
+      break
+    fi
+    log "local health not ready yet; retrying ($attempt/$HEALTH_ATTEMPTS)"
+    sleep "$HEALTH_SLEEP_SECONDS"
+  done
+  [[ "$health_ok" == "1" ]] || fail "local health check failed after $HEALTH_ATTEMPTS attempts: $HEALTH_URL"
 fi
 
 log "deployment complete: $TARGET_SHA"
