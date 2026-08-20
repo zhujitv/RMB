@@ -49,6 +49,24 @@ async function findIdentityProduct(
   )) || null;
 }
 
+async function findMaterialCodeProduct(
+  client: Prisma.TransactionClient,
+  customerId: string,
+  materialCode: string,
+  exceptId = "",
+) {
+  const code = materialCode.trim();
+  if (!code) return null;
+  return client.customerProduct.findFirst({
+    where: {
+      customerId,
+      materialCode: { equals: code, mode: "insensitive" },
+      deletedAt: null,
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+  });
+}
+
 function requireActorId(actor: QuotationActor) {
   const id = String(actor?.id || "").trim();
   if (!id) throw codedError("请先登录", 401, "AUTH_REQUIRED");
@@ -81,6 +99,7 @@ export async function listCustomerProducts(query: QueryLike, actor: QuotationAct
     ...(keyword ? {
       OR: [
         { name: { contains: keyword, mode: "insensitive" } },
+        { materialCode: { contains: keyword, mode: "insensitive" } },
         { specification: { contains: keyword, mode: "insensitive" } },
         { unit: { contains: keyword, mode: "insensitive" } },
       ],
@@ -120,11 +139,13 @@ export async function listCustomerProducts(query: QueryLike, actor: QuotationAct
 }
 
 function customerProductData(input: Record<string, unknown>, customerId: string, actorId: string) {
+  const materialCode = quotationText(input.materialCode ?? input.customerMaterialCode, "客户物料编码", 100);
   const name = quotationText(input.name ?? input.productName, "品名", 200, true);
   const specification = quotationText(input.specification, "规格", 500);
   const unit = quotationText(input.unit, "单位", 50, true);
   return {
     customerId,
+    materialCode: materialCode || null,
     name,
     specification: specification || null,
     unit,
@@ -154,6 +175,9 @@ export async function saveCustomerProduct(
     name: Object.hasOwn(body, "name") || Object.hasOwn(body, "productName")
       ? (body.name ?? body.productName)
       : before.name,
+    materialCode: Object.hasOwn(body, "materialCode") || Object.hasOwn(body, "customerMaterialCode")
+      ? (body.materialCode ?? body.customerMaterialCode)
+      : before.materialCode,
     specification: Object.hasOwn(body, "specification") ? body.specification : before.specification,
     unit: Object.hasOwn(body, "unit") ? body.unit : before.unit,
     remark: Object.hasOwn(body, "remark") ? body.remark : before.remark,
@@ -163,6 +187,8 @@ export async function saveCustomerProduct(
   try {
     return await prisma.$transaction(async (tx) => {
       if (before) {
+        const materialDuplicate = await findMaterialCodeProduct(tx, customerId, data.materialCode || "", before.id);
+        if (materialDuplicate) throw codedError("该客户已存在相同物料编码的产品", 409, "CUSTOMER_PRODUCT_MATERIAL_CODE_DUPLICATE");
         const duplicate = await findIdentityProduct(tx, customerId, data, before.id);
         if (duplicate) throw codedError("该客户已存在相同品名、规格和单位的产品", 409, "CUSTOMER_PRODUCT_DUPLICATE");
         const product = await tx.customerProduct.update({ where: { id: before.id }, data });
@@ -170,6 +196,8 @@ export async function saveCustomerProduct(
         return serializeCustomerProduct(product);
       }
 
+      const materialDuplicate = await findMaterialCodeProduct(tx, customerId, data.materialCode || "");
+      if (materialDuplicate) throw codedError("该客户已存在相同物料编码的产品", 409, "CUSTOMER_PRODUCT_MATERIAL_CODE_DUPLICATE");
       const existing = await findIdentityProduct(tx, customerId, data)
         || await tx.customerProduct.findUnique({
           where: { customerId_fingerprint: { customerId, fingerprint: data.fingerprint } },

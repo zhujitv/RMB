@@ -126,10 +126,10 @@ test("manual covers the complete workspace application map", () => {
 });
 
 test("manual explains quotation, PI, and manual customer acceptance", () => {
-  assert.match(manualModule, /title: "报价管理"/);
+  assert.match(manualModule, /title: "客户与报价"/);
   assert.match(manualModule, /报价号与 PI 发票号一致，按日期生成/);
   assert.match(manualModule, /同日后续报价依次为 20260809A、20260809B/);
-  assert.match(manualModule, /历史产品和同币种最近单价/);
+  assert.match(manualModule, /客户产品库、物料编码和同币种最近单价/);
   assert.match(manualModule, /发送客户不等于客户接受/);
   assert.match(manualModule, /只有“手动确认”会将报价登记为已接受/);
   assert.match(manualModule, /CNY 或 USD 银行账户/);
@@ -182,8 +182,8 @@ test("manual explains customer communication and current role menus", () => {
   assert.match(manualModule, /title: "客户沟通"/);
   assert.match(manualModule, /附件缺失时先返回物流信息或退税资料补齐/);
   assert.match(manualModule, /系统外发送标记只记录事实/);
-  assert.match(manualModule, /管理员：经营总览、报价管理、销售执行/);
-  assert.match(manualModule, /业务员：报价管理、销售执行/);
+  assert.match(manualModule, /管理员：经营总览、客户与报价、销售执行/);
+  assert.match(manualModule, /业务员：客户与报价、销售执行/);
   assert.match(manualModule, /财务：销售执行、收款管理/);
   assert.match(manualModule, /产品供应商：工厂采购单、资料回传、操作手册/);
 });

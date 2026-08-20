@@ -26,7 +26,7 @@ function user(role: string): User {
 
 test("quotation menu is available only to the default administrator and salesperson roles", () => {
   const quotationMenu = MENU_ITEMS.find((item) => item.key === "quotations");
-  assert.equal(quotationMenu?.label, "报价管理");
+  assert.equal(quotationMenu?.label, "客户与报价");
 
   assert.equal(availableMenus(user("管理员")).some((item) => item.key === "quotations"), true);
   assert.equal(availableMenus(user("业务员")).some((item) => item.key === "quotations"), true);
@@ -61,13 +61,13 @@ test("quotation permissions are exposed to custom permission settings", () => {
   assert.equal(MENU_KEYS.includes("quotations"), true);
   assert.equal(READ_PERMISSION_KEYS.includes("quotations"), true);
   assert.equal(WRITE_PERMISSION_KEYS.includes("quotations"), true);
-  assert.equal(SETTINGS_PERMISSION_LABELS.menu.quotations, "报价管理");
-  assert.equal(SETTINGS_PERMISSION_LABELS.read.quotations, "报价查看");
-  assert.equal(SETTINGS_PERMISSION_LABELS.write.quotations, "报价维护");
+  assert.equal(SETTINGS_PERMISSION_LABELS.menu.quotations, "客户与报价");
+  assert.equal(SETTINGS_PERMISSION_LABELS.read.quotations, "客户与报价查看");
+  assert.equal(SETTINGS_PERMISSION_LABELS.write.quotations, "客户与报价维护");
 
-  assert.deepEqual(optionList(MENU_KEYS, SETTINGS_PERMISSION_LABELS.menu).find((option) => option.value === "quotations"), { value: "quotations", label: "报价管理" });
-  assert.deepEqual(optionList(READ_PERMISSION_KEYS, SETTINGS_PERMISSION_LABELS.read).find((option) => option.value === "quotations"), { value: "quotations", label: "报价查看" });
-  assert.deepEqual(optionList(WRITE_PERMISSION_KEYS, SETTINGS_PERMISSION_LABELS.write).find((option) => option.value === "quotations"), { value: "quotations", label: "报价维护" });
+  assert.deepEqual(optionList(MENU_KEYS, SETTINGS_PERMISSION_LABELS.menu).find((option) => option.value === "quotations"), { value: "quotations", label: "客户与报价" });
+  assert.deepEqual(optionList(READ_PERMISSION_KEYS, SETTINGS_PERMISSION_LABELS.read).find((option) => option.value === "quotations"), { value: "quotations", label: "客户与报价查看" });
+  assert.deepEqual(optionList(WRITE_PERMISSION_KEYS, SETTINGS_PERMISSION_LABELS.write).find((option) => option.value === "quotations"), { value: "quotations", label: "客户与报价维护" });
   assert.match(sharedPermissions, /\{ value: "OWN", label: "本人客户、报价、销售执行单和订单" \}/);
 });
 

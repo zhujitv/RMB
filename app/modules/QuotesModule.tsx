@@ -118,7 +118,7 @@ export function QuotesModule({
         ? "新建报价"
         : detailQuotation
           ? `报价 · ${quotationNumber(detailQuotation) || "未编号"}`
-          : "报价管理",
+          : "客户与报价",
     view: editQuotation || createOpen ? "edit" : detailQuotation ? "detail" : "list",
     contextKey: editQuotation
       ? `edit:${editQuotation.id}`

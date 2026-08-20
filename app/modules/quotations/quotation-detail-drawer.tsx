@@ -75,7 +75,7 @@ export function QuotationDetailDrawer({
   return (
     <SideDetailDrawer
       ariaLabel="报价详情"
-      kicker="报价管理"
+      kicker="客户与报价"
       title={`${quotationNumber(quotation) || "未编号"} · ${customerSnapshotShortName}`}
       subtitle={`查看版本：V${version?.versionNumber || currentVersionNumber} · 当前版本：V${currentVersionNumber} · 状态：${quotationStatusLabel(quotation.status)}`}
       onClose={onClose}

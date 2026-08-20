@@ -2,7 +2,7 @@ import type { MenuItem, PermissionSnapshot, User } from "./types";
 
 export const MENU_ITEMS: MenuItem[] = [
   { key: "dashboard", label: "经营总览", description: "经营分析工具，按需进入后加载统计。" },
-  { key: "quotations", label: "报价管理", description: "创建、编辑和跟进客户报价。" },
+  { key: "quotations", label: "客户与报价", description: "维护客户报价、历史价格和成交前跟进。" },
   { key: "salesExecution", label: "销售执行", description: "从报价转入或直接创建销售执行单，并分配工厂采购草稿。" },
   { key: "orders", label: "应收订单", description: "创建、编辑和跟进订单应收信息。" },
   { key: "payments", label: "收款管理", description: "登记客户回款并确认到账状态。" },

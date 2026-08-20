@@ -29,6 +29,7 @@ enum SalesQuotationDecisionChannel {
 model CustomerProduct {
   id            String    @id @default(cuid())
   customerId    String    @map("customer_id")
+  materialCode  String?   @map("material_code")
   name          String
   specification String?
   unit          String
@@ -48,6 +49,7 @@ model CustomerProduct {
 
   @@unique([customerId, fingerprint])
   @@index([customerId, deletedAt, updatedAt])
+  @@index([customerId, materialCode])
   @@index([name])
   @@index([createdById])
   @@index([updatedById])

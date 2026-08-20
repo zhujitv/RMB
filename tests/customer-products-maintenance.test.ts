@@ -9,7 +9,7 @@ const serviceSource = readFileSync("lib/platform/quotation-customer-products.ts"
 const schemaSource = readFileSync("prisma/models/quotations.prisma", "utf8");
 
 test("customer details expose a product attribute maintenance entry", () => {
-  assert.match(settingsSource, /customerProducts[\s\S]*产品属性维护/);
+  assert.match(settingsSource, /customerProducts[\s\S]*客户产品库/);
   assert.match(tableSource, /onManageProducts/);
   assert.match(tableSource, /tab === "customerProducts"[\s\S]*onManageProducts/);
   assert.match(tableSource, />产品属性<\/button>/);
@@ -19,6 +19,8 @@ test("customer details expose a product attribute maintenance entry", () => {
 
 test("customer product manager supports search create edit and void", () => {
   assert.match(managerSource, /\/api\/customer-products\?\$\{params\}/);
+  assert.match(managerSource, /materialCode: form\.materialCode/);
+  assert.match(managerSource, /物料编码、产品描述、规格或单位/);
   assert.match(managerSource, /method: form\.id \? "PATCH" : "POST"/);
   assert.match(managerSource, /method: "DELETE"/);
   assert.match(managerSource, /历史报价和销售数据不会改变/);
@@ -26,8 +28,12 @@ test("customer product manager supports search create edit and void", () => {
 });
 
 test("customer products remain customer-scoped and deduplicated", () => {
+  assert.match(schemaSource, /materialCode\s+String\?\s+@map\("material_code"\)/);
+  assert.match(schemaSource, /@@index\(\[customerId, materialCode\]\)/);
   assert.match(schemaSource, /model CustomerProduct[\s\S]*@@unique\(\[customerId, fingerprint\]\)/);
   assert.match(serviceSource, /await assertCustomerScope\(actor, customerId\)/);
+  assert.match(serviceSource, /findMaterialCodeProduct/);
+  assert.match(serviceSource, /该客户已存在相同物料编码的产品/);
   assert.match(serviceSource, /该客户已存在相同品名、规格和单位的产品/);
   assert.match(serviceSource, /data: \{ deletedAt: new Date\(\), updatedById: actorId \}/);
 });

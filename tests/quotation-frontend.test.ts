@@ -208,6 +208,8 @@ test("quotation editor uses inline product suggestions and clears hidden linkage
   assert.match(editorSource, /role="combobox"/);
   assert.match(editorSource, /role="listbox"/);
   assert.match(editorSource, /data-product-id=\{product\.id\}/);
+  assert.match(editorSource, /customerProductSearchText\(product\)/);
+  assert.match(editorSource, /物料编码 \$\{product\.materialCode\}/);
   assert.match(editorSource, /visibleProductDescriptionParts\(event\.target\.value, item\.specification\)/);
   assert.match(editorSource, /customerProductId: ""[\s\S]*\.\.\.normalized/);
   assert.match(editorSource, /event\.key === "ArrowDown"/);

@@ -131,6 +131,15 @@ export function customerProductDescription(product?: CustomerProduct | null) {
   return productDescription(customerProductName(product), product?.specification);
 }
 
+export function customerProductSearchText(product?: CustomerProduct | null) {
+  return [
+    product?.materialCode,
+    customerProductDescription(product),
+    product?.unit,
+    product?.remark,
+  ].filter(Boolean).join(" ");
+}
+
 export function quotationItemSpecification(item?: QuotationItem | QuotationItemDraft | null) {
   if (!item) return "";
   return "specificationSnapshot" in item

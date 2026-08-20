@@ -4,16 +4,7 @@ import { formatCurrencyAmount } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import styles from "./quotation-form.module.css";
 import responsive from "./quotation-responsive.module.css";
-import {
-  customerProductDescription,
-  customerProductName,
-  duplicateQuotationItemAfter,
-  emptyQuotationItem,
-  quotationItemDescription,
-  quotationLineAmount,
-  type CustomerProduct,
-  type QuotationItemDraft,
-} from "./types";
+import { customerProductDescription, customerProductSearchText, customerProductName, duplicateQuotationItemAfter, emptyQuotationItem, quotationItemDescription, quotationLineAmount, type CustomerProduct, type QuotationItemDraft } from "./types";
 import { QuotationItemActions } from "./quotation-item-actions";
 import { visibleProductDescriptionParts } from "./quotation-product-description-values";
 const MAX_SUGGESTIONS = 8;
@@ -21,9 +12,9 @@ const MAX_SUGGESTIONS = 8;
 function matchingProducts(products: CustomerProduct[], query: string) {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (!normalizedQuery) return products.slice(0, MAX_SUGGESTIONS);
-  return products
-    .filter((product) => customerProductDescription(product).toLocaleLowerCase().includes(normalizedQuery))
-    .slice(0, MAX_SUGGESTIONS);
+  return products.filter((product) => (
+    customerProductSearchText(product).toLocaleLowerCase().includes(normalizedQuery)
+  )).slice(0, MAX_SUGGESTIONS);
 }
 
 function latestPrice(product: CustomerProduct, currency: string) {
@@ -160,6 +151,7 @@ function ProductDescriptionInput({
               >
                 <strong>{customerProductDescription(product)}</strong>
                 <span>
+                  {product.materialCode ? `物料编码 ${product.materialCode} · ` : ""}
                   {product.unit || "未设单位"}
                   {price ? ` · 最近单价 ${formatCurrencyAmount(currency, price)}` : " · 暂无该币种历史单价"}
                 </span>

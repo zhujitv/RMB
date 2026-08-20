@@ -1,7 +1,7 @@
 export const SETTINGS_PERMISSION_LABELS = {
   menu: {
     dashboard: "经营总览",
-    quotations: "报价管理",
+    quotations: "客户与报价",
     salesExecution: "销售执行",
     orders: "应收订单",
     payments: "收款管理",
@@ -22,7 +22,7 @@ export const SETTINGS_PERMISSION_LABELS = {
     users: "用户查看",
     customers: "客户查看",
     suppliers: "供应商查看",
-    quotations: "报价查看",
+    quotations: "客户与报价查看",
     salesExecution: "销售执行查看",
     orders: "应收订单查看",
     payments: "收款查看",
@@ -41,7 +41,7 @@ export const SETTINGS_PERMISSION_LABELS = {
   write: {
     users: "用户管理",
     customers: "客户维护",
-    quotations: "报价维护",
+    quotations: "客户与报价维护",
     salesExecution: "销售执行维护",
     orders: "应收订单保存",
     payments: "收款登记",

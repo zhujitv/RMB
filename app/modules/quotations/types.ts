@@ -206,6 +206,7 @@ export type QuotationDeleteResponse = {
 export type CustomerProduct = {
   id: string;
   customerId?: string | null;
+  materialCode?: string | null;
   name?: string | null;
   productName?: string | null;
   specification?: string | null;
@@ -260,6 +261,7 @@ export {
   currentQuotationVersion,
   hasCurrentManualQuotationAcceptance,
   customerProductDescription,
+  customerProductSearchText,
   customerProductName,
   duplicateQuotationItemAfter,
   emptyQuotationItem,

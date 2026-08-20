@@ -16,7 +16,7 @@ export async function recordQuotationDecision(
 ): Promise<never> {
   assertWrite(actor, "quotations");
   throw codedError(
-    "PI 邮件发送仅代表已发送，客户确认请在报价管理中手动登记",
+    "PI 邮件发送仅代表已发送，客户确认请在客户与报价中手动登记",
     409,
     "QUOTATION_EMAIL_DECISION_DISABLED",
   );

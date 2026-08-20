@@ -19,7 +19,7 @@ test("manual confirmation is available on the current valid draft or sent versio
   assert.doesNotMatch(actionsSource, /QuotationResponseDialog|latestSentDelivery|setDecision\(/);
   assert.doesNotMatch(actionsSource, />客户接受<\/button>|>客户拒绝<\/button>/);
   assert.doesNotMatch(actionsSource, /当前版本没有系统邮件发送记录/);
-  assert.match(moduleViewSource, /邮件发送只记录投递；客户接受仅通过“手动确认”登记/);
+  assert.match(moduleViewSource, /客户产品、历史价格、报价发送和客户确认统一在这里处理/);
 });
 
 test("manual confirmation submits the external channel, Shanghai date and optimistic version", () => {

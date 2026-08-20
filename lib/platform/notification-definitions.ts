@@ -47,7 +47,7 @@ export const NOTIFICATION_TYPE_DEFINITIONS: NotificationTypeDefinition[] = [
   {
     type: NOTIFICATION_TYPES.QUOTATION_CUSTOMER_EMAIL,
     name: "客户报价单发送",
-    module: "报价管理",
+    module: "客户与报价",
     description: "向客户发送英文报价邮件并附上对应版本的报价单 PDF。",
     editable: true,
     supportsAttachments: true,

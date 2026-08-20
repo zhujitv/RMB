@@ -78,8 +78,8 @@ export function QuotationsModuleView({
     <section className={shell.moduleCard}>
       <div className={shell.moduleHeader}>
         <div>
-          <h2>报价管理</h2>
-          <p className={styles.moduleIntro}>邮件发送只记录投递；客户接受仅通过“手动确认”登记。</p>
+          <h2>客户与报价</h2>
+          <p className={styles.moduleIntro}>客户产品、历史价格、报价发送和客户确认统一在这里处理。</p>
         </div>
         <div className={shell.headerActions}>
           {canWriteQuotations ? (

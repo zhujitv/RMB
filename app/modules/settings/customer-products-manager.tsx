@@ -8,6 +8,7 @@ import type { CustomerRow } from "./types";
 
 type CustomerProductRow = {
   id: string;
+  materialCode?: string | null;
   name: string;
   specification?: string | null;
   unit: string;
@@ -19,6 +20,7 @@ type CustomerProductRow = {
 
 type ProductForm = {
   id: string;
+  materialCode: string;
   name: string;
   specification: string;
   unit: string;
@@ -35,11 +37,12 @@ type ProductListResponse = {
   message?: string;
 };
 
-const EMPTY_FORM: ProductForm = { id: "", name: "", specification: "", unit: "PCS", remark: "" };
+const EMPTY_FORM: ProductForm = { id: "", materialCode: "", name: "", specification: "", unit: "PCS", remark: "" };
 
 function productFormFromRow(product: CustomerProductRow): ProductForm {
   return {
     id: product.id,
+    materialCode: product.materialCode || "",
     name: product.name || "",
     specification: product.specification || "",
     unit: product.unit || "PCS",
@@ -110,6 +113,7 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
           method: form.id ? "PATCH" : "POST",
           body: JSON.stringify({
             customerId: customer.id,
+            materialCode: form.materialCode,
             name: form.name,
             specification: form.specification,
             unit: form.unit,
@@ -150,7 +154,7 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
 
   return (
     <DismissibleLayer
-      ariaLabel={`${customerLabel(customer)}产品属性维护`}
+      ariaLabel={`${customerLabel(customer)}客户产品库`}
       overlayClassName={styles.modalOverlay}
       surfaceClassName={`${styles.supplierSettingsModalCard} ${managerStyles.surface}`}
       onClose={onClose}
@@ -164,7 +168,7 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
               <strong>产品属性 · {customerLabel(customer)}</strong>
               <span>按客户独立保存；修改资料不会改写历史报价和销售明细。</span>
             </div>
-            <button className={styles.supplierSettingsModalClose} type="button" onClick={requestClose} disabled={saving} aria-label="关闭产品属性维护">×</button>
+            <button className={styles.supplierSettingsModalClose} type="button" onClick={requestClose} disabled={saving} aria-label="关闭客户产品库">×</button>
           </div>
           <div className={managerStyles.body}>
             <form
@@ -179,7 +183,7 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
             >
               <label className={managerStyles.searchField}>
                 搜索产品属性
-                <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="产品描述、规格或单位" />
+                <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="物料编码、产品描述、规格或单位" />
               </label>
               <div className={managerStyles.toolbarActions}>
                 <button className={styles.secondaryButton} type="submit" disabled={loading}>查询</button>
@@ -191,9 +195,13 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
               <form className={managerStyles.formCard} onSubmit={saveProduct}>
                 <div className={managerStyles.formHeader}>
                   <strong>{form.id ? "编辑产品属性" : "新增产品属性"}</strong>
-                  <span>产品属性、规格补充和单位共同用于识别重复数据。</span>
+                  <span>物料编码按客户独立保存；没有编码的客户可留空。</span>
                 </div>
                 <div className={managerStyles.formGrid}>
+                  <label>
+                    客户物料编码
+                    <input value={form.materialCode} onChange={(event) => setFormValue("materialCode", event.target.value)} maxLength={100} placeholder="可留空" />
+                  </label>
                   <label>
                     产品属性
                     <input value={form.name} onChange={(event) => setFormValue("name", event.target.value)} required maxLength={200} />
@@ -221,12 +229,13 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
             {message ? <div className={messageIsError ? styles.inlineError : styles.inlineSuccess}>{message}</div> : null}
             <div className={styles.tableWrap}>
               <table className={styles.dataTable}>
-                <thead><tr><th>产品属性</th><th>单位</th><th>最近价格</th><th>最近使用</th><th>操作</th></tr></thead>
+                <thead><tr><th>物料编码</th><th>产品属性</th><th>单位</th><th>最近价格</th><th>最近使用</th><th>操作</th></tr></thead>
                 <tbody>
-                  {loading ? <tr><td colSpan={5}><div className={styles.emptyState}>产品属性加载中...</div></td></tr> : null}
-                  {!loading && !rows.length ? <tr><td colSpan={5}><div className={styles.emptyState}>暂无产品属性，可点击“新增产品”创建。</div></td></tr> : null}
+                  {loading ? <tr><td colSpan={6}><div className={styles.emptyState}>产品属性加载中...</div></td></tr> : null}
+                  {!loading && !rows.length ? <tr><td colSpan={6}><div className={styles.emptyState}>暂无产品属性，可点击“新增产品”创建。</div></td></tr> : null}
                   {!loading ? rows.map((product) => (
                     <tr key={product.id}>
+                      <td>{product.materialCode || "-"}</td>
                       <td className={managerStyles.descriptionCell}>
                         <strong>{product.name || "-"}</strong>
                         {product.specification ? <span>{product.specification}</span> : null}

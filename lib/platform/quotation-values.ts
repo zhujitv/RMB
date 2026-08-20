@@ -97,6 +97,7 @@ export function serializeCustomerProduct(value: unknown) {
   return {
     id: String(product.id || ""),
     customerId: String(product.customerId || ""),
+    materialCode: String(product.materialCode || ""),
     name: String(product.name || ""),
     productName: String(product.name || ""),
     specification: String(product.specification || ""),
