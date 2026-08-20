@@ -1,3 +1,5 @@
+import { Prisma } from "../generated/prisma/client.js";
+
 export type SupplierTaxContractSupplierLike = {
   supplierName?: string | null;
   invoiceTitle?: string | null;
@@ -5,6 +7,40 @@ export type SupplierTaxContractSupplierLike = {
 
 function cleanText(value: unknown) {
   return String(value || "").trim();
+}
+
+function quantityNumberText(value: unknown) {
+  return cleanText(value).replace(/[,，\s]/g, "").replace(/．/g, ".");
+}
+
+export function supplierTaxContractQuantityNeedsTwoDecimals(...values: unknown[]) {
+  return values.some((value) => /^\d+\.\d+$/.test(quantityNumberText(value)));
+}
+
+export function supplierTaxContractQuantityText(value: unknown, ...decimalSignalValues: unknown[]) {
+  const text = quantityNumberText(value);
+  if (!text) return "";
+  try {
+    const quantity = new Prisma.Decimal(text);
+    const needsTwoDecimals = supplierTaxContractQuantityNeedsTwoDecimals(...decimalSignalValues, value);
+    if (needsTwoDecimals) return quantity.toFixed(2);
+    const fixed = quantity.toFixed(4);
+    return fixed.includes(".") ? fixed.replace(/0+$/, "").replace(/\.$/, "") : fixed;
+  } catch {
+    return cleanText(value);
+  }
+}
+
+function normalizeDraftItems(value: unknown) {
+  if (!Array.isArray(value)) return value;
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    const row = item as Record<string, unknown>;
+    return {
+      ...row,
+      quantity: supplierTaxContractQuantityText(row.quantity, row.declaredQuantity),
+    };
+  });
 }
 
 export function supplierTaxContractSupplierName(supplier: SupplierTaxContractSupplierLike) {
@@ -55,5 +91,6 @@ export function normalizeSupplierTaxContractDraftValues<T extends Record<string,
     ...draft,
     ...(supplierName ? { supplierName } : {}),
     ...(latestDeliveryDate ? { signingDate: supplierTaxContractSigningDate(latestDeliveryDate) } : {}),
+    ...(Array.isArray(draft.items) ? { items: normalizeDraftItems(draft.items) } : {}),
   };
 }

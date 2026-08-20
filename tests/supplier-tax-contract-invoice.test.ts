@@ -10,7 +10,7 @@ const { matchSupplierInvoiceToContract } = jiti("../lib/platform/supplier-invoic
 const { generateSupplierTaxContractXlsx } = jiti("../lib/platform/supplier-tax-contract-xlsx.ts") as typeof import("../lib/platform/supplier-tax-contract-xlsx.ts");
 const { applySupplierTaxContractDraftEdits } = jiti("../lib/platform/supplier-tax-contract-draft-edit.ts") as typeof import("../lib/platform/supplier-tax-contract-draft-edit.ts");
 const { normalizeSupplierTaxContractNumber, supplierTaxContractNumberFromJson } = jiti("../lib/platform/supplier-tax-contract-number.ts") as typeof import("../lib/platform/supplier-tax-contract-number.ts");
-const { normalizeSupplierTaxContractDraftValues, supplierTaxContractSigningDate, supplierTaxContractSupplierName } = jiti("../lib/platform/supplier-tax-contract-values.ts") as typeof import("../lib/platform/supplier-tax-contract-values.ts");
+const { normalizeSupplierTaxContractDraftValues, supplierTaxContractQuantityText, supplierTaxContractSigningDate, supplierTaxContractSupplierName } = jiti("../lib/platform/supplier-tax-contract-values.ts") as typeof import("../lib/platform/supplier-tax-contract-values.ts");
 
 const contract = {
   contractNo: "PV258",
@@ -94,7 +94,13 @@ test("VAT invoice must match supplier, buyer, tax ids, product name, quantity, u
 });
 
 test("generated tax contract workbook contains no specification column and freezes approved customs values", async () => {
-  const body = await generateSupplierTaxContractXlsx(contract as never);
+  const body = await generateSupplierTaxContractXlsx({
+    ...contract,
+    items: [
+      { ...contract.items[0], quantity: "10", declaredQuantity: "10" },
+      { ...contract.items[0], lineNo: 2, purchaseOrderItemId: "item-2", productName: "木塑复合墙板", quantity: "2866.7", declaredQuantity: "2866.70", amountWithTax: "0.00" },
+    ],
+  } as never);
   assert.equal(body.subarray(0, 2).toString("binary"), "PK");
   const zip = await JSZip.loadAsync(body);
   const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("string");
@@ -111,11 +117,13 @@ test("generated tax contract workbook contains no specification column and freez
   assert.match(sheet || "", /开户行：工商银行/);
   assert.match(sheet || "", /账号：987654321/);
   assert.match(sheet || "", /<c r="A7"[^>]*s="8"/);
+  assert.match(sheet || "", /<c r="B7"[^>]*s="4"><v>10<\/v><\/c>/);
+  assert.match(sheet || "", /<c r="B8"[^>]*s="11"><v>2866\.70<\/v><\/c>/);
   assert.match(sheet || "", /<c r="C7"[^>]*s="8"/);
   assert.match(sheet || "", /<c r="F7"[^>]*s="6"/);
   assert.match(sheet || "", /<sheetFormatPr[^>]*defaultRowHeight="14"/);
-  assert.match(sheet || "", /<c r="B9"[^>]*s="8"/);
-  assert.match(sheet || "", /<c r="F9"[^>]*s="8"/);
+  assert.match(sheet || "", /<c r="B10"[^>]*s="8"/);
+  assert.match(sheet || "", /<c r="F10"[^>]*s="8"/);
   assert.match(styles || "", /formatCode="0\.######"/);
   assert.match(styles || "", /formatCode="0\.00"/);
   assert.doesNotMatch(styles || "", /#,##/);
@@ -181,6 +189,30 @@ test("tax contracts use supplier master name and sign one month before delivery"
   assert.match(templateSource, /generateSupplierTaxContractXlsx\(taxContractDraft\)/);
 });
 
+test("tax contract quantity keeps two decimals when customs quantity contains a decimal point", () => {
+  assert.equal(supplierTaxContractQuantityText("23301", "23301"), "23301");
+  assert.equal(supplierTaxContractQuantityText("23301", "23301.00"), "23301.00");
+  assert.equal(supplierTaxContractQuantityText("2866.7", "2866.70"), "2866.70");
+  assert.equal(supplierTaxContractQuantityText("2866.71", "2866.71"), "2866.71");
+  assert.equal(supplierTaxContractQuantityText("2,866.7", "2,866.70"), "2866.70");
+  const normalized = normalizeSupplierTaxContractDraftValues({
+      ...contract,
+      items: [
+        { ...contract.items[0], quantity: "23301", declaredQuantity: "23301.00" },
+        { ...contract.items[0], lineNo: 2, purchaseOrderItemId: "item-2", quantity: "186", declaredQuantity: "186" },
+      ],
+    }) as typeof contract;
+  assert.equal(normalized.items[0]?.quantity, "23301.00");
+  assert.equal(normalized.items[1]?.quantity, "186");
+
+  const draftSource = readFileSync("lib/platform/supplier-tax-contract-draft.ts", "utf8");
+  const transitionSource = readFileSync("lib/platform/supplier-transition-settlement.ts", "utf8");
+  const xlsxSource = readFileSync("lib/platform/supplier-tax-contract-xlsx.ts", "utf8");
+  assert.match(draftSource, /supplierTaxContractQuantityText\(quantity, declaredQuantity\)/);
+  assert.match(transitionSource, /supplierTaxContractQuantityText\(item\.quantity, item\.declaredQuantity\)/);
+  assert.match(xlsxSource, /supplierTaxContractQuantityNeedsTwoDecimals\(item\.declaredQuantity, item\.quantity\)/);
+});
+
 test("tax contract adds one bordered product row per item and shifts the remaining template", async () => {
   const items = Array.from({ length: 9 }, (_, index) => ({
     ...contract.items[0],
@@ -211,7 +243,7 @@ test("manual review can correct OCR name, quantity and unit while preserving ori
     unit: "平方米（m²）",
   }], new Date("2026-08-17T01:00:00.000Z"));
   assert.equal(edited.draft.items[0]?.productName, "木塑地板");
-  assert.equal(edited.draft.items[0]?.quantity, "10");
+  assert.equal(edited.draft.items[0]?.quantity, "10.00");
   assert.equal(edited.draft.items[0]?.unit, "平方米（m²）");
   assert.equal(edited.draft.items[0]?.amountWithTax, "1130.00");
   assert.deepEqual(edited.draft.customsSnapshot, contract.customsSnapshot);

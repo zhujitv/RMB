@@ -1,6 +1,7 @@
 import { Prisma } from "../generated/prisma/client.js";
 import type { SupplierTaxContractDraft, SupplierTaxContractItemDraft } from "./supplier-tax-contract-draft";
 import { codedError, nonEmpty } from "./shared-base-utils";
+import { supplierTaxContractQuantityText } from "./supplier-tax-contract-values";
 
 export type SupplierTaxContractDraftEdit = {
   purchaseOrderItemId?: unknown;
@@ -28,8 +29,8 @@ function editableQuantity(value: unknown, lineNo: number) {
   return quantity;
 }
 
-function normalizedQuantity(value: Prisma.Decimal) {
-  return value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+function normalizedQuantity(value: Prisma.Decimal, source: unknown) {
+  return supplierTaxContractQuantityText(value, source);
 }
 
 function changedFields(before: SupplierTaxContractItemDraft, after: SupplierTaxContractItemDraft) {
@@ -61,13 +62,15 @@ export function applySupplierTaxContractDraftEdits(
     const edit = editsById.get(before.purchaseOrderItemId);
     if (!edit) throw codedError(`合同第${before.lineNo}行缺失。`, 400, "SUPPLIER_TAX_CONTRACT_EDIT_ITEM_MISSING");
     const quantity = editableQuantity(edit.quantity, before.lineNo);
+    const quantityText = normalizedQuantity(quantity, edit.quantity);
+    const quantityForAmount = new Prisma.Decimal(quantityText);
     const unitPrice = new Prisma.Decimal(before.unitPriceWithTax);
     const after: SupplierTaxContractItemDraft = {
       ...before,
       productName: editableText(edit.productName, `第${before.lineNo}行品名`, 200),
-      quantity: normalizedQuantity(quantity),
+      quantity: quantityText,
       unit: editableText(edit.unit, `第${before.lineNo}行单位`, 40),
-      amountWithTax: quantity.mul(unitPrice).toDecimalPlaces(2).toFixed(2),
+      amountWithTax: quantityForAmount.mul(unitPrice).toDecimalPlaces(2).toFixed(2),
     };
     const fields = changedFields(before, after);
     if (fields.length) changes.push({ lineNo: before.lineNo, fields });

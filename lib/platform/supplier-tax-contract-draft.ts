@@ -6,6 +6,7 @@ import { codedError, nonEmpty } from "./shared-base-utils";
 import { domesticContractIssues } from "./business-entity-domestic-bank";
 import {
   dateText,
+  supplierTaxContractQuantityText,
   supplierTaxContractSigningDate,
   supplierTaxContractSupplierName,
 } from "./supplier-tax-contract-values";
@@ -178,7 +179,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
       customsCommodityCode: nonEmpty(candidate.commodityCode),
       productName,
       unit,
-      quantity: decimalText(quantity, 4),
+      quantity: supplierTaxContractQuantityText(quantity, declaredQuantity),
       declaredQuantity,
       unitPriceWithTax: decimalText(unitPrice, 6),
       amountWithTax: amount.toFixed(2),
