@@ -16,13 +16,17 @@ on:
           - "true"
           - "false"
       apply_customer_product_material_code_migration:
-        description: "Backup DB and apply only 20260820233000_customer_product_material_code before deploy"
+        description: "Deprecated: use safe_prisma_migration instead"
         required: false
         default: "false"
         type: choice
         options:
           - "false"
           - "true"
+      safe_prisma_migration:
+        description: "Optional single Prisma migration directory to backup and apply before deploy"
+        required: false
+        default: ""
   workflow_run:
     workflows:
       - CI
@@ -58,6 +62,7 @@ jobs:
       APP_DIR: ${{ vars.RMB_CVM_APP_DIR }}
       SERVICE_NAME: ${{ vars.RMB_CVM_SERVICE }}
       ENV_FILE: ${{ vars.RMB_CVM_ENV_FILE }}
+      DB_BACKUP_DIR: ${{ vars.RMB_CVM_DB_BACKUP_DIR }}
       LOCAL_HEALTH_URL: ${{ vars.RMB_CVM_LOCAL_HEALTH_URL }}
       PUBLIC_HEALTH_URL: ${{ vars.RMB_CVM_PUBLIC_HEALTH_URL }}
       GH_TOKEN: ${{ github.token }}
@@ -99,6 +104,29 @@ jobs:
           fi
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve optional database migration
+        id: migration
+        run: |
+          set -euo pipefail
+          migration_name=""
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            migration_name='${{ inputs.safe_prisma_migration }}'
+            if [[ -z "$migration_name" && '${{ inputs.apply_customer_product_material_code_migration }}' == "true" ]]; then
+              migration_name="20260820233000_customer_product_material_code"
+            fi
+          fi
+          if [[ -n "$migration_name" ]]; then
+            if [[ ! "$migration_name" =~ ^[0-9]{14}_[a-z0-9_]+$ ]]; then
+              echo "::error::safe_prisma_migration must be an existing Prisma migration directory name."
+              exit 1
+            fi
+            if [[ ! -f "prisma/migrations/$migration_name/migration.sql" ]]; then
+              echo "::error::Migration SQL not found: prisma/migrations/$migration_name/migration.sql"
+              exit 1
+            fi
+          fi
+          printf 'name=%s\n' "$migration_name" >> "$GITHUB_OUTPUT"
+
       - name: Check deployment secrets
         run: |
           set -euo pipefail
@@ -122,17 +150,45 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/rmb-cvm-deploy" "$HOME/.ssh/known_hosts"
 
-      - name: Apply customer product material code migration
-        if: github.event_name == 'workflow_dispatch' && inputs.apply_customer_product_material_code_migration == 'true'
+      - name: Ensure CVM database backup directory
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          backup_dir="${DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
+          ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          ssh "${ssh_opts[@]}" "$ssh_target" "RMB_DB_BACKUP_DIR='$backup_dir' bash -s" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          backup_dir="${RMB_DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
+          current_user="$(id -un)"
+          current_group="$(id -gn)"
+          if mkdir -p "$backup_dir" 2>/dev/null; then
+            chmod 700 "$backup_dir" 2>/dev/null || true
+          elif command -v sudo >/dev/null 2>&1; then
+            sudo install -d -m 700 -o "$current_user" -g "$current_group" "$backup_dir"
+          else
+            echo "::warning::Cannot create shared backup directory; migrations will use the deploy user's private fallback."
+          fi
+          if [[ -d "$backup_dir" && -w "$backup_dir" ]]; then
+            printf '[rmb-cvm-deploy] shared DB backup directory ready: %s\n' "$backup_dir"
+          else
+            printf '[rmb-cvm-deploy] shared DB backup directory not writable; private fallback remains enabled: %s\n' "$backup_dir"
+          fi
+          REMOTE_SCRIPT
+
+      - name: Apply single safe Prisma migration
+        if: steps.migration.outputs.name != ''
         run: |
           set -euo pipefail
           port="${DEPLOY_PORT:-22}"
           app_dir="${APP_DIR:-/srv/rmb/app}"
           env_file="${ENV_FILE:-/srv/rmb/shared/app.env}"
+          backup_dir="${DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           scp_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          migration_name="20260820233000_customer_product_material_code"
+          migration_name="${{ steps.migration.outputs.name }}"
           local_script="$RUNNER_TEMP/rmb-cvm-db-migration.sh"
           remote_script="/tmp/rmb-cvm-db-migration-$migration_name.sh"
           remote_sql="/tmp/rmb-cvm-db-migration-$migration_name.sql"
@@ -183,19 +239,52 @@ jobs:
           POSTGRES_URL="$(DATABASE_URL="$DATABASE_URL" node <<'NODE'
           const raw = process.env.DATABASE_URL || "";
           const url = new URL(raw);
-          url.searchParams.delete("schema");
-          url.searchParams.delete("uselibpqcompat");
+          for (const name of ["schema", "uselibpqcompat", "connection_limit", "pool_timeout", "pgbouncer", "statement_cache_size"]) {
+            url.searchParams.delete(name);
+          }
           process.stdout.write(url.toString());
           NODE
           )"
+          POSTGRES_SCHEMA="$(DATABASE_URL="$DATABASE_URL" node <<'NODE'
+          const raw = process.env.DATABASE_URL || "";
+          const url = new URL(raw);
+          const schema = url.searchParams.get("schema") || "";
+          if (schema && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(schema)) {
+            throw new Error("DATABASE_URL schema contains unsupported characters");
+          }
+          process.stdout.write(schema);
+          NODE
+          )"
+          if [[ -n "$POSTGRES_SCHEMA" ]]; then
+            export PGOPTIONS="-c search_path=$POSTGRES_SCHEMA,public"
+          fi
 
           umask 077
           if ! mkdir -p "$BACKUP_DIR" 2>/dev/null; then
-            BACKUP_DIR="$HOME/rmb-db-backups"
-            log "shared backup directory is not writable; using $BACKUP_DIR"
-            mkdir -p "$BACKUP_DIR"
+            if command -v sudo >/dev/null 2>&1; then
+              sudo install -d -m 700 -o "$(id -un)" -g "$(id -gn)" "$BACKUP_DIR" 2>/dev/null || true
+            fi
+            if ! mkdir -p "$BACKUP_DIR" 2>/dev/null; then
+              BACKUP_DIR="$HOME/rmb-db-backups"
+              log "shared backup directory is not writable; using $BACKUP_DIR"
+              mkdir -p "$BACKUP_DIR"
+            fi
           fi
           chmod 700 "$BACKUP_DIR" 2>/dev/null || true
+          already_applied="$("$PSQL_BIN" "$POSTGRES_URL" --set=ON_ERROR_STOP=1 --set=migration_name="$MIGRATION_NAME" --tuples-only --no-align <<'SQL'
+          SELECT COALESCE((
+            SELECT 'true'
+            FROM "_prisma_migrations"
+            WHERE "migration_name" = :'migration_name'
+            LIMIT 1
+          ), 'false');
+          SQL
+          )"
+          if [[ "$already_applied" == "true" ]]; then
+            log "migration already recorded; skipping SQL: $MIGRATION_NAME"
+            rm -f "$MIGRATION_SQL"
+            exit 0
+          fi
           backup_path="$BACKUP_DIR/$MIGRATION_NAME-$(date -u +%Y%m%dT%H%M%SZ).dump"
           log "creating database backup at $backup_path"
           "$PG_DUMP_BIN" --format=custom --no-owner --no-privileges --file "$backup_path" "$POSTGRES_URL"
@@ -203,19 +292,15 @@ jobs:
           checksum="$(sha256sum "$MIGRATION_SQL" | awk '{print $1}')"
           migration_id="$(node -e "console.log(require('crypto').randomUUID())")"
 
-          log "applying additive customer_products.material_code migration"
+          log "applying Prisma migration $MIGRATION_NAME"
+          "$PSQL_BIN" "$POSTGRES_URL" --set=ON_ERROR_STOP=1 --file "$MIGRATION_SQL"
+
           "$PSQL_BIN" "$POSTGRES_URL" \
             --set=ON_ERROR_STOP=1 \
             --set=migration_id="$migration_id" \
             --set=migration_name="$MIGRATION_NAME" \
             --set=checksum="$checksum" <<'SQL'
           BEGIN;
-
-          ALTER TABLE "customer_products"
-            ADD COLUMN IF NOT EXISTS "material_code" TEXT;
-
-          CREATE INDEX IF NOT EXISTS "customer_products_customer_id_material_code_idx"
-            ON "customer_products"("customer_id", "material_code");
 
           INSERT INTO "_prisma_migrations" (
             "id",
@@ -250,7 +335,7 @@ jobs:
           scp "${scp_opts[@]}" "$local_script" "$ssh_target:$remote_script"
           scp "${scp_opts[@]}" "prisma/migrations/$migration_name/migration.sql" "$ssh_target:$remote_sql"
           ssh "${ssh_opts[@]}" "$ssh_target" \
-            "chmod 700 '$remote_script' && RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
+            "chmod 700 '$remote_script' && RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_DB_BACKUP_DIR='$backup_dir' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
 
       - name: Build incremental git bundle
         id: bundle
