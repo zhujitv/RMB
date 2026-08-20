@@ -39,9 +39,9 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
       success: true,
       data: product,
       product,
-      message: "客户产品已作废",
+      message: "客户产品已删除",
     });
   } catch (error: unknown) {
-    return apiError(error, "作废客户产品失败");
+    return apiError(error, "删除客户产品失败");
   }
 }

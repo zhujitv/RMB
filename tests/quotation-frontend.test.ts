@@ -288,9 +288,10 @@ test("quotations module opens with a visible CRM workspace before the quote ledg
   assert.match(quotationCrmSource, /CRM 工作台/);
   assert.match(quotationCrmSource, /重点客户/);
   assert.match(quotationCrmSource, /跟进提醒/);
-  assert.match(quotationCrmSource, /物料编码与固定产品属性/);
-  assert.match(quotationCrmSource, /有物料编码客户/);
-  assert.match(quotationCrmSource, /无物料编码客户/);
+  assert.match(quotationCrmSource, /报价时间线/);
+  assert.doesNotMatch(quotationCrmSource, /物料编码与固定产品属性/);
+  assert.doesNotMatch(quotationCrmSource, /有物料编码客户/);
+  assert.doesNotMatch(quotationCrmSource, /无物料编码客户/);
   assert.match(quotationCrmSource, /历史报价明细/);
   assert.match(quotationsViewSource, /搜索客户 \/ 联系人 \/ 报价号 \/ 发票号 \/ 业务员/);
 });
@@ -305,6 +306,7 @@ test("quotation CRM customer cards open a customer detail and product library pa
   assert.match(quotationCustomerProductsSource, /\/api\/customer-products\?\$\{params\}/);
   assert.match(quotationCustomerProductsSource, /客户产品库读取中/);
   assert.match(quotationCustomerDetailSource, /物料编码与产品属性/);
+  assert.match(quotationCustomerDetailSource, /styles\.fullWidthPanel/);
   assert.match(quotationCustomerDetailSource, /该客户报价记录/);
   assert.match(quotationCustomerDetailSource, /onViewQuotation\(quotation\)/);
 });
@@ -320,17 +322,22 @@ test("quotation CRM customer detail can create and edit customer products", () =
   assert.match(quotationCustomerProductsSource, /setReloadToken\(\(value\) => value \+ 1\)/);
   assert.match(quotationCustomerProductsSource, /canWriteQuotations \? /);
   assert.match(quotationCustomerProductsSource, /productFormFromRow\(product\)/);
-  assert.match(quotationCustomerProductsSource, /修改客户产品不会改写历史报价/);
+  assert.match(quotationCustomerProductsSource, /<ProductCards/);
+  assert.match(quotationCustomerProductsSource, /未设置物料编码/);
+  assert.doesNotMatch(quotationCustomerProductsSource, /修改客户产品不会改写历史报价/);
+  assert.doesNotMatch(quotationCrmSource, /不用再从一张报价表里猜下一步/);
+  assert.doesNotMatch(quotationCrmSource, /productPlaybook/);
 });
 
 test("quotation CRM customer detail can safely void customer products", () => {
   assert.match(quotationCustomerProductsSource, /function voidProduct\(product: CustomerProduct\)/);
-  assert.match(quotationCustomerProductsSource, /确认作废\/删除/);
+  assert.match(quotationCustomerProductsSource, /确认删除/);
   assert.match(quotationCustomerProductsSource, /历史报价不会改变/);
   assert.match(quotationCustomerProductsSource, /method: "DELETE"/);
   assert.match(quotationCustomerProductsSource, /setForm\(\(current\) => current\?\.id === product\.id \? null : current\)/);
-  assert.match(quotationCustomerProductsSource, /客户产品已作废\/删除/);
-  assert.match(quotationCustomerProductsSource, />作废\/删除<\/button>/);
+  assert.match(quotationCustomerProductsSource, /客户产品已删除/);
+  assert.match(quotationCustomerProductsSource, />删除<\/button>/);
+  assert.doesNotMatch(quotationCustomerProductsSource, /作废\/删除/);
 });
 
 test("quotation CRM customer detail maintains contacts through a scoped customer API", () => {

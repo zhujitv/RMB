@@ -7,9 +7,8 @@
   box-shadow: 0 20px 40px rgba(37, 99, 235, .18); color: #fff; padding: 22px;
 }
 
-.crmHero h3, .crmHero p, .crmPanelHeader h3, .recordHeader h3 { margin: 0; }
+.crmHero h3, .crmPanelHeader h3, .recordHeader h3 { margin: 0; }
 .crmHero h3 { margin-top: 6px; font-size: 24px; line-height: 1.25; }
-.crmHero p { max-width: 720px; margin-top: 8px; color: rgba(255,255,255,.82); font-size: 14px; line-height: 1.7; }
 
 .crmEyebrow { color: #2563eb; font-size: 12px; font-weight: 900; letter-spacing: .08em; }
 .crmHero .crmEyebrow { color: rgba(255,255,255,.78); }
@@ -28,7 +27,7 @@
 .crmStats article { display: grid; gap: 4px; min-height: 104px; padding: 16px; }
 
 .crmStats span, .crmStats small, .crmPanelHeader small, .customerCard small,
-.customerMeta, .customerLatest, .followUpCards small, .productPlaybook p,
+.customerMeta, .customerLatest, .followUpCards small,
 .timelineItem small, .recordHeader small { color: #64748b; }
 
 .crmStats span { font-size: 13px; font-weight: 800; }
@@ -64,8 +63,8 @@
 .customerMeta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
 .customerMeta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.customerMetrics, .followUpCards, .productPlaybook { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.customerMetrics span, .followUpCards article, .productPlaybook article { border: 1px solid #e0f2fe; border-radius: 14px; background: #f8fafc; padding: 10px; }
+.customerMetrics, .followUpCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.customerMetrics span, .followUpCards article { border: 1px solid #e0f2fe; border-radius: 14px; background: #f8fafc; padding: 10px; }
 .customerMetrics span { color: #64748b; font-size: 12px; }
 .customerMetrics strong { display: block; margin-top: 4px; color: #0f172a; font-size: 18px; }
 .customerLatest { border-top: 1px solid #f1f5f9; padding-top: 10px; font-size: 12px; }
@@ -74,10 +73,7 @@
 .followUpCards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .followUpCards article { display: grid; gap: 5px; }
 .followUpCards strong { color: #2563eb; font-size: 28px; line-height: 1; }
-.followUpCards span, .productPlaybook strong { color: #0f172a; font-size: 14px; font-weight: 900; }
-
-.productPlaybook article { background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%); }
-.productPlaybook p { margin: 7px 0 0; font-size: 12px; line-height: 1.6; }
+.followUpCards span { color: #0f172a; font-size: 14px; font-weight: 900; }
 
 .timelineItem strong, .timelineItem small { display: block; }
 .timelineItem strong { color: #0f172a; }
@@ -112,6 +108,7 @@
 .detailMetrics strong { display: block; margin-top: 5px; color: #0f172a; font-size: 26px; line-height: 1; }
 
 .detailGrid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 16px; }
+.fullWidthPanel { grid-column: 1 / -1; }
 .profileGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .profileGrid span {
   border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; color: #64748b;
@@ -119,19 +116,11 @@
 }
 .profileGrid strong { display: block; margin-top: 5px; overflow: hidden; color: #0f172a; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 
-.productTableWrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; }
-.productTable { width: 100%; min-width: 620px; border-collapse: collapse; }
-.productTable th, .productTable td { border-bottom: 1px solid #edf2f7; padding: 9px 10px; text-align: left; }
-.productTable th { background: #f8fafc; color: #64748b; font-size: 12px; font-weight: 900; }
-.productTable td { color: #334155; font-size: 13px; }
-.productTable tr:last-child td { border-bottom: 0; }
-
-.productLibrary, .productForm, .compactForm, .followUpForm, .followUpList { display: grid; gap: 12px; }
+.productLibrary, .productForm, .compactForm, .followUpForm, .followUpList, .productCardList { display: grid; gap: 12px; }
 .productToolbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   border: 1px solid #e0f2fe; border-radius: 14px; background: #f8fafc; padding: 10px;
 }
-.productToolbar span, .productFormHeader span { color: #64748b; font-size: 12px; line-height: 1.5; }
 
 .productForm {
   border: 1px solid #bfdbfe; border-radius: 16px; background: linear-gradient(180deg, #fff 0%, #eff6ff 100%);
@@ -151,6 +140,23 @@
 .productRemark { grid-column: 1 / -1; }
 .productFormActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .productActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.productCard {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, auto) auto; gap: 14px; align-items: center;
+  border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; padding: 14px;
+}
+.productCardMain { display: grid; gap: 9px; min-width: 0; }
+.productCardMain strong { display: block; color: #0f172a; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.productCardMain small { display: block; margin-top: 4px; color: #64748b; font-size: 12px; line-height: 1.5; }
+.materialCodeBadge, .materialCodeEmpty {
+  width: fit-content; max-width: 100%; border-radius: 999px; padding: 6px 10px;
+  font-size: 12px; font-weight: 900; overflow-wrap: anywhere;
+}
+.materialCodeBadge { border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+.materialCodeEmpty { border: 1px dashed #cbd5e1; background: #f8fafc; color: #64748b; }
+.productCardFacts { display: grid; grid-template-columns: repeat(3, minmax(82px, 1fr)); gap: 8px; }
+.productCardFacts span { border: 1px solid #edf2f7; border-radius: 12px; background: #f8fafc; padding: 9px; }
+.productCardFacts small { display: block; color: #64748b; font-size: 11px; font-weight: 800; }
+.productCardFacts strong { display: block; margin-top: 3px; color: #0f172a; font-size: 13px; overflow-wrap: anywhere; }
 .dangerTextButton {
   border: 1px solid #fecdd3; border-radius: 999px; background: #fff1f2; color: #be123c;
   padding: 6px 10px; font: inherit; font-size: 12px; font-weight: 900; cursor: pointer;
@@ -187,6 +193,8 @@
 
 @media (max-width: 1100px) {
   .crmGrid, .detailGrid { grid-template-columns: 1fr; }
+  .productCard { grid-template-columns: 1fr; align-items: stretch; }
+  .productActions { justify-content: flex-start; }
 }
 
 @media (max-width: 700px) {
@@ -195,6 +203,6 @@
   .crmHeroActions button { width: 100%; }
   .detailHero, .quoteCard { grid-template-columns: 1fr; }
   .productToolbar, .productFormHeader { align-items: stretch; flex-direction: column; }
-  .crmStats, .customerMeta, .customerMetrics, .followUpCards, .productPlaybook, .detailMetrics, .profileGrid, .productFormGrid, .compactForm, .followUpForm { grid-template-columns: 1fr; }
+  .crmStats, .customerMeta, .customerMetrics, .followUpCards, .detailMetrics, .profileGrid, .productFormGrid, .compactForm, .followUpForm, .productCardFacts { grid-template-columns: 1fr; }
   .recordHeader { align-items: flex-start; flex-direction: column; }
 }

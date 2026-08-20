@@ -58,7 +58,7 @@ export function QuotationCustomerDetail({
             <span>最近更新<strong>{formatDate(latest.updatedAt || latest.createdAt || latestVersion?.createdAt)}</strong></span>
           </div>
         </section>
-        <section className={styles.crmPanel}>
+        <section className={`${styles.crmPanel} ${styles.fullWidthPanel}`}>
           <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户产品库</span><h3>物料编码与产品属性</h3></div><small>来自客户产品接口</small></div>
           <QuotationCustomerProductsEditor customer={customer} canWriteQuotations={canWriteQuotations} />
         </section>

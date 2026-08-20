@@ -134,7 +134,7 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
   }
 
   async function voidProduct(product: CustomerProductRow) {
-    if (!window.confirm(`确认作废“${product.name}”？历史报价和销售数据不会改变。`)) return;
+    if (!window.confirm(`确认删除“${product.name}”？历史报价和销售数据不会改变。`)) return;
     setSaving(true);
     setMessage("");
     setMessageIsError(false);
@@ -142,11 +142,11 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
       const result = await apiJson<{ message?: string }>(`/api/customer-products/${product.id}`, { method: "DELETE" });
       setForm((current) => current?.id === product.id ? null : current);
       setMessageIsError(false);
-      setMessage(result.message || "产品属性已作废");
+      setMessage(result.message || "产品属性已删除");
       setReloadToken((value) => value + 1);
     } catch (error) {
       setMessageIsError(true);
-      setMessage(error instanceof Error ? error.message : "产品属性作废失败");
+      setMessage(error instanceof Error ? error.message : "产品属性删除失败");
     } finally {
       setSaving(false);
     }
@@ -166,7 +166,6 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
           <div className={styles.supplierSettingsModalHeader}>
             <div>
               <strong>产品属性 · {customerLabel(customer)}</strong>
-              <span>按客户独立保存；修改资料不会改写历史报价和销售明细。</span>
             </div>
             <button className={styles.supplierSettingsModalClose} type="button" onClick={requestClose} disabled={saving} aria-label="关闭客户产品库">×</button>
           </div>
@@ -195,7 +194,6 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
               <form className={managerStyles.formCard} onSubmit={saveProduct}>
                 <div className={managerStyles.formHeader}>
                   <strong>{form.id ? "编辑产品属性" : "新增产品属性"}</strong>
-                  <span>物料编码按客户独立保存；没有编码的客户可留空。</span>
                 </div>
                 <div className={managerStyles.formGrid}>
                   <label>

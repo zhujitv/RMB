@@ -91,7 +91,7 @@ export function QuotationCrmWorkspace({
   return (
     <section className={styles.crmWorkspace} aria-label="客户与报价 CRM 工作台">
       <div className={styles.crmHero}>
-        <div><span className={styles.crmEyebrow}>CRM 工作台</span><h3>先看客户，再处理报价</h3><p>把客户档案、联系人、客户产品、历史报价和成交前跟进放到同一个入口里，业务员进来后不用再从一张报价表里猜下一步。</p></div>
+        <div><span className={styles.crmEyebrow}>CRM 工作台</span><h3>先看客户，再处理报价</h3></div>
         <div className={styles.crmHeroActions}>
           {canWriteQuotations ? <button className={shell.primaryButtonCompact} type="button" onClick={onToggleCreate}>{createOpen ? "继续编辑报价" : "为客户新建报价"}</button> : null}
           <button className={shell.secondaryButton} type="button" disabled={loading} onClick={onRefresh}>{loading ? "同步中..." : "同步客户动态"}</button>
@@ -126,15 +126,7 @@ export function QuotationCrmWorkspace({
       </div>
 
       <div className={styles.crmGrid}>
-        <section className={styles.crmPanel}>
-          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户产品库</span><h3>物料编码与固定产品属性</h3></div><small>报价时自动复用</small></div>
-          <div className={styles.productPlaybook}>
-            <article><strong>有物料编码客户</strong><p>用客户物料编码绑定固定品名、规格、单位和最近报价价格，减少重复录入。</p></article>
-            <article><strong>无物料编码客户</strong><p>按品名、规格、单位沉淀客户产品；后续拿到编码后再补充，不影响报价。</p></article>
-            <article><strong>历史报价复用</strong><p>同客户、同币种、同产品优先带出最近单价，人工修改也会保留新版本。</p></article>
-          </div>
-        </section>
-        <section className={styles.crmPanel}>
+        <section className={`${styles.crmPanel} ${styles.fullWidthPanel}`}>
           <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>最近动态</span><h3>报价时间线</h3></div><small>点击可查看详情</small></div>
           <div className={styles.timelineList}>
             {recentQuotations.length ? recentQuotations.map((quotation) => {

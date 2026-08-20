@@ -70,27 +70,27 @@ export function QuotationCustomerProductsEditor({ customer, canWriteQuotations }
   }
 
   async function voidProduct(product: CustomerProduct) {
-    if (!window.confirm(`确认作废/删除“${customerProductDescription(product)}”吗？历史报价不会改变。`)) return;
+    if (!window.confirm(`确认删除“${customerProductDescription(product)}”吗？历史报价不会改变。`)) return;
     setSaving(true); setMessage(""); setMessageIsError(false);
     try {
       const result = await apiJson<{ message?: string }>(`/api/customer-products/${encodeURIComponent(product.id)}`, { method: "DELETE" });
       setForm((current) => current?.id === product.id ? null : current);
-      setMessageIsError(false); setMessage(result.message || "客户产品已作废/删除"); setReloadToken((value) => value + 1);
+      setMessageIsError(false); setMessage(result.message || "客户产品已删除"); setReloadToken((value) => value + 1);
     } catch (error) {
-      setMessageIsError(true); setMessage(error instanceof Error ? error.message : "客户产品作废/删除失败");
+      setMessageIsError(true); setMessage(error instanceof Error ? error.message : "客户产品删除失败");
     } finally { setSaving(false); }
   }
 
   if (!customer.customerId) return <div className={styles.crmEmpty}>该客户来自历史报价快照，缺少客户 ID，暂时无法读取客户产品库。</div>;
   return (
     <div className={styles.productLibrary}>
-      {canWriteQuotations ? <div className={styles.productToolbar}><span>修改客户产品不会改写历史报价，后续新报价会使用最新资料。</span><button className={shell.primaryButtonCompact} type="button" disabled={saving} onClick={() => setForm({ ...EMPTY_PRODUCT_FORM })}>新增产品</button></div> : null}
+      {canWriteQuotations ? <div className={styles.productToolbar}><button className={shell.primaryButtonCompact} type="button" disabled={saving} onClick={() => setForm({ ...EMPTY_PRODUCT_FORM })}>新增产品</button></div> : null}
       {form ? <ProductFormCard form={form} saving={saving} setFormValue={setFormValue} onCancel={() => setForm(null)} onSubmit={saveProduct} /> : null}
       {message ? <div className={messageIsError ? shell.inlineError : styles.inlineSuccess} role="status">{message}</div> : null}
       {state.loading ? <div className={styles.crmEmpty}>客户产品库读取中...</div> : null}
       {state.error ? <div className={shell.inlineError} role="alert">{state.error}</div> : null}
       {!state.loading && !state.error && !state.rows.length ? <div className={styles.crmEmpty}>客户产品库暂无记录，可点击“新增产品”创建。</div> : null}
-      {!state.loading && !state.error && state.rows.length ? <ProductTable rows={state.rows} saving={saving} canWrite={canWriteQuotations} onEdit={(product) => setForm(productFormFromRow(product))} onVoid={(product) => void voidProduct(product)} /> : null}
+      {!state.loading && !state.error && state.rows.length ? <ProductCards rows={state.rows} saving={saving} canWrite={canWriteQuotations} onEdit={(product) => setForm(productFormFromRow(product))} onVoid={(product) => void voidProduct(product)} /> : null}
     </div>
   );
 }
@@ -98,7 +98,7 @@ export function QuotationCustomerProductsEditor({ customer, canWriteQuotations }
 function ProductFormCard({ form, saving, setFormValue, onCancel, onSubmit }: { form: ProductForm; saving: boolean; setFormValue: <K extends keyof ProductForm>(key: K, value: ProductForm[K]) => void; onCancel: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   return (
     <form className={styles.productForm} onSubmit={onSubmit}>
-      <div className={styles.productFormHeader}><strong>{form.id ? "编辑客户产品" : "新增客户产品"}</strong><span>没有物料编码可留空，品名和单位必填。</span></div>
+      <div className={styles.productFormHeader}><strong>{form.id ? "编辑客户产品" : "新增客户产品"}</strong></div>
       <div className={styles.productFormGrid}>
         <label>客户物料编码<input value={form.materialCode} maxLength={100} placeholder="可留空" onChange={(event) => setFormValue("materialCode", event.target.value)} /></label>
         <label>产品属性 / 品名<input value={form.name} required maxLength={200} onChange={(event) => setFormValue("name", event.target.value)} /></label>
@@ -111,13 +111,23 @@ function ProductFormCard({ form, saving, setFormValue, onCancel, onSubmit }: { f
   );
 }
 
-function ProductTable({ rows, saving, canWrite, onEdit, onVoid }: { rows: CustomerProduct[]; saving: boolean; canWrite: boolean; onEdit: (product: CustomerProduct) => void; onVoid: (product: CustomerProduct) => void }) {
+function ProductCards({ rows, saving, canWrite, onEdit, onVoid }: { rows: CustomerProduct[]; saving: boolean; canWrite: boolean; onEdit: (product: CustomerProduct) => void; onVoid: (product: CustomerProduct) => void }) {
   return (
-    <div className={styles.productTableWrap}><table className={styles.productTable}>
-      <thead><tr><th>物料编码</th><th>产品属性</th><th>单位</th><th>最近单价</th><th>最近报价</th><th>操作</th></tr></thead>
-      <tbody>{rows.map((product) => (
-        <tr key={product.id}><td>{product.materialCode || "-"}</td><td>{customerProductDescription(product)}</td><td>{product.unit || "-"}</td><td>{priceText(product)}</td><td>{formatDate(product.lastQuotedAt || product.updatedAt)}</td><td>{canWrite ? <div className={styles.productActions}><button className={shell.rowDetailButton} type="button" disabled={saving} onClick={() => onEdit(product)}>编辑</button><button className={styles.dangerTextButton} type="button" disabled={saving} onClick={() => onVoid(product)}>作废/删除</button></div> : "-"}</td></tr>
-      ))}</tbody>
-    </table></div>
+    <div className={styles.productCardList}>
+      {rows.map((product) => (
+        <article className={styles.productCard} key={product.id}>
+          <div className={styles.productCardMain}>
+            <span className={product.materialCode ? styles.materialCodeBadge : styles.materialCodeEmpty}>{product.materialCode || "未设置物料编码"}</span>
+            <div><strong>{customerProductDescription(product)}</strong>{product.remark ? <small>{product.remark}</small> : null}</div>
+          </div>
+          <div className={styles.productCardFacts}>
+            <span><small>单位</small><strong>{product.unit || "-"}</strong></span>
+            <span><small>最近单价</small><strong>{priceText(product)}</strong></span>
+            <span><small>最近报价</small><strong>{formatDate(product.lastQuotedAt || product.updatedAt)}</strong></span>
+          </div>
+          {canWrite ? <div className={styles.productActions}><button className={shell.rowDetailButton} type="button" disabled={saving} onClick={() => onEdit(product)}>编辑</button><button className={styles.dangerTextButton} type="button" disabled={saving} onClick={() => onVoid(product)}>删除</button></div> : null}
+        </article>
+      ))}
+    </div>
   );
 }
