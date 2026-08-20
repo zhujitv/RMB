@@ -172,6 +172,7 @@ jobs:
           const raw = process.env.DATABASE_URL || "";
           const url = new URL(raw);
           url.searchParams.delete("schema");
+          url.searchParams.delete("uselibpqcompat");
           process.stdout.write(url.toString());
           NODE
           )"
