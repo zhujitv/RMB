@@ -169,12 +169,18 @@ test("settings can maintain business entities without making it multi tenant", (
   assert.match(settingsCards, /已封存版本不会被追溯改写/);
   assert.match(settingsCards, /英文法定抬头/);
   assert.match(settingsCards, /人民币收款账户/);
+  assert.match(settingsCards, /中国地区纳税人识别号/);
+  assert.match(settingsCards, /中国地区开户行/);
+  assert.match(settingsCards, /中国地区银行账号/);
+  assert.match(settingsCards, /国际汇款 SWIFT \/ BIC（可选）/);
   assert.match(settingsCards, /美元收款账户/);
   assert.match(settingsCards, /Beneficiary Name/);
   assert.match(settingsCards, /Beneficiary Address/);
   assert.match(settingsCards, /Bank Name/);
   assert.match(settingsCards, /Account Number/);
   assert.match(settingsCards, /SWIFT \/ BIC Code/);
+  assert.match(service, /currency === "CNY"\s*\? \[bankName, accountNumber\]/);
+  assert.match(service, /人民币收款账户请同时填写开户行和银行账号/);
   assert.match(settingsCards, /PI 页头显示公司电话/);
   assert.match(settingsCards, /PI 页头显示公司邮箱/);
   assert.match(settingsCards, /PI 页头显示公司网址/);

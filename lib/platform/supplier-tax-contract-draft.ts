@@ -242,7 +242,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     buyerPhone: purchaseOrder.execution.businessEntity.contactPhone || "",
     buyerBankName: cnyAccount?.bankName || "",
     buyerBankAccount: cnyAccount?.accountNumber || purchaseOrder.execution.businessEntity.bankAccount || "",
-    signingPlace: purchaseOrder.execution.businessEntity.address || "",
+    signingPlace: "浙江诸暨",
     signingDate: dateText(new Date()),
     latestDeliveryDate: dateText(purchaseOrder.confirmedSupplierDeliveryDate || purchaseOrder.requestedDeliveryDate),
     currency: purchaseOrder.purchaseCurrency,
