@@ -14,7 +14,10 @@ function quantityNumberText(value: unknown) {
 }
 
 export function supplierTaxContractQuantityNeedsTwoDecimals(...values: unknown[]) {
-  return values.some((value) => /^\d+\.\d+$/.test(quantityNumberText(value)));
+  return values.some((value) => {
+    const fraction = quantityNumberText(value).match(/^\d+\.(\d+)$/)?.[1] || "";
+    return /[1-9]/.test(fraction);
+  });
 }
 
 export function supplierTaxContractQuantityText(value: unknown, ...decimalSignalValues: unknown[]) {

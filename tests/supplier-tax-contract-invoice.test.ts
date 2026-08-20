@@ -97,7 +97,7 @@ test("generated tax contract workbook contains no specification column and freez
   const body = await generateSupplierTaxContractXlsx({
     ...contract,
     items: [
-      { ...contract.items[0], quantity: "10", declaredQuantity: "10" },
+      { ...contract.items[0], quantity: "10", declaredQuantity: "10.00" },
       { ...contract.items[0], lineNo: 2, purchaseOrderItemId: "item-2", productName: "木塑复合墙板", quantity: "2866.7", declaredQuantity: "2866.70", amountWithTax: "0.00" },
     ],
   } as never);
@@ -189,11 +189,14 @@ test("tax contracts use supplier master name and sign one month before delivery"
   assert.match(templateSource, /generateSupplierTaxContractXlsx\(taxContractDraft\)/);
 });
 
-test("tax contract quantity keeps two decimals when customs quantity contains a decimal point", () => {
+test("tax contract quantity keeps decimals only when quantity has a non-zero fractional part", () => {
   assert.equal(supplierTaxContractQuantityText("23301", "23301"), "23301");
-  assert.equal(supplierTaxContractQuantityText("23301", "23301.00"), "23301.00");
+  assert.equal(supplierTaxContractQuantityText("23301", "23301.00"), "23301");
+  assert.equal(supplierTaxContractQuantityText("23301.00", "23301.00"), "23301");
+  assert.equal(supplierTaxContractQuantityText("23301.", "23301."), "23301");
   assert.equal(supplierTaxContractQuantityText("2866.7", "2866.70"), "2866.70");
   assert.equal(supplierTaxContractQuantityText("2866.71", "2866.71"), "2866.71");
+  assert.equal(supplierTaxContractQuantityText("2,866.00", "2,866.00"), "2866");
   assert.equal(supplierTaxContractQuantityText("2,866.7", "2,866.70"), "2866.70");
   const normalized = normalizeSupplierTaxContractDraftValues({
       ...contract,
@@ -202,7 +205,7 @@ test("tax contract quantity keeps two decimals when customs quantity contains a 
         { ...contract.items[0], lineNo: 2, purchaseOrderItemId: "item-2", quantity: "186", declaredQuantity: "186" },
       ],
     }) as typeof contract;
-  assert.equal(normalized.items[0]?.quantity, "23301.00");
+  assert.equal(normalized.items[0]?.quantity, "23301");
   assert.equal(normalized.items[1]?.quantity, "186");
 
   const draftSource = readFileSync("lib/platform/supplier-tax-contract-draft.ts", "utf8");
@@ -243,7 +246,7 @@ test("manual review can correct OCR name, quantity and unit while preserving ori
     unit: "平方米（m²）",
   }], new Date("2026-08-17T01:00:00.000Z"));
   assert.equal(edited.draft.items[0]?.productName, "木塑地板");
-  assert.equal(edited.draft.items[0]?.quantity, "10.00");
+  assert.equal(edited.draft.items[0]?.quantity, "10");
   assert.equal(edited.draft.items[0]?.unit, "平方米（m²）");
   assert.equal(edited.draft.items[0]?.amountWithTax, "1130.00");
   assert.deepEqual(edited.draft.customsSnapshot, contract.customsSnapshot);
