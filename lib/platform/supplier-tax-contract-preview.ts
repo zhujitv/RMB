@@ -8,6 +8,7 @@ import type { SupplierTaxContractDraft } from "./supplier-tax-contract-draft";
 import { generateSupplierTaxContractXlsx } from "./supplier-tax-contract-xlsx";
 import { safeFileName } from "../r2";
 import type { ActorLike, AuditRequestLike } from "./supplier-document-request-types";
+import { refreshSupplierTaxContractBuyer } from "./supplier-tax-contract-buyer";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -35,7 +36,7 @@ export async function previewSupplierTaxContractDraft(
   if (row.contractStatus !== "PENDING_REVIEW") {
     throw codedError("当前合同不在待审核状态，请下载已确认的合同样本。", 409, "SUPPLIER_TAX_CONTRACT_NOT_PENDING");
   }
-  const draft = pendingDraft(row.contractDraft);
+  const draft = await refreshSupplierTaxContractBuyer(pendingDraft(row.contractDraft));
   const body = await generateSupplierTaxContractXlsx(draft);
   const fileName = safeFileName(`${draft.contractNo || row.contractNo || "退税合同"}-草稿.xlsx`);
   await runNonCriticalTask("退税合同草稿预览日志", () => writeAudit(

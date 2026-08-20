@@ -81,7 +81,7 @@ export async function loadTransitionContext(costId: string) {
     include: {
       transitionSettlement: true,
       supplier: true,
-      order: { include: { businessEntity: { include: { bankAccounts: { where: { currency: "CNY" } } } } } },
+      order: { include: { businessEntity: true } },
     },
   });
   if (!cost || !cost.supplierId || !cost.supplier || !cost.order) throw codedError("请选择有效的工厂供应商成本。", 404, "FACTORY_TRANSITION_COST_NOT_FOUND");

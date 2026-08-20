@@ -11,6 +11,8 @@ export type BusinessEntityLike = {
   shortName?: string | null;
   nameEn?: string | null;
   taxNumber?: string | null;
+  domesticBankName?: string | null;
+  domesticBankAccount?: string | null;
   address?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
@@ -52,6 +54,8 @@ export function serializeBusinessEntitySettings(entity: BusinessEntityLike | nul
     ...serializeBusinessEntity(entity),
     nameEn: entity?.nameEn || "",
     taxNumber: entity?.taxNumber || "",
+    domesticBankName: entity?.domesticBankName || "",
+    domesticBankAccount: entity?.domesticBankAccount || "",
     address: entity?.address || "",
     contactEmail: entity?.contactEmail || "",
     contactPhone: entity?.contactPhone || "",

@@ -168,10 +168,13 @@ test("settings can maintain business entities without making it multi tenant", (
   assert.match(settingsCards, /公司简称/);
   assert.match(settingsCards, /已封存版本不会被追溯改写/);
   assert.match(settingsCards, /英文法定抬头/);
-  assert.match(settingsCards, /人民币收款账户/);
+  assert.match(settingsCards, /人民币国际汇款账户/);
   assert.match(settingsCards, /中国地区纳税人识别号/);
   assert.match(settingsCards, /中国地区开户行/);
   assert.match(settingsCards, /中国地区银行账号/);
+  assert.match(settingsCards, /人民币国际汇款账户（报价 \/ PI）/);
+  assert.match(service, /domesticBankPayload\(input\)/);
+  assert.match(service, /delete safeEntity\.domesticBankAccount/);
   assert.match(settingsCards, /国际汇款 SWIFT \/ BIC（可选）/);
   assert.match(settingsCards, /美元收款账户/);
   assert.match(settingsCards, /Beneficiary Name/);

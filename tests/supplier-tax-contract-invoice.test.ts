@@ -107,7 +107,20 @@ test("generated tax contract workbook contains no specification column and freez
   assert.match(sheet || "", /税号：91330000987654321X/);
   assert.match(sheet || "", /开户行：工商银行/);
   assert.match(sheet || "", /账号：987654321/);
+  assert.match(sheet || "", /<c r="B9"[^>]*s="8"/);
+  assert.match(sheet || "", /<c r="F9"[^>]*s="8"/);
   assert.doesNotMatch(sheet || "", /规格型号/);
+});
+
+test("tax contracts use the dedicated domestic buyer account instead of CNY international remittance data", () => {
+  const draftSource = readFileSync("lib/platform/supplier-tax-contract-draft.ts", "utf8");
+  const transitionSource = readFileSync("lib/platform/supplier-transition-settlement.ts", "utf8");
+  assert.match(draftSource, /buyerBankName: purchaseOrder\.execution\.businessEntity\.domesticBankName/);
+  assert.match(draftSource, /buyerBankAccount: purchaseOrder\.execution\.businessEntity\.domesticBankAccount/);
+  assert.match(transitionSource, /buyerBankName: entity\.domesticBankName/);
+  assert.match(transitionSource, /buyerBankAccount: entity\.domesticBankAccount/);
+  assert.doesNotMatch(draftSource, /buyerBankName: cnyAccount/);
+  assert.doesNotMatch(transitionSource, /buyerBankName: cnyAccount/);
 });
 
 test("tax contract adds one bordered product row per item and shifts the remaining template", async () => {
@@ -163,6 +176,7 @@ test("workflow requires manual contract review and invoice confirmation before c
   const completion = readFileSync("lib/platform/supplier-document-request-completion.ts", "utf8");
   const taxStatus = readFileSync("lib/platform/tax-refunds-status-actions.ts", "utf8");
   assert.match(workflow, /contractStatus: "PENDING_REVIEW"/);
+  assert.match(workflow, /refreshSupplierTaxContractBuyer\(contractDraft\(row\.contractDraft\)\)/);
   assert.match(workflow, /input\.confirmed !== true/);
   assert.match(workflow, /contractRevision: \{ increment: 1 \}/);
   assert.match(workflow, /generateSupplierTaxContractXlsx/);
@@ -171,6 +185,14 @@ test("workflow requires manual contract review and invoice confirmation before c
   assert.match(upload, /row\.contractStatus !== "APPROVED" \|\| !row\.contractApproved/);
   assert.match(completion, /invoiceMatchStatus === "CONFIRMED"/);
   assert.match(taxStatus, /SUPPLIER_INVOICE_REVIEW_REQUIRED/);
+});
+
+test("pending contract previews refresh buyer domestic account data before review", () => {
+  const preview = readFileSync("lib/platform/supplier-tax-contract-preview.ts", "utf8");
+  const buyer = readFileSync("lib/platform/supplier-tax-contract-buyer.ts", "utf8");
+  assert.match(preview, /refreshSupplierTaxContractBuyer\(pendingDraft\(row\.contractDraft\)\)/);
+  assert.match(buyer, /domesticBankName: true, domesticBankAccount: true/);
+  assert.match(buyer, /buyerBankName: entity\.domesticBankName/);
 });
 
 test("approved contracts can rerun Tencent invoice OCR for an already uploaded PDF", () => {
