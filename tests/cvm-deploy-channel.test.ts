@@ -32,6 +32,8 @@ test("CVM deployment avoids direct GitHub pulls from the server", () => {
 });
 
 test("CVM deployment stays migration-safe and uses the app build only", () => {
+  assert.match(workflow, /RMB_CVM_ENV_FILE/);
+  assert.match(remoteScript, /source "\$ENV_FILE"/);
   assert.match(remoteScript, /npx prisma migrate status/);
   assert.match(remoteScript, /npm run build:app/);
   assert.doesNotMatch(remoteScript, /db:deploy|build:release|prisma migrate deploy|prisma db push|prisma migrate dev/);

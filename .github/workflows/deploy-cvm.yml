@@ -49,6 +49,7 @@ jobs:
       DEPLOY_KNOWN_HOSTS: ${{ secrets.RMB_CVM_KNOWN_HOSTS }}
       APP_DIR: ${{ vars.RMB_CVM_APP_DIR }}
       SERVICE_NAME: ${{ vars.RMB_CVM_SERVICE }}
+      ENV_FILE: ${{ vars.RMB_CVM_ENV_FILE }}
       LOCAL_HEALTH_URL: ${{ vars.RMB_CVM_LOCAL_HEALTH_URL }}
       PUBLIC_HEALTH_URL: ${{ vars.RMB_CVM_PUBLIC_HEALTH_URL }}
       GH_TOKEN: ${{ github.token }}
@@ -144,6 +145,7 @@ jobs:
           port="${DEPLOY_PORT:-22}"
           app_dir="${APP_DIR:-/srv/rmb/app}"
           service_name="${SERVICE_NAME:-rmb-app.service}"
+          env_file="${ENV_FILE:-/srv/rmb/shared/app.env}"
           local_health_url="${LOCAL_HEALTH_URL:-http://127.0.0.1:3000/}"
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
@@ -154,7 +156,7 @@ jobs:
           scp "${scp_opts[@]}" "${{ steps.bundle.outputs.path }}" "$ssh_target:$remote_bundle"
           scp "${scp_opts[@]}" scripts/deploy-cvm-from-bundle.sh "$ssh_target:$remote_script"
           ssh "${ssh_opts[@]}" "$ssh_target" \
-            "chmod 700 '$remote_script' && RMB_DEPLOY_SHA='$deploy_sha' RMB_DEPLOY_BUNDLE='$remote_bundle' RMB_APP_DIR='$app_dir' RMB_SERVICE='$service_name' RMB_HEALTH_URL='$local_health_url' '$remote_script'"
+            "chmod 700 '$remote_script' && RMB_DEPLOY_SHA='$deploy_sha' RMB_DEPLOY_BUNDLE='$remote_bundle' RMB_APP_DIR='$app_dir' RMB_SERVICE='$service_name' RMB_ENV_FILE='$env_file' RMB_HEALTH_URL='$local_health_url' '$remote_script'"
 
       - name: Public health check
         if: steps.bundle.outputs.up_to_date != 'true'

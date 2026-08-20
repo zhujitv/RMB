@@ -10,8 +10,9 @@
 4. Runner 生成从 CVM 当前 SHA 到目标 SHA 的增量 Git bundle，并上传到 CVM。
 5. CVM 从本地 bundle 快进，不再依赖 CVM 直接连接 GitHub。
 6. 如果 `package.json` 或 `package-lock.json` 没变化，则跳过 `npm ci`；否则重新安装依赖。
-7. CVM 只执行 `npx prisma migrate status`，不自动执行数据库迁移。
-8. CVM 执行 `npm run build:app`，重启 `rmb-app.service`，再做本机健康检查。
+7. CVM 加载 `/srv/rmb/shared/app.env`，让迁移状态检查和生产构建使用服务器真实配置。
+8. CVM 只执行 `npx prisma migrate status`，不自动执行数据库迁移。
+9. CVM 执行 `npm run build:app`，重启 `rmb-app.service`，再做本机健康检查。
 9. GitHub Runner 最后访问公网地址，确认 Nginx HTTPS 正常。
 
 ## 安全边界
@@ -46,6 +47,7 @@ RMB_CVM_PORT          # 默认 22
 ```text
 RMB_CVM_APP_DIR=/srv/rmb/app
 RMB_CVM_SERVICE=rmb-app.service
+RMB_CVM_ENV_FILE=/srv/rmb/shared/app.env
 RMB_CVM_LOCAL_HEALTH_URL=http://127.0.0.1:3000/
 RMB_CVM_PUBLIC_HEALTH_URL=https://www.nextwood.net
 RMB_CVM_AUTO_DEPLOY=false
@@ -55,6 +57,7 @@ RMB_CVM_AUTO_DEPLOY=false
 
 - `RMB_CVM_APP_DIR` 未配置时使用 `/srv/rmb/app`
 - `RMB_CVM_SERVICE` 未配置时使用 `rmb-app.service`
+- `RMB_CVM_ENV_FILE` 未配置时使用 `/srv/rmb/shared/app.env`
 - `RMB_CVM_LOCAL_HEALTH_URL` 未配置时使用 `http://127.0.0.1:3000/`
 - `RMB_CVM_PUBLIC_HEALTH_URL` 未配置时使用 `https://www.nextwood.net`
 

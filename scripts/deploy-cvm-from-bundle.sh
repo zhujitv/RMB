@@ -12,6 +12,7 @@ fail() {
 
 APP_DIR="${RMB_APP_DIR:-/srv/rmb/app}"
 SERVICE="${RMB_SERVICE:-rmb-app.service}"
+ENV_FILE="${RMB_ENV_FILE:-/srv/rmb/shared/app.env}"
 BUNDLE="${RMB_DEPLOY_BUNDLE:-}"
 DEPLOY_SHA="${RMB_DEPLOY_SHA:-}"
 HEALTH_URL="${RMB_HEALTH_URL:-http://127.0.0.1:3000/}"
@@ -56,6 +57,17 @@ if [[ "$NPM_INSTALL_MODE" == "always" ]] \
   npm ci --prefer-offline --no-audit --fund=false
 else
   log "package manifests unchanged; skipping npm ci"
+fi
+
+if [[ -f "$ENV_FILE" ]]; then
+  [[ -r "$ENV_FILE" ]] || fail "environment file is not readable by the deployment user: $ENV_FILE"
+  log "loading build environment from $ENV_FILE"
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+else
+  log "build environment file not found; continuing without $ENV_FILE"
 fi
 
 log "checking migration status without applying migrations"
