@@ -287,15 +287,20 @@ npm run verify:release
 
 当前生产只发布到腾讯云，GitHub 是源码和正式版本的唯一档案库。每个正式发布版本都必须在 GitHub 保存 commit、Git tag 和 GitHub Release。腾讯云 CVM 不保存源码压缩包、旧 release 目录或代码版本备份。
 
+推荐使用 `Deploy CVM` GitHub Actions 通道，详见 `docs/CVM_DEPLOYMENT_CHANNEL.md`：
+
 1. 在本地只选择本次功能文件提交，执行 `npm run verify:ci` 并推送到 GitHub `main`。
-2. 等待 GitHub Actions 全部通过，为目标 commit 创建并推送 `vX.Y.Z` Git tag；`GitHub Release Archive` workflow 会自动创建 GitHub Release。
-3. CVM 从 GitHub 拉取并检出同一 tag 或 commit SHA，执行 `npm ci`。
-4. 核对 `DATABASE_URL`、COS、邮件、OCR、飞驼可视、限流和代理配置，但不要输出或覆盖现有密钥。
-5. 执行 `npx prisma migrate status`。只有存在待执行 migration 时，才先确认数据库备份成功，并在维护窗口显式执行 `npm run db:deploy`。
-6. 使用 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
-7. 重启 systemd 应用服务，不在 CVM 创建代码压缩包、旧目录或版本副本。
-8. 核对 systemd 服务正常、仅一个 `next-server` 进程、应用只监听本机端口，Nginx HTTPS 正常。
-9. 确认服务器运行 SHA 与 GitHub SHA 一致，`www` 返回 200、裸域名正确跳转，再登录验收核心业务。
+2. 等待目标 commit 的 `CI` workflow 通过。
+3. 在 GitHub Actions 页面手动运行 `Deploy CVM`，或使用：
+
+```bash
+gh workflow run deploy-cvm.yml --repo zhujitv/RMB -f ref=main -f require_ci_success=true
+```
+
+4. `Deploy CVM` 会通过 SSH 读取 CVM 当前 SHA，由 GitHub Runner 生成增量 Git bundle 并上传到 CVM；CVM 不再直接连接 GitHub 拉取代码。
+5. 部署脚本只做快进更新，执行 `npx prisma migrate status`、`npm run build:app`、重启 `rmb-app.service`，并核对本机和公网健康状态。
+6. 核对 systemd 服务正常、仅一个 `next-server` 进程、应用只监听本机端口，Nginx HTTPS 正常。
+7. 确认服务器运行 SHA 与 GitHub SHA 一致，`www` 返回 200、裸域名正确跳转，再登录验收核心业务。
 
 代码回滚时，从 GitHub 检出上一个正式 tag，重新安装依赖、构建并重启服务；不要依赖腾讯云上的旧代码目录。
 

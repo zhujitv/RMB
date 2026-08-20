@@ -1,0 +1,169 @@
+name: Deploy CVM
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or full SHA to deploy"
+        required: false
+        default: "main"
+      require_ci_success:
+        description: "Require a successful CI run for the exact commit"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: rmb-cvm-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Tencent Cloud CVM
+    runs-on: ubuntu-latest
+    environment: production
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        vars.RMB_CVM_AUTO_DEPLOY == 'true'
+      )
+    env:
+      DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
+      DEPLOY_PORT: ${{ secrets.RMB_CVM_PORT }}
+      DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.RMB_CVM_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.RMB_CVM_KNOWN_HOSTS }}
+      APP_DIR: ${{ vars.RMB_CVM_APP_DIR }}
+      SERVICE_NAME: ${{ vars.RMB_CVM_SERVICE }}
+      LOCAL_HEALTH_URL: ${{ vars.RMB_CVM_LOCAL_HEALTH_URL }}
+      PUBLIC_HEALTH_URL: ${{ vars.RMB_CVM_PUBLIC_HEALTH_URL }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Resolve deploy target
+        id: target
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            printf 'ref=%s\n' '${{ github.event.workflow_run.head_sha }}' >> "$GITHUB_OUTPUT"
+            printf 'require_ci_success=false\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'ref=%s\n' '${{ inputs.ref }}' >> "$GITHUB_OUTPUT"
+            printf 'require_ci_success=%s\n' '${{ inputs.require_ci_success }}' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout target commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ steps.target.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Verify target commit and CI
+        id: sha
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          sha="$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$sha" origin/main || {
+            echo "::error::Target commit must be on main."
+            exit 1
+          }
+          if [[ "${{ steps.target.outputs.require_ci_success }}" == "true" ]]; then
+            ci_success_count="$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&status=success&per_page=1" --jq '.total_count')"
+            if [[ "$ci_success_count" == "0" ]]; then
+              echo "::error::No successful CI run found for $sha. Run CI first or dispatch with require_ci_success=false for an emergency rollback."
+              exit 1
+            fi
+          fi
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check deployment secrets
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing required deployment secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Prepare SSH
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/rmb-cvm-deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/rmb-cvm-deploy" "$HOME/.ssh/known_hosts"
+
+      - name: Build incremental git bundle
+        id: bundle
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          app_dir="${APP_DIR:-/srv/rmb/app}"
+          ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          remote_head="$(ssh "${ssh_opts[@]}" "$ssh_target" "cd '$app_dir' && git rev-parse HEAD")"
+          deploy_sha="${{ steps.sha.outputs.sha }}"
+          if [[ "$remote_head" == "$deploy_sha" ]]; then
+            printf 'up_to_date=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git merge-base --is-ancestor "$remote_head" "$deploy_sha" || {
+            echo "::error::Server HEAD $remote_head is not an ancestor of $deploy_sha. Refusing non-fast-forward deployment."
+            exit 1
+          }
+          git branch --force deploy-target "$deploy_sha"
+          bundle_path="$RUNNER_TEMP/rmb-cvm-$deploy_sha.bundle"
+          git bundle create "$bundle_path" deploy-target "^$remote_head"
+          printf 'path=%s\n' "$bundle_path" >> "$GITHUB_OUTPUT"
+          printf 'up_to_date=false\n' >> "$GITHUB_OUTPUT"
+
+      - name: Upload and run deployment
+        if: steps.bundle.outputs.up_to_date != 'true'
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          app_dir="${APP_DIR:-/srv/rmb/app}"
+          service_name="${SERVICE_NAME:-rmb-app.service}"
+          local_health_url="${LOCAL_HEALTH_URL:-http://127.0.0.1:3000/}"
+          ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          scp_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          deploy_sha="${{ steps.sha.outputs.sha }}"
+          remote_bundle="/tmp/rmb-cvm-$deploy_sha.bundle"
+          remote_script="/tmp/rmb-cvm-deploy-$deploy_sha.sh"
+          scp "${scp_opts[@]}" "${{ steps.bundle.outputs.path }}" "$ssh_target:$remote_bundle"
+          scp "${scp_opts[@]}" scripts/deploy-cvm-from-bundle.sh "$ssh_target:$remote_script"
+          ssh "${ssh_opts[@]}" "$ssh_target" \
+            "chmod 700 '$remote_script' && RMB_DEPLOY_SHA='$deploy_sha' RMB_DEPLOY_BUNDLE='$remote_bundle' RMB_APP_DIR='$app_dir' RMB_SERVICE='$service_name' RMB_HEALTH_URL='$local_health_url' '$remote_script'"
+
+      - name: Public health check
+        if: steps.bundle.outputs.up_to_date != 'true'
+        run: |
+          set -euo pipefail
+          public_url="${PUBLIC_HEALTH_URL:-https://www.nextwood.net}"
+          curl --fail --silent --show-error --head --max-time 20 "$public_url" >/dev/null
+          echo "Public health check passed: $public_url"
+
+      - name: Already up to date
+        if: steps.bundle.outputs.up_to_date == 'true'
+        run: echo "CVM already runs ${{ steps.sha.outputs.sha }}."

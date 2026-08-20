@@ -1008,7 +1008,7 @@ npm run db:studio
 
 1. 只选择本次功能文件提交并推送到 GitHub `main`，禁止在脏工作区宽泛暂存。
 2. 确认该 commit 的 GitHub Actions 已通过，为本次正式版本创建并推送 `vX.Y.Z` Git tag；`GitHub Release Archive` workflow 会自动创建 GitHub Release。
-3. CVM 从 GitHub 拉取并检出同一 tag 或 commit SHA，然后执行 `npm ci`。
+3. 优先使用 `Deploy CVM` GitHub Actions 通道部署：GitHub Runner 生成增量 Git bundle 上传到 CVM，CVM 从本地 bundle 快进，不再依赖 CVM 直接连接 GitHub。
 4. 如果存在数据库 migration，先确认数据库备份成功并核对 migration 状态。数据库备份属于业务数据保护，不是代码版本备份。
 5. 只有存在待执行 migration 时，才在维护窗口显式执行：
 
@@ -1016,10 +1016,18 @@ npm run db:studio
 npm run db:deploy
 ```
 
-6. 使用 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
-7. 重启唯一的应用服务。腾讯云不保留源码压缩包、旧 release 目录或代码版本备份；需要回滚时从 GitHub 检出上一个正式 tag 后重新构建。
+6. 部署通道在 CVM 上执行 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
+7. 部署通道重启唯一的应用服务。腾讯云不保留源码压缩包、旧 release 目录或代码版本备份；需要回滚时从 GitHub 检出上一个正式 tag 后重新构建。
 8. 核对服务器运行 commit 与 GitHub SHA 一致、systemd 服务正常、仅一个 Next.js 运行进程、`www` 返回 200、裸域名正确跳转。
 9. 登录后验收报价、销售执行、供应商采购、应收订单、COS 附件和邮件流程。
+
+手动触发快速通道：
+
+```bash
+gh workflow run deploy-cvm.yml --repo zhujitv/RMB -f ref=main -f require_ci_success=true
+```
+
+完整配置见 `docs/CVM_DEPLOYMENT_CHANNEL.md`。
 
 代码层发布前执行：
 
