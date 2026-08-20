@@ -484,6 +484,8 @@ test("supplier document cards merge upload slots with uploaded files by document
   assert.match(supplierModule, /fileDownloadUrl\("order-document", document\.id\)/);
   assert.doesNotMatch(supplierModule, /SupplierDocumentOcrPanel/);
   assert.match(supplierModule, /OCR完整匹配|人工核查并通过|驳回发票/);
+  assert.match(supplierModule, /contract-preview/);
+  assert.match(supplierModule, /下载合同草稿（Excel）/);
   assert.doesNotMatch(supplierModule, /function supplierDocumentUploadSlots/);
   assert.doesNotMatch(supplierModule, /UNMATCHED_SUPPLIER_DOCUMENT_SLOT_ID/);
   assert.doesNotMatch(supplierModule, /已上传资料槽|uploadedDocumentSlots/);

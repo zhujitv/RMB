@@ -190,6 +190,16 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
       ) : null}
       {isAdmin && canWrite && task.contractStatus === "PENDING_REVIEW" ? (
         <div className={styles.supplierDocumentNoticeActions}>
+          <a
+            className={styles.secondaryButton}
+            href={`/api/supplier-document-requests/${encodeURIComponent(task.id)}/contract-preview`}
+            aria-disabled={draftDirty}
+            onClick={(event) => {
+              if (draftDirty) event.preventDefault();
+            }}
+          >
+            下载合同草稿（Excel）
+          </a>
           <button className={styles.primaryButtonCompact} type="button" disabled={busy || draftDirty || Boolean(draft?.blockingIssues?.length)} onClick={() => reviewContract("APPROVED")}>人工核查并通过</button>
           <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => reviewContract("REJECTED")}>驳回草稿</button>
         </div>
