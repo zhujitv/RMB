@@ -49,6 +49,7 @@ RMB_CVM_APP_DIR=/srv/rmb/app
 RMB_CVM_SERVICE=rmb-app.service
 RMB_CVM_ENV_FILE=/srv/rmb/shared/app.env
 RMB_CVM_DB_BACKUP_DIR=/srv/rmb/shared/db-backups
+RMB_CVM_DB_BACKUP_RETENTION_DAYS=15
 RMB_CVM_LOCAL_HEALTH_URL=http://127.0.0.1:3000/
 RMB_CVM_PUBLIC_HEALTH_URL=https://www.nextwood.net
 RMB_CVM_AUTO_DEPLOY=false
@@ -60,6 +61,7 @@ RMB_CVM_AUTO_DEPLOY=false
 - `RMB_CVM_SERVICE` 未配置时使用 `rmb-app.service`
 - `RMB_CVM_ENV_FILE` 未配置时使用 `/srv/rmb/shared/app.env`
 - `RMB_CVM_DB_BACKUP_DIR` 未配置时使用 `/srv/rmb/shared/db-backups`
+- `RMB_CVM_DB_BACKUP_RETENTION_DAYS` 未配置时使用 `15`
 - `RMB_CVM_LOCAL_HEALTH_URL` 未配置时使用 `http://127.0.0.1:3000/`
 - `RMB_CVM_PUBLIC_HEALTH_URL` 未配置时使用 `https://www.nextwood.net`
 
@@ -114,9 +116,10 @@ gh workflow run deploy-cvm.yml --repo zhujitv/RMB \
 
 1. 读取 `/srv/rmb/shared/app.env` 中的生产 `DATABASE_URL`。
 2. 自动确保 `/srv/rmb/shared/db-backups` 可写；如果 sudo 权限不足，则回退到部署用户私有目录 `~/rmb-db-backups`。
-3. 用与数据库大版本匹配的 PostgreSQL 工具做 `pg_dump` 备份，并兼容 Prisma 专用连接参数。
-4. 只执行指定 migration 的 `migration.sql`。
-5. 只把这一条 Prisma migration 标记为已应用。
-6. 继续执行正常 CVM 部署。
+3. 自动清理备份目录中超过 15 天的 RMB 数据库备份；可用 `RMB_CVM_DB_BACKUP_RETENTION_DAYS` 调整。
+4. 用与数据库大版本匹配的 PostgreSQL 工具做 `pg_dump` 备份，并兼容 Prisma 专用连接参数。
+5. 只执行指定 migration 的 `migration.sql`。
+6. 只把这一条 Prisma migration 标记为已应用。
+7. 继续执行正常 CVM 部署。
 
 `safe_prisma_migration` 默认空，不会运行任何数据库迁移。这个通道只适合已人工确认的单条安全迁移；复杂迁移仍应单独制定维护窗口。

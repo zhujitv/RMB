@@ -63,6 +63,7 @@ jobs:
       SERVICE_NAME: ${{ vars.RMB_CVM_SERVICE }}
       ENV_FILE: ${{ vars.RMB_CVM_ENV_FILE }}
       DB_BACKUP_DIR: ${{ vars.RMB_CVM_DB_BACKUP_DIR }}
+      DB_BACKUP_RETENTION_DAYS: ${{ vars.RMB_CVM_DB_BACKUP_RETENTION_DAYS }}
       LOCAL_HEALTH_URL: ${{ vars.RMB_CVM_LOCAL_HEALTH_URL }}
       PUBLIC_HEALTH_URL: ${{ vars.RMB_CVM_PUBLIC_HEALTH_URL }}
       GH_TOKEN: ${{ github.token }}
@@ -156,11 +157,23 @@ jobs:
           set -euo pipefail
           port="${DEPLOY_PORT:-22}"
           backup_dir="${DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
+          retention_days="${DB_BACKUP_RETENTION_DAYS:-15}"
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          ssh "${ssh_opts[@]}" "$ssh_target" "RMB_DB_BACKUP_DIR='$backup_dir' bash -s" <<'REMOTE_SCRIPT'
+          ssh "${ssh_opts[@]}" "$ssh_target" "RMB_DB_BACKUP_DIR='$backup_dir' RMB_DB_BACKUP_RETENTION_DAYS='$retention_days' bash -s" <<'REMOTE_SCRIPT'
           set -euo pipefail
           backup_dir="${RMB_DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
+          retention_days="${RMB_DB_BACKUP_RETENTION_DAYS:-15}"
+          [[ "$retention_days" =~ ^[0-9]+$ ]] || retention_days=15
+
+          prune_old_backups() {
+            local dir="$1"
+            [[ -d "$dir" && -w "$dir" ]] || return 0
+            local deleted_count
+            deleted_count="$(find "$dir" -maxdepth 1 -type f -name '*-20??????T??????Z.dump' -mtime +"$retention_days" -print -delete | wc -l | tr -d ' ')"
+            printf '[rmb-cvm-deploy] pruned %s DB backup(s) older than %s day(s) in %s\n' "$deleted_count" "$retention_days" "$dir"
+          }
+
           current_user="$(id -un)"
           current_group="$(id -gn)"
           if mkdir -p "$backup_dir" 2>/dev/null; then
@@ -177,6 +190,8 @@ jobs:
           else
             printf '[rmb-cvm-deploy] shared DB backup directory not writable; private fallback remains enabled: %s\n' "$backup_dir"
           fi
+          prune_old_backups "$backup_dir"
+          prune_old_backups "$HOME/rmb-db-backups"
           REMOTE_SCRIPT
 
       - name: Apply single safe Prisma migration
@@ -187,6 +202,7 @@ jobs:
           app_dir="${APP_DIR:-/srv/rmb/app}"
           env_file="${ENV_FILE:-/srv/rmb/shared/app.env}"
           backup_dir="${DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
+          retention_days="${DB_BACKUP_RETENTION_DAYS:-15}"
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           scp_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
@@ -217,6 +233,16 @@ jobs:
               fi
             done
             command -v "$tool" 2>/dev/null || return 1
+          }
+
+          prune_old_backups() {
+            local dir="$1"
+            local retention_days="${RMB_DB_BACKUP_RETENTION_DAYS:-15}"
+            [[ "$retention_days" =~ ^[0-9]+$ ]] || retention_days=15
+            [[ -d "$dir" && -w "$dir" ]] || return 0
+            local deleted_count
+            deleted_count="$(find "$dir" -maxdepth 1 -type f -name '*-20??????T??????Z.dump' -mtime +"$retention_days" -print -delete | wc -l | tr -d ' ')"
+            log "pruned $deleted_count DB backup(s) older than $retention_days day(s) in $dir"
           }
 
           APP_DIR="${RMB_APP_DIR:-/srv/rmb/app}"
@@ -331,13 +357,14 @@ jobs:
           SQL
 
           log "migration complete; backup kept at $backup_path"
+          prune_old_backups "$BACKUP_DIR"
           rm -f "$MIGRATION_SQL"
           REMOTE_SCRIPT
           chmod 700 "$local_script"
           scp "${scp_opts[@]}" "$local_script" "$ssh_target:$remote_script"
           scp "${scp_opts[@]}" "prisma/migrations/$migration_name/migration.sql" "$ssh_target:$remote_sql"
           ssh "${ssh_opts[@]}" "$ssh_target" \
-            "chmod 700 '$remote_script' && RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_DB_BACKUP_DIR='$backup_dir' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
+            "chmod 700 '$remote_script' && RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_DB_BACKUP_DIR='$backup_dir' RMB_DB_BACKUP_RETENTION_DAYS='$retention_days' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
 
       - name: Build incremental git bundle
         id: bundle
