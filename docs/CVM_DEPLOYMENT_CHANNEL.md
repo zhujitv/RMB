@@ -102,7 +102,7 @@ npm run db:deploy
 `20260820233000_customer_product_material_code` 只给 `customer_products` 增加可空 `material_code` 字段和查询索引，不改写现有业务数据。手动运行 `Deploy CVM` 时可把 `apply_customer_product_material_code_migration` 设置为 `true`，工作流会在 CVM 上：
 
 1. 读取 `/srv/rmb/shared/app.env` 中的生产 `DATABASE_URL`。
-2. 用 `pg_dump` 在 `/srv/rmb/shared/db-backups` 生成受限权限备份。
+2. 用 `pg_dump` 优先在 `/srv/rmb/shared/db-backups` 生成受限权限备份；如果部署用户没有共享目录写入权限，则回退到部署用户私有目录 `~/rmb-db-backups`。
 3. 只执行这一条迁移 SQL。
 4. 只把这一条 Prisma migration 标记为已应用。
 5. 继续执行正常 CVM 部署。

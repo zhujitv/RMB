@@ -170,7 +170,12 @@ jobs:
           [[ -n "${DATABASE_URL:-}" ]] || fail "DATABASE_URL is missing from $ENV_FILE"
 
           umask 077
-          mkdir -p "$BACKUP_DIR"
+          if ! mkdir -p "$BACKUP_DIR" 2>/dev/null; then
+            BACKUP_DIR="$HOME/rmb-db-backups"
+            log "shared backup directory is not writable; using $BACKUP_DIR"
+            mkdir -p "$BACKUP_DIR"
+          fi
+          chmod 700 "$BACKUP_DIR" 2>/dev/null || true
           backup_path="$BACKUP_DIR/$MIGRATION_NAME-$(date -u +%Y%m%dT%H%M%SZ).dump"
           log "creating database backup at $backup_path"
           pg_dump --format=custom --no-owner --no-privileges --file "$backup_path" "$DATABASE_URL"
