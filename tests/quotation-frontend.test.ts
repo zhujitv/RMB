@@ -31,7 +31,9 @@ const quotationCustomerDetailSource = readFileSync("app/modules/quotations/quota
 const quotationCustomerProductsSource = readFileSync("app/modules/quotations/quotation-customer-products-editor.tsx", "utf8");
 const quotationCustomerContactsSource = readFileSync("app/modules/quotations/quotation-customer-contacts.tsx", "utf8");
 const quotationCustomerFollowUpsSource = readFileSync("app/modules/quotations/quotation-customer-follow-ups.tsx", "utf8");
+const quotationCustomerBusinessSource = readFileSync("app/modules/quotations/quotation-customer-business-records.tsx", "utf8");
 const customerCrmServiceSource = readFileSync("lib/platform/customer-crm.ts", "utf8");
+const customerBusinessRouteSource = readFileSync("app/api/customer-business-records/route.ts", "utf8");
 const customerFollowUpsMigration = readFileSync("prisma/migrations/20260821120000_customer_follow_ups/migration.sql", "utf8");
 
 test("only the current version internal decision unlocks quotation conversion", () => {
@@ -364,6 +366,25 @@ test("quotation CRM customer detail records follow-ups and next reminders", () =
   assert.match(customerCrmServiceSource, /completeCustomerFollowUp/);
   assert.match(customerFollowUpsMigration, /CREATE TABLE "customer_follow_ups"/);
   assert.match(customerFollowUpsMigration, /FOREIGN KEY \("customer_id"\) REFERENCES "customers"/);
+});
+
+test("quotation CRM customer detail reads existing shipment orders and receivables", () => {
+  assert.match(quotationCustomerDetailSource, /<QuotationCustomerBusinessRecords/);
+  assert.match(quotationCustomerBusinessSource, /发货与应收/);
+  assert.match(quotationCustomerBusinessSource, /客户经营记录/);
+  assert.match(quotationCustomerBusinessSource, /\/api\/customer-business-records\?\$\{params\}/);
+  assert.match(quotationCustomerBusinessSource, /打开应收订单/);
+  assert.match(quotationCustomerBusinessSource, /打开收款管理/);
+  assert.match(customerBusinessRouteSource, /listCustomerBusinessRecords/);
+  assert.match(customerCrmServiceSource, /export async function listCustomerBusinessRecords/);
+  assert.match(customerCrmServiceSource, /const customerId = String\(query\.get\("customerId"\)/);
+  assert.match(customerCrmServiceSource, /orderAccessWhere\(actor\)/);
+  assert.match(customerCrmServiceSource, /serializeOrderListRow\(scopeOrderForActor\(order, actor\)\)/);
+  assert.match(customerCrmServiceSource, /serializePayment/);
+  assert.match(quotesModuleSource, /canReadPermission\(currentUser, permissions, "orders"/);
+  assert.match(quotesModuleSource, /canReadPermission\(currentUser, permissions, "payments"/);
+  assert.match(quotationsViewSource, /onOpenOrders=\{actions\.onOpenOrders\}/);
+  assert.match(quotationsViewSource, /onOpenPayments=\{actions\.onOpenPayments\}/);
 });
 
 test("quotation mutations reject same-tick duplicate submits", () => {

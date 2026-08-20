@@ -19,7 +19,11 @@ type QuotationCrmWorkspaceProps = {
   loading: boolean;
   createOpen: boolean;
   canWriteQuotations: boolean;
+  canReadOrders: boolean;
+  canReadPayments: boolean;
   onToggleCreate: () => void;
+  onOpenOrders: (keyword: string) => void;
+  onOpenPayments: (keyword: string) => void;
   onRefresh: () => void;
   onViewDetail: (quotation: QuotationRow) => void;
 };
@@ -65,7 +69,11 @@ export function QuotationCrmWorkspace({
   loading,
   createOpen,
   canWriteQuotations,
+  canReadOrders,
+  canReadPayments,
   onToggleCreate,
+  onOpenOrders,
+  onOpenPayments,
   onRefresh,
   onViewDetail,
 }: QuotationCrmWorkspaceProps) {
@@ -80,9 +88,13 @@ export function QuotationCrmWorkspace({
       <QuotationCustomerDetail
         customer={selectedCustomer}
         canWriteQuotations={canWriteQuotations}
+        canReadOrders={canReadOrders}
+        canReadPayments={canReadPayments}
         createOpen={createOpen}
         onBack={() => setSelectedCustomerKey("")}
         onToggleCreate={onToggleCreate}
+        onOpenOrders={onOpenOrders}
+        onOpenPayments={onOpenPayments}
         onViewQuotation={onViewDetail}
       />
     );
@@ -115,7 +127,7 @@ export function QuotationCrmWorkspace({
           </div>
         </section>
         <section className={styles.crmPanel}>
-          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>销售动作</span><h3>跟进提醒</h3></div><small>不涉及回款和财务</small></div>
+          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>销售动作</span><h3>跟进提醒</h3></div><small>报价、订单和应收联动</small></div>
           <div className={styles.followUpCards}>
             <article><strong>{crmSummary.sentCount}</strong><span>待客户确认</span><small>已发送报价，等待客户接受或拒绝。</small></article>
             <article><strong>{crmSummary.expiredCount}</strong><span>已过期需重报</span><small>报价有效期已过，适合重新生成版本。</small></article>

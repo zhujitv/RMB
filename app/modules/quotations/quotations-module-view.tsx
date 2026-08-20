@@ -29,12 +29,16 @@ type QuotationsModuleViewProps = {
   canDeleteQuotationDrafts: boolean;
   canSendCustomerEmail: boolean;
   canWriteSalesExecution: boolean;
+  canReadOrders: boolean;
+  canReadPayments: boolean;
   confirmation: ConfirmationDialogState | null;
   onSetKeyword: (value: string) => void;
   onSetStatus: (value: string) => void;
   onSubmitSearch: () => void;
   onResetSearch: () => void;
   onToggleCreate: () => void;
+  onOpenOrders: (keyword: string) => void;
+  onOpenPayments: (keyword: string) => void;
   onRefresh: () => void;
   onCancelForm: () => void;
   onSaved: (quotation: QuotationRow, message: string) => void;
@@ -72,6 +76,8 @@ export function QuotationsModuleView({
   canDeleteQuotationDrafts,
   canSendCustomerEmail,
   canWriteSalesExecution,
+  canReadOrders,
+  canReadPayments,
   confirmation,
   ...actions
 }: QuotationsModuleViewProps) {
@@ -103,7 +109,11 @@ export function QuotationsModuleView({
         loading={loading}
         createOpen={createOpen}
         canWriteQuotations={canWriteQuotations}
+        canReadOrders={canReadOrders}
+        canReadPayments={canReadPayments}
         onToggleCreate={actions.onToggleCreate}
+        onOpenOrders={actions.onOpenOrders}
+        onOpenPayments={actions.onOpenPayments}
         onRefresh={actions.onRefresh}
         onViewDetail={actions.onViewDetail}
       />

@@ -3,23 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { apiJson } from "../api";
 import { useConfirmationDialog } from "../components";
 import type { PermissionSnapshot, User } from "../types";
-import { canWritePermission } from "../utils";
+import { canReadPermission, canWritePermission } from "../utils";
 import { useWorkspaceTabDiscardGuard, useWorkspaceTabBusy, useWorkspaceTabPresentation, useWorkspaceTabReactivation } from "../workspace/workspace-tab-context";
 import { QuotationsModuleView } from "./quotations/quotations-module-view";
 import { quotationNumber, QUOTATION_PAGE_SIZE, type QuotationDetailResponse, type QuotationRow, type QuotationsResponse } from "./quotations/types";
 import { useQuotationDeletion } from "./quotations/use-quotation-deletion";
-export function QuotesModule({
-  currentUser,
-  permissions,
-  initialKeyword = "",
-  initialOpenToken = 0,
-  onOpenSalesExecution,
-}: {
-  currentUser: User;
-  permissions?: PermissionSnapshot;
-  initialKeyword?: string;
-  initialOpenToken?: number;
+export function QuotesModule({ currentUser, permissions, initialKeyword = "", initialOpenToken = 0, onOpenSalesExecution, onOpenOrders, onOpenPayments }: {
+  currentUser: User; permissions?: PermissionSnapshot; initialKeyword?: string; initialOpenToken?: number;
   onOpenSalesExecution: (quotationId: string, quotationNo: string, executionId?: string, executionNo?: string) => void;
+  onOpenOrders: (keyword: string) => void; onOpenPayments: (keyword: string) => void;
 }) {
   const [quotations, setQuotations] = useState<QuotationRow[]>([]);
   const [keyword, setKeyword] = useState("");
@@ -40,14 +32,9 @@ export function QuotesModule({
   const [voiding, setVoiding] = useState(false);
   const listRequestRef = useRef(0), detailRequestRef = useRef(0), voidingBusyRef = useRef(false);
   const canWriteQuotations = canWritePermission(currentUser, permissions, "quotations", ["管理员", "业务员"]), canSendCustomerEmail = canWritePermission(currentUser, permissions, "customerCommunication", ["管理员", "业务员"]), canWriteSalesExecution = canWritePermission(currentUser, permissions, "salesExecution", ["管理员", "业务员"]);
+  const canReadOrders = canReadPermission(currentUser, permissions, "orders", ["管理员", "业务员", "财务"]), canReadPayments = canReadPermission(currentUser, permissions, "payments", ["管理员", "业务员", "财务"]);
   const confirmDiscard = useWorkspaceTabDiscardGuard("当前报价草稿尚未保存，确定放弃吗？");
-  const {
-    confirmation,
-    requestConfirmation,
-    cancelConfirmation,
-    confirmConfirmation,
-    updateConfirmationInput,
-  } = useConfirmationDialog();
+  const { confirmation, requestConfirmation, cancelConfirmation, confirmConfirmation, updateConfirmationInput } = useConfirmationDialog();
   const { deleting, canDeleteQuotationDrafts, deleteQuotation } = useQuotationDeletion({
     currentUser, canWriteQuotations, detailLoaded, detailError, page, total, submittedKeyword, submittedStatus,
     detailRequestRef, loadQuotations, requestConfirmation, setDetailQuotation, setDetailLoading, setDetailLoaded,
@@ -80,9 +67,7 @@ export function QuotesModule({
     }
   }
 
-  useEffect(() => {
-    void loadQuotations(1, "", "");
-  }, []);
+  useEffect(() => { void loadQuotations(1, "", ""); }, []);
 
   useEffect(() => {
     const value = initialKeyword.trim();
@@ -129,9 +114,7 @@ export function QuotesModule({
           : "list:quotations",
     ensureListTab: Boolean(editQuotation || createOpen || detailQuotation),
   });
-  useWorkspaceTabReactivation(() => {
-    void loadQuotations(page, submittedKeyword, submittedStatus);
-  });
+  useWorkspaceTabReactivation(() => { void loadQuotations(page, submittedKeyword, submittedStatus); });
 
   function submitSearch() {
     const value = keyword.trim();
@@ -274,10 +257,11 @@ export function QuotesModule({
       voiding={voiding} deleting={deleting}
       canWriteQuotations={canWriteQuotations} canDeleteQuotationDrafts={canDeleteQuotationDrafts}
       canSendCustomerEmail={canSendCustomerEmail}
-      canWriteSalesExecution={canWriteSalesExecution}
+      canWriteSalesExecution={canWriteSalesExecution} canReadOrders={canReadOrders} canReadPayments={canReadPayments}
       confirmation={confirmation}
       onSetKeyword={setKeyword} onSetStatus={setStatus}
       onSubmitSearch={submitSearch} onResetSearch={resetSearch} onToggleCreate={toggleCreate}
+      onOpenOrders={onOpenOrders} onOpenPayments={onOpenPayments}
       onRefresh={() => void loadQuotations(page, submittedKeyword, submittedStatus)}
       onCancelForm={cancelForm}
       onSaved={quotationSaved}

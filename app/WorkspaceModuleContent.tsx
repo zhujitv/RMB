@@ -91,6 +91,8 @@ export function WorkspaceModuleContent({
         onOpenSalesExecution={(quotationId, quoteNo, executionId, customerOrderNo) => openWorkspaceMenu("salesExecution", executionId ? {
           executionId,
         } : { action: "convert", quotationId }, { forceNew: true, title: executionId ? `销售执行 · ${customerOrderNo || "未填写客户订单号"}` : `新建销售执行 · ${quoteNo || "报价"}` })}
+        onOpenOrders={(keyword) => openWorkspaceMenu("orders", { keyword }, { forceNew: true, title: `应收订单 · ${keyword || "客户"}` })}
+        onOpenPayments={(keyword) => openWorkspaceMenu("payments", { keyword }, { forceNew: true, title: `收款管理 · ${keyword || "客户"}` })}
       />
     );
   }

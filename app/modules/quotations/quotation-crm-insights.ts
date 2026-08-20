@@ -17,8 +17,12 @@ export type CustomerInsight = {
   contactPhone: string;
   quoteCount: number;
   acceptedCount: number;
+  draftCount: number;
+  expiredCount: number;
   pendingCount: number;
   productNames: Set<string>;
+  rejectedCount: number;
+  sentCount: number;
   quotations: QuotationRow[];
   latestQuotation: QuotationRow;
   latestUpdatedAt: number;
@@ -59,8 +63,12 @@ export function buildCustomerInsights(quotations: QuotationRow[]) {
       contactPhone: firstText(version?.contactPhoneSnapshot, quotation.customer?.contactPhone),
       quoteCount: 0,
       acceptedCount: 0,
+      draftCount: 0,
+      expiredCount: 0,
       pendingCount: 0,
       productNames: new Set<string>(),
+      rejectedCount: 0,
+      sentCount: 0,
       quotations: [],
       latestQuotation: quotation,
       latestUpdatedAt: currentTime,
@@ -68,8 +76,12 @@ export function buildCustomerInsights(quotations: QuotationRow[]) {
 
     insight.quotations.push(quotation);
     insight.quoteCount += 1;
+    if (quotation.status === "DRAFT") insight.draftCount += 1;
+    if (quotation.status === "SENT") insight.sentCount += 1;
     if (quotation.status === "ACCEPTED") insight.acceptedCount += 1;
+    if (quotation.status === "REJECTED") insight.rejectedCount += 1;
     if (quotation.status === "SENT" || quotation.status === "DRAFT") insight.pendingCount += 1;
+    if (quotationValidityState(quotation).expired) insight.expiredCount += 1;
     for (const item of version?.items || []) {
       const productName = quotationItemDescription(item);
       if (productName) insight.productNames.add(productName);
