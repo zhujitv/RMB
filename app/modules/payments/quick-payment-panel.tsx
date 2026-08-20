@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiRequestError, apiJson } from "../../api";
 import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 import { paymentFormFromRow } from "./helpers";
@@ -18,20 +18,35 @@ import { type ExchangeRateResponse, type OrdersResponse, type PaymentOrderOption
 
 export function QuickCreatePaymentPanel({
   initialPayment,
+  initialOrder,
   canConfirmArrived,
   onCancel,
   onConflict,
   onSaved,
 }: {
   initialPayment?: PaymentRow | null;
+  initialOrder?: PaymentOrderOption | null;
   canConfirmArrived: boolean;
   onCancel: () => void;
   onConflict: (paymentId: string) => Promise<void>;
   onSaved: (payment?: PaymentRow | null) => void;
 }) {
   const [editingSnapshot] = useState<PaymentRow | null>(() => initialPayment ? { ...initialPayment } : null);
-  const [form, setForm] = useState<QuickPaymentForm>(() => paymentFormFromRow(editingSnapshot));
-  const [orders, setOrders] = useState<PaymentOrderOption[]>([]);
+  const initialCreateOrder = !editingSnapshot && initialOrder?.id ? { ...initialOrder, currency: (initialOrder.currency || "").toUpperCase() } : null;
+  const [form, setForm] = useState<QuickPaymentForm>(() => {
+    const base = paymentFormFromRow(editingSnapshot);
+    if (!initialCreateOrder) return base;
+    return {
+      ...base,
+      orderId: initialCreateOrder.id,
+      currency: initialCreateOrder.currency || "",
+      exchangeRate: initialCreateOrder.currency === "CNY" ? "1.0000" : "",
+      exchangeRateDate: initialCreateOrder.currency === "CNY" ? base.paymentDate : "",
+      exchangeRateSource: initialCreateOrder.currency === "CNY" ? "系统" : "",
+      exchangeRateType: initialCreateOrder.currency === "CNY" ? "人民币" : "",
+    };
+  });
+  const [orders, setOrders] = useState<PaymentOrderOption[]>(() => initialCreateOrder ? [initialCreateOrder] : []);
   const [exchangeMeta, setExchangeMeta] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -186,6 +201,10 @@ export function QuickCreatePaymentPanel({
       });
     }
   }
+
+  useEffect(() => {
+    if (initialCreateOrder?.currency && initialCreateOrder.currency !== "CNY") void resolveExchangeRate(initialCreateOrder.currency);
+  }, []);
 
   async function submitQuickPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

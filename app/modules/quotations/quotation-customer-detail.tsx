@@ -19,6 +19,8 @@ type QuotationCustomerDetailProps = {
   canWriteQuotations: boolean;
   canReadOrders: boolean;
   canReadPayments: boolean;
+  canRegisterPayments: boolean;
+  canConfirmPayments: boolean;
   createOpen: boolean;
   onBack: () => void;
   onToggleCreate: () => void;
@@ -33,6 +35,8 @@ export function QuotationCustomerDetail({
   canWriteQuotations,
   canReadOrders,
   canReadPayments,
+  canRegisterPayments,
+  canConfirmPayments,
   createOpen,
   onBack,
   onToggleCreate,
@@ -71,6 +75,8 @@ export function QuotationCustomerDetail({
           customer={customer}
           canReadOrders={canReadOrders}
           canReadPayments={canReadPayments}
+          canRegisterPayments={canRegisterPayments}
+          canConfirmPayments={canConfirmPayments}
           onOpenOrders={onOpenOrders}
           onOpenPayments={onOpenPayments}
         />

@@ -34,6 +34,8 @@ export function QuotesModule({ currentUser, permissions, initialKeyword = "", in
   const canWriteQuotations = canWritePermission(currentUser, permissions, "quotations", ["管理员", "业务员"]), canSendCustomerEmail = canWritePermission(currentUser, permissions, "customerCommunication", ["管理员", "业务员"]), canWriteSalesExecution = canWritePermission(currentUser, permissions, "salesExecution", ["管理员", "业务员"]);
   const canReadCustomers = canReadPermission(currentUser, permissions, "customers", ["管理员", "业务员"]);
   const canReadOrders = canReadPermission(currentUser, permissions, "orders", ["管理员", "业务员", "财务"]), canReadPayments = canReadPermission(currentUser, permissions, "payments", ["管理员", "业务员", "财务"]);
+  const canConfirmPayments = canWritePermission(currentUser, permissions, "payments", ["管理员", "财务"]) && ["管理员", "财务"].includes(currentUser.role);
+  const canRegisterPayments = canConfirmPayments || currentUser.role === "业务员";
   const confirmDiscard = useWorkspaceTabDiscardGuard("当前报价草稿尚未保存，确定放弃吗？");
   const { confirmation, requestConfirmation, cancelConfirmation, confirmConfirmation, updateConfirmationInput } = useConfirmationDialog();
   const { deleting, canDeleteQuotationDrafts, deleteQuotation } = useQuotationDeletion({
@@ -259,6 +261,7 @@ export function QuotesModule({ currentUser, permissions, initialKeyword = "", in
       canWriteQuotations={canWriteQuotations} canDeleteQuotationDrafts={canDeleteQuotationDrafts}
       canSendCustomerEmail={canSendCustomerEmail}
       canWriteSalesExecution={canWriteSalesExecution} canReadCustomers={canReadCustomers} canReadOrders={canReadOrders} canReadPayments={canReadPayments}
+      canRegisterPayments={canRegisterPayments} canConfirmPayments={canConfirmPayments}
       confirmation={confirmation}
       onSetKeyword={setKeyword} onSetStatus={setStatus}
       onSubmitSearch={submitSearch} onResetSearch={resetSearch} onToggleCreate={toggleCreate}

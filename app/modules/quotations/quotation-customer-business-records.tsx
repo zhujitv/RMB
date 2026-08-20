@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { SideDetailDrawer } from "../../components";
 import { apiJson } from "../../api";
 import { formatCny, formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
+import { QuickCreatePaymentPanel } from "../payments/quick-payment-panel";
+import type { PaymentOrderOption, PaymentRow } from "../payments/types";
 import styles from "./quotation-crm-workspace.module.css";
 import type { CustomerInsight } from "./quotation-crm-insights";
 
@@ -21,13 +24,16 @@ type BusinessRecords = {
 type BusinessRecordsResponse = { data?: BusinessRecords };
 
 export function QuotationCustomerBusinessRecords({
-  customer, canReadOrders, canReadPayments, onOpenOrders, onOpenPayments,
+  customer, canReadOrders, canReadPayments, canRegisterPayments, canConfirmPayments, onOpenOrders, onOpenPayments,
 }: {
-  customer: CustomerInsight; canReadOrders: boolean; canReadPayments: boolean;
+  customer: CustomerInsight; canReadOrders: boolean; canReadPayments: boolean; canRegisterPayments: boolean; canConfirmPayments: boolean;
   onOpenOrders: (keyword: string) => void; onOpenPayments: (keyword: string) => void;
 }) {
   const [records, setRecords] = useState<BusinessRecords | null>(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [reloadToken, setReloadToken] = useState(0);
+  const [paymentOrder, setPaymentOrder] = useState<PaymentOrderOption | null>(null);
   const customerKeyword = customer.legalName || customer.name;
 
   useEffect(() => {
@@ -40,7 +46,7 @@ export function QuotationCustomerBusinessRecords({
       .catch((loadError) => { if (!cancelled) setError(loadError instanceof Error ? loadError.message : "读取客户发货订单与应收款失败"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [customer.customerId, canReadOrders, canReadPayments]);
+  }, [customer.customerId, canReadOrders, canReadPayments, reloadToken]);
 
   if (!canReadOrders && !canReadPayments) return null;
   if (!customer.customerId) return (
@@ -64,6 +70,7 @@ export function QuotationCustomerBusinessRecords({
       </div>
       {loading ? <div className={styles.crmEmpty}>正在读取客户发货订单和应收款...</div> : null}
       {error ? <div className={shell.inlineError} role="alert">{error}</div> : null}
+      {notice ? <div className={shell.infoStrip}>{notice}</div> : null}
       {!loading && !error ? <>
         <div className={styles.businessStats}>
           <article><span>发货订单</span><strong>{summary.shippedCount || 0}/{summary.orderCount || 0}</strong><small>已发货 / 全部订单</small></article>
@@ -72,22 +79,80 @@ export function QuotationCustomerBusinessRecords({
           <article><span>未收余额</span><strong>{formatCny(summary.outstandingCny)}</strong><small>{summary.overdueCount || 0} 单逾期</small></article>
         </div>
         <div className={styles.businessGrid}>
-          <BusinessOrderList orders={orders} canReadOrders={canReadOrders} onOpenOrders={onOpenOrders} />
+          <BusinessOrderList
+            orders={orders}
+            canReadOrders={canReadOrders}
+            canRegisterPayments={canRegisterPayments}
+            onOpenOrders={onOpenOrders}
+            onRegisterPayment={(order) => setPaymentOrder(paymentOrderFromBusinessOrder(order, customer))}
+          />
           <BusinessPaymentList payments={payments} canReadPayments={canReadPayments} onOpenPayments={onOpenPayments} />
         </div>
       </> : null}
+      {paymentOrder ? (
+        <SideDetailDrawer
+          ariaLabel="CRM 登记收款"
+          kicker="客户 CRM"
+          title={`登记收款 · ${paymentOrder.orderNo || "未编号"}`}
+          subtitle="调用原收款管理接口保存"
+          onClose={() => setPaymentOrder(null)}
+        >
+          <QuickCreatePaymentPanel
+            key={paymentOrder.id}
+            initialOrder={paymentOrder}
+            canConfirmArrived={canConfirmPayments}
+            onCancel={() => setPaymentOrder(null)}
+            onConflict={async () => {
+              setReloadToken((value) => value + 1);
+              setError("该订单或收款数据刚刚被更新，请核对后重新登记。");
+            }}
+            onSaved={(payment?: PaymentRow | null) => {
+              setPaymentOrder(null);
+              setNotice(payment?.id ? "收款已保存，客户经营记录已刷新。" : "收款已保存。");
+              setReloadToken((value) => value + 1);
+            }}
+          />
+        </SideDetailDrawer>
+      ) : null}
     </section>
   );
 }
 
-function BusinessOrderList({ orders, canReadOrders, onOpenOrders }: { orders: BusinessOrder[]; canReadOrders: boolean; onOpenOrders: (keyword: string) => void }) {
+function paymentOrderFromBusinessOrder(order: BusinessOrder, customer: CustomerInsight): PaymentOrderOption {
+  return {
+    id: order.id,
+    orderNo: order.orderNo,
+    blNo: order.blNo,
+    customerName: customer.name,
+    customerFullName: customer.legalName,
+    customerShortName: customer.name,
+    currency: order.currency,
+    finalReceivableAmount: order.finalReceivableAmount,
+    finalReceivableAmountCny: order.finalReceivableAmountCny,
+    outstandingCny: order.summary?.outstandingCny,
+    summary: {
+      receivableAmount: order.finalReceivableAmount,
+      receivableCny: order.finalReceivableAmountCny,
+      outstandingCny: order.summary?.outstandingCny,
+    },
+  };
+}
+
+function BusinessOrderList({ orders, canReadOrders, canRegisterPayments, onOpenOrders, onRegisterPayment }: {
+  orders: BusinessOrder[]; canReadOrders: boolean; canRegisterPayments: boolean;
+  onOpenOrders: (keyword: string) => void; onRegisterPayment: (order: BusinessOrder) => void;
+}) {
   if (!canReadOrders) return <div className={styles.crmEmpty}>当前账号没有应收订单查看权限。</div>;
   return <div className={styles.businessList}><h4>最近发货/应收订单</h4>{orders.length ? orders.map((order) => (
-    <button className={styles.businessRow} type="button" key={order.id} onClick={() => onOpenOrders(order.orderNo || "")}>
+    <div className={styles.businessRow} key={order.id}>
       <span><strong>{order.orderNo || "未编号"}</strong><small>提单 {order.blNo || "-"}</small></span>
       <span><strong>{formatCurrencyAmount(order.currency || "CNY", order.finalReceivableAmount)}</strong><small>未收 {formatCny(order.summary?.outstandingCny)}</small></span>
       <span><strong>{order.status || "-"}</strong><small>发货 {formatDate(order.actualShipmentDate)} · 到期 {formatDate(order.dueDate)}</small></span>
-    </button>
+      <span className={styles.businessRowActions}>
+        <button className={shell.secondaryButton} type="button" onClick={() => onOpenOrders(order.orderNo || "")}>查看订单</button>
+        {canRegisterPayments ? <button className={shell.primaryButtonCompact} type="button" onClick={() => onRegisterPayment(order)}>登记收款</button> : null}
+      </span>
+    </div>
   )) : <div className={styles.crmEmpty}>暂无该客户应收订单。</div>}</div>;
 }
 

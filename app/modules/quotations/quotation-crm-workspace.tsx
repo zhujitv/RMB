@@ -23,6 +23,8 @@ type QuotationCrmWorkspaceProps = {
   canReadCustomers: boolean;
   canReadOrders: boolean;
   canReadPayments: boolean;
+  canRegisterPayments: boolean;
+  canConfirmPayments: boolean;
   onToggleCreate: () => void;
   onOpenOrders: (keyword: string) => void;
   onOpenPayments: (keyword: string) => void;
@@ -76,6 +78,8 @@ export function QuotationCrmWorkspace({
   canReadCustomers,
   canReadOrders,
   canReadPayments,
+  canRegisterPayments,
+  canConfirmPayments,
   onToggleCreate,
   onOpenOrders,
   onOpenPayments,
@@ -109,6 +113,8 @@ export function QuotationCrmWorkspace({
         canWriteQuotations={canWriteQuotations}
         canReadOrders={canReadOrders}
         canReadPayments={canReadPayments}
+        canRegisterPayments={canRegisterPayments}
+        canConfirmPayments={canConfirmPayments}
         createOpen={createOpen}
         onBack={() => setSelectedCustomerKey("")}
         onToggleCreate={onToggleCreate}

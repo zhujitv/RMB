@@ -43,8 +43,9 @@ export function PaymentsModule({
     confirmConfirmation,
     updateConfirmationInput,
   } = useConfirmationDialog();
-  const canManagePayments = canWritePermission(currentUser, permissions, "payments", ["管理员", "财务"])
+  const canConfirmPayments = canWritePermission(currentUser, permissions, "payments", ["管理员", "财务"])
     && ["管理员", "财务"].includes(currentUser.role);
+  const canRegisterPayments = canConfirmPayments || currentUser.role === "业务员";
   useWorkspaceTabBusy(Boolean(deletingId || confirmingId));
   const workspaceTab = useWorkspaceTabContext();
   const workspaceBusyRef = useRef(Boolean(workspaceTab?.busy));
@@ -95,7 +96,7 @@ export function PaymentsModule({
           <h2>收款管理</h2>
         </div>
         <div className={styles.headerActions}>
-          {canManagePayments ? (
+          {canRegisterPayments ? (
             <button
               className={styles.primaryButtonCompact}
               type="button"
@@ -122,11 +123,11 @@ export function PaymentsModule({
         </div>
       </div>
 
-      {canManagePayments && (createOpen || editPayment) ? (
+      {canRegisterPayments && (createOpen || editPayment) ? (
         <QuickCreatePaymentPanel
           key={editPayment?.id ? `edit:${editPayment.id}` : "create"}
           initialPayment={editPayment}
-          canConfirmArrived={canManagePayments}
+          canConfirmArrived={canConfirmPayments}
           onCancel={() => {
             if (!confirmDiscardPaymentEdit()) return;
             setCreateOpen(false);
@@ -183,7 +184,7 @@ export function PaymentsModule({
       {detailPayment ? (
         <PaymentDetailDrawer
           payment={detailPayment}
-          canManage={canManagePayments}
+          canManage={canConfirmPayments}
           deleting={deletingId === detailPayment.id}
           confirming={confirmingId === detailPayment.id}
           busy={Boolean(workspaceTab?.busy)}

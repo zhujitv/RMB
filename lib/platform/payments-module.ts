@@ -9,6 +9,7 @@ import {
   assertInputSchema,
   assertJsonObject,
   assertWrite,
+  canWrite,
   codedError,
   dateFromInput,
   dateToInput,
@@ -108,8 +109,13 @@ async function assertFinalPaymentHasHistory(
   }
 }
 
+function assertCustomerPaymentWrite(actor: ActorLike) {
+  if (canWrite(actor, "payments") || actorRole(actor) === "业务员") return;
+  throw permissionError("没有权限执行该操作");
+}
+
 export async function savePayment(request: AuditRequestLike, actor: ActorLike, input: unknown, id: string | null = null) {
-  assertWrite(actor, "payments");
+  assertCustomerPaymentWrite(actor);
   const currentActorId = actorId(actor);
   const currentActor = { ...(actor || {}), id: currentActorId, role: actorRole(actor) };
   const jsonInput = assertJsonObject(input);

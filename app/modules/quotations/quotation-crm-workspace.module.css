@@ -129,14 +129,16 @@
 .businessList { display: grid; align-content: start; gap: 9px; min-width: 0; }
 .businessList h4 { margin: 0; color: #0f172a; font-size: 15px; }
 .businessRow {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, auto) minmax(160px, auto);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, auto) minmax(150px, auto) minmax(120px, auto);
   gap: 10px; align-items: center; width: 100%; border: 1px solid #e2e8f0; border-radius: 14px;
-  background: #fff; color: #0f172a; padding: 12px; text-align: left; font: inherit; cursor: pointer;
+  background: #fff; color: #0f172a; padding: 12px; text-align: left; font: inherit;
 }
 .businessRow:hover { border-color: #93c5fd; box-shadow: 0 10px 20px rgba(37,99,235,.1); }
 .businessRow strong, .businessRow small { display: block; overflow-wrap: anywhere; }
 .businessRow small { margin-top: 4px; color: #64748b; font-size: 12px; }
 .businessRow > span:nth-child(2), .businessRow > span:nth-child(3) { text-align: right; }
+.businessRowActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.businessRowActions button { white-space: nowrap; }
 
 .productLibrary, .productForm, .compactForm, .followUpForm, .followUpList, .productCardList { display: grid; gap: 12px; }
 .productToolbar {
@@ -230,5 +232,7 @@
   .businessActions { justify-content: stretch; }
   .businessActions button { width: 100%; }
   .businessRow > span:nth-child(2), .businessRow > span:nth-child(3) { text-align: left; }
+  .businessRowActions { justify-content: stretch; }
+  .businessRowActions button { width: 100%; }
   .recordHeader { align-items: flex-start; flex-direction: column; }
 }

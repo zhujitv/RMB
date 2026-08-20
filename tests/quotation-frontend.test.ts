@@ -398,6 +398,12 @@ test("quotation CRM customer detail reads existing shipment orders and receivabl
   assert.match(quotationCustomerBusinessSource, /\/api\/customer-business-records\?\$\{params\}/);
   assert.match(quotationCustomerBusinessSource, /打开应收订单/);
   assert.match(quotationCustomerBusinessSource, /打开收款管理/);
+  assert.match(quotationCustomerBusinessSource, /QuickCreatePaymentPanel/);
+  assert.match(quotationCustomerBusinessSource, /SideDetailDrawer/);
+  assert.match(quotationCustomerBusinessSource, /登记收款/);
+  assert.match(quotationCustomerBusinessSource, /initialOrder=\{paymentOrder\}/);
+  assert.match(quotationCustomerBusinessSource, /canConfirmArrived=\{canConfirmPayments\}/);
+  assert.match(quotationCustomerBusinessSource, /setReloadToken\(\(value\) => value \+ 1\)/);
   assert.match(customerBusinessRouteSource, /listCustomerBusinessRecords/);
   assert.match(customerCrmServiceSource, /export async function listCustomerBusinessRecords/);
   assert.match(customerCrmServiceSource, /const customerId = String\(query\.get\("customerId"\)/);
@@ -411,6 +417,9 @@ test("quotation CRM customer detail reads existing shipment orders and receivabl
   assert.match(customerCrmServiceSource, /serializePayment/);
   assert.match(quotesModuleSource, /canReadPermission\(currentUser, permissions, "orders"/);
   assert.match(quotesModuleSource, /canReadPermission\(currentUser, permissions, "payments"/);
+  assert.match(quotesModuleSource, /const canRegisterPayments = canConfirmPayments \|\| currentUser\.role === "业务员"/);
+  assert.match(quotationCrmSource, /canRegisterPayments=\{canRegisterPayments\}/);
+  assert.match(quotationCustomerDetailSource, /canRegisterPayments=\{canRegisterPayments\}/);
   assert.match(quotationsViewSource, /onOpenOrders=\{actions\.onOpenOrders\}/);
   assert.match(quotationsViewSource, /onOpenPayments=\{actions\.onOpenPayments\}/);
 });

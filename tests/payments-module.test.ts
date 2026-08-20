@@ -34,7 +34,14 @@ test("payments page keeps summary cards and avoids duplicate recent payment list
 
 test("payments write actions follow the effective permission snapshot", () => {
   assert.match(paymentsModuleController, /permissions\?: PermissionSnapshot/);
-  assert.match(paymentsModuleController, /canWritePermission\(currentUser, permissions, "payments", \["管理员", "财务"\]\)/);
+  assert.match(paymentsModuleController, /const canConfirmPayments = canWritePermission\(currentUser, permissions, "payments", \["管理员", "财务"\]\)/);
+  assert.match(paymentsModuleController, /const canRegisterPayments = canConfirmPayments \|\| currentUser\.role === "业务员"/);
+  assert.match(paymentsModuleController, /canConfirmArrived=\{canConfirmPayments\}/);
+  assert.match(paymentsModuleController, /canManage=\{canConfirmPayments\}/);
+  assert.match(paymentsService, /function assertCustomerPaymentWrite\(actor: ActorLike\)/);
+  assert.match(paymentsService, /canWrite\(actor, "payments"\) \|\| actorRole\(actor\) === "业务员"/);
+  assert.match(paymentsService, /export async function savePayment[\s\S]*assertCustomerPaymentWrite\(actor\)/);
+  assert.match(paymentsService, /export async function deletePayment[\s\S]*assertWrite\(actor, "payments"\)/);
 });
 
 test("payments API returns paginated summary metrics", () => {
@@ -167,6 +174,9 @@ test("payment edits reject a stale form version instead of overwriting a concurr
 test("payment editor keeps its form and version on one opening snapshot and recovers conflicts safely", () => {
   assert.match(quickPaymentPanel, /const \[editingSnapshot\] = useState<PaymentRow \| null>\(\(\) => initialPayment \? \{ \.\.\.initialPayment \} : null\)/);
   assert.match(quickPaymentPanel, /paymentFormFromRow\(editingSnapshot\)/);
+  assert.match(quickPaymentPanel, /initialOrder\?: PaymentOrderOption \| null/);
+  assert.match(quickPaymentPanel, /const initialCreateOrder = !editingSnapshot && initialOrder\?\.id/);
+  assert.match(quickPaymentPanel, /useState<PaymentOrderOption\[\]>\(\(\) => initialCreateOrder \? \[initialCreateOrder\] : \[\]\)/);
   assert.match(quickPaymentPanel, /quickPaymentPayload\(normalizedForm, editingSnapshot\)/);
   assert.match(quickPaymentPanel, /expectedUpdatedAt: editing\.updatedAt \|\| undefined/);
   assert.doesNotMatch(quickPaymentPanel, /expectedUpdatedAt: initialPayment\?\.updatedAt/);

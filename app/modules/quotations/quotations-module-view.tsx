@@ -32,6 +32,8 @@ type QuotationsModuleViewProps = {
   canReadCustomers: boolean;
   canReadOrders: boolean;
   canReadPayments: boolean;
+  canRegisterPayments: boolean;
+  canConfirmPayments: boolean;
   confirmation: ConfirmationDialogState | null;
   onSetKeyword: (value: string) => void;
   onSetStatus: (value: string) => void;
@@ -80,6 +82,8 @@ export function QuotationsModuleView({
   canReadCustomers,
   canReadOrders,
   canReadPayments,
+  canRegisterPayments,
+  canConfirmPayments,
   confirmation,
   ...actions
 }: QuotationsModuleViewProps) {
@@ -114,6 +118,8 @@ export function QuotationsModuleView({
         canReadCustomers={canReadCustomers}
         canReadOrders={canReadOrders}
         canReadPayments={canReadPayments}
+        canRegisterPayments={canRegisterPayments}
+        canConfirmPayments={canConfirmPayments}
         onToggleCreate={actions.onToggleCreate}
         onOpenOrders={actions.onOpenOrders}
         onOpenPayments={actions.onOpenPayments}
