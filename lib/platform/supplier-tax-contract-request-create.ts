@@ -27,10 +27,10 @@ export async function createSupplierTaxContractRequest(request: AuditRequestLike
   const order = factoryCost.order;
   const supplier = factoryCost.supplier;
   if (!order || !supplier) throw codedError("请选择有效的工厂结算成本。", 404, "SUPPLIER_TAX_CONTRACT_COST_NOT_FOUND");
-  if (!supplier.allowFactoryDocumentUpload) throw codedError("该供应商未开通资料回传权限。", 400, "SUPPLIER_DOCUMENT_UPLOAD_DISABLED");
   await assertSupplierDocumentRequestCostAvailable(factoryCost);
-  const recipients = supplierRecipientEmails(supplier);
-  if (!recipients.length) throw codedError("供应商没有可用邮箱，无法发送合同。", 400, "SUPPLIER_EMAIL_REQUIRED");
+  const supplierCanUpload = Boolean(supplier.allowFactoryDocumentUpload);
+  const recipients = supplierCanUpload ? supplierRecipientEmails(supplier) : [];
+  if (supplierCanUpload && !recipients.length) throw codedError("供应商没有可用邮箱，无法发送合同。", 400, "SUPPLIER_EMAIL_REQUIRED");
   const preparedTransition = factoryCost.sourceType !== "FACTORY_PURCHASE_SETTLEMENT"
     ? await prepareFactoryPurchaseTransitionSettlement(factoryCost.id, {
         items: input.transitionItems,

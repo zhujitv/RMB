@@ -12,6 +12,7 @@ import { refreshSupplierTaxContractBuyer } from "./supplier-tax-contract-buyer";
 import { normalizeSupplierTaxContractNumber } from "./supplier-tax-contract-number";
 import {
   actorId,
+  jsonStringArray,
   serializeSupplierDocumentRequest,
 } from "./supplier-document-request-serialization";
 import {
@@ -164,7 +165,23 @@ export async function reviewSupplierTaxContract(
     totalAmountWithTax: draft.totalAmountWithTax,
     itemCount: draft.items.length,
   });
-  return resendSupplierDocumentRequestNotice(request, actor, updated.id);
+  const recipientEmails = jsonStringArray(updated.recipientEmails);
+  if (updated.supplier?.allowFactoryDocumentUpload && recipientEmails.length) {
+    return resendSupplierDocumentRequestNotice(request, actor, updated.id);
+  }
+  const manualUploadMessage = updated.supplier?.allowFactoryDocumentUpload
+    ? "供应商没有可用收件人，请管理员在资料回传里代上传。"
+    : "供应商未开通资料回传权限，请管理员在资料回传里代上传。";
+  const manualUploadRow = await prisma.supplierDocumentRequest.update({
+    where: { id: updated.id },
+    data: { sendStatus: "manual_upload", sendError: manualUploadMessage },
+    include: supplierDocumentRequestInclude(),
+  });
+  await writeAudit(request, actor, "退税合同转为管理员代上传", "supplier_document_requests", row.id, updated, {
+    reason: manualUploadMessage,
+    supplierId: row.supplierId,
+  });
+  return serializeSupplierDocumentRequest(manualUploadRow, actor);
 }
 
 export async function saveSupplierTaxContractDraftEdits(

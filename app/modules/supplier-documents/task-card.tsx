@@ -137,7 +137,7 @@ export function SupplierDocumentTaskCard({
                   下载合同样本（{task.templateFileName || `${displayOrderNo || "合同样本"}.xlsx`}）
                 </a>
               ) : null}
-              {isAdmin && canWrite ? (
+              {isAdmin && canWrite && task.sendStatus !== "manual_upload" ? (
                 <div className={styles.supplierDocumentNoticeActions}>
                   <button className={styles.secondaryButton} type="button" onClick={() => onResendNotice(task)} disabled={resending}>
                     {resending ? "发送中..." : "重新发送邮件"}

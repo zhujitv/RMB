@@ -205,7 +205,6 @@ export function supplierDocumentRequestFactoryCostWhere({
     supplier: {
       is: {
         status: "启用",
-        allowFactoryDocumentUpload: true,
         supplierType: { in: TAX_REFUND_SUPPLIER_TYPES },
       },
     },
@@ -232,6 +231,7 @@ export function serializeSupplierDocumentCostCandidate(cost: FactorySupplierRetu
     supplierId: cost.supplierId || "",
     supplierName: cost.supplierNameSnapshot || cost.supplier?.supplierName || cost.vendorName || "",
     supplierType: cost.supplier?.supplierType || "",
+    supplierAllowsFactoryDocumentUpload: Boolean(cost.supplier?.allowFactoryDocumentUpload),
     costType: cost.costType,
     currency: cost.currency || "CNY",
     amount: Number(cost.amount || 0),

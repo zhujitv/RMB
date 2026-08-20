@@ -26,6 +26,7 @@ type FactoryCostCandidate = {
   createdAt?: string;
   sourceType?: string;
   requiresTransitionSettlement?: boolean;
+  supplierAllowsFactoryDocumentUpload?: boolean;
 };
 
 type CostCandidatesResponse = {
@@ -204,7 +205,7 @@ export function CreateSupplierDocumentRequestDialog({
             <textarea
               value={message}
               onChange={(event) => setMessage(event.target.value)}
-              placeholder="可选，供应商会在邮件中看到此备注"
+              placeholder="可选，有发送邮件时供应商会看到此备注"
               maxLength={1000}
               rows={4}
             />
@@ -242,6 +243,7 @@ function costCandidateDescription(cost: FactoryCostCandidate) {
     cost.billOfLadingNo ? `提单号 ${cost.billOfLadingNo}` : "",
     cost.supplierType || "",
     cost.requiresTransitionSettlement ? "需过渡结算" : "工厂最终结算",
+    cost.supplierAllowsFactoryDocumentUpload === false ? "供应商未开通回传，管理员代上传" : "可通知供应商回传",
     `折人民币 ${moneyLabel("CNY", cost.amountCny)}`,
   ].filter(Boolean);
   return parts.join(" / ");

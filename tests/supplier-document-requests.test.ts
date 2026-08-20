@@ -220,6 +220,8 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(taxModule, /onOpenSupplierDocuments/);
   assert.match(supplierModule, /重新发送邮件/);
   assert.match(supplierModule, /发送状态/);
+  assert.match(supplierModule, /管理员代上传/);
+  assert.match(supplierModule, /task\.sendStatus !== "manual_upload"/);
   assert.match(supplierModule, /发起资料回传通知/);
   assert.match(supplierModule, /CreateSupplierDocumentRequestDialog/);
   assert.match(supplierCreateDialog, /\/api\/supplier-document-requests/);
@@ -237,6 +239,7 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(supplierCreateDialog, /SUPPLIER_INVOICE/);
   assert.match(supplierCreateDialog, /上传供应商签章采购合同 PDF/);
   assert.match(supplierCreateDialog, /上传供应商开具的增值税专用发票 PDF/);
+  assert.match(supplierCreateDialog, /供应商未开通回传，管理员代上传/);
   assert.match(supplierCreateDialog, /role="checkbox"/);
   assert.match(supplierCreateDialog, /aria-checked=\{requiredTypes\.includes\(item\.value\)\}/);
   assert.match(supplierCreateDialog, /supplierDocumentRequestTypeCardSelected/);
@@ -262,6 +265,12 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.match(service, /costType: \{ in: FACTORY_SUPPLIER_COST_TYPES \}/);
   assert.match(service, /sourceType: \{ notIn: LOGISTICS_GENERATED_COST_SOURCE_TYPES \}/);
   assert.match(service, /allowFactoryDocumentUpload: true/);
+  assert.match(service, /supplierAllowsFactoryDocumentUpload/);
+  assert.match(supplierTaxContractWorkflow, /const supplierCanUpload = Boolean\(supplier\.allowFactoryDocumentUpload\)/);
+  assert.match(supplierTaxContractWorkflow, /supplierCanUpload \? supplierRecipientEmails\(supplier\) : \[\]/);
+  assert.doesNotMatch(supplierTaxContractWorkflow, /if \(!supplier\.allowFactoryDocumentUpload\) throw codedError\("该供应商未开通资料回传权限/);
+  assert.match(supplierTaxContractWorkflow, /sendStatus: "manual_upload"/);
+  assert.match(supplierTaxContractWorkflow, /退税合同转为管理员代上传/);
   assert.match(service, /loadFactorySupplierReturnCostForRequest\(input\)/);
   assert.match(service, /TEMPLATE_FILE_REQUIRED/);
   assert.match(service, /请上传回传表格 Excel。/);
