@@ -15,6 +15,14 @@ on:
         options:
           - "true"
           - "false"
+      apply_customer_product_material_code_migration:
+        description: "Backup DB and apply only 20260820233000_customer_product_material_code before deploy"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
   workflow_run:
     workflows:
       - CI
@@ -113,6 +121,111 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/rmb-cvm-deploy"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/rmb-cvm-deploy" "$HOME/.ssh/known_hosts"
+
+      - name: Apply customer product material code migration
+        if: github.event_name == 'workflow_dispatch' && inputs.apply_customer_product_material_code_migration == 'true'
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          app_dir="${APP_DIR:-/srv/rmb/app}"
+          env_file="${ENV_FILE:-/srv/rmb/shared/app.env}"
+          ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          scp_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          migration_name="20260820233000_customer_product_material_code"
+          local_script="$RUNNER_TEMP/rmb-cvm-db-migration.sh"
+          remote_script="/tmp/rmb-cvm-db-migration-$migration_name.sh"
+          remote_sql="/tmp/rmb-cvm-db-migration-$migration_name.sql"
+          cat > "$local_script" <<'REMOTE_SCRIPT'
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+
+          fail() {
+            printf '[rmb-cvm-db-migration] ERROR: %s\n' "$*" >&2
+            exit 1
+          }
+
+          log() {
+            printf '[rmb-cvm-db-migration] %s\n' "$*"
+          }
+
+          APP_DIR="${RMB_APP_DIR:-/srv/rmb/app}"
+          ENV_FILE="${RMB_ENV_FILE:-/srv/rmb/shared/app.env}"
+          MIGRATION_NAME="${RMB_MIGRATION_NAME:?RMB_MIGRATION_NAME is required}"
+          MIGRATION_SQL="${RMB_MIGRATION_SQL:?RMB_MIGRATION_SQL is required}"
+          BACKUP_DIR="${RMB_DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
+
+          [[ -d "$APP_DIR" ]] || fail "app directory not found: $APP_DIR"
+          [[ -f "$MIGRATION_SQL" ]] || fail "migration SQL file not found: $MIGRATION_SQL"
+          [[ -f "$ENV_FILE" ]] || fail "environment file not found: $ENV_FILE"
+          command -v pg_dump >/dev/null 2>&1 || fail "pg_dump is required for the pre-migration backup"
+          command -v psql >/dev/null 2>&1 || fail "psql is required to apply this migration"
+          command -v node >/dev/null 2>&1 || fail "node is required to mark Prisma migration metadata"
+
+          cd "$APP_DIR"
+          set -a
+          # shellcheck disable=SC1090
+          source "$ENV_FILE"
+          set +a
+          [[ -n "${DATABASE_URL:-}" ]] || fail "DATABASE_URL is missing from $ENV_FILE"
+
+          umask 077
+          mkdir -p "$BACKUP_DIR"
+          backup_path="$BACKUP_DIR/$MIGRATION_NAME-$(date -u +%Y%m%dT%H%M%SZ).dump"
+          log "creating database backup at $backup_path"
+          pg_dump --format=custom --no-owner --no-privileges --file "$backup_path" "$DATABASE_URL"
+
+          checksum="$(sha256sum "$MIGRATION_SQL" | awk '{print $1}')"
+          migration_id="$(node -e "console.log(require('crypto').randomUUID())")"
+
+          log "applying additive customer_products.material_code migration"
+          psql "$DATABASE_URL" \
+            --set=ON_ERROR_STOP=1 \
+            --set=migration_id="$migration_id" \
+            --set=migration_name="$MIGRATION_NAME" \
+            --set=checksum="$checksum" <<'SQL'
+          BEGIN;
+
+          ALTER TABLE "customer_products"
+            ADD COLUMN IF NOT EXISTS "material_code" TEXT;
+
+          CREATE INDEX IF NOT EXISTS "customer_products_customer_id_material_code_idx"
+            ON "customer_products"("customer_id", "material_code");
+
+          INSERT INTO "_prisma_migrations" (
+            "id",
+            "checksum",
+            "finished_at",
+            "migration_name",
+            "logs",
+            "rolled_back_at",
+            "started_at",
+            "applied_steps_count"
+          )
+          SELECT
+            :'migration_id',
+            :'checksum',
+            now(),
+            :'migration_name',
+            NULL,
+            NULL,
+            now(),
+            1
+          WHERE NOT EXISTS (
+            SELECT 1 FROM "_prisma_migrations" WHERE "migration_name" = :'migration_name'
+          );
+
+          COMMIT;
+          SQL
+
+          log "migration complete; backup kept at $backup_path"
+          rm -f "$MIGRATION_SQL"
+          REMOTE_SCRIPT
+          chmod 700 "$local_script"
+          scp "${scp_opts[@]}" "$local_script" "$ssh_target:$remote_script"
+          scp "${scp_opts[@]}" "prisma/migrations/$migration_name/migration.sql" "$ssh_target:$remote_sql"
+          ssh "${ssh_opts[@]}" "$ssh_target" \
+            "chmod 700 '$remote_script' && RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
 
       - name: Build incremental git bundle
         id: bundle
