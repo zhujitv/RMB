@@ -149,6 +149,18 @@ jobs:
             printf '[rmb-cvm-db-migration] %s\n' "$*"
           }
 
+          resolve_pg_tool() {
+            local tool="$1"
+            local candidate
+            for candidate in "/usr/pgsql-18/bin/$tool" "/usr/lib/postgresql/18/bin/$tool"; do
+              if [[ -x "$candidate" ]]; then
+                printf '%s\n' "$candidate"
+                return 0
+              fi
+            done
+            command -v "$tool" 2>/dev/null || return 1
+          }
+
           APP_DIR="${RMB_APP_DIR:-/srv/rmb/app}"
           ENV_FILE="${RMB_ENV_FILE:-/srv/rmb/shared/app.env}"
           MIGRATION_NAME="${RMB_MIGRATION_NAME:?RMB_MIGRATION_NAME is required}"
@@ -158,8 +170,8 @@ jobs:
           [[ -d "$APP_DIR" ]] || fail "app directory not found: $APP_DIR"
           [[ -f "$MIGRATION_SQL" ]] || fail "migration SQL file not found: $MIGRATION_SQL"
           [[ -f "$ENV_FILE" ]] || fail "environment file not found: $ENV_FILE"
-          command -v pg_dump >/dev/null 2>&1 || fail "pg_dump is required for the pre-migration backup"
-          command -v psql >/dev/null 2>&1 || fail "psql is required to apply this migration"
+          PG_DUMP_BIN="$(resolve_pg_tool pg_dump)" || fail "pg_dump is required for the pre-migration backup"
+          PSQL_BIN="$(resolve_pg_tool psql)" || fail "psql is required to apply this migration"
           command -v node >/dev/null 2>&1 || fail "node is required to mark Prisma migration metadata"
 
           cd "$APP_DIR"
@@ -186,13 +198,13 @@ jobs:
           chmod 700 "$BACKUP_DIR" 2>/dev/null || true
           backup_path="$BACKUP_DIR/$MIGRATION_NAME-$(date -u +%Y%m%dT%H%M%SZ).dump"
           log "creating database backup at $backup_path"
-          pg_dump --format=custom --no-owner --no-privileges --file "$backup_path" "$POSTGRES_URL"
+          "$PG_DUMP_BIN" --format=custom --no-owner --no-privileges --file "$backup_path" "$POSTGRES_URL"
 
           checksum="$(sha256sum "$MIGRATION_SQL" | awk '{print $1}')"
           migration_id="$(node -e "console.log(require('crypto').randomUUID())")"
 
           log "applying additive customer_products.material_code migration"
-          psql "$POSTGRES_URL" \
+          "$PSQL_BIN" "$POSTGRES_URL" \
             --set=ON_ERROR_STOP=1 \
             --set=migration_id="$migration_id" \
             --set=migration_name="$MIGRATION_NAME" \
