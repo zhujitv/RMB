@@ -123,6 +123,13 @@ export function SupplierDocumentsModule({
     void loadStats(submittedKeyword);
   });
 
+  async function refreshTaskAfterReview(taskId: string) {
+    await loadTaskDetail(taskId, { force: true, silent: true });
+    void loadRows(page, pageSize, submittedKeyword, { silent: true });
+    void loadStats(submittedKeyword, { silent: true });
+    void onRefreshTodos?.();
+  }
+
   return (
     <SupplierDocumentsModuleView
       currentUser={currentUser}
@@ -171,6 +178,7 @@ export function SupplierDocumentsModule({
       }}
       onToggleTask={toggleTask}
       onOpenTask={openTask}
+      onRefreshTask={(taskId) => void refreshTaskAfterReview(taskId)}
       onUpload={uploadDocument}
       onDeleteTask={(task) => void deleteTask(task)}
       onResendNotice={(task) => void resendNotice(task)}

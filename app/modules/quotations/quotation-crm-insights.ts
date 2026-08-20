@@ -41,6 +41,18 @@ export type CustomerMasterSeed = {
   createdAt?: string | null;
 };
 
+export type CustomerFilterKey = "all" | "followUp" | "quoted" | "accepted" | "needsRequote" | "missingContact" | "noQuote";
+
+export const CUSTOMER_FILTER_OPTIONS: Array<{ value: CustomerFilterKey; label: string }> = [
+  { value: "all", label: "全部客户" },
+  { value: "followUp", label: "有待跟进" },
+  { value: "quoted", label: "有历史报价" },
+  { value: "accepted", label: "已成交" },
+  { value: "needsRequote", label: "需重报" },
+  { value: "missingContact", label: "未维护联系人" },
+  { value: "noQuote", label: "暂无报价" },
+];
+
 export function timestamp(value?: string | null) {
   if (!value) return 0;
   const date = new Date(value);
@@ -149,6 +161,63 @@ export function buildCustomerInsights(quotations: QuotationRow[], customerMaster
     const quoteDiff = Number(Boolean(right.latestQuotation)) - Number(Boolean(left.latestQuotation));
     return quoteDiff || right.latestUpdatedAt - left.latestUpdatedAt || left.name.localeCompare(right.name, "zh-CN");
   });
+}
+
+function normalizeSearchText(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+export function customerInsightSearchText(customer: CustomerInsight) {
+  const quotationText = customer.quotations.flatMap((quotation) => {
+    const version = currentQuotationVersion(quotation);
+    return [
+      quotation.quoteNo,
+      quotation.quotationNo,
+      quotation.invoiceNo,
+      quotation.customerName,
+      quotation.customerFullName,
+      quotation.customerShortName,
+      version?.customerNameSnapshot,
+      version?.customerShortNameSnapshot,
+      ...(version?.items || []).flatMap((item) => [
+        item.productNameSnapshot,
+        item.name,
+        item.productName,
+        item.description,
+        item.specificationSnapshot,
+        item.specification,
+        item.unit,
+        item.customerProductId,
+      ]),
+    ];
+  });
+  return [
+    customer.name,
+    customer.legalName,
+    customer.contactPerson,
+    customer.contactEmail,
+    customer.contactPhone,
+    ...Array.from(customer.productNames),
+    ...quotationText,
+  ].filter(Boolean).join(" ").toLocaleLowerCase();
+}
+
+export function matchesCustomerFilter(customer: CustomerInsight, filter: CustomerFilterKey) {
+  if (filter === "followUp") return customer.pendingCount > 0 || customer.expiredCount > 0;
+  if (filter === "quoted") return customer.quoteCount > 0;
+  if (filter === "accepted") return customer.acceptedCount > 0;
+  if (filter === "needsRequote") return customer.expiredCount > 0;
+  if (filter === "missingContact") return [customer.contactPerson, customer.contactPhone, customer.contactEmail].some((value) => !value || value === "-");
+  if (filter === "noQuote") return customer.quoteCount === 0;
+  return true;
+}
+
+export function filterCustomerInsights(customers: CustomerInsight[], keyword: string, filter: CustomerFilterKey) {
+  const normalizedKeyword = normalizeSearchText(keyword);
+  return customers.filter((customer) => (
+    matchesCustomerFilter(customer, filter)
+    && (!normalizedKeyword || customerInsightSearchText(customer).includes(normalizedKeyword))
+  ));
 }
 
 export function buildCrmSummary(quotations: QuotationRow[], customers: CustomerInsight[]) {

@@ -42,6 +42,7 @@ type SupplierDocumentsModuleViewProps = {
   onSetPageSize: (pageSize: number) => void;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
+  onRefreshTask: (taskId: string) => void | Promise<void>;
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null, costId?: string) => void;
   onDeleteTask: (task: SupplierDocumentTask) => void;
   onResendNotice: (task: SupplierDocumentTask) => void;
@@ -159,6 +160,7 @@ export function SupplierDocumentsModuleView({
                 resending={resendingTaskId === task.id}
                 onToggle={() => actions.onToggleTask(task.id)}
                 onOpen={() => actions.onOpenTask(task.id)}
+                onRefreshTask={() => actions.onRefreshTask(task.id)}
                 onUpload={actions.onUpload}
                 onDelete={actions.onDeleteTask}
                 onResendNotice={actions.onResendNotice}

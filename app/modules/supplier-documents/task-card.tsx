@@ -30,6 +30,7 @@ export function SupplierDocumentTaskCard({
   resending,
   onToggle,
   onOpen,
+  onRefreshTask,
   onUpload,
   onDelete,
   onResendNotice,
@@ -44,6 +45,7 @@ export function SupplierDocumentTaskCard({
   resending: boolean;
   onToggle: () => void;
   onOpen: () => void;
+  onRefreshTask: () => void | Promise<void>;
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null, costId?: string) => void;
   onDelete: (task: SupplierDocumentTask) => void;
   onResendNotice: (task: SupplierDocumentTask) => void;
@@ -105,7 +107,7 @@ export function SupplierDocumentTaskCard({
             </div>
           ) : (
             <>
-              <TaxContractReviewPanel task={task} isAdmin={isAdmin} canWrite={canWrite} onRefresh={onOpen} />
+              <TaxContractReviewPanel task={task} isAdmin={isAdmin} canWrite={canWrite} onRefresh={onRefreshTask} />
               <div className={styles.supplierDocumentTaskMeta}>
                 <span>
                   <small>通知时间</small>

@@ -3,7 +3,16 @@ import { apiJson } from "../../api";
 import { formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import { QuotationCustomerDetail } from "./quotation-customer-detail";
-import { buildCrmSummary, buildCustomerInsights, latestQuotationTime, type CustomerInsight, type CustomerMasterSeed } from "./quotation-crm-insights";
+import {
+  CUSTOMER_FILTER_OPTIONS,
+  buildCrmSummary,
+  buildCustomerInsights,
+  filterCustomerInsights,
+  latestQuotationTime,
+  type CustomerFilterKey,
+  type CustomerInsight,
+  type CustomerMasterSeed,
+} from "./quotation-crm-insights";
 import { quotationValidityState } from "./quotation-expiry";
 import styles from "./quotation-crm-workspace.module.css";
 import {
@@ -92,6 +101,8 @@ export function QuotationCrmWorkspace({
   const [customersError, setCustomersError] = useState("");
   const [customerReloadToken, setCustomerReloadToken] = useState(0);
   const [customerPage, setCustomerPage] = useState(1);
+  const [customerKeyword, setCustomerKeyword] = useState("");
+  const [customerFilter, setCustomerFilter] = useState<CustomerFilterKey>("all");
   useEffect(() => {
     if (!canReadCustomers) return;
     let cancelled = false;
@@ -103,12 +114,16 @@ export function QuotationCrmWorkspace({
     return () => { cancelled = true; };
   }, [canReadCustomers, customerReloadToken]);
   const customerInsights = buildCustomerInsights(quotations, customerMasters);
+  const filteredCustomers = filterCustomerInsights(customerInsights, customerKeyword, customerFilter);
   const selectedCustomer = customerInsights.find((customer) => customer.key === selectedCustomerKey);
   const crmSummary = buildCrmSummary(quotations, customerInsights);
   const recentQuotations = [...quotations].sort((left, right) => latestQuotationTime(right) - latestQuotationTime(left)).slice(0, 4);
-  const customerTotalPages = Math.max(1, Math.ceil(customerInsights.length / CUSTOMER_PAGE_SIZE));
+  const customerTotalPages = Math.max(1, Math.ceil(filteredCustomers.length / CUSTOMER_PAGE_SIZE));
   const safeCustomerPage = Math.min(customerPage, customerTotalPages);
-  const visibleCustomers = customerInsights.slice((safeCustomerPage - 1) * CUSTOMER_PAGE_SIZE, safeCustomerPage * CUSTOMER_PAGE_SIZE);
+  const visibleCustomers = filteredCustomers.slice((safeCustomerPage - 1) * CUSTOMER_PAGE_SIZE, safeCustomerPage * CUSTOMER_PAGE_SIZE);
+  useEffect(() => {
+    setCustomerPage(1);
+  }, [customerKeyword, customerFilter]);
   useEffect(() => {
     if (customerPage > customerTotalPages) setCustomerPage(customerTotalPages);
   }, [customerPage, customerTotalPages]);
@@ -151,16 +166,26 @@ export function QuotationCrmWorkspace({
 
       <div className={styles.crmGrid}>
         <section className={styles.crmPanel}>
-          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户档案</span><h3>业务员客户</h3></div><small>自动带出权限范围内客户 · 共 {customerInsights.length} 位</small></div>
+          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户档案</span><h3>业务员客户</h3></div><small>自动带出权限范围内客户 · 共 {customerInsights.length} 位 · 当前筛选 {filteredCustomers.length} 位</small></div>
+          <div className={styles.customerFilters}>
+            <input
+              value={customerKeyword}
+              placeholder="搜索客户 / 联系人 / 电话 / 邮箱 / 报价号 / 产品"
+              onChange={(event) => setCustomerKeyword(event.target.value)}
+            />
+            <select value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value as CustomerFilterKey)}>
+              {CUSTOMER_FILTER_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+            </select>
+          </div>
           {customersError ? <div className={styles.crmEmpty}>客户档案读取失败：{customersError}。当前仅显示报价中出现过的客户。</div> : null}
           <div className={styles.customerCards}>
             {visibleCustomers.length
               ? visibleCustomers.map((customer) => <CustomerCard customer={customer} key={customer.key} onOpenCustomer={(nextCustomer) => setSelectedCustomerKey(nextCustomer.key)} />)
-              : <div className={styles.crmEmpty}>当前权限范围内还没有客户档案或报价记录。</div>}
+              : <div className={styles.crmEmpty}>{customerKeyword || customerFilter !== "all" ? "当前搜索或筛选条件下没有客户。" : "当前权限范围内还没有客户档案或报价记录。"}</div>}
           </div>
-          {customerInsights.length > CUSTOMER_PAGE_SIZE ? (
+          {filteredCustomers.length > CUSTOMER_PAGE_SIZE ? (
             <div className={shell.paginationBar}>
-              <span>共 {customerInsights.length} 位客户，当前第 {safeCustomerPage} / {customerTotalPages} 页</span>
+              <span>共 {filteredCustomers.length} 位客户，当前第 {safeCustomerPage} / {customerTotalPages} 页</span>
               <div>
                 <button className={shell.secondaryButton} type="button" disabled={safeCustomerPage <= 1} onClick={() => setCustomerPage((value) => Math.max(1, value - 1))}>上一页</button>
                 <button className={shell.secondaryButton} type="button" disabled={safeCustomerPage >= customerTotalPages} onClick={() => setCustomerPage((value) => Math.min(customerTotalPages, value + 1))}>下一页</button>

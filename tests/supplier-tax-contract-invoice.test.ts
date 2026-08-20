@@ -308,12 +308,23 @@ test("approved contracts can rerun Tencent invoice OCR for an already uploaded P
 
 test("contract review UI requires saving manual OCR corrections before approval", () => {
   const panel = readFileSync("app/modules/supplier-documents/tax-contract-review-panel.tsx", "utf8");
+  const taskCard = readFileSync("app/modules/supplier-documents/task-card.tsx", "utf8");
+  const moduleView = readFileSync("app/modules/supplier-documents/module-view.tsx", "utf8");
+  const module = readFileSync("app/modules/SupplierDocumentsModule.tsx", "utf8");
   const route = readFileSync("app/api/supplier-document-requests/[id]/contract-review/route.ts", "utf8");
   assert.match(panel, /保存人工修正/);
   assert.match(panel, /productName/);
   assert.match(panel, /quantity/);
   assert.match(panel, /unit/);
   assert.match(panel, /draftDirty/);
+  assert.match(taskCard, /onRefreshTask: \(\) => void \| Promise<void>/);
+  assert.match(taskCard, /<TaxContractReviewPanel task=\{task\} isAdmin=\{isAdmin\} canWrite=\{canWrite\} onRefresh=\{onRefreshTask\}/);
+  assert.doesNotMatch(taskCard, /<TaxContractReviewPanel task=\{task\} isAdmin=\{isAdmin\} canWrite=\{canWrite\} onRefresh=\{onOpen\}/);
+  assert.match(moduleView, /onRefreshTask: \(taskId: string\) => void \| Promise<void>/);
+  assert.match(module, /async function refreshTaskAfterReview\(taskId: string\)/);
+  assert.match(module, /await loadTaskDetail\(taskId, \{ force: true, silent: true \}\)/);
+  assert.match(module, /void loadRows\(page, pageSize, submittedKeyword, \{ silent: true \}\)/);
+  assert.match(module, /void loadStats\(submittedKeyword, \{ silent: true \}\)/);
   assert.match(route, /decision === "SAVE_DRAFT"/);
   assert.match(route, /saveSupplierTaxContractDraftEdits/);
 });

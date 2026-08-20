@@ -16,7 +16,7 @@ const jiti = createJiti(import.meta.url);
 const { quotationValidityState } = await jiti.import<typeof import("../app/modules/quotations/quotation-expiry.ts")>(
   "../app/modules/quotations/quotation-expiry.ts",
 );
-const { buildCustomerInsights } = await jiti.import<typeof import("../app/modules/quotations/quotation-crm-insights.ts")>(
+const { buildCustomerInsights, filterCustomerInsights } = await jiti.import<typeof import("../app/modules/quotations/quotation-crm-insights.ts")>(
   "../app/modules/quotations/quotation-crm-insights.ts",
 );
 
@@ -318,15 +318,51 @@ test("quotation CRM automatically includes salesperson-owned customer masters", 
   assert.match(quotationCrmSource, /buildCustomerInsights\(quotations, customerMasters\)/);
   assert.match(quotationCrmSource, /自动带出权限范围内客户/);
   assert.match(quotationCrmSource, /共 \{customerInsights\.length\} 位/);
+  assert.match(quotationCrmSource, /当前筛选 \{filteredCustomers\.length\} 位/);
   assert.doesNotMatch(quotationCrmSource, /slice\(0,\s*MAX_VISIBLE_CUSTOMERS\)/);
   assert.doesNotMatch(quotationCrmSource, /MAX_VISIBLE_CUSTOMERS\s*=\s*4/);
   assert.match(quotationCrmSource, /CUSTOMER_PAGE_SIZE\s*=\s*5/);
-  assert.match(quotationCrmSource, /visibleCustomers = customerInsights\.slice/);
-  assert.match(quotationCrmSource, /共 \{customerInsights\.length\} 位客户，当前第 \{safeCustomerPage\} \/ \{customerTotalPages\} 页/);
+  assert.match(quotationCrmSource, /filteredCustomers = filterCustomerInsights/);
+  assert.match(quotationCrmSource, /visibleCustomers = filteredCustomers\.slice/);
+  assert.match(quotationCrmSource, /共 \{filteredCustomers\.length\} 位客户，当前第 \{safeCustomerPage\} \/ \{customerTotalPages\} 页/);
   assert.match(quotationCrmSource, /上一页/);
   assert.match(quotationCrmSource, /下一页/);
   assert.match(quotesModuleSource, /canReadPermission\(currentUser, permissions, "customers"/);
   assert.match(quotationsViewSource, /canReadCustomers=\{canReadCustomers\}/);
+});
+
+test("quotation CRM can search and segment customers before pagination", () => {
+  const insights = buildCustomerInsights([{
+    id: "quote-1",
+    quoteNo: "Q-ALPHA",
+    status: "SENT",
+    customerId: "customer-1",
+    customer: { id: "customer-1", shortName: "阿尔法", fullName: "Alpha Trading", contactPerson: "Alice", contactEmail: "alice@example.com", contactPhone: "13800000000" },
+    currentVersion: { validUntil: "2026-08-01", items: [{ description: "Decking board", specification: "140x25", unit: "PCS", customerProductId: "MAT-001" }] },
+    updatedAt: "2026-08-10T00:00:00.000Z",
+  }, {
+    id: "quote-2",
+    quoteNo: "Q-BETA",
+    status: "ACCEPTED",
+    customerId: "customer-2",
+    customer: { id: "customer-2", shortName: "贝塔", fullName: "Beta Build", contactPerson: "Bob", contactEmail: "bob@example.com", contactPhone: "13900000000" },
+    currentVersion: { items: [{ description: "Wall panel", unit: "PCS" }] },
+    updatedAt: "2026-08-09T00:00:00.000Z",
+  }], [{
+    id: "customer-3",
+    name: "Gamma Empty",
+    shortName: "伽马",
+    updatedAt: "2026-08-08T00:00:00.000Z",
+  }]);
+  assert.equal(filterCustomerInsights(insights, "Alice", "all").map((customer) => customer.customerId).join(","), "customer-1");
+  assert.equal(filterCustomerInsights(insights, "MAT-001", "all").map((customer) => customer.customerId).join(","), "customer-1");
+  assert.equal(filterCustomerInsights(insights, "Q-BETA", "accepted").map((customer) => customer.customerId).join(","), "customer-2");
+  assert.equal(filterCustomerInsights(insights, "", "followUp").map((customer) => customer.customerId).join(","), "customer-1");
+  assert.equal(filterCustomerInsights(insights, "", "missingContact").map((customer) => customer.customerId).join(","), "customer-3");
+  assert.equal(filterCustomerInsights(insights, "", "noQuote").map((customer) => customer.customerId).join(","), "customer-3");
+  assert.match(quotationCrmSource, /搜索客户 \/ 联系人 \/ 电话 \/ 邮箱 \/ 报价号 \/ 产品/);
+  assert.match(quotationCrmSource, /CUSTOMER_FILTER_OPTIONS\.map/);
+  assert.match(quotationCrmSource, /\[customerKeyword, customerFilter\]/);
 });
 
 test("quotation CRM customer cards open a customer detail and product library page", () => {
