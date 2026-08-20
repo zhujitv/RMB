@@ -107,6 +107,16 @@ function paymentStatusAmount(rows: CustomerPaymentRecord[], status: string) {
   return sumNumbers(rows.filter((row) => row.status === status), (row) => row.amountCny);
 }
 
+function shippedOrderWhere(): Prisma.ReceivableOrderWhereInput {
+  return {
+    OR: [
+      { actualShipmentDate: { not: null } },
+      { actualShipmentAmount: { not: null } },
+      { status: { contains: "发货" } },
+    ],
+  };
+}
+
 export async function listCustomerBusinessRecords(query: QueryLike, actor: CustomerCrmActor) {
   assertCustomerCrmRead(actor);
   const customerId = String(query.get("customerId") || "").trim();
@@ -117,7 +127,7 @@ export async function listCustomerBusinessRecords(query: QueryLike, actor: Custo
     throw codedError("没有权限查看客户发货订单和应收款", 403, "PERMISSION_DENIED");
   }
   const orderWhere: Prisma.ReceivableOrderWhereInput = {
-    AND: [{ customerId, deletedAt: null }, orderAccessWhere(actor)],
+    AND: [{ customerId, deletedAt: null }, shippedOrderWhere(), orderAccessWhere(actor)],
   };
   const [orderRecords, paymentRecords] = await Promise.all([
     canReadOrders ? prisma.receivableOrder.findMany({

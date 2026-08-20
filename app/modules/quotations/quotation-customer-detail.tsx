@@ -60,11 +60,11 @@ export function QuotationCustomerDetail({
       <div className={styles.detailGrid}>
         <QuotationCustomerContacts customer={customer} canWriteQuotations={canWriteQuotations} />
         <section className={styles.crmPanel}>
-          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>最近报价</span><h3>最新一次报价动态</h3></div><small>{quotationNumber(latest) || "未编号"}</small></div>
+          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>最近报价</span><h3>最新一次报价动态</h3></div><small>{latest ? quotationNumber(latest) || "未编号" : "暂无报价"}</small></div>
           <div className={styles.profileGrid}>
-            <span>最近报价<strong>{quotationNumber(latest) || "未编号"}</strong></span>
-            <span>最近金额<strong>{formatCurrencyAmount(latestVersion?.currency || "CNY", quotationTotal(latest))}</strong></span>
-            <span>最近更新<strong>{formatDate(latest.updatedAt || latest.createdAt || latestVersion?.createdAt)}</strong></span>
+            <span>最近报价<strong>{latest ? quotationNumber(latest) || "未编号" : "暂无报价"}</strong></span>
+            <span>最近金额<strong>{latest ? formatCurrencyAmount(latestVersion?.currency || "CNY", quotationTotal(latest)) : "-"}</strong></span>
+            <span>最近更新<strong>{latest ? formatDate(latest.updatedAt || latest.createdAt || latestVersion?.createdAt) : "-"}</strong></span>
           </div>
         </section>
         <QuotationCustomerBusinessRecords
@@ -85,7 +85,7 @@ export function QuotationCustomerDetail({
       <section className={styles.crmPanel}>
         <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>历史报价</span><h3>该客户报价记录</h3></div><small>点击查看报价详情</small></div>
         <div className={styles.quoteCards}>
-          {customer.quotations.map((quotation) => {
+          {customer.quotations.length ? customer.quotations.map((quotation) => {
             const version = currentQuotationVersion(quotation);
             return (
               <button className={styles.quoteCard} type="button" key={quotation.id} onClick={() => onViewQuotation(quotation)}>
@@ -94,7 +94,7 @@ export function QuotationCustomerDetail({
                 <span><strong>V{quotation.currentVersionNumber || version?.versionNumber || 1}</strong><small>预计交期 {version?.leadTimeDays == null || version.leadTimeDays === "" ? "-" : `${version.leadTimeDays} 天`}</small></span>
               </button>
             );
-          })}
+          }) : <div className={styles.crmEmpty}>该客户暂无历史报价，可以先维护联系人、客户产品库，再新建报价。</div>}
         </div>
       </section>
     </section>

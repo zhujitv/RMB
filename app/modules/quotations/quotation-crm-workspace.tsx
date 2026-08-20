@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { apiJson } from "../../api";
 import { formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import { QuotationCustomerDetail } from "./quotation-customer-detail";
-import { buildCrmSummary, buildCustomerInsights, latestQuotationTime, type CustomerInsight } from "./quotation-crm-insights";
+import { buildCrmSummary, buildCustomerInsights, latestQuotationTime, type CustomerInsight, type CustomerMasterSeed } from "./quotation-crm-insights";
 import { quotationValidityState } from "./quotation-expiry";
 import styles from "./quotation-crm-workspace.module.css";
 import {
@@ -19,6 +20,7 @@ type QuotationCrmWorkspaceProps = {
   loading: boolean;
   createOpen: boolean;
   canWriteQuotations: boolean;
+  canReadCustomers: boolean;
   canReadOrders: boolean;
   canReadPayments: boolean;
   onToggleCreate: () => void;
@@ -29,11 +31,12 @@ type QuotationCrmWorkspaceProps = {
 };
 
 const MAX_VISIBLE_CUSTOMERS = 4;
+type CustomersResponse = { customers?: CustomerMasterSeed[] };
 
 function CustomerCard({ customer, onOpenCustomer }: { customer: CustomerInsight; onOpenCustomer: (customer: CustomerInsight) => void }) {
   const latest = customer.latestQuotation;
   const latestVersion = currentQuotationVersion(latest);
-  const latestExpired = quotationValidityState(latest).expired;
+  const latestExpired = latest ? quotationValidityState(latest).expired : false;
   return (
     <button className={styles.customerCard} type="button" onClick={() => onOpenCustomer(customer)}>
       <span className={styles.customerCardTop}>
@@ -47,8 +50,9 @@ function CustomerCard({ customer, onOpenCustomer }: { customer: CustomerInsight;
         <span>报价 <strong>{customer.quoteCount}</strong></span><span>成交 <strong>{customer.acceptedCount}</strong></span><span>产品 <strong>{customer.productNames.size}</strong></span>
       </span>
       <span className={styles.customerLatest}>
-        最近 {quotationNumber(latest) || "未编号"} · {quotationStatusLabel(latest.status)}
-        {latestExpired ? " · 已过期" : ""} · {formatCurrencyAmount(latestVersion?.currency || "CNY", quotationTotal(latest))}
+        {latest
+          ? <>最近 {quotationNumber(latest) || "未编号"} · {quotationStatusLabel(latest.status)}{latestExpired ? " · 已过期" : ""} · {formatCurrencyAmount(latestVersion?.currency || "CNY", quotationTotal(latest))}</>
+          : "暂无报价 · 可先维护联系人和客户产品库"}
       </span>
       <span className={styles.openCustomerHint}>进入客户详情 / 客户产品库</span>
     </button>
@@ -69,6 +73,7 @@ export function QuotationCrmWorkspace({
   loading,
   createOpen,
   canWriteQuotations,
+  canReadCustomers,
   canReadOrders,
   canReadPayments,
   onToggleCreate,
@@ -78,7 +83,21 @@ export function QuotationCrmWorkspace({
   onViewDetail,
 }: QuotationCrmWorkspaceProps) {
   const [selectedCustomerKey, setSelectedCustomerKey] = useState("");
-  const customerInsights = buildCustomerInsights(quotations);
+  const [customerMasters, setCustomerMasters] = useState<CustomerMasterSeed[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customersError, setCustomersError] = useState("");
+  const [customerReloadToken, setCustomerReloadToken] = useState(0);
+  useEffect(() => {
+    if (!canReadCustomers) return;
+    let cancelled = false;
+    setCustomersLoading(true); setCustomersError("");
+    apiJson<CustomersResponse>("/api/customers")
+      .then((result) => { if (!cancelled) setCustomerMasters(Array.isArray(result.customers) ? result.customers : []); })
+      .catch((error) => { if (!cancelled) setCustomersError(error instanceof Error ? error.message : "读取客户档案失败"); })
+      .finally(() => { if (!cancelled) setCustomersLoading(false); });
+    return () => { cancelled = true; };
+  }, [canReadCustomers, customerReloadToken]);
+  const customerInsights = buildCustomerInsights(quotations, customerMasters);
   const selectedCustomer = customerInsights.find((customer) => customer.key === selectedCustomerKey);
   const crmSummary = buildCrmSummary(quotations, customerInsights);
   const recentQuotations = [...quotations].sort((left, right) => latestQuotationTime(right) - latestQuotationTime(left)).slice(0, 4);
@@ -106,12 +125,12 @@ export function QuotationCrmWorkspace({
         <div><span className={styles.crmEyebrow}>CRM 工作台</span><h3>先看客户，再处理报价</h3></div>
         <div className={styles.crmHeroActions}>
           {canWriteQuotations ? <button className={shell.primaryButtonCompact} type="button" onClick={onToggleCreate}>{createOpen ? "继续编辑报价" : "为客户新建报价"}</button> : null}
-          <button className={shell.secondaryButton} type="button" disabled={loading} onClick={onRefresh}>{loading ? "同步中..." : "同步客户动态"}</button>
+          <button className={shell.secondaryButton} type="button" disabled={loading || customersLoading} onClick={() => { setCustomerReloadToken((value) => value + 1); onRefresh(); }}>{loading || customersLoading ? "同步中..." : "同步客户动态"}</button>
         </div>
       </div>
 
       <div className={styles.crmStats}>
-        <article><span>客户数</span><strong>{customerInsights.length}</strong><small>来自当前报价客户</small></article>
+        <article><span>客户数</span><strong>{customerInsights.length}</strong><small>{canReadCustomers ? "来自客户档案" : "来自当前报价客户"}</small></article>
         <article><span>客户产品</span><strong>{crmSummary.productCount}</strong><small>按报价产品沉淀</small></article>
         <article><span>待跟进</span><strong>{crmSummary.followUpCount}</strong><small>已发送或已过期</small></article>
         <article><span>已成交</span><strong>{crmSummary.acceptedCount}</strong><small>客户已接受报价</small></article>
@@ -119,11 +138,12 @@ export function QuotationCrmWorkspace({
 
       <div className={styles.crmGrid}>
         <section className={styles.crmPanel}>
-          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户档案</span><h3>重点客户</h3></div><small>按最近报价排序</small></div>
+          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户档案</span><h3>业务员客户</h3></div><small>自动带出权限范围内客户</small></div>
+          {customersError ? <div className={styles.crmEmpty}>客户档案读取失败：{customersError}。当前仅显示报价中出现过的客户。</div> : null}
           <div className={styles.customerCards}>
             {customerInsights.slice(0, MAX_VISIBLE_CUSTOMERS).length
               ? customerInsights.slice(0, MAX_VISIBLE_CUSTOMERS).map((customer) => <CustomerCard customer={customer} key={customer.key} onOpenCustomer={(nextCustomer) => setSelectedCustomerKey(nextCustomer.key)} />)
-              : <div className={styles.crmEmpty}>当前条件下还没有客户报价。新建报价后，这里会自动形成客户卡片。</div>}
+              : <div className={styles.crmEmpty}>当前权限范围内还没有客户档案或报价记录。</div>}
           </div>
         </section>
         <section className={styles.crmPanel}>

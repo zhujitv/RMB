@@ -16,6 +16,9 @@ const jiti = createJiti(import.meta.url);
 const { quotationValidityState } = await jiti.import<typeof import("../app/modules/quotations/quotation-expiry.ts")>(
   "../app/modules/quotations/quotation-expiry.ts",
 );
+const { buildCustomerInsights } = await jiti.import<typeof import("../app/modules/quotations/quotation-crm-insights.ts")>(
+  "../app/modules/quotations/quotation-crm-insights.ts",
+);
 
 const editorSource = readFileSync("app/modules/quotations/quotation-items-editor.tsx", "utf8");
 const actionsSource = readFileSync("app/modules/quotations/quotation-item-actions.tsx", "utf8");
@@ -288,7 +291,7 @@ test("quotations module opens with a visible CRM workspace before the quote ledg
   assert.match(quotationsViewSource, /<QuotationCrmWorkspace/);
   assert.match(quotationCrmSource, /aria-label="客户与报价 CRM 工作台"/);
   assert.match(quotationCrmSource, /CRM 工作台/);
-  assert.match(quotationCrmSource, /重点客户/);
+  assert.match(quotationCrmSource, /业务员客户/);
   assert.match(quotationCrmSource, /跟进提醒/);
   assert.match(quotationCrmSource, /报价时间线/);
   assert.doesNotMatch(quotationCrmSource, /物料编码与固定产品属性/);
@@ -296,6 +299,26 @@ test("quotations module opens with a visible CRM workspace before the quote ledg
   assert.doesNotMatch(quotationCrmSource, /无物料编码客户/);
   assert.match(quotationCrmSource, /历史报价明细/);
   assert.match(quotationsViewSource, /搜索客户 \/ 联系人 \/ 报价号 \/ 发票号 \/ 业务员/);
+});
+
+test("quotation CRM automatically includes salesperson-owned customer masters", () => {
+  const insights = buildCustomerInsights([], [{
+    id: "customer-1",
+    name: "Zhejiang Client Co., Ltd.",
+    shortName: "浙江客户",
+    contactPerson: "王总",
+    updatedAt: "2026-08-20T00:00:00.000Z",
+  }]);
+  assert.equal(insights.length, 1);
+  assert.equal(insights[0]?.customerId, "customer-1");
+  assert.equal(insights[0]?.name, "浙江客户");
+  assert.equal(insights[0]?.quoteCount, 0);
+  assert.equal(insights[0]?.latestQuotation, undefined);
+  assert.ok(quotationCrmSource.includes('apiJson<CustomersResponse>("/api/customers")'));
+  assert.match(quotationCrmSource, /buildCustomerInsights\(quotations, customerMasters\)/);
+  assert.match(quotationCrmSource, /自动带出权限范围内客户/);
+  assert.match(quotesModuleSource, /canReadPermission\(currentUser, permissions, "customers"/);
+  assert.match(quotationsViewSource, /canReadCustomers=\{canReadCustomers\}/);
 });
 
 test("quotation CRM customer cards open a customer detail and product library page", () => {
@@ -379,6 +402,11 @@ test("quotation CRM customer detail reads existing shipment orders and receivabl
   assert.match(customerCrmServiceSource, /export async function listCustomerBusinessRecords/);
   assert.match(customerCrmServiceSource, /const customerId = String\(query\.get\("customerId"\)/);
   assert.match(customerCrmServiceSource, /orderAccessWhere\(actor\)/);
+  assert.match(customerCrmServiceSource, /function shippedOrderWhere\(\): Prisma\.ReceivableOrderWhereInput/);
+  assert.match(customerCrmServiceSource, /actualShipmentDate: \{ not: null \}/);
+  assert.match(customerCrmServiceSource, /actualShipmentAmount: \{ not: null \}/);
+  assert.match(customerCrmServiceSource, /status: \{ contains: "发货" \}/);
+  assert.match(customerCrmServiceSource, /AND: \[\{ customerId, deletedAt: null \}, shippedOrderWhere\(\), orderAccessWhere\(actor\)\]/);
   assert.match(customerCrmServiceSource, /serializeOrderListRow\(scopeOrderForActor\(order, actor\)\)/);
   assert.match(customerCrmServiceSource, /serializePayment/);
   assert.match(quotesModuleSource, /canReadPermission\(currentUser, permissions, "orders"/);

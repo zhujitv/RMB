@@ -29,6 +29,7 @@ type QuotationsModuleViewProps = {
   canDeleteQuotationDrafts: boolean;
   canSendCustomerEmail: boolean;
   canWriteSalesExecution: boolean;
+  canReadCustomers: boolean;
   canReadOrders: boolean;
   canReadPayments: boolean;
   confirmation: ConfirmationDialogState | null;
@@ -76,6 +77,7 @@ export function QuotationsModuleView({
   canDeleteQuotationDrafts,
   canSendCustomerEmail,
   canWriteSalesExecution,
+  canReadCustomers,
   canReadOrders,
   canReadPayments,
   confirmation,
@@ -109,6 +111,7 @@ export function QuotationsModuleView({
         loading={loading}
         createOpen={createOpen}
         canWriteQuotations={canWriteQuotations}
+        canReadCustomers={canReadCustomers}
         canReadOrders={canReadOrders}
         canReadPayments={canReadPayments}
         onToggleCreate={actions.onToggleCreate}

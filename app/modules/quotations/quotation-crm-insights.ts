@@ -24,8 +24,21 @@ export type CustomerInsight = {
   rejectedCount: number;
   sentCount: number;
   quotations: QuotationRow[];
-  latestQuotation: QuotationRow;
+  latestQuotation?: QuotationRow;
   latestUpdatedAt: number;
+};
+
+export type CustomerMasterSeed = {
+  id?: string | null;
+  name?: string | null;
+  fullName?: string | null;
+  shortName?: string | null;
+  displayName?: string | null;
+  contactPerson?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
 };
 
 export function timestamp(value?: string | null) {
@@ -46,8 +59,40 @@ export function customerInsightKey(quotation: QuotationRow) {
   return quotation.customerId || quotation.customer?.id || quotationCustomerLegalName(quotation) || quotationCustomerName(quotation) || quotation.id;
 }
 
-export function buildCustomerInsights(quotations: QuotationRow[]) {
+function customerMasterKey(customer: CustomerMasterSeed) {
+  return customer.id || customer.fullName || customer.name || customer.displayName || "";
+}
+
+function customerMasterInsight(customer: CustomerMasterSeed): CustomerInsight {
+  const name = firstText(customer.displayName, customer.shortName, customer.name, customer.fullName);
+  const legalName = firstText(customer.fullName, customer.name, name);
+  return {
+    key: customerMasterKey(customer),
+    customerId: String(customer.id || ""),
+    name,
+    legalName,
+    contactPerson: firstText(customer.contactPerson),
+    contactEmail: firstText(customer.contactEmail),
+    contactPhone: firstText(customer.contactPhone),
+    quoteCount: 0,
+    acceptedCount: 0,
+    draftCount: 0,
+    expiredCount: 0,
+    pendingCount: 0,
+    productNames: new Set<string>(),
+    rejectedCount: 0,
+    sentCount: 0,
+    quotations: [],
+    latestUpdatedAt: Math.max(timestamp(customer.updatedAt), timestamp(customer.createdAt)),
+  };
+}
+
+export function buildCustomerInsights(quotations: QuotationRow[], customerMasters: CustomerMasterSeed[] = []) {
   const customers = new Map<string, CustomerInsight>();
+  for (const customer of customerMasters) {
+    const key = customerMasterKey(customer);
+    if (key) customers.set(key, customerMasterInsight(customer));
+  }
   for (const quotation of quotations) {
     const key = customerInsightKey(quotation);
     const version = currentQuotationVersion(quotation);
@@ -70,7 +115,6 @@ export function buildCustomerInsights(quotations: QuotationRow[]) {
       rejectedCount: 0,
       sentCount: 0,
       quotations: [],
-      latestQuotation: quotation,
       latestUpdatedAt: currentTime,
     };
 
@@ -101,7 +145,10 @@ export function buildCustomerInsights(quotations: QuotationRow[]) {
   return Array.from(customers.values()).map((customer) => ({
     ...customer,
     quotations: customer.quotations.sort((left, right) => latestQuotationTime(right) - latestQuotationTime(left)),
-  })).sort((left, right) => right.latestUpdatedAt - left.latestUpdatedAt);
+  })).sort((left, right) => {
+    const quoteDiff = Number(Boolean(right.latestQuotation)) - Number(Boolean(left.latestQuotation));
+    return quoteDiff || right.latestUpdatedAt - left.latestUpdatedAt || left.name.localeCompare(right.name, "zh-CN");
+  });
 }
 
 export function buildCrmSummary(quotations: QuotationRow[], customers: CustomerInsight[]) {
