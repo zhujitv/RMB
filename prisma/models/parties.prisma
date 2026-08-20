@@ -45,6 +45,8 @@ model BusinessEntity {
   contactPhone         String?   @map("contact_phone")
   website              String?
   taxNumber            String?   @map("tax_number")
+  domesticBankName     String?   @map("domestic_bank_name")
+  domesticBankAccount  String?   @map("domestic_bank_account")
   showContactPhoneOnPi Boolean   @default(false) @map("show_contact_phone_on_pi")
   showContactEmailOnPi Boolean   @default(false) @map("show_contact_email_on_pi")
   showWebsiteOnPi      Boolean   @default(false) @map("show_website_on_pi")

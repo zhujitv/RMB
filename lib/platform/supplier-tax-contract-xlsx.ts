@@ -81,7 +81,7 @@ function worksheet(draft: SupplierTaxContractDraft) {
   rows.push(`<row r="${row}">${inlineCell(row, 1, "合计", 7)}${numberCell(row, 5, draft.totalAmountWithTax, 5)}${inlineCell(row, 6, "", 6)}</row>`);
   row += 1;
   const capitalRow = row;
-  rows.push(`<row r="${row}" ht="30" customHeight="1">${inlineCell(row, 1, `人民币大写：${chineseCurrency(draft.totalAmountWithTax)}`, 8)}</row>`);
+  rows.push(`<row r="${row}" ht="30" customHeight="1">${inlineCell(row, 1, `人民币大写：${chineseCurrency(draft.totalAmountWithTax)}`, 8)}${[2, 3, 4, 5, 6].map((column) => inlineCell(row, column, "", 8)).join("")}</row>`);
   row += 1;
   const clauses = [
     { text: "二、交（提）货地点、方式：需方指定船公司仓库。允许溢短装。", rows: 1 },

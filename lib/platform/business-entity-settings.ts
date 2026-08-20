@@ -19,6 +19,7 @@ import {
   type BusinessEntityBankAccountCurrency,
 } from "./business-entity-bank-accounts";
 import type { writeAudit as WriteAudit } from "./shared-audit";
+import { domesticBankPayload } from "./business-entity-domestic-bank";
 
 type ActorLike = { id?: string | null; role?: string | null } | null | undefined;
 type AuditRequestLike = Parameters<typeof WriteAudit>[0];
@@ -153,6 +154,7 @@ function businessEntityPayload(input: BusinessEntityInput) {
     shortName: optionalBusinessText(input.shortName, "公司简称", 100),
     nameEn: optionalBusinessText(input.nameEn, "英文抬头", 200),
     taxNumber: optionalBusinessText(input.taxNumber, "纳税人识别号", 50),
+    ...domesticBankPayload(input),
     address: optionalBusinessText(input.address, "公司地址", 1000, true),
     contactEmail: optionalBusinessEmail(input.contactEmail),
     contactPhone: optionalBusinessText(input.contactPhone, "联系电话", 100),
@@ -171,6 +173,7 @@ function businessEntityAuditValue(entity: BusinessEntityInput | null | undefined
   if (!entity) return entity;
   const safeEntity = { ...entity };
   delete safeEntity.bankAccount;
+  delete safeEntity.domesticBankAccount;
   const accounts = Array.isArray(entity.bankAccounts)
     ? entity.bankAccounts.map((account) => ({
       currency: nonEmpty((account as BusinessEntityInput | null)?.currency),

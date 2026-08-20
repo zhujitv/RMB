@@ -89,6 +89,8 @@ export type BusinessEntityRow = {
   shortName?: string;
   nameEn?: string;
   taxNumber?: string;
+  domesticBankName?: string;
+  domesticBankAccount?: string;
   address?: string;
   contactEmail?: string;
   contactPhone?: string;

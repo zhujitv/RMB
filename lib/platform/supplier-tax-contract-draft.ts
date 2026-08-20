@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { readR2Object } from "../r2";
 import { recognizeTencentCustomsGoods } from "./tencent-customs-ocr-experiment";
 import { codedError, nonEmpty } from "./shared-base-utils";
+import { domesticContractIssues } from "./business-entity-domestic-bank";
 
 const ACTIVE_PURCHASE_ORDER_STATUSES = ["DISPATCHED", "ACCEPTED", "DELIVERY_PROPOSED"] as const;
 
@@ -111,7 +112,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
       items: { include: { supplierPrice: true }, orderBy: [{ lineNumber: "asc" }] },
       execution: {
         include: {
-          businessEntity: { include: { bankAccounts: { where: { currency: "CNY" } } } },
+          businessEntity: true,
           receivableOrder: true,
           purchaseOrders: {
             where: { status: { in: [...ACTIVE_PURCHASE_ORDER_STATUSES] } },
@@ -144,7 +145,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
   const customs = await recognizeTencentCustomsGoods(await readR2Object(customsDocument.storageKey));
   const candidates = customs.items as Array<Record<string, unknown>>;
   const warnings = [...customs.warnings];
-  const blockingIssues: string[] = [];
+  const blockingIssues = domesticContractIssues(purchaseOrder.execution.businessEntity);
   const items = purchaseOrder.items.map((item, index): SupplierTaxContractItemDraft => {
     if (item.actualDeliveredQuantity == null) {
       throw codedError(`采购单第${item.lineNumber}行尚未确认实际装柜数量。`, 409, "ACTUAL_LOADED_QUANTITY_REQUIRED");
@@ -216,7 +217,6 @@ export async function buildSupplierTaxContractDraft(costId: string) {
   if (!calculatedTotal.eq(purchaseOrder.settlement.baseAmount)) {
     throw codedError("实际装柜数量乘确认单价与采购结算货款基数不一致，请先修复结算数据。", 409, "SUPPLIER_TAX_CONTRACT_AMOUNT_MISMATCH");
   }
-  const cnyAccount = purchaseOrder.execution.businessEntity.bankAccounts[0];
   const activeIndex = purchaseOrder.execution.purchaseOrders.findIndex((row) => row.id === purchaseOrder.id);
   const contractNo = `${purchaseOrder.execution.customerOrderNo}-${String(Math.max(0, activeIndex) + 1).padStart(2, "0")}`;
   return {
@@ -240,8 +240,8 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     buyerTaxNumber: purchaseOrder.execution.businessEntity.taxNumber || "",
     buyerAddress: purchaseOrder.execution.businessEntity.address || "",
     buyerPhone: purchaseOrder.execution.businessEntity.contactPhone || "",
-    buyerBankName: cnyAccount?.bankName || "",
-    buyerBankAccount: cnyAccount?.accountNumber || purchaseOrder.execution.businessEntity.bankAccount || "",
+    buyerBankName: purchaseOrder.execution.businessEntity.domesticBankName || "",
+    buyerBankAccount: purchaseOrder.execution.businessEntity.domesticBankAccount || "",
     signingPlace: "浙江诸暨",
     signingDate: dateText(new Date()),
     latestDeliveryDate: dateText(purchaseOrder.confirmedSupplierDeliveryDate || purchaseOrder.requestedDeliveryDate),

@@ -1,6 +1,7 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../prisma";
 import { codedError, nonEmpty } from "./shared-base-utils";
+import { domesticContractIssues } from "./business-entity-domestic-bank";
 import { FACTORY_SUPPLIER_COST_TYPES } from "./shared-cost-constants";
 import type { SupplierTaxContractDraft, SupplierTaxContractItemDraft } from "./supplier-tax-contract-draft";
 import {
@@ -200,7 +201,6 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
   });
   const sequence = Math.max(0, factoryCosts.findIndex((row) => row.id === cost.id)) + 1;
   const entity = cost.order.businessEntity!;
-  const cnyAccount = entity.bankAccounts[0];
   const relevantCustomsSnapshot = selectableCustomsItems(candidates);
   const draft: SupplierTaxContractDraft = {
     contractNo: `${cost.order.orderNo}-T${String(sequence).padStart(2, "0")}`,
@@ -223,9 +223,9 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     buyerTaxNumber: entity.taxNumber || "",
     buyerAddress: entity.address || "",
     buyerPhone: entity.contactPhone || "",
-    buyerBankName: cnyAccount?.bankName || "",
-    buyerBankAccount: cnyAccount?.accountNumber || entity.bankAccount || "",
-    signingPlace: entity.address || "",
+    buyerBankName: entity.domesticBankName || "",
+    buyerBankAccount: entity.domesticBankAccount || "",
+    signingPlace: "浙江诸暨",
     signingDate: dateText(new Date()),
     latestDeliveryDate: dateText(cost.order.actualShipmentDate || cost.order.customsDeclarationDate || new Date()),
     currency: cost.currency,
@@ -233,7 +233,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     items,
     customsSnapshot: relevantCustomsSnapshot,
     warnings: [...new Set(warnings)],
-    blockingIssues: [],
+    blockingIssues: domesticContractIssues(entity),
     generatedAt: new Date().toISOString(),
     ocrRequestIds: customs.requestIds,
     sourceType: FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE,
