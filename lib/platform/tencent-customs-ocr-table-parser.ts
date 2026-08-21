@@ -14,7 +14,7 @@ export type TencentCustomsExperimentTable = {
 };
 
 const CUSTOMS_TABLE_NUMBER_PATTERN = "-?\\d[\\d,，]*(?:\\.\\d+)?";
-const CUSTOMS_TABLE_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|PCS|PCE|PC|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
+const CUSTOMS_TABLE_UNIT_PATTERN = "(千克|公斤|克|吨|个|只|件|套|台|米|平方米|立方米|双|条|箱|片|PCS|PCE|PC|SET|SETS|KG|KGS|M2|M3|MT|UNIT|UNITS|PIECE|PIECES)";
 const CUSTOMS_TABLE_UNIT_REGEX = new RegExp(CUSTOMS_TABLE_UNIT_PATTERN, "i");
 
 function headerColumn(row: string[], aliases: RegExp) {
@@ -198,4 +198,19 @@ export function candidateItemsFromTencentTables(tables: TencentCustomsExperiment
       }];
     }));
   });
+}
+
+export function candidateItemsFromCustomsText(text = "") {
+  const body = nonEmpty(text).replace(/\n+/g, " ");
+  if (!body) return [];
+  return candidateItemsFromTencentTables([{
+    page: 1,
+    tableIndex: 999,
+    type: null,
+    rows: [
+      ["项号 商品编号 商品名称及规格型号 数量及单位 总价 币制"],
+      [body],
+    ],
+    cells: [],
+  }]);
 }

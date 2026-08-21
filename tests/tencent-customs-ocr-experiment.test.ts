@@ -36,6 +36,9 @@ test("experiment runs dedicated customs recognition and table V3 without enablin
   assert.match(service, /RecognizeTableAccurateOCR/);
   assert.match(service, /UseNewModel: true/);
   assert.match(service, /Promise\.allSettled/);
+  assert.match(service, /extractPdfTextFromPdfBuffer/);
+  assert.match(service, /candidateItemsFromCustomsText/);
+  assert.match(service, /表格识别漏读的\$\{additions\.length\}行商品已从PDF文本补充/);
   assert.match(card, /报关单专用识别和表格识别 V3/);
   assert.match(card, /不写入订单、不保存附件、不修改报关或退税数据/);
 });
@@ -125,6 +128,41 @@ test("table candidates split multiple customs products merged into one OCR row",
   })), [
     { itemNo: "1", commodityCode: "3918909000", productName: "塑料制地板", quantityUnits: [{ quantity: "16250", unit: "千克" }] },
     { itemNo: "2", commodityCode: "7326909000", productName: "不锈钢连接件", quantityUnits: [{ quantity: "240", unit: "件" }] },
+  ]);
+});
+
+test("customs PDF text fallback supplements products missed by table OCR", async () => {
+  const { candidateItemsFromCustomsText } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  const text = [
+    "商品项号 商品编号 商品名称、规格型号 成交数量及单位 总价 币制",
+    "1 3918909000 塑料制地板 0|2|PVC|无品牌 22430千克 2880片 8.9550 25790.40 美元",
+    "2 7326199000 不锈钢连接件 0|2|非工业用|不锈钢|冲压 190千克 25000套 0.1200 3000.00 美元",
+  ].join("\n");
+  const items = candidateItemsFromCustomsText(text);
+  assert.deepEqual(items.map((item) => ({
+    itemNo: item.itemNo,
+    commodityCode: item.commodityCode,
+    productName: item.productName,
+    quantityUnits: item.quantityUnits,
+  })), [
+    {
+      itemNo: "1",
+      commodityCode: "3918909000",
+      productName: "塑料制地板",
+      quantityUnits: [
+        { quantity: "22430", unit: "千克" },
+        { quantity: "2880", unit: "片" },
+      ],
+    },
+    {
+      itemNo: "2",
+      commodityCode: "7326199000",
+      productName: "不锈钢连接件",
+      quantityUnits: [
+        { quantity: "190", unit: "千克" },
+        { quantity: "25000", unit: "套" },
+      ],
+    },
   ]);
 });
 
