@@ -71,17 +71,54 @@ export function customsQuantityForSelection(candidate: Record<string, unknown>, 
     || {};
 }
 
-export function selectableCustomsItems(candidates: Array<Record<string, unknown>>) {
+function decimalComparable(value: unknown) {
+  const text = String(value || "").replace(/[,，\s]/g, "");
+  if (!/^-?\d+(?:\.\d+)?$/.test(text)) return "";
+  try {
+    return new Prisma.Decimal(text).toDecimalPlaces(4).toString();
+  } catch {
+    return "";
+  }
+}
+
+function bestQuantityOption(
+  candidate: Record<string, unknown>,
+  quantityOptions: Array<{ index: number; quantity: string; unit: string }>,
+  references: Array<{ productName?: unknown; unit?: unknown; quantity?: unknown }>,
+) {
+  if (!quantityOptions.length || !references.length) return quantityOptions[0] || null;
+  const productKey = comparable(candidate.productName || candidate.nameAndSpecification);
+  const scored = quantityOptions.flatMap((option) => references.map((reference) => {
+    const referenceQuantity = decimalComparable(reference.quantity);
+    const sameQuantity = referenceQuantity && decimalComparable(option.quantity) === referenceQuantity;
+    const sameUnit = comparable(option.unit) === comparable(reference.unit);
+    const referenceProduct = comparable(reference.productName);
+    const sameProduct = productKey && referenceProduct && (productKey === referenceProduct || productKey.includes(referenceProduct) || referenceProduct.includes(productKey));
+    return {
+      option,
+      score: (sameQuantity && sameUnit ? 120 : sameQuantity ? 70 : 0) + (sameProduct ? 30 : 0) + (sameUnit ? 10 : 0),
+    };
+  }));
+  return scored.sort((left, right) => right.score - left.score)[0]?.score > 0
+    ? scored.sort((left, right) => right.score - left.score)[0]?.option || quantityOptions[0]
+    : quantityOptions[0];
+}
+
+export function selectableCustomsItems(
+  candidates: Array<Record<string, unknown>>,
+  references: Array<{ productName?: unknown; unit?: unknown; quantity?: unknown }> = [],
+) {
   return candidates.flatMap((candidate, customsItemIndex) => {
-    const quantity = customsQuantity(candidate);
     const productName = nonEmpty(candidate.productName);
-    const unit = nonEmpty(quantity.unit);
-    const quantityValue = nonEmpty(quantity.quantity);
-    if (!productName || !unit || !quantityValue) return [];
     const quantityOptions = (Array.isArray(candidate.quantityUnits) ? candidate.quantityUnits as Array<Record<string, unknown>> : [])
       .map((row, index) => ({ index, quantity: nonEmpty(row.quantity), unit: nonEmpty(row.unit) }))
       .filter((row) => row.quantity && row.unit);
-    return [{ customsItemIndex, productName, unit, quantity: quantityValue, quantityOptionIndex: 0, quantityOptions }];
+    const quantity = bestQuantityOption(candidate, quantityOptions, references) || customsQuantity(candidate);
+    const unit = nonEmpty(quantity.unit);
+    const quantityValue = nonEmpty(quantity.quantity);
+    if (!productName || !unit || !quantityValue) return [];
+    const quantityOptionIndex = Number.isInteger(Number(quantity.index)) ? Number(quantity.index) : 0;
+    return [{ customsItemIndex, productName, unit, quantity: quantityValue, quantityOptionIndex, quantityOptions }];
   });
 }
 
@@ -105,7 +142,16 @@ export async function loadTransitionContext(costId: string) {
         take: 1,
       },
       supplier: true,
-      order: { include: { businessEntity: true } },
+      order: {
+        include: {
+          businessEntity: true,
+          sourceSalesExecution: {
+            include: {
+              items: { orderBy: [{ lineNumber: "asc" }] },
+            },
+          },
+        },
+      },
     },
   });
   if (!cost || !cost.supplierId || !cost.supplier || !cost.order) throw codedError("请选择有效的工厂供应商成本。", 404, "FACTORY_TRANSITION_COST_NOT_FOUND");
@@ -143,6 +189,11 @@ export async function previewFactoryPurchaseTransitionSettlement(costId: string,
     items: transitionSettlement.itemSnapshot,
   };
   const customs = await recognizedCustoms(customsDocument.storageKey);
+  const orderQuantityReferences = cost.order.sourceSalesExecution?.items.map((item) => ({
+    productName: item.productNameSnapshot,
+    unit: item.unitSnapshot,
+    quantity: item.quantity,
+  })) || [];
   return {
     existing: false,
     customsDocumentId: customsDocument.id,
@@ -150,7 +201,7 @@ export async function previewFactoryPurchaseTransitionSettlement(costId: string,
     finalPayableAmount: cost.amount.toFixed(2),
     currency: cost.currency,
     warnings: customs.warnings,
-    items: selectableCustomsItems(customs.items as Array<Record<string, unknown>>)
+    items: selectableCustomsItems(customs.items as Array<Record<string, unknown>>, orderQuantityReferences)
       .map((item) => ({ ...item, selected: false })),
   };
 }

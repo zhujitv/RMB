@@ -185,6 +185,106 @@ test("table candidates zip customs products split across multiline cells", async
   assert.deepEqual(items[1].quantityUnits, [{ quantity: "240", unit: "件" }]);
 });
 
+test("table candidates split product lines when each product has multiple quantity units", async () => {
+  const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  const items = candidateItemsFromTencentTables([{
+    page: 1,
+    tableIndex: 0,
+    type: 2,
+    rows: [
+      ["项号", "商品编号", "品名", "成交数量及单位", "总价"],
+      [
+        "1\n2\n3",
+        "3918909000\n3916909000\n7326909000",
+        "塑料制地板\n塑料制柱子\n不锈钢连接件",
+        "16250 千克\n80 平方米\n23301 千克\n186 米\n240 千克\n25000 套",
+        "16250.00\n110898.92\n1800.00",
+      ],
+    ],
+    cells: [],
+  }]);
+  assert.deepEqual(items.map((item) => ({
+    itemNo: item.itemNo,
+    commodityCode: item.commodityCode,
+    productName: item.productName,
+    quantityUnits: item.quantityUnits,
+  })), [
+    {
+      itemNo: "1",
+      commodityCode: "3918909000",
+      productName: "塑料制地板",
+      quantityUnits: [
+        { quantity: "16250", unit: "千克" },
+        { quantity: "80", unit: "平方米" },
+      ],
+    },
+    {
+      itemNo: "2",
+      commodityCode: "3916909000",
+      productName: "塑料制柱子",
+      quantityUnits: [
+        { quantity: "23301", unit: "千克" },
+        { quantity: "186", unit: "米" },
+      ],
+    },
+    {
+      itemNo: "3",
+      commodityCode: "7326909000",
+      productName: "不锈钢连接件",
+      quantityUnits: [
+        { quantity: "240", unit: "千克" },
+        { quantity: "25000", unit: "套" },
+      ],
+    },
+  ]);
+});
+
+test("table candidates match product lines by inline quantity-unit groups", async () => {
+  const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  const items = candidateItemsFromTencentTables([{
+    page: 1,
+    tableIndex: 0,
+    type: 2,
+    rows: [
+      ["项号", "商品编号", "品名", "成交数量及单位", "总价"],
+      [
+        "1\n2\n3",
+        "3918909000\n3916909000\n7326909000",
+        "塑料制地板\n塑料制柱子\n不锈钢连接件",
+        "16250 千克 80 平方米 23301 千克 186 米 240 千克 25000 套",
+        "16250.00\n110898.92\n1800.00",
+      ],
+    ],
+    cells: [],
+  }]);
+  assert.deepEqual(items.map((item) => ({
+    productName: item.productName,
+    quantityUnits: item.quantityUnits,
+  })), [
+    {
+      productName: "塑料制地板",
+      quantityUnits: [
+        { quantity: "16250", unit: "千克" },
+        { quantity: "80", unit: "平方米" },
+      ],
+    },
+    {
+      productName: "塑料制柱子",
+      quantityUnits: [
+        { quantity: "23301", unit: "千克" },
+        { quantity: "186", unit: "米" },
+      ],
+    },
+    {
+      productName: "不锈钢连接件",
+      quantityUnits: [
+        { quantity: "240", unit: "千克" },
+        { quantity: "25000", unit: "套" },
+      ],
+    },
+  ]);
+});
+
 test("table candidates handle split quantity and unit columns", async () => {
   const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
   const items = candidateItemsFromTencentTables([{

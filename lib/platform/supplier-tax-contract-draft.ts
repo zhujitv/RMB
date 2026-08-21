@@ -74,28 +74,50 @@ function comparable(value: unknown) {
   return String(value || "").toUpperCase().replace(/[\s（）()【】\[\]，,。._\-\/\\]/g, "");
 }
 
-function matchScore(productName: string, unit: string, candidate: Record<string, unknown>) {
-  const left = comparable(productName);
-  const right = comparable(candidate.productName || candidate.nameAndSpecification);
-  let score = left && right && left === right ? 100 : left && right && (left.includes(right) || right.includes(left)) ? 60 : 0;
+function decimalComparable(value: unknown) {
+  const text = String(value || "").replace(/[,，\s]/g, "");
+  if (!/^-?\d+(?:\.\d+)?$/.test(text)) return "";
+  try {
+    return new Prisma.Decimal(text).toDecimalPlaces(4).toString();
+  } catch {
+    return "";
+  }
+}
+
+function matchScore(unit: string, quantity: unknown, candidate: Record<string, unknown>) {
   const units = Array.isArray(candidate.quantityUnits) ? candidate.quantityUnits as Array<Record<string, unknown>> : [];
-  if (units.some((row) => comparable(row.unit) === comparable(unit))) score += 20;
+  const unitKey = comparable(unit);
+  const quantityKey = decimalComparable(quantity);
+  let score = 0;
+  if (units.some((row) => comparable(row.unit) === unitKey)) score += 20;
+  if (quantityKey && units.some((row) => decimalComparable(row.quantity) === quantityKey && comparable(row.unit) === unitKey)) score += 120;
+  else if (quantityKey && units.some((row) => decimalComparable(row.quantity) === quantityKey)) score += 70;
   return score;
 }
 
-function candidateForItem(
-  item: { productNameSnapshot: string; unitSnapshot: string },
+export function candidateForSupplierTaxContractItem(
+  item: { productNameSnapshot: string; unitSnapshot: string; actualDeliveredQuantity?: unknown },
   candidates: Array<Record<string, unknown>>,
   index: number,
 ) {
-  return candidates
-    .map((candidate) => ({ candidate, score: matchScore(item.productNameSnapshot, item.unitSnapshot, candidate) }))
-    .sort((left, right) => right.score - left.score)[0]?.candidate || candidates[index] || null;
+  const best = candidates
+    .map((candidate) => ({
+      candidate,
+      score: matchScore(item.unitSnapshot, item.actualDeliveredQuantity, candidate),
+    }))
+    .sort((left, right) => right.score - left.score)[0];
+  return best && best.score > 0 ? best.candidate : candidates[index] || null;
 }
 
-function quantityForUnit(candidate: Record<string, unknown>, preferredUnit: string) {
+function quantityForUnit(candidate: Record<string, unknown>, preferredUnit: string, preferredQuantity?: unknown) {
   const rows = Array.isArray(candidate.quantityUnits) ? candidate.quantityUnits as Array<Record<string, unknown>> : [];
-  return rows.find((row) => comparable(row.unit) === comparable(preferredUnit)) || rows[0] || {};
+  const unitKey = comparable(preferredUnit);
+  const quantityKey = decimalComparable(preferredQuantity);
+  return (quantityKey ? rows.find((row) => comparable(row.unit) === unitKey && decimalComparable(row.quantity) === quantityKey) : null)
+    || rows.find((row) => comparable(row.unit) === unitKey)
+    || (quantityKey ? rows.find((row) => decimalComparable(row.quantity) === quantityKey) : null)
+    || rows[0]
+    || {};
 }
 
 export async function buildSupplierTaxContractDraft(costId: string) {
@@ -154,20 +176,17 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     }
     const price = item.supplierPrice?.unitPrice ?? item.purchaseUnitPrice;
     if (price == null) throw codedError(`采购单第${item.lineNumber}行缺少确认含税单价。`, 409, "SUPPLIER_UNIT_PRICE_REQUIRED");
-    const candidate = candidateForItem(item, candidates, index);
-    if (!candidate) throw codedError("报关单商品行数量不足，无法生成合同草稿。", 422, "CUSTOMS_ITEM_MAPPING_REQUIRED");
-    const customsQuantity = quantityForUnit(candidate, item.unitSnapshot);
     const quantity = new Prisma.Decimal(item.actualDeliveredQuantity);
+    const candidate = candidateForSupplierTaxContractItem({ ...item, actualDeliveredQuantity: quantity }, candidates, index);
+    if (!candidate) throw codedError("报关单商品行数量不足，无法生成合同草稿。", 422, "CUSTOMS_ITEM_MAPPING_REQUIRED");
+    const customsQuantity = quantityForUnit(candidate, item.unitSnapshot, quantity);
     const unitPrice = new Prisma.Decimal(price);
     const amount = quantity.mul(unitPrice).toDecimalPlaces(2);
     const productName = nonEmpty(candidate.productName || candidate.nameAndSpecification);
     const unit = nonEmpty(customsQuantity.unit || item.unitSnapshot);
     const declaredQuantity = nonEmpty(customsQuantity.quantity);
-    if (matchScore(item.productNameSnapshot, item.unitSnapshot, candidate) < 60) {
-      blockingIssues.push(`采购第${item.lineNumber}行无法可靠匹配报关单商品，请先修正报关单识别或商品资料。`);
-    }
-    if (comparable(item.productNameSnapshot) !== comparable(productName)) {
-      warnings.push(`采购第${item.lineNumber}行品名“${item.productNameSnapshot}”已按报关品名“${productName}”生成，请人工核查。`);
+    if (matchScore(item.unitSnapshot, quantity, candidate) <= 0) {
+      warnings.push(`采购第${item.lineNumber}行未按数量或单位命中报关商品，已按报关单顺序生成，请人工核查。`);
     }
     if (comparable(item.unitSnapshot) !== comparable(unit)) {
       warnings.push(`采购第${item.lineNumber}行单位“${item.unitSnapshot}”与报关单位“${unit}”不同，请人工确认换算依据。`);
@@ -192,10 +211,10 @@ export async function buildSupplierTaxContractDraft(costId: string) {
         blockingIssues.push(`采购单${activeOrder.sequenceNo}仍有商品未确认实际装柜数量。`);
         continue;
       }
-      const candidate = candidateForItem(item, candidates, 0);
-      if (!candidate || matchScore(item.productNameSnapshot, item.unitSnapshot, candidate) < 60) continue;
+      const candidate = candidateForSupplierTaxContractItem(item, candidates, 0);
+      if (!candidate || matchScore(item.unitSnapshot, item.actualDeliveredQuantity, candidate) <= 0) continue;
       const candidateIndex = candidates.indexOf(candidate);
-      const customsQuantity = quantityForUnit(candidate, item.unitSnapshot);
+      const customsQuantity = quantityForUnit(candidate, item.unitSnapshot, item.actualDeliveredQuantity);
       const key = `${candidateIndex}|${comparable(customsQuantity.unit || item.unitSnapshot)}`;
       const current = declaredTotals.get(key) || {
         actual: new Prisma.Decimal(0),

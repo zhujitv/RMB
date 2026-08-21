@@ -14,6 +14,9 @@ const { transitionSettlementValidationError } = await jiti.import<
 const { selectableCustomsItems, customsQuantityForSelection } = await jiti.import<
   typeof import("../lib/platform/supplier-transition-settlement-context.ts")
 >("../lib/platform/supplier-transition-settlement-context.ts");
+const { candidateForSupplierTaxContractItem } = await jiti.import<
+  typeof import("../lib/platform/supplier-tax-contract-draft.ts")
+>("../lib/platform/supplier-tax-contract-draft.ts");
 
 const schema = readPrismaSchemaSource();
 const service = readSupplierDocumentRequestsSource();
@@ -97,6 +100,52 @@ test("transition settlement exposes multiple customs quantities for manual selec
   );
   assert.match(supplierCreateDialog, /选择第\$\{index \+ 1\}行成交数量/);
   assert.match(supplierCreateDialog, /quantityOptions/);
+});
+
+test("transition settlement defaults customs quantity by order quantity", () => {
+  const candidates = selectableCustomsItems([{
+    productName: "塑料制地板",
+    quantityUnits: [
+      { quantity: "16250", unit: "千克" },
+      { quantity: "80", unit: "平方米" },
+    ],
+  }], [{ productName: "塑料制地板", quantity: "80.0000", unit: "平方米" }]);
+  assert.equal(candidates[0]?.quantity, "80");
+  assert.equal(candidates[0]?.unit, "平方米");
+  assert.equal(candidates[0]?.quantityOptionIndex, 1);
+});
+
+test("supplier tax contract matches customs row by order quantity before position", () => {
+  const candidate = candidateForSupplierTaxContractItem({
+    productNameSnapshot: "HDPE MOULDED WALL PANEL 8 x 6",
+    unitSnapshot: "千克",
+    actualDeliveredQuantity: "23301.0000",
+  }, [
+    {
+      productName: "塑料制地板",
+      quantityUnits: [
+        { quantity: "16250", unit: "千克" },
+        { quantity: "80", unit: "平方米" },
+      ],
+    },
+    {
+      productName: "塑料制墙板",
+      quantityUnits: [
+        { quantity: "23301", unit: "千克" },
+        { quantity: "186", unit: "米" },
+      ],
+    },
+  ], 0);
+  assert.deepEqual(candidate?.quantityUnits, [
+    { quantity: "23301", unit: "千克" },
+    { quantity: "186", unit: "米" },
+  ]);
+});
+
+test("supplier tax contract does not block on order and customs product name differences", () => {
+  const source = readFileSync("lib/platform/supplier-tax-contract-draft.ts", "utf8");
+  assert.doesNotMatch(source, /无法可靠匹配报关单商品/);
+  assert.doesNotMatch(source, /品名“.*已按报关品名/);
 });
 
 test("supplier document template uses a Web-compatible binary response body", () => {

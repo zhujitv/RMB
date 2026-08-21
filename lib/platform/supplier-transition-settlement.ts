@@ -202,7 +202,12 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     }
   }
   const entity = cost.order.businessEntity!;
-  const relevantCustomsSnapshot = selectableCustomsItems(candidates);
+  const orderQuantityReferences = cost.order.sourceSalesExecution?.items.map((item) => ({
+    productName: item.productNameSnapshot,
+    unit: item.unitSnapshot,
+    quantity: item.quantity,
+  })) || [];
+  const relevantCustomsSnapshot = selectableCustomsItems(candidates, orderQuantityReferences);
   const latestDeliveryDateValue = cost.order.actualShipmentDate || cost.order.blDate || cost.order.customsDeclarationDate || new Date();
   const draft: SupplierTaxContractDraft = {
     contractNo: cost.order.orderNo,

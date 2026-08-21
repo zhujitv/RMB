@@ -54,7 +54,7 @@ function quantityUnitCandidates(value: string) {
   ]
     .filter((entry) => entry.quantity && entry.unit)
     .filter((entry, index, rows) => rows.findIndex((row) => row.quantity === entry.quantity && row.unit === entry.unit) === index)
-    .slice(0, 3)
+    .slice(0, 12)
     .map((entry) => ({ quantity: entry.quantity, unit: entry.unit }));
 }
 
@@ -106,6 +106,43 @@ function cellLines(value: string) {
   return String(value || "").split(/[\r\n]+/).map((line) => line.trim()).filter(Boolean);
 }
 
+function splitRowsByProductQuantityGroups(row: string[], columns: number[]) {
+  const nameColumn = columns[2];
+  const quantityColumn = columns[3];
+  if (nameColumn < 0 || quantityColumn < 0) return null;
+  const nameLines = cellLines(row[nameColumn] || "");
+  if (nameLines.length <= 1) return null;
+  const quantityUnitLines = cellLines(row[quantityColumn] || "");
+  const quantityEntries = quantityUnitCandidates(row[quantityColumn] || "");
+  const unitColumn = columns[4];
+  const splitUnitLines = unitColumn >= 0 ? cellLines(row[unitColumn] || "") : [];
+  const hasLineQuantityGroups = quantityUnitLines.length > nameLines.length && quantityUnitLines.length % nameLines.length === 0;
+  const hasInlineQuantityGroups = quantityEntries.length >= nameLines.length && quantityEntries.length % nameLines.length === 0;
+  const hasSplitQuantityUnitGroups = splitUnitLines.length === quantityUnitLines.length
+    && quantityUnitLines.length >= nameLines.length
+    && quantityUnitLines.length % nameLines.length === 0;
+  if (!hasLineQuantityGroups && !hasInlineQuantityGroups && !hasSplitQuantityUnitGroups) return null;
+  const quantityGroupSize = hasLineQuantityGroups || hasSplitQuantityUnitGroups
+    ? Math.max(1, quantityUnitLines.length / nameLines.length)
+    : Math.max(1, quantityEntries.length / nameLines.length);
+  return Array.from({ length: nameLines.length }, (_, lineIndex) => row.map((cell, columnIndex) => {
+    const lines = cellLines(cell || "");
+    if (columnIndex === quantityColumn) {
+      if (hasLineQuantityGroups || hasSplitQuantityUnitGroups) {
+        return quantityUnitLines.slice(lineIndex * quantityGroupSize, (lineIndex + 1) * quantityGroupSize).join("\n");
+      }
+      return quantityEntries.slice(lineIndex * quantityGroupSize, (lineIndex + 1) * quantityGroupSize)
+        .map((entry) => `${entry.quantity} ${entry.unit}`)
+        .join("\n");
+    }
+    if (columnIndex === unitColumn && hasSplitQuantityUnitGroups) {
+      return splitUnitLines.slice(lineIndex * quantityGroupSize, (lineIndex + 1) * quantityGroupSize).join("\n");
+    }
+    if (lines.length === nameLines.length) return lines[lineIndex] || "";
+    return cell;
+  }));
+}
+
 function splitCollapsedCustomsRows(row: string[]) {
   const text = rowText(row);
   const matches = [...text.matchAll(/(?:^|\s)(\d{1,3})\s+\d{8,13}\b/g)];
@@ -124,6 +161,8 @@ function expandedCustomsRows(row: string[], columns: number[]) {
   if (collapsed.length > 1) return collapsed;
   const inspected = columns.filter((column) => column >= 0).map((column) => cellLines(row[column] || ""));
   const maxLines = Math.max(1, ...inspected.map((lines) => lines.length));
+  const productQuantityRows = splitRowsByProductQuantityGroups(row, columns);
+  if (productQuantityRows) return productQuantityRows;
   const hasItemBreaks = columns.slice(0, 2).some((column) => column >= 0 && cellLines(row[column] || "").length === maxLines && maxLines > 1);
   const hasNameQuantityBreaks = columns[2] >= 0 && columns[3] >= 0
     && cellLines(row[columns[2]] || "").length === maxLines
