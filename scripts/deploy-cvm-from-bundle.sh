@@ -36,8 +36,13 @@ trap cleanup EXIT
 
 cd "$APP_DIR"
 
-git diff --quiet || fail "tracked working tree has unstaged changes"
-git diff --cached --quiet || fail "tracked working tree has staged changes"
+CURRENT_HEAD="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+if [[ -n "$CURRENT_HEAD" ]]; then
+  git diff --quiet || fail "tracked working tree has unstaged changes"
+  git diff --cached --quiet || fail "tracked working tree has staged changes"
+else
+  log "server checkout has no readable HEAD; bootstrapping from the deployment bundle"
+fi
 
 log "verifying uploaded bundle"
 git bundle verify "$BUNDLE" >/dev/null
@@ -45,11 +50,17 @@ git fetch "$BUNDLE" deploy-target
 
 TARGET_SHA="$(git rev-parse FETCH_HEAD)"
 [[ "$TARGET_SHA" == "$DEPLOY_SHA" ]] || fail "bundle target $TARGET_SHA does not match requested $DEPLOY_SHA"
-git merge-base --is-ancestor HEAD "$TARGET_SHA" || fail "target commit is not a fast-forward from the current server checkout"
 
-CHANGED_FILES="$(git diff --name-only HEAD "$TARGET_SHA")"
-log "fast-forwarding to $TARGET_SHA"
-git merge --ff-only FETCH_HEAD
+if [[ -n "$CURRENT_HEAD" ]]; then
+  git merge-base --is-ancestor "$CURRENT_HEAD" "$TARGET_SHA" || fail "target commit is not a fast-forward from the current server checkout"
+  CHANGED_FILES="$(git diff --name-only "$CURRENT_HEAD" "$TARGET_SHA")"
+  log "fast-forwarding to $TARGET_SHA"
+  git merge --ff-only FETCH_HEAD
+else
+  CHANGED_FILES=$'package.json\npackage-lock.json'
+  log "checking out $TARGET_SHA from a full deployment bundle"
+  git checkout --force -B main FETCH_HEAD
+fi
 git update-ref refs/remotes/origin/main "$TARGET_SHA" || true
 
 if [[ "$NPM_INSTALL_MODE" == "always" ]] \
