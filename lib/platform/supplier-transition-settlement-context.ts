@@ -8,6 +8,7 @@ import { codedError, nonEmpty } from "./shared-base-utils";
 import { FACTORY_SUPPLIER_COST_TYPES } from "./shared-cost-constants";
 import { recognizeTencentCustomsGoods } from "./tencent-customs-ocr-experiment";
 import type { ActorLike } from "./supplier-document-request-types";
+import { customsQuantityKey, customsUnitKey } from "./supplier-tax-contract-customs-match";
 
 export { FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE } from "./factory-purchase-transition-settlement-values";
 
@@ -63,22 +64,17 @@ export function customsQuantityForSelection(candidate: Record<string, unknown>, 
   const rows = Array.isArray(candidate.quantityUnits) ? candidate.quantityUnits as Array<Record<string, unknown>> : [];
   const indexed = Number(optionIndex);
   if (Number.isInteger(indexed) && indexed >= 0 && rows[indexed]) return rows[indexed];
-  const unitKey = comparable(unit);
-  const quantityKey = String(quantity || "").replace(/[,，\s]/g, "");
-  return rows.find((row) => comparable(row.unit) === unitKey && String(row.quantity || "").replace(/[,，\s]/g, "") === quantityKey)
-    || rows.find((row) => comparable(row.unit) === unitKey)
+  const unitKey = customsUnitKey(unit);
+  const quantityKey = customsQuantityKey(quantity);
+  return rows.find((row) => customsUnitKey(row.unit) === unitKey && customsQuantityKey(row.quantity) === quantityKey)
+    || rows.find((row) => customsUnitKey(row.unit) === unitKey)
+    || (unitKey ? { quantity: nonEmpty(quantity), unit: nonEmpty(unit) } : null)
     || rows[0]
     || {};
 }
 
 function decimalComparable(value: unknown) {
-  const text = String(value || "").replace(/[,，\s]/g, "");
-  if (!/^-?\d+(?:\.\d+)?$/.test(text)) return "";
-  try {
-    return new Prisma.Decimal(text).toDecimalPlaces(4).toString();
-  } catch {
-    return "";
-  }
+  return customsQuantityKey(value);
 }
 
 function bestQuantityOption(
@@ -91,12 +87,13 @@ function bestQuantityOption(
   const scored = quantityOptions.flatMap((option) => references.map((reference) => {
     const referenceQuantity = decimalComparable(reference.quantity);
     const sameQuantity = referenceQuantity && decimalComparable(option.quantity) === referenceQuantity;
-    const sameUnit = comparable(option.unit) === comparable(reference.unit);
+    const referenceUnit = customsUnitKey(reference.unit);
+    const sameUnit = customsUnitKey(option.unit) === referenceUnit;
     const referenceProduct = comparable(reference.productName);
     const sameProduct = productKey && referenceProduct && (productKey === referenceProduct || productKey.includes(referenceProduct) || referenceProduct.includes(productKey));
     return {
       option,
-      score: (sameQuantity && sameUnit ? 120 : sameQuantity ? 70 : 0) + (sameProduct ? 30 : 0) + (sameUnit ? 10 : 0),
+      score: (sameQuantity && sameUnit ? 120 : sameQuantity && !referenceUnit ? 70 : 0) + (sameProduct ? 30 : 0) + (sameUnit ? 10 : 0),
     };
   }));
   return scored.sort((left, right) => right.score - left.score)[0]?.score > 0

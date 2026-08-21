@@ -17,6 +17,9 @@ const { selectableCustomsItems, customsQuantityForSelection } = await jiti.impor
 const { candidateForSupplierTaxContractItem } = await jiti.import<
   typeof import("../lib/platform/supplier-tax-contract-draft.ts")
 >("../lib/platform/supplier-tax-contract-draft.ts");
+const { customsQuantityForUnit } = await jiti.import<
+  typeof import("../lib/platform/supplier-tax-contract-customs-match.ts")
+>("../lib/platform/supplier-tax-contract-customs-match.ts");
 
 const schema = readPrismaSchemaSource();
 const service = readSupplierDocumentRequestsSource();
@@ -115,6 +118,21 @@ test("transition settlement defaults customs quantity by order quantity", () => 
   assert.equal(candidates[0]?.quantityOptionIndex, 1);
 });
 
+test("transition settlement does not default to same quantity with a different unit", () => {
+  const candidates = selectableCustomsItems([{
+    productName: "塑料制地板",
+    quantityUnits: [
+      { quantity: "1200", unit: "千克" },
+      { quantity: "500", unit: "支" },
+    ],
+  }], [{ productName: "塑料制地板", quantity: "1200", unit: "支" }]);
+  const first = candidates[0];
+  assert.ok(first);
+  assert.equal(first.quantity, "500");
+  assert.equal(first.unit, "支");
+  assert.equal(first.quantityOptionIndex, 1);
+});
+
 test("supplier tax contract matches customs row by order quantity before position", () => {
   const candidate = candidateForSupplierTaxContractItem({
     productNameSnapshot: "HDPE MOULDED WALL PANEL 8 x 6",
@@ -140,6 +158,25 @@ test("supplier tax contract matches customs row by order quantity before positio
     { quantity: "23301", unit: "千克" },
     { quantity: "186", unit: "米" },
   ]);
+});
+
+test("supplier tax contract keeps the purchase unit when same quantity has a different customs unit", () => {
+  const candidate = candidateForSupplierTaxContractItem({
+    productNameSnapshot: "HDPE MOULDED BOARD",
+    unitSnapshot: "支",
+    actualDeliveredQuantity: "1200",
+  }, [
+    {
+      productName: "塑料制地板",
+      quantityUnits: [
+        { quantity: "1200", unit: "千克" },
+        { quantity: "1200", unit: "支" },
+      ],
+    },
+  ], 0);
+  assert.equal(customsQuantityForUnit(candidate || {}, "支", "1200").unit, "支");
+  assert.equal(customsQuantityForUnit(candidate || {}, "支", "1200").quantity, "1200");
+  assert.equal(customsQuantityForUnit({ quantityUnits: [{ quantity: "1200", unit: "千克" }] }, "支", "1200").unit, "支");
 });
 
 test("supplier tax contract does not block on order and customs product name differences", () => {
