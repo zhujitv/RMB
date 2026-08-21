@@ -1,5 +1,7 @@
 import styles from "../../WorkspaceShell.module.css";
-import { SettingsCard, SettingsSwitch } from "./settings-layout";
+import { UiSwitch } from "../../components";
+import localStyles from "./customs-product-whitelist-card.module.css";
+import { SettingsCard } from "./settings-layout";
 import type { CustomsProductWhitelistEntry, OcrIntegrationForm } from "./types";
 
 function listText(value: string[]) {
@@ -41,63 +43,50 @@ export function CustomsProductWhitelistCard({
   }
   return (
     <SettingsCard title="报关品名白名单" icon="白">
-      <div className={styles.emptyState}>
-        启用后，报关单 OCR 只会自动填入白名单命中的报关品名；未命中的识别文本会保留为核查提示，不进入自动合同品名。
-      </div>
-      <SettingsSwitch
-        label="启用白名单模式"
-        tooltip="适合报关品名比较固定的业务。标准品名用于合同，别名用于纠正 OCR 常见识别差异。"
-        checked={form.customsProductWhitelistEnabled}
-        onChange={(value) => onChange({ ...form, customsProductWhitelistEnabled: value })}
-      />
-      <div className={styles.inlineActionGroup}>
-        <button
-          className={styles.secondaryButton}
-          type="button"
-          onClick={() => onChange({ ...form, customsProductWhitelist: [...entries, newEntry()] })}
-        >
-          新增报关品名
-        </button>
+      <div className={localStyles.toolbar}>
+        <p>只把命中白名单的报关品名自动填入合同；未命中内容只作为核查提示。</p>
+        <div className={localStyles.toolbarActions}>
+          <UiSwitch
+            label="启用白名单模式"
+            checked={form.customsProductWhitelistEnabled}
+            className={localStyles.compactSwitch}
+            onChange={(value) => onChange({ ...form, customsProductWhitelistEnabled: value })}
+          />
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => onChange({ ...form, customsProductWhitelist: [...entries, newEntry()] })}
+          >
+            新增报关品名
+          </button>
+        </div>
       </div>
       {entries.length ? (
-        <div className={styles.settingsFieldGrid}>
+        <div className={localStyles.entryList}>
           {entries.map((entry, index) => (
-            <div className={styles.notificationTemplateField} key={entry.id || index}>
-              <label>
-                标准报关品名
-                <input
-                  value={entry.standardName}
-                  onChange={(event) => updateEntry(index, { standardName: event.target.value })}
-                  placeholder="例：塑料制墙板"
-                />
+            <section className={localStyles.entryRow} key={entry.id || index}>
+              <label className={`${localStyles.field} ${localStyles.nameField}`}>
+                <span>标准报关品名</span>
+                <input value={entry.standardName} onChange={(event) => updateEntry(index, { standardName: event.target.value })} placeholder="例：塑料制墙板" />
               </label>
-              <label>
-                OCR 别名 / 常见错字
-                <textarea
-                  rows={3}
-                  value={listText(entry.aliases)}
-                  onChange={(event) => updateEntry(index, { aliases: splitList(event.target.value) })}
-                  placeholder="每行一个，例如：塑料墙板"
-                />
+              <label className={`${localStyles.field} ${localStyles.aliasField}`}>
+                <span>OCR 别名 / 常见错字</span>
+                <textarea rows={2} value={listText(entry.aliases)} onChange={(event) => updateEntry(index, { aliases: splitList(event.target.value) })} placeholder="每行一个，例如：塑料墙板" />
               </label>
-              <label>
-                HS Code（可选）
-                <textarea
-                  rows={2}
-                  value={listText(entry.hsCodes)}
-                  onChange={(event) => updateEntry(index, { hsCodes: splitList(event.target.value) })}
-                  placeholder="每行一个商品编号"
-                />
+              <label className={`${localStyles.field} ${localStyles.hsField}`}>
+                <span>HS Code（可选）</span>
+                <textarea rows={2} value={listText(entry.hsCodes)} onChange={(event) => updateEntry(index, { hsCodes: splitList(event.target.value) })} placeholder="每行一个商品编号" />
               </label>
-              <div className={styles.inlineActionGroup}>
-                <SettingsSwitch
-                  label="启用该品名"
+              <div className={localStyles.entryActions}>
+                <UiSwitch
+                  label="启用"
                   checked={entry.enabled}
+                  className={localStyles.miniSwitch}
                   onChange={(value) => updateEntry(index, { enabled: value })}
                 />
                 <button className={styles.secondaryButton} type="button" onClick={() => removeEntry(index)}>删除</button>
               </div>
-            </div>
+            </section>
           ))}
         </div>
       ) : (

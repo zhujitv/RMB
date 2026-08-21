@@ -97,9 +97,10 @@ test("VAT invoice must match supplier, buyer, tax ids, product name, quantity, u
 test("generated tax contract workbook contains no specification column and freezes approved customs values", async () => {
   const body = await generateSupplierTaxContractXlsx({
     ...contract,
+    totalAmountWithTax: "45158.8",
     items: [
-      { ...contract.items[0], quantity: "10", declaredQuantity: "10.00" },
-      { ...contract.items[0], lineNo: 2, purchaseOrderItemId: "item-2", productName: "木塑复合墙板", quantity: "2866.7", declaredQuantity: "2866.70", amountWithTax: "0.00" },
+      { ...contract.items[0], quantity: "10", declaredQuantity: "10.00", amountWithTax: "40542." },
+      { ...contract.items[0], lineNo: 2, purchaseOrderItemId: "item-2", productName: "木塑复合墙板", quantity: "2866.7", declaredQuantity: "2866.70", amountWithTax: "4616.8" },
     ],
   } as never);
   assert.equal(body.subarray(0, 2).toString("binary"), "PK");
@@ -121,13 +122,16 @@ test("generated tax contract workbook contains no specification column and freez
   assert.match(sheet || "", /<c r="B7"[^>]*s="12"><v>10<\/v><\/c>/);
   assert.match(sheet || "", /<c r="B8"[^>]*s="11"><v>2866\.70<\/v><\/c>/);
   assert.match(sheet || "", /<c r="C7"[^>]*s="8"/);
+  assert.match(sheet || "", /<c r="E7"[^>]*s="13"><v>40542\.00<\/v><\/c>/);
+  assert.match(sheet || "", /<c r="E8"[^>]*s="13"><v>4616\.80<\/v><\/c>/);
+  assert.match(sheet || "", /<c r="E9"[^>]*s="5"><v>45158\.80<\/v><\/c>/);
   assert.match(sheet || "", /<c r="F7"[^>]*s="6"/);
   assert.match(sheet || "", /<sheetFormatPr[^>]*defaultRowHeight="14"/);
   assert.match(sheet || "", /<c r="B10"[^>]*s="8"/);
   assert.match(sheet || "", /<c r="F10"[^>]*s="8"/);
   assert.match(styles || "", /formatCode="0\.######"/);
   assert.match(styles || "", /formatCode="0\.00"/);
-  assert.match(styles || "", /cellXfs count="13"/);
+  assert.match(styles || "", /cellXfs count="14"/);
   assert.match(styles || "", /numFmtId="1" applyNumberFormat="1" applyAlignment="1"/);
   assert.doesNotMatch(styles || "", /#,##/);
   assert.doesNotMatch(sheet || "", /规格型号/);
