@@ -375,19 +375,24 @@ jobs:
           app_dir="${APP_DIR:-/srv/rmb/app}"
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          remote_head="$(ssh "${ssh_opts[@]}" "$ssh_target" "cd '$app_dir' && git rev-parse HEAD")"
+          remote_head="$(ssh "${ssh_opts[@]}" "$ssh_target" "cd '$app_dir' && git rev-parse --verify HEAD 2>/dev/null || true")"
           deploy_sha="${{ steps.sha.outputs.sha }}"
           if [[ "$remote_head" == "$deploy_sha" ]]; then
             printf 'up_to_date=true\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git merge-base --is-ancestor "$remote_head" "$deploy_sha" || {
-            echo "::error::Server HEAD $remote_head is not an ancestor of $deploy_sha. Refusing non-fast-forward deployment."
-            exit 1
-          }
           git branch --force deploy-target "$deploy_sha"
           bundle_path="$RUNNER_TEMP/rmb-cvm-$deploy_sha.bundle"
-          git bundle create "$bundle_path" deploy-target "^$remote_head"
+          if [[ -n "$remote_head" ]]; then
+            git merge-base --is-ancestor "$remote_head" "$deploy_sha" || {
+              echo "::error::Server HEAD $remote_head is not an ancestor of $deploy_sha. Refusing non-fast-forward deployment."
+              exit 1
+            }
+            git bundle create "$bundle_path" deploy-target "^$remote_head"
+          else
+            echo "::warning::Server checkout has no readable HEAD; creating a full deployment bundle."
+            git bundle create "$bundle_path" deploy-target
+          fi
           printf 'path=%s\n' "$bundle_path" >> "$GITHUB_OUTPUT"
           printf 'up_to_date=false\n' >> "$GITHUB_OUTPUT"
 

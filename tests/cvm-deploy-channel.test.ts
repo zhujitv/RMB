@@ -32,6 +32,15 @@ test("CVM deployment avoids direct GitHub pulls from the server", () => {
   assert.doesNotMatch(remoteScript, /git pull|git fetch origin main/);
 });
 
+test("CVM deployment can recover when the server checkout has no readable HEAD", () => {
+  assert.match(workflow, /git rev-parse --verify HEAD 2>\/dev\/null \|\| true/);
+  assert.match(workflow, /creating a full deployment bundle/);
+  assert.match(workflow, /git bundle create "\$bundle_path" deploy-target/);
+  assert.match(remoteScript, /CURRENT_HEAD="\$\(git rev-parse --verify HEAD 2>\/dev\/null \|\| true\)"/);
+  assert.match(remoteScript, /bootstrapping from the deployment bundle/);
+  assert.match(remoteScript, /git checkout --force -B main FETCH_HEAD/);
+});
+
 test("CVM deployment stays migration-safe and uses the app build only", () => {
   assert.match(workflow, /RMB_CVM_ENV_FILE/);
   assert.match(remoteScript, /source "\$ENV_FILE"/);
