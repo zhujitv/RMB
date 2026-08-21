@@ -60,6 +60,12 @@ const directCreate = readFileSync("lib/platform/sales-execution-create-direct.ts
 const directItemsService = readFileSync("lib/platform/sales-execution-direct-items.ts", "utf8");
 const quoteCreate = readFileSync("lib/platform/sales-execution-create-quotation.ts", "utf8");
 const mutationService = readFileSync("lib/platform/sales-execution-service.ts", "utf8");
+const quantityCorrectionService = readFileSync("lib/platform/sales-execution-quantity-correction.ts", "utf8");
+const quantityCorrectionRoute = readFileSync("app/api/sales-executions/[id]/quantity-correction/route.ts", "utf8");
+const quantityCorrectionMigration = readFileSync(
+  "prisma/migrations/20260821152000_dispatched_quantity_correction/migration.sql",
+  "utf8",
+);
 const voidNotificationService = readFileSync(
   "lib/platform/sales-execution-void-notifications.ts",
   "utf8",
@@ -522,6 +528,39 @@ test("draft mutations use revision locks, append versions, audit, and soft void"
   assert.match(mutationService, /replaceFactoryPurchaseOrderRows/);
   assert.match(mutationService, /allocationsForExecutionLines/);
   assert.match(mutationService, /修改销售明细时必须同时提交完整工厂分配/);
+});
+
+test("dispatched direct-order quantity correction is an audited narrow channel", () => {
+  assert.match(quantityCorrectionService, /assertWrite\(actor, "salesExecution"\)/);
+  assert.match(quantityCorrectionService, /assertWrite\(actor, "orders"\)/);
+  assert.match(quantityCorrectionService, /lockSalesExecution\(tx, executionId\)/);
+  assert.match(quantityCorrectionService, /lockFactoryPurchaseOrders\(tx, executionId\)/);
+  assert.match(quantityCorrectionService, /assertExpectedSalesExecutionRevision/);
+  assert.match(quantityCorrectionService, /execution\.sourceType !== "DIRECT"/);
+  assert.match(quantityCorrectionService, /execution\.shippingStartedAt \|\| item\.actualDeliveredQuantity !== null \|\| order\.actualDeliveryDate/);
+  assert.match(quantityCorrectionService, /order\.settlement/);
+  assert.match(quantityCorrectionService, /BLOCKING_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
+  assert.match(quantityCorrectionService, /assertBusinessOrderWritableInTransaction/);
+  assert.match(quantityCorrectionService, /app\.sales_quantity_correction/);
+  assert.match(quantityCorrectionService, /salesExecutionItem\.updateMany/);
+  assert.match(quantityCorrectionService, /factoryPurchaseOrderItem\.updateMany/);
+  assert.match(quantityCorrectionService, /factoryPurchaseOrderSupplierPrice\.updateMany/);
+  assert.match(quantityCorrectionService, /receivableOrder\.updateMany/);
+  assert.match(quantityCorrectionService, /factoryPurchaseOrderProductionReport\.create/);
+  assert.match(quantityCorrectionService, /appendSalesExecutionVersion/);
+  assert.match(quantityCorrectionService, /更正已下发订单数量/);
+  assert.match(quantityCorrectionRoute, /requireApiWrite\(request, "salesExecution"\)/);
+  assert.match(quantityCorrectionRoute, /correctSalesExecutionQuantity/);
+});
+
+test("database immutability allows only the explicit quantity-correction session", () => {
+  assert.match(quantityCorrectionMigration, /current_setting\('app\.sales_quantity_correction', true\) = 'on'/);
+  assert.match(quantityCorrectionMigration, /TO_JSONB\(NEW\) - 'quantity' - 'sales_amount'/);
+  assert.match(quantityCorrectionMigration, /TO_JSONB\(NEW\) - 'allocated_quantity' - 'amount'/);
+  assert.match(quantityCorrectionMigration, /quantity_correction IS NOT TRUE[\s\S]*NEW\."subtotal" IS DISTINCT FROM OLD\."subtotal"/);
+  assert.match(quantityCorrectionMigration, /NEW\."penalty_base_amount" IS DISTINCT FROM OLD\."penalty_base_amount"[\s\S]*quantity_correction IS NOT TRUE/);
+  assert.match(quantityCorrectionMigration, /NEW\."source" = 'INTERNAL_OFFLINE'[\s\S]*purchase_order_production_status = 'COMPLETED'/);
+  assert.doesNotMatch(quantityCorrectionMigration, /DROP TRIGGER|DISABLE TRIGGER/);
 });
 
 test("customer product history considers latest same-currency sales execution price", () => {

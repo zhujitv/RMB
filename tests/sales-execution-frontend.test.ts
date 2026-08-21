@@ -34,6 +34,8 @@ const viewSource = readFileSync("app/modules/sales-execution/sales-execution-mod
 const dispatchSource = readFileSync("app/modules/sales-execution/use-sales-execution-dispatch.ts", "utf8");
 const emailRetrySource = readFileSync("app/modules/sales-execution/use-sales-execution-email-retry.ts", "utf8");
 const voidSource = readFileSync("app/modules/sales-execution/use-sales-execution-void.ts", "utf8");
+const quantityCorrectionSource = readFileSync("app/modules/sales-execution/purchase-order-quantity-correction.tsx", "utf8");
+const purchaseExecutionPanelSource = readFileSync("app/modules/sales-execution/purchase-order-execution-panel.tsx", "utf8");
 const salesExecutionUiSource = [moduleSource, ...readdirSync("app/modules/sales-execution")
   .filter((name) => name.endsWith(".tsx"))
   .map((name) => readFileSync(`app/modules/sales-execution/${name}`, "utf8"))]
@@ -389,4 +391,18 @@ test("sales execution mutations reject same-tick duplicates and await detail ref
   ]) {
     assert.match(source, /BusyRef\.current|busyRef\.current/);
   }
+});
+
+test("accepted purchase orders expose a guarded quantity-correction action", () => {
+  assert.match(purchaseExecutionPanelSource, /PurchaseOrderQuantityCorrection/);
+  assert.match(quantityCorrectionSource, /更正订单数量/);
+  assert.match(quantityCorrectionSource, /order\.status === "ACCEPTED"/);
+  assert.match(quantityCorrectionSource, /!shippingStarted/);
+  assert.match(quantityCorrectionSource, /!order\.actualDeliveryDate/);
+  assert.match(quantityCorrectionSource, /!order\.settlement/);
+  assert.match(quantityCorrectionSource, /expectedRevision: executionRevision/);
+  assert.match(quantityCorrectionSource, /purchaseOrderItemId: itemId/);
+  assert.match(quantityCorrectionSource, /newQuantity/);
+  assert.match(quantityCorrectionSource, /reason/);
+  assert.match(quantityCorrectionSource, /onSaved\("订单数量已更正"\)/);
 });
