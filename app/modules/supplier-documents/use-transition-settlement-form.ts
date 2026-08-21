@@ -8,6 +8,8 @@ export type TransitionItem = {
   productName?: string;
   unit?: string;
   quantity?: string;
+  quantityOptionIndex?: number | null;
+  quantityOptions?: Array<{ index: number; quantity: string; unit: string }>;
   selected?: boolean;
 };
 

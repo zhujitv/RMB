@@ -42,7 +42,18 @@ export function TransitionSettlementPanel({ cost, saving, form, onError }: {
             >
               <td><input className={styles.supplierDocumentTransitionCheckbox} aria-label={`选择第${index + 1}行报关商品`} type="checkbox" checked={Boolean(item.selected)} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { selected: event.target.checked })} onClick={(event) => event.stopPropagation()} /></td>
               <td><input className={styles.supplierDocumentTransitionField} aria-label={`过渡结算第${index + 1}行品名`} value={item.productName || ""} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { productName: event.target.value })} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} /></td>
-              <td><input className={styles.supplierDocumentTransitionField} aria-label={`过渡结算第${index + 1}行数量`} inputMode="decimal" value={item.quantity || ""} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { quantity: event.target.value })} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} /></td>
+              <td>{(item.quantityOptions || []).length > 1 ? <select
+                className={styles.supplierDocumentTransitionField}
+                aria-label={`选择第${index + 1}行成交数量`}
+                value={String(item.quantityOptionIndex ?? "")}
+                disabled={Boolean(form.preview?.existing)}
+                onChange={(event) => {
+                  const option = (item.quantityOptions || []).find((entry) => String(entry.index) === event.target.value);
+                  form.updateItem(index, { quantityOptionIndex: option?.index ?? null, quantity: option?.quantity || item.quantity, unit: option?.unit || item.unit });
+                }}
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+              >{(item.quantityOptions || []).map((option) => <option key={option.index} value={option.index}>{option.quantity} {option.unit}</option>)}</select> : null}<input className={styles.supplierDocumentTransitionField} aria-label={`过渡结算第${index + 1}行数量`} inputMode="decimal" value={item.quantity || ""} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { quantity: event.target.value, quantityOptionIndex: null })} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} /></td>
               <td><input className={styles.supplierDocumentTransitionField} aria-label={`过渡结算第${index + 1}行单位`} value={item.unit || ""} disabled={Boolean(form.preview?.existing)} onChange={(event) => form.updateItem(index, { unit: event.target.value })} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} /></td>
             </tr>)}</tbody>
           </table></div>

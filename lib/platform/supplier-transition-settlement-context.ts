@@ -16,6 +16,7 @@ export type TransitionItemInput = {
   productName?: unknown;
   unit?: unknown;
   quantity?: unknown;
+  quantityOptionIndex?: unknown;
 };
 
 export type TransitionInput = {
@@ -54,6 +55,22 @@ export function customsQuantity(candidate: Record<string, unknown>) {
   return rows[0] || {};
 }
 
+function comparable(value: unknown) {
+  return String(value || "").toUpperCase().replace(/[\s（）()【】\[\]，,。._\-\/\\]/g, "");
+}
+
+export function customsQuantityForSelection(candidate: Record<string, unknown>, unit: unknown, quantity: unknown, optionIndex?: unknown) {
+  const rows = Array.isArray(candidate.quantityUnits) ? candidate.quantityUnits as Array<Record<string, unknown>> : [];
+  const indexed = Number(optionIndex);
+  if (Number.isInteger(indexed) && indexed >= 0 && rows[indexed]) return rows[indexed];
+  const unitKey = comparable(unit);
+  const quantityKey = String(quantity || "").replace(/[,，\s]/g, "");
+  return rows.find((row) => comparable(row.unit) === unitKey && String(row.quantity || "").replace(/[,，\s]/g, "") === quantityKey)
+    || rows.find((row) => comparable(row.unit) === unitKey)
+    || rows[0]
+    || {};
+}
+
 export function selectableCustomsItems(candidates: Array<Record<string, unknown>>) {
   return candidates.flatMap((candidate, customsItemIndex) => {
     const quantity = customsQuantity(candidate);
@@ -61,7 +78,10 @@ export function selectableCustomsItems(candidates: Array<Record<string, unknown>
     const unit = nonEmpty(quantity.unit);
     const quantityValue = nonEmpty(quantity.quantity);
     if (!productName || !unit || !quantityValue) return [];
-    return [{ customsItemIndex, productName, unit, quantity: quantityValue }];
+    const quantityOptions = (Array.isArray(candidate.quantityUnits) ? candidate.quantityUnits as Array<Record<string, unknown>> : [])
+      .map((row, index) => ({ index, quantity: nonEmpty(row.quantity), unit: nonEmpty(row.unit) }))
+      .filter((row) => row.quantity && row.unit);
+    return [{ customsItemIndex, productName, unit, quantity: quantityValue, quantityOptionIndex: 0, quantityOptions }];
   });
 }
 

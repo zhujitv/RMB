@@ -62,6 +62,69 @@ test("table candidates retain commodity name, code, quantity/unit and source coo
   ]);
 });
 
+test("table candidates never use HS code as quantity or product name as unit", async () => {
+  const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  const items = candidateItemsFromTencentTables([{
+    page: 1,
+    tableIndex: 0,
+    type: 2,
+    rows: [
+      ["项号", "商品编号", "商品名称及规格型号", "数量及单位", "备用识别列", "总价"],
+      ["1", "3918909000", "塑料制地板", "3918909000 塑料制地板", "16250 千克", "16250.00"],
+    ],
+    cells: [],
+  }]);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].commodityCode, "3918909000");
+  assert.equal(items[0].productName, "塑料制地板");
+  assert.deepEqual(items[0].quantityUnits, [{ quantity: "16250", unit: "千克" }]);
+});
+
+test("table candidates split customs rows collapsed into one OCR column", async () => {
+  const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  const items = candidateItemsFromTencentTables([{
+    page: 1,
+    tableIndex: 0,
+    type: 2,
+    rows: [
+      ["项号 商品编号 商品名称及规格型号 数量及单位 总价 币制"],
+      ["1 3918909000 塑料制地板 16250 千克 16250.00 USD"],
+      ["2 3916909000 塑料制柱子 23301 千克 110898.92 USD"],
+    ],
+    cells: [],
+  }]);
+  assert.equal(items.length, 2);
+  assert.deepEqual(items.map((item) => ({
+    itemNo: item.itemNo,
+    commodityCode: item.commodityCode,
+    productName: item.productName,
+    quantityUnits: item.quantityUnits,
+  })), [
+    { itemNo: "1", commodityCode: "3918909000", productName: "塑料制地板", quantityUnits: [{ quantity: "16250", unit: "千克" }] },
+    { itemNo: "2", commodityCode: "3916909000", productName: "塑料制柱子", quantityUnits: [{ quantity: "23301", unit: "千克" }] },
+  ]);
+});
+
+test("table candidates handle split quantity and unit columns", async () => {
+  const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  const items = candidateItemsFromTencentTables([{
+    page: 1,
+    tableIndex: 0,
+    type: 2,
+    rows: [
+      ["项号", "商品编号", "品名", "成交数量", "成交单位", "总价"],
+      ["1", "3918909000", "塑料制地板", "16250", "千克", "16250.00"],
+      ["2", "3916909000", "塑料制柱子", "23301", "千克", "110898.92"],
+    ],
+    cells: [],
+  }]);
+  assert.equal(items.length, 2);
+  assert.deepEqual(items.map((item) => item.quantityUnits), [
+    [{ quantity: "16250", unit: "千克" }],
+    [{ quantity: "23301", unit: "千克" }],
+  ]);
+});
+
 test("transition product name excludes customs declaration elements", async () => {
   const { customsProductName } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
   assert.equal(customsProductName("塑料制柱子 0|2|杆|58%木粉 37%PE塑料 5%化学助剂|无品牌|无型号"), "塑料制柱子");
