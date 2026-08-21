@@ -77,6 +77,10 @@ const quantityCorrectionShippingResetMigration = readFileSync(
   "prisma/migrations/20260821173000_quantity_correction_shipping_reset/migration.sql",
   "utf8",
 );
+const quantityCorrectionSupplierPriceMigration = readFileSync(
+  "prisma/migrations/20260821180500_quantity_correction_supplier_price/migration.sql",
+  "utf8",
+);
 const voidNotificationService = readFileSync(
   "lib/platform/sales-execution-void-notifications.ts",
   "utf8",
@@ -554,6 +558,7 @@ test("dispatched direct-order quantity correction is an audited narrow channel",
   assert.match(quantityCorrectionService, /shippingStartedMarkerReset/);
   assert.match(quantityCorrectionService, /classifiedQuantityCorrectionDatabaseError/);
   assert.match(quantityCorrectionService, /SALES_QUANTITY_CORRECTION_SHIPPING_ANCHOR_GUARD/);
+  assert.match(quantityCorrectionService, /confirmed supplier price is immutable/);
   assert.match(quantityCorrectionService, /order\.settlement/);
   assert.match(quantityCorrectionReceivableService, /BLOCKING_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
   assert.match(quantityCorrectionReceivableService, /assertBusinessOrderWritableInTransaction/);
@@ -632,8 +637,14 @@ test("database immutability allows only the explicit quantity-correction session
   assert.match(quantityCorrectionShippingResetMigration, /RAISE EXCEPTION 'sales execution shipping handoff is immutable'/);
   assert.match(quantityCorrectionShippingResetMigration, /unreleased_active_container_count/);
   assert.match(quantityCorrectionShippingResetMigration, /purchase_order\."status" NOT IN \('REJECTED', 'VOIDED'\)/);
+  assert.match(quantityCorrectionSupplierPriceMigration, /CREATE OR REPLACE FUNCTION "protect_factory_purchase_order_supplier_price"/);
+  assert.match(quantityCorrectionSupplierPriceMigration, /current_setting\('app\.sales_quantity_correction', true\) = 'on'/);
+  assert.match(quantityCorrectionSupplierPriceMigration, /TO_JSONB\(NEW\) - 'amount'/);
+  assert.match(quantityCorrectionSupplierPriceMigration, /NEW\."amount" <> ROUND\(allocated_quantity \* NEW\."unit_price", 2\)/);
+  assert.match(quantityCorrectionSupplierPriceMigration, /RAISE EXCEPTION 'confirmed supplier price is immutable'/);
   assert.doesNotMatch(quantityCorrectionMigration, /DROP TRIGGER|DISABLE TRIGGER/);
   assert.doesNotMatch(quantityCorrectionShippingResetMigration, /DROP TRIGGER|DISABLE TRIGGER/);
+  assert.doesNotMatch(quantityCorrectionSupplierPriceMigration, /DROP TRIGGER|DISABLE TRIGGER/);
 });
 
 test("customer product history considers latest same-currency sales execution price", () => {

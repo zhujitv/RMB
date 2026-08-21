@@ -176,8 +176,13 @@ function classifiedQuantityCorrectionDatabaseError(error: unknown) {
   if (
     /dispatched sales execution (items|core fields) are immutable/i.test(message)
     || /dispatched factory purchase order (items|core fields) are immutable/i.test(message)
+    || /confirmed supplier price is immutable/i.test(message)
+    || /supplier price amount must equal quantity multiplied by unit price/i.test(message)
     || /factory purchase order penalty base is immutable/i.test(message)
     || /production progress requires/i.test(message)
+    || /production progress (report must contain|cumulative quantity cannot decrease|sequence is invalid|report time is invalid)/i.test(message)
+    || /production completed quantity exceeds the approved delivery target/i.test(message)
+    || /receivable order sales execution lineage is inconsistent/i.test(message)
   ) {
     return codedError(
       "数据库保护规则阻止了本次数量更正，请刷新页面；如果仍失败，请让管理员执行数量更正数据库补丁。",
