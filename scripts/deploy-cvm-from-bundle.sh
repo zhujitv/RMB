@@ -29,7 +29,7 @@ ensure_checkout_writable() {
   local app_probe git_probe
   app_probe="$APP_DIR/.rmb-deploy-write-check"
   git_probe="$APP_DIR/.git/.rmb-deploy-write-check"
-  if touch "$app_probe" "$git_probe" 2>/dev/null; then
+  if touch "$app_probe" "$git_probe" 2>/dev/null && git status --short >/dev/null 2>&1; then
     rm -f "$app_probe" "$git_probe"
     return 0
   fi
