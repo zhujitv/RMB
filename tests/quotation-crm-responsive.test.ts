@@ -32,16 +32,16 @@ test("payment business rows use three columns because they render three fields",
   );
 });
 
-test("payment registration is hidden after any payment arrives", () => {
+test("payment registration is hidden only after full collection", () => {
   assert.match(
     businessRecordsSource,
     /canRegisterPayments\s*&&\s*businessOrderNeedsPaymentRegistration\(order\)/,
   );
-  assert.equal(businessOrderNeedsPaymentRegistration({ summary: { arrivedPaymentsCny: 100, arrivedOutstandingCny: 10 } }), false);
+  assert.equal(businessOrderNeedsPaymentRegistration({ summary: { arrivedPaymentsCny: 100, arrivedOutstandingCny: 10 } }), true);
+  assert.equal(businessOrderNeedsPaymentRegistration({ status: "部分收款", summary: { arrivedPaymentsCny: 100, arrivedOutstandingCny: 10 } }), true);
   assert.equal(businessOrderNeedsPaymentRegistration({ summary: { arrivedOutstandingCny: 0 } }), false);
   assert.equal(businessOrderNeedsPaymentRegistration({ summary: { outstandingCny: -0.01 } }), false);
   assert.equal(businessOrderNeedsPaymentRegistration({ status: "已收齐" }), false);
   assert.equal(businessOrderNeedsPaymentRegistration({ status: "多收款" }), false);
-  assert.equal(businessOrderNeedsPaymentRegistration({ status: "部分收款", summary: { arrivedPaymentsCny: 0, arrivedOutstandingCny: 10 } }), true);
   assert.equal(businessOrderNeedsPaymentRegistration({ status: "已发货", summary: { arrivedPaymentsCny: 0, arrivedOutstandingCny: 10 } }), true);
 });
