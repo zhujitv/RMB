@@ -44,7 +44,7 @@ export function SupplierDocumentTaskCard({
   deleting: boolean;
   resending: boolean;
   onToggle: () => void;
-  onOpen: () => void;
+  onOpen: () => void | Promise<void>;
   onRefreshTask: () => void | Promise<void>;
   onUpload: (task: SupplierDocumentTask, documentType: string, file: File | null, costId?: string) => void;
   onDelete: (task: SupplierDocumentTask) => void;

@@ -212,6 +212,15 @@ test("supplier document mobile detail opens as a fixed foreground drawer", () =>
   assert.match(supplierDocumentStyles, /@media \(max-width: 640px\)[\s\S]*\.supplierDocumentRequestDialog\s*\{[\s\S]*calc\(100dvh - 24px\)/);
 });
 
+test("supplier contract detail force-refreshes when opened and after workflow mutations", () => {
+  assert.match(supplierModule, /async function openTask\(taskId: string\)[\s\S]*loadTaskDetail\(taskId, \{ force: true \}\)/);
+  assert.match(supplierModule, /if \(expandedTaskId\) void loadTaskDetail\(expandedTaskId, \{ force: true, silent: true \}\)/);
+  assert.match(supplierModule, /<TaxContractReviewPanel[\s\S]*onRefresh=\{onRefreshTask\}/);
+  assert.match(supplierModule, /onRefreshTask=\{refreshTaskAfterReview\}/);
+  assert.doesNotMatch(supplierModule, /onRefreshTask=\{\(taskId\) => void refreshTaskAfterReview\(taskId\)\}/);
+  assert.match(supplierModule, /await onRefresh\(\)/);
+});
+
 test("supplier document reminders are owned by the supplier return module", () => {
   assert.doesNotMatch(taxModule, /通知产品供应商回传/);
   assert.doesNotMatch(taxModule, /\/api\/supplier-document-requests/);

@@ -9,6 +9,7 @@ const jiti = createJiti(import.meta.url);
 const { matchSupplierInvoiceToContract } = jiti("../lib/platform/supplier-invoice-contract-match.ts") as typeof import("../lib/platform/supplier-invoice-contract-match.ts");
 const { generateSupplierTaxContractXlsx } = jiti("../lib/platform/supplier-tax-contract-xlsx.ts") as typeof import("../lib/platform/supplier-tax-contract-xlsx.ts");
 const { applySupplierTaxContractDraftEdits } = jiti("../lib/platform/supplier-tax-contract-draft-edit.ts") as typeof import("../lib/platform/supplier-tax-contract-draft-edit.ts");
+const { applySupplierTaxContractPartyDetails } = jiti("../lib/platform/supplier-tax-contract-parties.ts") as typeof import("../lib/platform/supplier-tax-contract-parties.ts");
 const { normalizeSupplierTaxContractNumber, supplierTaxContractNumberFromJson } = jiti("../lib/platform/supplier-tax-contract-number.ts") as typeof import("../lib/platform/supplier-tax-contract-number.ts");
 const { normalizeSupplierTaxContractDraftValues, supplierTaxContractQuantityText, supplierTaxContractSigningDate, supplierTaxContractSupplierName } = jiti("../lib/platform/supplier-tax-contract-values.ts") as typeof import("../lib/platform/supplier-tax-contract-values.ts");
 
@@ -270,13 +271,143 @@ test("manual quantity correction is saved but blocks approval when the settlemen
   assert.throws(() => applySupplierTaxContractDraftEdits(contract as never, []), /完整提交合同中的全部商品行/);
 });
 
+test("manual corrections preserve customs and quantity blockers and only replace their own amount blocker", () => {
+  const preservedIssues = [
+    "采购单1仍有商品未确认实际装柜数量。",
+    "报关商品“木塑复合地板”的全部供应商实际装柜合计9与报关数量10不一致。",
+    "报关商品“木塑复合地板”的数量“未识别”无法核验。",
+  ];
+  const editableMatchIssue = "采购第1行无法可靠匹配报关单商品，请先修正报关单识别或商品资料。";
+  const previousAmountIssue = "人工修正后的商品金额合计1017.00与采购结算金额1130.00不一致。";
+  const withIssues = {
+    ...contract,
+    blockingIssues: [...preservedIssues, editableMatchIssue, previousAmountIssue],
+  };
+  const restored = applySupplierTaxContractDraftEdits(withIssues as never, [{
+    purchaseOrderItemId: "item-1",
+    productName: "木塑复合地板",
+    quantity: "10",
+    unit: "平方米",
+  }]);
+  assert.deepEqual(restored.draft.blockingIssues, [...preservedIssues, editableMatchIssue]);
+
+  const changed = applySupplierTaxContractDraftEdits(withIssues as never, [{
+    purchaseOrderItemId: "item-1",
+    productName: "木塑复合地板",
+    quantity: "8",
+    unit: "平方米",
+  }]);
+  assert.equal(changed.draft.blockingIssues.filter((issue) => issue.startsWith("人工修正后的商品金额合计")).length, 1);
+  for (const issue of preservedIssues) assert.ok(changed.draft.blockingIssues.includes(issue));
+  assert.ok(!changed.draft.blockingIssues.includes(editableMatchIssue));
+});
+
+test("manual correction only clears the editable blocker for rows that actually changed", () => {
+  const secondItem = {
+    ...contract.items[0],
+    lineNo: 2,
+    purchaseOrderItemId: "item-2",
+    amountWithTax: "1130.00",
+  };
+  const firstIssue = "采购第1行无法可靠匹配报关单商品，请先修正报关单识别或商品资料。";
+  const secondIssue = "采购第2行无法可靠匹配报关单商品，请先修正报关单识别或商品资料。";
+  const edited = applySupplierTaxContractDraftEdits({
+    ...contract,
+    items: [contract.items[0], secondItem],
+    totalAmountWithTax: "2260.00",
+    blockingIssues: [firstIssue, secondIssue],
+  } as never, [{
+    purchaseOrderItemId: "item-1",
+    productName: "木塑地板",
+    quantity: "10",
+    unit: "平方米",
+  }, {
+    purchaseOrderItemId: "item-2",
+    productName: secondItem.productName,
+    quantity: secondItem.quantity,
+    unit: secondItem.unit,
+  }]);
+  assert.ok(!edited.draft.blockingIssues.includes(firstIssue));
+  assert.ok(edited.draft.blockingIssues.includes(secondIssue));
+});
+
+test("pending contracts refresh both parties while preserving non-invoice compliance blockers", () => {
+  const customsIssue = "采购第1行无法可靠匹配报关单商品，请先修正报关单识别或商品资料。";
+  const refreshed = applySupplierTaxContractPartyDetails({
+    ...contract,
+    contractNo: "PV258-T01",
+    signingDate: "2026-08-20",
+    items: contract.items.map((item) => ({ ...item, quantity: "10.00" })),
+    supplierName: "旧供应商",
+    supplierTaxNumber: "",
+    buyerName: "旧业务主体",
+    buyerTaxNumber: "",
+    blockingIssues: [
+      "请先在设置 → 业务主体维护中国地区纳税人识别号。",
+      "请先在设置 → 业务主体维护中国地区开户行和银行账号。",
+      customsIssue,
+    ],
+  } as never, {
+    supplierName: "当前供应商名称",
+    invoiceTitle: "当前供应商开票抬头",
+    taxNumber: "CURRENT-SUPPLIER-TAX",
+    address: "当前供应商地址",
+    phone: "0571-00000000",
+    bankName: "当前供应商开户行",
+    bankAccount: "CURRENT-SUPPLIER-ACCOUNT",
+  }, {
+    name: "当前业务主体",
+    taxNumber: "CURRENT-BUYER-TAX",
+    address: "当前业务主体地址",
+    contactPhone: "0575-00000000",
+    domesticBankName: "当前国内开户行",
+    domesticBankAccount: "CURRENT-BUYER-ACCOUNT",
+  });
+  assert.equal(refreshed.contractNo, "PV258");
+  assert.equal(refreshed.supplierName, "当前供应商名称");
+  assert.equal(refreshed.signingDate, "2026-07-20");
+  assert.equal(refreshed.items[0]?.quantity, "10");
+  assert.equal(refreshed.supplierTaxNumber, "CURRENT-SUPPLIER-TAX");
+  assert.equal(refreshed.supplierBankAccount, "CURRENT-SUPPLIER-ACCOUNT");
+  assert.equal(refreshed.buyerName, "当前业务主体");
+  assert.equal(refreshed.buyerTaxNumber, "CURRENT-BUYER-TAX");
+  assert.equal(refreshed.buyerBankAccount, "CURRENT-BUYER-ACCOUNT");
+  assert.deepEqual(refreshed.blockingIssues, [customsIssue]);
+});
+
+test("party refresh recalculates current invoice-data blockers without clearing real blockers", () => {
+  const amountIssue = "人工修正后的商品金额合计1017.00与采购结算金额1130.00不一致。";
+  const refreshed = applySupplierTaxContractPartyDetails({
+    ...contract,
+    blockingIssues: [amountIssue],
+  } as never, {
+    supplierName: "当前供应商名称",
+    invoiceTitle: null,
+    taxNumber: "CURRENT-SUPPLIER-TAX",
+    address: null,
+    phone: null,
+    bankName: null,
+    bankAccount: null,
+  }, {
+    name: "当前业务主体",
+    taxNumber: null,
+    address: null,
+    contactPhone: null,
+    domesticBankName: null,
+    domesticBankAccount: null,
+  });
+  assert.ok(refreshed.blockingIssues.includes(amountIssue));
+  assert.match(refreshed.blockingIssues.join("|"), /业务主体维护中国地区纳税人识别号/);
+  assert.match(refreshed.blockingIssues.join("|"), /业务主体维护中国地区开户行和银行账号/);
+});
+
 test("workflow requires manual contract review and invoice confirmation before completion and tax submission", () => {
   const workflow = readFileSync("lib/platform/supplier-tax-contract-workflow.ts", "utf8");
   const upload = readFileSync("lib/platform/supplier-document-request-upload.ts", "utf8");
   const completion = readFileSync("lib/platform/supplier-document-request-completion.ts", "utf8");
   const taxStatus = readFileSync("lib/platform/tax-refunds-status-actions.ts", "utf8");
   assert.match(workflow, /contractStatus: "PENDING_REVIEW"/);
-  assert.match(workflow, /refreshSupplierTaxContractBuyer\(contractDraft\(row\.contractDraft\)\)/);
+  assert.match(workflow, /refreshSupplierTaxContractParties\(contractDraft\(row\.contractDraft\)\)/);
   assert.match(workflow, /input\.confirmed !== true/);
   assert.match(workflow, /contractRevision: \{ increment: 1 \}/);
   assert.match(workflow, /generateSupplierTaxContractXlsx/);
@@ -287,12 +418,17 @@ test("workflow requires manual contract review and invoice confirmation before c
   assert.match(taxStatus, /SUPPLIER_INVOICE_REVIEW_REQUIRED/);
 });
 
-test("pending contract previews refresh buyer domestic account data before review", () => {
+test("pending contract details, previews and approval refresh both parties before review", () => {
   const preview = readFileSync("lib/platform/supplier-tax-contract-preview.ts", "utf8");
-  const buyer = readFileSync("lib/platform/supplier-tax-contract-buyer.ts", "utf8");
-  assert.match(preview, /refreshSupplierTaxContractBuyer\(pendingDraft\(row\.contractDraft\)\)/);
-  assert.match(buyer, /domesticBankName: true, domesticBankAccount: true/);
-  assert.match(buyer, /buyerBankName: entity\.domesticBankName/);
+  const detail = readFileSync("lib/platform/supplier-document-request-detail.ts", "utf8");
+  const parties = readFileSync("lib/platform/supplier-tax-contract-parties.ts", "utf8");
+  assert.match(preview, /refreshSupplierTaxContractParties\(pendingDraft\(row\.contractDraft\)\)/);
+  assert.match(detail, /row\.contractStatus !== "PENDING_REVIEW"/);
+  assert.match(detail, /refreshSupplierTaxContractParties\(pendingContractDraft\(row\.contractDraft\)\)/);
+  assert.match(parties, /prisma\.supplier\.findFirst/);
+  assert.match(parties, /prisma\.businessEntity\.findFirst/);
+  assert.match(parties, /supplierTaxNumber: supplier\.taxNumber/);
+  assert.match(parties, /buyerBankName: entity\.domesticBankName/);
 });
 
 test("approved contracts can rerun Tencent invoice OCR for an already uploaded PDF", () => {

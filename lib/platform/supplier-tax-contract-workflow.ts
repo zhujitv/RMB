@@ -8,7 +8,7 @@ import { writeAudit } from "./shared-audit";
 import { type SupplierTaxContractDraft } from "./supplier-tax-contract-draft";
 import { applySupplierTaxContractDraftEdits } from "./supplier-tax-contract-draft-edit";
 import { generateSupplierTaxContractXlsx } from "./supplier-tax-contract-xlsx";
-import { refreshSupplierTaxContractBuyer } from "./supplier-tax-contract-buyer";
+import { refreshSupplierTaxContractParties } from "./supplier-tax-contract-parties";
 import { normalizeSupplierTaxContractNumber } from "./supplier-tax-contract-number";
 import {
   actorId,
@@ -76,7 +76,7 @@ export async function reviewSupplierTaxContract(
   if (decision !== "APPROVED" || input.confirmed !== true) {
     throw codedError("请人工核查全部商品行及金额后勾选确认。", 400, "SUPPLIER_TAX_CONTRACT_CONFIRM_REQUIRED");
   }
-  const draft = await refreshSupplierTaxContractBuyer(contractDraft(row.contractDraft));
+  const draft = await refreshSupplierTaxContractParties(contractDraft(row.contractDraft));
   if (!draft.items.length || !draft.totalAmountWithTax || !draft.customsDocumentId) {
     throw codedError("合同草稿数据不完整，不能通过审核。", 409, "SUPPLIER_TAX_CONTRACT_DRAFT_INVALID");
   }
