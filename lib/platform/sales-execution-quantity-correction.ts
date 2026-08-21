@@ -69,7 +69,7 @@ function assertCorrectionOpen(execution: LoadedExecution, order: LoadedPurchaseO
   if (execution.status !== "DISPATCHED") {
     throw codedError("只有已下发的直接创建订单可以更正数量", 409, "SALES_QUANTITY_CORRECTION_STATUS_INVALID");
   }
-  if (execution.shippingStartedAt || item.actualDeliveredQuantity !== null || order.actualDeliveryDate) {
+  if (item.actualDeliveredQuantity !== null || order.actualDeliveryDate) {
     throw codedError("装柜已最终确认，不能再更正订单数量", 409, "SALES_QUANTITY_CORRECTION_SHIPPING_LOCKED");
   }
   if (!ACTIVE_PURCHASE_ORDER_STATUSES.includes(order.status)) {
@@ -95,6 +95,7 @@ function assertCorrectionOpen(execution: LoadedExecution, order: LoadedPurchaseO
   if (activeItemsForSalesLine.length !== 1) {
     throw codedError("该销售明细已拆分多家供应商，请先补专门的拆分变更流程", 409, "SALES_QUANTITY_CORRECTION_SPLIT_LINE");
   }
+  return { resetShippingStartedAt: Boolean(execution.shippingStartedAt) };
 }
 
 function latestCompleted(order: LoadedPurchaseOrder) {
@@ -176,7 +177,7 @@ export async function correctSalesExecutionQuantity(
     await assertCustomerScope(actor, before.customerId, tx);
     assertExpectedSalesExecutionRevision({ expectedRevision: input.expectedRevision }, before.revision);
     const { order, item } = findTarget(before, input.purchaseOrderItemId);
-    assertCorrectionOpen(before, order, item);
+    const correctionOpen = assertCorrectionOpen(before, order, item);
     if (input.newQuantity.eq(item.allocatedQuantity)) {
       throw codedError("正确数量与当前数量一致，无需更正", 400, "SALES_QUANTITY_CORRECTION_UNCHANGED");
     }
@@ -229,7 +230,14 @@ export async function correctSalesExecutionQuantity(
     const nextRevision = before.revision + 1;
     const executionUpdate = await tx.salesExecution.updateMany({
       where: { id: before.id, revision: before.revision },
-      data: { subtotal: newSalesTotal, totalAmount: newSalesTotal, revision: nextRevision, currentVersionNumber: nextRevision, updatedById: actorId },
+      data: {
+        subtotal: newSalesTotal,
+        totalAmount: newSalesTotal,
+        revision: nextRevision,
+        currentVersionNumber: nextRevision,
+        ...(correctionOpen.resetShippingStartedAt ? { shippingStartedAt: null, shippingStartedById: null } : {}),
+        updatedById: actorId,
+      },
     });
     if (executionUpdate.count !== 1) {
       throw codedError("销售执行单已被其他用户更新，请刷新后重试", 409, "SALES_EXECUTION_REVISION_CONFLICT");
@@ -245,6 +253,7 @@ export async function correctSalesExecutionQuantity(
       purchaseOrderItemId: item.id,
       oldQuantity: item.allocatedQuantity.toString(),
       newQuantity: input.newQuantity.toString(),
+      shippingStartedMarkerReset: correctionOpen.resetShippingStartedAt,
       reason: input.reason,
     }, tx);
     return after;

@@ -544,7 +544,10 @@ test("dispatched direct-order quantity correction is an audited narrow channel",
   assert.match(quantityCorrectionService, /lockFactoryPurchaseOrders\(tx, executionId\)/);
   assert.match(quantityCorrectionService, /assertExpectedSalesExecutionRevision/);
   assert.match(quantityCorrectionService, /execution\.sourceType !== "DIRECT"/);
-  assert.match(quantityCorrectionService, /execution\.shippingStartedAt \|\| item\.actualDeliveredQuantity !== null \|\| order\.actualDeliveryDate/);
+  assert.match(quantityCorrectionService, /item\.actualDeliveredQuantity !== null \|\| order\.actualDeliveryDate/);
+  assert.match(quantityCorrectionService, /resetShippingStartedAt: Boolean\(execution\.shippingStartedAt\)/);
+  assert.match(quantityCorrectionService, /shippingStartedAt: null/);
+  assert.match(quantityCorrectionService, /shippingStartedMarkerReset/);
   assert.match(quantityCorrectionService, /order\.settlement/);
   assert.match(quantityCorrectionReceivableService, /BLOCKING_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
   assert.match(quantityCorrectionReceivableService, /assertBusinessOrderWritableInTransaction/);
