@@ -5,13 +5,14 @@ import { formatCny, formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import { QuickCreatePaymentPanel } from "../payments/quick-payment-panel";
 import type { PaymentOrderOption, PaymentRow } from "../payments/types";
+import { businessOrderNeedsPaymentRegistration } from "./quotation-customer-business-values";
 import styles from "./quotation-crm-workspace.module.css";
 import type { CustomerInsight } from "./quotation-crm-insights";
 
 type BusinessOrder = {
   id: string; orderNo?: string; blNo?: string; status?: string; currency?: string;
   finalReceivableAmount?: number; finalReceivableAmountCny?: number; actualShipmentDate?: string; dueDate?: string;
-  summary?: { outstandingCny?: number; arrivedPaymentsCny?: number; reminderStatus?: string; overdueDays?: number };
+  summary?: { outstandingCny?: number; arrivedOutstandingCny?: number; arrivedPaymentsCny?: number; reminderStatus?: string; overdueDays?: number };
 };
 type BusinessPayment = {
   id: string; orderNo?: string; paymentDate?: string; currency?: string; amount?: number; amountCny?: number; status?: string; paymentType?: string;
@@ -50,7 +51,7 @@ export function QuotationCustomerBusinessRecords({
 
   if (!canReadOrders && !canReadPayments) return null;
   if (!customer.customerId) return (
-    <section className={`${styles.crmPanel} ${styles.fullWidthPanel}`}>
+    <section className={`${styles.crmPanel} ${styles.fullWidthPanel} ${styles.businessPanel}`}>
       <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>发货与应收</span><h3>客户经营记录</h3></div></div>
       <div className={styles.crmEmpty}>该客户来自历史报价快照，尚未关联客户档案，无法精确读取发货订单和应收款。</div>
     </section>
@@ -60,7 +61,7 @@ export function QuotationCustomerBusinessRecords({
   const orders = records?.orders || [];
   const payments = records?.payments || [];
   return (
-    <section className={`${styles.crmPanel} ${styles.fullWidthPanel}`}>
+    <section className={`${styles.crmPanel} ${styles.fullWidthPanel} ${styles.businessPanel}`}>
       <div className={styles.crmPanelHeader}>
         <div><span className={styles.crmEyebrow}>发货与应收</span><h3>客户经营记录</h3></div>
         <div className={styles.businessActions}>
@@ -150,7 +151,7 @@ function BusinessOrderList({ orders, canReadOrders, canRegisterPayments, onOpenO
       <span><strong>{order.status || "-"}</strong><small>发货 {formatDate(order.actualShipmentDate)} · 到期 {formatDate(order.dueDate)}</small></span>
       <span className={styles.businessRowActions}>
         <button className={shell.secondaryButton} type="button" onClick={() => onOpenOrders(order.orderNo || "")}>查看订单</button>
-        {canRegisterPayments ? <button className={shell.primaryButtonCompact} type="button" onClick={() => onRegisterPayment(order)}>登记收款</button> : null}
+        {canRegisterPayments && businessOrderNeedsPaymentRegistration(order) ? <button className={shell.primaryButtonCompact} type="button" onClick={() => onRegisterPayment(order)}>登记收款</button> : null}
       </span>
     </div>
   )) : <div className={styles.crmEmpty}>暂无该客户应收订单。</div>}</div>;
@@ -159,7 +160,7 @@ function BusinessOrderList({ orders, canReadOrders, canRegisterPayments, onOpenO
 function BusinessPaymentList({ payments, canReadPayments, onOpenPayments }: { payments: BusinessPayment[]; canReadPayments: boolean; onOpenPayments: (keyword: string) => void }) {
   if (!canReadPayments) return <div className={styles.crmEmpty}>当前账号没有收款管理查看权限。</div>;
   return <div className={styles.businessList}><h4>最近收款记录</h4>{payments.length ? payments.map((payment) => (
-    <button className={styles.businessRow} type="button" key={payment.id} onClick={() => onOpenPayments(payment.orderNo || "")}>
+    <button className={`${styles.businessRow} ${styles.paymentBusinessRow}`} type="button" key={payment.id} onClick={() => onOpenPayments(payment.orderNo || "")}>
       <span><strong>{payment.orderNo || "未关联订单"}</strong><small>{payment.paymentType || "收款"}</small></span>
       <span><strong>{formatCurrencyAmount(payment.currency || "CNY", payment.amount)}</strong><small>折人民币 {formatCny(payment.amountCny)}</small></span>
       <span><strong>{payment.status || "-"}</strong><small>{formatDate(payment.paymentDate)}</small></span>

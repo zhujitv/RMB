@@ -117,6 +117,7 @@
 
 .detailGrid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 16px; }
 .fullWidthPanel { grid-column: 1 / -1; }
+.businessPanel { container-type: inline-size; }
 .profileGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .profileGrid span {
   border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; color: #64748b;
@@ -141,6 +142,7 @@
   gap: 10px; align-items: center; width: 100%; border: 1px solid #e2e8f0; border-radius: 14px;
   background: #fff; color: #0f172a; padding: 12px; text-align: left; font: inherit;
 }
+.paymentBusinessRow { grid-template-columns: minmax(0, 1fr) minmax(140px, auto) minmax(150px, auto); }
 .businessRow:hover { border-color: #93c5fd; box-shadow: 0 10px 20px rgba(37,99,235,.1); }
 .businessRow strong, .businessRow small { display: block; overflow-wrap: anywhere; }
 .businessRow small { margin-top: 4px; color: #64748b; font-size: 12px; }
@@ -255,6 +257,10 @@
 .quoteCard:hover { border-color: #93c5fd; box-shadow: 0 10px 20px rgba(37,99,235,.1); }
 .quoteCard strong, .quoteCard small { display: block; }
 .quoteCard small { margin-top: 4px; color: #64748b; font-size: 12px; }
+
+@container (max-width: 1120px) {
+  .businessGrid { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 1100px) {
   .crmGrid, .detailGrid { grid-template-columns: 1fr; }
