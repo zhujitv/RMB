@@ -6,6 +6,8 @@ import type {
   CommissionFormulaForm,
   CommissionFormulaSettings,
   CompanyProfileForm,
+  CrmEmailIntegrationForm,
+  CrmEmailIntegrationSettings,
   CustomerForm,
   ExchangeRateForm,
   ExchangeRateSettings,
@@ -44,6 +46,7 @@ export type SettingsSaveActionsContext = {
   notificationTemplateSettings: NotificationTemplateSettings | null;
   ocrIntegrationForm: OcrIntegrationForm | null;
   smsIntegrationForm: SmsIntegrationForm | null;
+  crmEmailIntegrationForm: CrmEmailIntegrationForm | null;
   onCompanyProfileSaved?: (settings: CompanyProfileSettings) => void;
   selectedNotificationTemplateType: string;
   setBusinessEntities: Setter<BusinessEntityRow[]>;
@@ -77,6 +80,10 @@ export type SettingsSaveActionsContext = {
   setSmsIntegrationMessage: Setter<string>;
   setSmsIntegrationSaving: Setter<boolean>;
   setSmsIntegrationSettings: Setter<SmsIntegrationSettings | null>;
+  setCrmEmailIntegrationForm: Setter<CrmEmailIntegrationForm | null>;
+  setCrmEmailIntegrationMessage: Setter<string>;
+  setCrmEmailIntegrationSaving: Setter<boolean>;
+  setCrmEmailIntegrationSettings: Setter<CrmEmailIntegrationSettings | null>;
   setSelectedNotificationTemplateType: Setter<string>;
   setSelectedUserId: Setter<string>;
   setShipsgoIntegrationForm: Setter<ShipsgoIntegrationForm | null>;

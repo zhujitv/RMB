@@ -53,6 +53,7 @@ export type NotificationTemplateSettings = {
 export type OcrIntegrationSettings = Record<string, unknown>;
 export type ShipsgoIntegrationSettings = Record<string, unknown>;
 export type SmsIntegrationSettings = Record<string, unknown>;
+export type CrmEmailIntegrationSettings = Record<string, unknown>;
 export type LogisticsInvoiceValidationRule = { label: string; keywords: string[] };
 export type LogisticsInvoiceValidationRules = Record<string, LogisticsInvoiceValidationRule>;
 export type PermissionOption = { value: string; label: string };

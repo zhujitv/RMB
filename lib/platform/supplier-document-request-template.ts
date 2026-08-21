@@ -122,7 +122,7 @@ export async function getSupplierDocumentRequestTemplate(request: AuditRequestLi
   );
   const storageKey = asset?.storageKey || row.templateStorageKey;
   const body = await readR2Object(storageKey).catch((error) => {
-    if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") {
+    if (error?.status === 404 || ["STORAGE_OBJECT_NOT_FOUND", "R2_OBJECT_NOT_FOUND"].includes(String(error?.code || ""))) {
       throw codedError("合同样本文件不存在或已删除。", 404, "TEMPLATE_NOT_FOUND");
     }
     throw error;

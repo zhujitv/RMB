@@ -24,7 +24,7 @@ type ErrorLike = {
 
 async function previewErrorResponse(error: ErrorLike) {
   const status = error?.status || 500;
-  const code = error?.code || (status === 403 ? "PERMISSION_DENIED" : "R2_STREAM_FAILED");
+  const code = error?.code || (status === 403 ? "PERMISSION_DENIED" : "STORAGE_STREAM_FAILED");
   const response = await apiErrorSafe500(error, "文件暂时无法预览，请下载查看。", code);
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("X-Preview-Error-Code", code);

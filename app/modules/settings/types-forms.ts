@@ -101,6 +101,14 @@ export type SmsIntegrationForm = {
   secretKeyConfigured: boolean;
 };
 
+export type CrmEmailIntegrationForm = {
+  enabled: boolean;
+  mailDomain: string;
+  outboundEnabled: boolean;
+  inboundEnabled: boolean;
+  outboundProvider: "RESEND";
+};
+
 export type CompanyProfileForm = {
   brandName: string;
   systemName: string;
@@ -190,6 +198,7 @@ export type UserForm = {
   id: string;
   expectedUpdatedAt: string;
   name: string;
+  englishName: string;
   email: string;
   role: string;
   approvalStatus: string;

@@ -1,0 +1,60 @@
+model CrmEmailAccount {
+  id           String    @id @default(cuid())
+  userId       String    @unique @map("user_id")
+  englishName  String    @map("english_name")
+  localPart    String    @unique @map("local_part")
+  emailAddress String    @unique @map("email_address")
+  status       String    @default("ACTIVE")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  user     User              @relation("UserCrmEmailAccount", fields: [userId], references: [id], onDelete: Cascade)
+  messages CrmEmailMessage[] @relation("CrmEmailAccountMessages")
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("crm_email_accounts")
+}
+
+model CrmEmailMessage {
+  id                 String    @id @default(cuid())
+  customerId         String    @map("customer_id")
+  accountId          String?   @map("account_id")
+  direction          String
+  status             String    @default("DRAFT")
+  fromName           String?   @map("from_name")
+  fromEmail          String    @map("from_email")
+  toEmails           Json      @map("to_emails")
+  ccEmails           Json?     @map("cc_emails")
+  subject            String
+  bodyText           String    @map("body_text")
+  messageId          String?   @unique @map("message_id")
+  threadKey          String?   @map("thread_key")
+  relatedQuotationId String?   @map("related_quotation_id")
+  relatedOrderId     String?   @map("related_order_id")
+  lastError          String?   @map("last_error")
+  sentAt             DateTime? @map("sent_at")
+  receivedAt         DateTime? @map("received_at")
+  createdById        String?   @map("created_by")
+  updatedById        String?   @map("updated_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  customer  Customer         @relation("CustomerCrmEmailMessages", fields: [customerId], references: [id], onDelete: Restrict)
+  account   CrmEmailAccount? @relation("CrmEmailAccountMessages", fields: [accountId], references: [id], onDelete: SetNull)
+  createdBy User?            @relation("CrmEmailMessagesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?            @relation("CrmEmailMessagesUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, createdAt])
+  @@index([accountId, createdAt])
+  @@index([direction, status])
+  @@index([threadKey])
+  @@index([relatedQuotationId])
+  @@index([relatedOrderId])
+  @@index([createdById])
+  @@index([updatedById])
+  @@index([deletedAt])
+  @@map("crm_email_messages")
+}

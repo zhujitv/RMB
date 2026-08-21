@@ -20,6 +20,7 @@ import type {
   ShipsgoIntegrationSettings,
   SmsIntegrationSettings,
 } from "./types";
+import { createSaveCrmEmailIntegrationSettings } from "./use-settings-crm-email-save-action";
 import type { SettingsSaveActionsContext } from "./use-settings-save-actions";
 
 export function useSettingsSystemSaveActions(context: SettingsSaveActionsContext) {
@@ -66,6 +67,7 @@ export function useSettingsSystemSaveActions(context: SettingsSaveActionsContext
     setShipsgoIntegrationSettings,
     shipsgoIntegrationForm,
   } = context;
+  const saveCrmEmailIntegrationSettings = createSaveCrmEmailIntegrationSettings(context);
 
 async function saveCompanyProfileSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -288,5 +290,6 @@ async function saveOcrIntegrationSettings(event: FormEvent<HTMLFormElement>) {
     saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
     saveSmsIntegrationSettings,
+    saveCrmEmailIntegrationSettings,
   };
 }

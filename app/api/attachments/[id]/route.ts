@@ -13,7 +13,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
     await params;
     await requireApiActor(request);
-    return Response.json({ error: "旧附件接口已停用，请使用订单单证 R2 上传接口。" }, { status: 410 });
+    return Response.json({ error: "旧附件接口已停用，请使用订单单证对象存储上传接口。" }, { status: 410 });
   } catch (error: unknown) {
     return apiError(error, "删除附件失败");
   }

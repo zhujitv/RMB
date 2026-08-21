@@ -168,7 +168,7 @@ export async function ensureQuotationDocument(
       try {
         await readVerifiedAsset(existing, quotation.id, version.id);
       } catch (error) {
-        if (existing.isDeleted && (error as { code?: string } | null)?.code === "R2_OBJECT_NOT_FOUND") {
+        if (existing.isDeleted && ["STORAGE_OBJECT_NOT_FOUND", "R2_OBJECT_NOT_FOUND"].includes(String((error as { code?: string } | null)?.code || ""))) {
           throw codedError("已软删除的形式发票原文件不存在，请联系管理员处理", 409, "QUOTATION_DOCUMENT_DELETED_OBJECT_MISSING");
         }
         throw error;

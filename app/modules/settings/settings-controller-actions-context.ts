@@ -62,6 +62,7 @@ export type SettingsControllerActionsContext = {
   setSelectedUserId: Setter<string>;
   setShipsgoIntegrationMessage: Setter<string>;
   setSmsIntegrationMessage: Setter<string>;
+  setCrmEmailIntegrationMessage: Setter<string>;
   setSupplierForm: Setter<SupplierForm | null>;
   setSupplierMessage: Setter<string>;
   setSupplierPanelMode: Setter<"view" | "edit">;

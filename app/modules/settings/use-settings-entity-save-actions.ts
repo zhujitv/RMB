@@ -2,13 +2,10 @@ import type { FormEvent } from "react";
 import { apiJson } from "../../api";
 import { PASSWORD_POLICY_MESSAGE, passwordMeetsPolicy } from "../../../lib/password-policy";
 import { FACTORY_SUPPLIER_ACCOUNT_ROLES, PRODUCT_SUPPLIER_TYPES } from "./constants";
-import {
-  businessEntityFormFromRow,
-  isSupplierAccountRole,
-  supplierMatchesUserRole,
-} from "./helpers";
+import { businessEntityFormFromRow, isSupplierAccountRole, supplierMatchesUserRole } from "./helpers";
 import type { BusinessEntityRow, SupplierRow } from "./types";
 import type { SettingsSaveActionsContext } from "./use-settings-save-actions";
+
 export function useSettingsEntitySaveActions(context: SettingsSaveActionsContext) {
   const {
     activePagination,
@@ -257,6 +254,7 @@ async function saveUserForm(event: FormEvent<HTMLFormElement>) {
       const isEdit = Boolean(userForm.id);
       const payload: Record<string, unknown> = {
         name: userForm.name,
+        englishName: userForm.englishName,
         email: userForm.email,
         role: userForm.role,
         approvalStatus: userForm.approvalStatus,

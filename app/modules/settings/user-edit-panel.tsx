@@ -154,6 +154,10 @@ export function UserEditPanel({
             <input value={form.name} onChange={(event) => setField("name", event.target.value)} required />
           </label>
           <label>
+            英文名
+            <input value={form.englishName} onChange={(event) => setField("englishName", event.target.value)} placeholder="用于生成 CRM 系统邮箱" />
+          </label>
+          <label>
             邮箱
             <input value={form.email} onChange={(event) => setField("email", event.target.value.trim().toLowerCase())} type="email" required />
           </label>

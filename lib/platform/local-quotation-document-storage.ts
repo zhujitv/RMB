@@ -186,7 +186,7 @@ async function readableTarget(key: string, rootValue?: string) {
     return target;
   } catch (error) {
     if (errorCode(error) === "ENOENT") {
-      throw localStorageError("形式发票文件不存在，请重新生成", 404, "R2_OBJECT_NOT_FOUND");
+      throw localStorageError("形式发票文件不存在，请重新生成", 404, "STORAGE_OBJECT_NOT_FOUND");
     }
     throw error;
   }
@@ -199,7 +199,7 @@ export async function readLocalQuotationDocument(key: string, options: LocalRead
     const fileInfo = await handle.stat();
     if (!fileInfo.isFile()) throw localStorageError("本地文件格式无效", 409, "LOCAL_STORAGE_FILE_INVALID");
     if (fileInfo.size > options.maxBytes) {
-      throw localStorageError("文件超过安全读取上限", 413, "R2_OBJECT_TOO_LARGE");
+      throw localStorageError("文件超过安全读取上限", 413, "STORAGE_OBJECT_TOO_LARGE");
     }
     const chunks: Buffer[] = [];
     let totalBytes = 0;
@@ -211,7 +211,7 @@ export async function readLocalQuotationDocument(key: string, options: LocalRead
       if (!bytesRead) break;
       totalBytes += bytesRead;
       if (totalBytes > options.maxBytes) {
-        throw localStorageError("文件超过安全读取上限", 413, "R2_OBJECT_TOO_LARGE");
+        throw localStorageError("文件超过安全读取上限", 413, "STORAGE_OBJECT_TOO_LARGE");
       }
       chunks.push(chunk.subarray(0, bytesRead));
       position += bytesRead;
@@ -225,7 +225,7 @@ export async function readLocalQuotationDocument(key: string, options: LocalRead
 export async function writeLocalQuotationDocument(key: string, options: LocalWriteOptions) {
   const body = Buffer.from(options.body);
   if (body.byteLength > options.maxBytes) {
-    throw localStorageError("文件超过安全写入上限", 413, "R2_OBJECT_TOO_LARGE");
+    throw localStorageError("文件超过安全写入上限", 413, "STORAGE_OBJECT_TOO_LARGE");
   }
   const { target } = await writableTarget(key, options.root);
   const temporary = join(

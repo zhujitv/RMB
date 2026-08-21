@@ -25,7 +25,7 @@ export function SettingsModuleView(settings: SettingsController) {
   } = settings;
   const activeTabLabel = SETTINGS_TABS.find((tab) => tab.key === activeTab)?.label || "系统设置";
   const isTableTab = TABLE_SETTING_TABS.has(activeTab);
-  const showTopHeader = activeTab !== "ocrIntegration" && activeTab !== "shipsgoIntegration" && activeTab !== "smsIntegration";
+  const showTopHeader = activeTab !== "ocrIntegration" && activeTab !== "shipsgoIntegration" && activeTab !== "smsIntegration" && activeTab !== "crmEmailIntegration";
 
   return (
     <section className={`${styles.moduleCard} ${styles.settingsCenterShell}`}>

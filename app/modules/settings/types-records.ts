@@ -1,6 +1,6 @@
 import type { UserCustomPermissions } from "./types-integrations";
 
-export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "customerProducts" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "smsIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
+export type SettingsTabKey = "home" | "companyProfile" | "businessEntities" | "customers" | "customerProducts" | "suppliers" | "users" | "ocrIntegration" | "shipsgoIntegration" | "smsIntegration" | "crmEmailIntegration" | "exchangeRates" | "commissionFormula" | "notificationTemplates" | "auditLogs";
 
 export type SettingsFilters = {
   customers: { keyword: string };
@@ -109,6 +109,7 @@ export type BusinessEntityRow = {
 export type UserRow = {
   id: string;
   name?: string;
+  englishName?: string;
   email?: string;
   role?: string;
   supplierId?: string;

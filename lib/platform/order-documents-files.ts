@@ -117,10 +117,12 @@ export async function getOrderDocumentDownload(request: AuditRequestLike, actor:
   if (document.uploadStatus !== "SUCCESS") throw permissionError("文件尚未上传成功，不能下载", 400);
   const asset = await findActiveFileAssetBySource(FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS, document.id, String(document.documentType));
   const fileDocument = applyFileAssetToOrderDocument(document, asset);
-  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "STORAGE_OBJECT_NOT_FOUND");
   const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
   const body = await readR2Object(fileDocument.storageKey).catch((error) => {
-    if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+    if (error?.status === 404 || ["STORAGE_OBJECT_NOT_FOUND", "R2_OBJECT_NOT_FOUND"].includes(String(error?.code || ""))) {
+      throw codedError("文件不存在或已删除", 404, "STORAGE_OBJECT_NOT_FOUND");
+    }
     throw error;
   });
   await runNonCriticalTask("文件下载操作日志写入", () => writeAudit(request, actor, "下载文件", "order_documents", document.id, null, {
@@ -197,7 +199,7 @@ export async function getOrderDocumentPreviewMetadata(request: AuditRequestLike,
   if (!isPreviewableOrderDocumentMimeType(mimeType)) {
     throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
   }
-  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "STORAGE_OBJECT_NOT_FOUND");
   const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
   return serializeOrderDocument({ ...fileDocument, standardFilename });
 }
@@ -217,9 +219,11 @@ export async function getOrderDocumentPreview(request: AuditRequestLike, actor: 
   if (!isPreviewableOrderDocumentMimeType(mimeType)) {
     throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
   }
-  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "STORAGE_OBJECT_NOT_FOUND");
   const body = await readR2Object(fileDocument.storageKey).catch((error) => {
-    if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") throw codedError("文件不存在或已删除", 404, "R2_OBJECT_NOT_FOUND");
+    if (error?.status === 404 || ["STORAGE_OBJECT_NOT_FOUND", "R2_OBJECT_NOT_FOUND"].includes(String(error?.code || ""))) {
+      throw codedError("文件不存在或已删除", 404, "STORAGE_OBJECT_NOT_FOUND");
+    }
     throw error;
   });
   const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);

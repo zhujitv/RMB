@@ -1,4 +1,4 @@
-import type { NotificationTemplateForm, OcrIntegrationForm, ShipsgoIntegrationForm, SmsIntegrationForm } from "./types";
+import type { CrmEmailIntegrationForm, NotificationTemplateForm, OcrIntegrationForm, ShipsgoIntegrationForm, SmsIntegrationForm } from "./types";
 
 export { SETTINGS_TABS } from "./settings-tab-options";
 
@@ -196,6 +196,13 @@ export const DEFAULT_SMS_INTEGRATION_FORM: SmsIntegrationForm = {
   secretIdConfigured: false,
   secretKey: "",
   secretKeyConfigured: false,
+};
+export const DEFAULT_CRM_EMAIL_INTEGRATION_FORM: CrmEmailIntegrationForm = {
+  enabled: false,
+  mailDomain: "crm.nextwood.net",
+  outboundEnabled: false,
+  inboundEnabled: false,
+  outboundProvider: "RESEND",
 };
 export const OCR_FEATURE_OPTIONS = [
   {

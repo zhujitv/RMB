@@ -213,6 +213,39 @@
 .followUpItem p, .followUpDone p { margin: 0; line-height: 1.6; white-space: pre-wrap; }
 .followUpMeta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 
+.emailAccountForm, .emailComposeForm {
+  display: grid; gap: 12px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; padding: 14px;
+}
+.emailAccountForm { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+.emailAccountForm label, .emailComposeForm label { display: grid; gap: 6px; color: #334155; font-size: 13px; font-weight: 800; }
+.emailAccountForm input, .emailComposeForm input, .emailComposeForm textarea {
+  width: 100%; min-height: 42px; border: 1px solid #dbeafe; border-radius: 13px; background: #fff;
+  color: #0f172a; font: inherit; font-weight: 500; outline: none; padding: 9px 11px;
+}
+.emailComposeForm textarea { resize: vertical; line-height: 1.6; }
+.emailAccountForm input:focus, .emailComposeForm input:focus, .emailComposeForm textarea:focus {
+  border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+.emailComposeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mutedNote { color: #64748b; align-self: center; font-size: 12px; }
+.emailTimeline { display: grid; gap: 10px; }
+.emailTimelineItem {
+  display: grid; gap: 10px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff;
+  color: #334155; padding: 14px;
+}
+.emailTimelineTop { display: flex; justify-content: space-between; gap: 12px; }
+.emailTimelineTop strong, .emailTimelineTop small { display: block; }
+.emailTimelineTop strong { color: #0f172a; }
+.emailTimelineTop small, .emailTimelineTop span, .emailRecipients { color: #64748b; font-size: 12px; }
+.emailTimelineItem p { margin: 0; white-space: pre-wrap; line-height: 1.65; }
+.emailRecipients { display: flex; flex-wrap: wrap; gap: 10px; }
+.attachmentList { display: flex; flex-wrap: wrap; gap: 8px; }
+.attachmentList span, .attachmentList a {
+  border: 1px solid #dbeafe; border-radius: 999px; background: #eff6ff; color: #1d4ed8;
+  padding: 6px 10px; font-size: 12px; font-weight: 900; text-decoration: none;
+}
+.attachmentList a:hover { background: #dbeafe; }
+
 .quoteCards { display: grid; gap: 10px; }
 .quoteCard {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, auto) minmax(140px, auto); gap: 12px;
@@ -236,7 +269,7 @@
   .crmHeroActions button { width: 100%; }
   .detailHero, .quoteCard { grid-template-columns: 1fr; }
   .productToolbar, .productFormHeader { align-items: stretch; flex-direction: column; }
-  .crmStats, .customerMeta, .customerMetrics, .customerFilters, .followUpCards, .detailMetrics, .profileGrid, .businessStats, .businessRow, .productFormGrid, .compactForm, .followUpForm, .productCardFacts { grid-template-columns: 1fr; }
+  .crmStats, .customerMeta, .customerMetrics, .customerFilters, .followUpCards, .detailMetrics, .profileGrid, .businessStats, .businessRow, .productFormGrid, .compactForm, .followUpForm, .emailAccountForm, .emailComposeGrid, .productCardFacts { grid-template-columns: 1fr; }
   .businessActions { justify-content: stretch; }
   .businessActions button { width: 100%; }
   .businessRow > span:nth-child(2), .businessRow > span:nth-child(3) { text-align: left; }

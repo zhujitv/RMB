@@ -50,7 +50,7 @@ test("legacy R2 configuration remains supported", () => {
     R2_BUCKET: "legacy-bucket",
   });
 
-  assert.equal(config.provider, "Cloudflare R2 / S3");
+  assert.equal(config.provider, "S3-compatible object storage");
   assert.equal(config.endpoint, "https://legacy-account.r2.cloudflarestorage.com");
   assert.equal(config.region, "auto");
 });

@@ -159,7 +159,7 @@ export async function reparseTaxRefundCustomsDeclarationPdf(request: AuditReques
     throw codedError("报关单 PDF 文件地址缺失，请重新上传后再试。", 404, "CUSTOMS_DECLARATION_PDF_STORAGE_MISSING");
   }
   const body = await readR2Object(fileDocument.storageKey).catch((error) => {
-    if (error?.status === 404 || error?.code === "R2_OBJECT_NOT_FOUND") {
+    if (error?.status === 404 || ["STORAGE_OBJECT_NOT_FOUND", "R2_OBJECT_NOT_FOUND"].includes(String(error?.code || ""))) {
       throw codedError("报关单 PDF 文件不存在或已失效，请重新上传。", 404, "CUSTOMS_DECLARATION_PDF_OBJECT_NOT_FOUND");
     }
     throw error;

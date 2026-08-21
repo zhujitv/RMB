@@ -6,7 +6,7 @@ type StorageConfigError = Error & {
 };
 
 export type ObjectStorageConfig = {
-  provider: "Tencent COS" | "Cloudflare R2 / S3";
+  provider: "Tencent COS" | "S3-compatible object storage";
   endpoint: string;
   region: string;
   accessKeyId: string;
@@ -93,14 +93,14 @@ export function objectStorageConfig(env: Record<string, string | undefined> = pr
   ].filter(Boolean);
   if (missing.length) {
     throw configError(
-      `文件存储服务未配置，请联系管理员配置 Cloudflare R2 / S3。${!bucket ? "存储桶未配置。" : ""}`,
+        `文件存储服务未配置，请联系管理员配置 S3 兼容对象存储。${!bucket ? "存储桶未配置。" : ""}`,
       503,
       "STORAGE_NOT_CONFIGURED",
       { missing },
     );
   }
   return {
-    provider: "Cloudflare R2 / S3",
+    provider: "S3-compatible object storage",
     endpoint,
     region: "auto",
     accessKeyId: accessKeyId as string,

@@ -11,6 +11,9 @@ const PUBLIC_API_ROUTES = new Set([
   "app/api/wechat-mini/auth/login/route.ts",
   "app/api/company-profile/route.ts",
   "app/api/freightower/webhook/route.ts",
+  // CRM email inbound callbacks are called by the mail gateway without ERP
+  // cookies; the route is protected by CRM_EMAIL_INBOUND_SECRET and upload caps.
+  "app/api/customer-email-messages/inbound/route.ts",
   // WeChat redirects users here without the ERP session cookie. The handler is
   // authenticated by a single-use, hashed `reserved` nonce plus scene/template checks.
   "app/api/wechat-official/subscription/callback/route.ts",

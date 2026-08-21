@@ -7,6 +7,7 @@ import {
   OcrIntegrationSettingsCard,
   FreightowerIntegrationSettingsCard,
   SmsIntegrationSettingsCard,
+  CrmEmailIntegrationSettingsCard,
 } from "./settings-cards";
 import {
   commissionFormulaFormFromSettings,
@@ -15,6 +16,7 @@ import {
   notificationTemplateFormFromSettings,
   ocrIntegrationFormFromSettings,
   shipsgoIntegrationFormFromSettings,
+  crmEmailIntegrationFormFromSettings,
   smsIntegrationFormFromSettings,
 } from "./helpers";
 import { SettingsHomeGrid } from "./settings-home-grid";
@@ -46,6 +48,8 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     shipsgoIntegrationForm,
     smsIntegrationSettings,
     smsIntegrationForm,
+    crmEmailIntegrationSettings,
+    crmEmailIntegrationForm,
     loadedTabs,
     loading,
     businessEntityForm,
@@ -68,6 +72,8 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     shipsgoIntegrationMessage,
     smsIntegrationSaving,
     smsIntegrationMessage,
+    crmEmailIntegrationSaving,
+    crmEmailIntegrationMessage,
     selectTab,
     startCreateBusinessEntity,
     startEditBusinessEntity,
@@ -82,6 +88,7 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     saveOcrIntegrationSettings,
     saveShipsgoIntegrationSettings,
     saveSmsIntegrationSettings,
+    saveCrmEmailIntegrationSettings,
     setBusinessEntityForm,
     setCompanyProfileForm,
     setCompanyProfileMessage,
@@ -97,6 +104,8 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     setShipsgoIntegrationMessage,
     setSmsIntegrationForm,
     setSmsIntegrationMessage,
+    setCrmEmailIntegrationForm,
+    setCrmEmailIntegrationMessage,
   } = settings;
 
   if (activeTab === "home") return <SettingsHomeGrid onSelect={selectTab} />;
@@ -247,6 +256,23 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
           setSmsIntegrationMessage("");
         }}
         onSubmit={saveSmsIntegrationSettings}
+      />
+    );
+  }
+  if (activeTab === "crmEmailIntegration") {
+    return (
+      <CrmEmailIntegrationSettingsCard
+        settings={crmEmailIntegrationSettings}
+        form={crmEmailIntegrationForm}
+        loading={loading && !crmEmailIntegrationSettings}
+        saving={crmEmailIntegrationSaving}
+        message={crmEmailIntegrationMessage}
+        onChange={setCrmEmailIntegrationForm}
+        onReset={() => {
+          setCrmEmailIntegrationForm(crmEmailIntegrationFormFromSettings(crmEmailIntegrationSettings));
+          setCrmEmailIntegrationMessage("");
+        }}
+        onSubmit={saveCrmEmailIntegrationSettings}
       />
     );
   }

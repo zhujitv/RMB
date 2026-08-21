@@ -84,5 +84,5 @@ test("PDF parsing and tax ZIP generation have hard resource budgets", () => {
   assert.match(provider, /signal\?\.addEventListener\("abort", abortBody/);
   assert.match(taxPackage, /TAX_REFUND_PACKAGE_MAX_FILES = 50/);
   assert.match(taxPackage, /TAX_REFUND_PACKAGE_MAX_TOTAL_BYTES = 48 \* 1024 \* 1024/);
-  assert.match(r2, /R2_OBJECT_TOO_LARGE/);
+  assert.match(r2, /STORAGE_OBJECT_TOO_LARGE/);
 });

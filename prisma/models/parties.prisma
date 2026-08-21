@@ -24,6 +24,7 @@ model Customer {
   orders                        ReceivableOrder[]
   products                      CustomerProduct[]
   followUps                     CustomerFollowUp[]
+  crmEmailMessages              CrmEmailMessage[]             @relation("CustomerCrmEmailMessages")
   salesQuotations               SalesQuotation[]
   salesExecutions               SalesExecution[]
   shippingDocumentNotifications ShippingDocumentNotification[]

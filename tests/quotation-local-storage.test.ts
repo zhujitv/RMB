@@ -40,13 +40,13 @@ test("local quotation storage writes, reads and deletes a private PDF", async ()
     assert.deepEqual(stored, body);
     await assert.rejects(
       readLocalQuotationDocument(key, { root, maxBytes: 4 }),
-      matchesCode("R2_OBJECT_TOO_LARGE"),
+      matchesCode("STORAGE_OBJECT_TOO_LARGE"),
     );
     await writeLocalQuotationDocument(key, { root, body, maxBytes: 1024 });
     await deleteLocalQuotationDocument(key, root);
     await assert.rejects(
       readLocalQuotationDocument(key, { root, maxBytes: 1024 }),
-      matchesCode("R2_OBJECT_NOT_FOUND"),
+      matchesCode("STORAGE_OBJECT_NOT_FOUND"),
     );
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -71,7 +71,7 @@ test("local quotation storage rejects traversal, oversize data and key conflicts
     );
     await assert.rejects(
       writeLocalQuotationDocument(key, { root, body: pdfBody(), maxBytes: 4 }),
-      matchesCode("R2_OBJECT_TOO_LARGE"),
+      matchesCode("STORAGE_OBJECT_TOO_LARGE"),
     );
     await writeLocalQuotationDocument(key, { root, body: pdfBody("first"), maxBytes: 1024 });
     await assert.rejects(
@@ -161,7 +161,7 @@ test("local quotation driver stores and reads through the provider adapter", asy
     await deleteQuotationDocumentObject(stored.bucket, stored.key);
     await assert.rejects(
       readQuotationDocumentObject(stored.bucket, stored.key, { maxBytes: 1024 }),
-      matchesCode("R2_OBJECT_NOT_FOUND"),
+      matchesCode("STORAGE_OBJECT_NOT_FOUND"),
     );
     await storeQuotationDocumentObject({
       key,

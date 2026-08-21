@@ -6,6 +6,7 @@ import {
   appendFilterParams,
   commissionFormulaFormFromSettings,
   companyProfileFormFromSettings,
+  crmEmailIntegrationFormFromSettings,
   emptyPagination,
   exchangeFormFromSettings,
   filtersForTab,
@@ -22,6 +23,8 @@ import type {
   CommissionFormulaForm,
   CommissionFormulaSettings,
   CompanyProfileForm,
+  CrmEmailIntegrationForm,
+  CrmEmailIntegrationSettings,
   CustomerRow,
   ExchangeRateForm,
   ExchangeRateSettings,
@@ -77,6 +80,8 @@ type SettingsLoadActionsContext = {
   setShipsgoIntegrationSettings: Setter<ShipsgoIntegrationSettings | null>;
   setSmsIntegrationForm: Setter<SmsIntegrationForm | null>;
   setSmsIntegrationSettings: Setter<SmsIntegrationSettings | null>;
+  setCrmEmailIntegrationForm: Setter<CrmEmailIntegrationForm | null>;
+  setCrmEmailIntegrationSettings: Setter<CrmEmailIntegrationSettings | null>;
   setSuppliers: Setter<SupplierRow[]>;
   setUsers: Setter<UserRow[]>;
 };
@@ -115,6 +120,8 @@ export function useSettingsLoadActions(context: SettingsLoadActionsContext) {
     setShipsgoIntegrationSettings,
     setSmsIntegrationForm,
     setSmsIntegrationSettings,
+    setCrmEmailIntegrationForm,
+    setCrmEmailIntegrationSettings,
     setSuppliers,
     setUsers,
   } = context;
@@ -190,6 +197,14 @@ async function loadTab(tab = activeTab, page = activePagination.page || 1, nextF
         const settings = smsResult.settings || {};
         setSmsIntegrationSettings(settings);
         setSmsIntegrationForm(smsIntegrationFormFromSettings(settings));
+        markLoaded(tab);
+        return;
+      }
+      if (tab === "crmEmailIntegration") {
+        const crmEmailResult = await apiJson<{ settings: CrmEmailIntegrationSettings }>("/api/settings/crm-email");
+        const settings = crmEmailResult.settings || {};
+        setCrmEmailIntegrationSettings(settings);
+        setCrmEmailIntegrationForm(crmEmailIntegrationFormFromSettings(settings));
         markLoaded(tab);
         return;
       }

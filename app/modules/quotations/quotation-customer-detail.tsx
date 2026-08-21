@@ -2,6 +2,7 @@ import { formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import { QuotationCustomerBusinessRecords } from "./quotation-customer-business-records";
 import { QuotationCustomerContacts } from "./quotation-customer-contacts";
+import { QuotationCustomerEmails } from "./quotation-customer-emails";
 import { QuotationCustomerFollowUps } from "./quotation-customer-follow-ups";
 import { QuotationCustomerProductsEditor } from "./quotation-customer-products-editor";
 import styles from "./quotation-crm-workspace.module.css";
@@ -87,6 +88,7 @@ export function QuotationCustomerDetail({
       </div>
 
       <QuotationCustomerFollowUps customer={customer} canWriteQuotations={canWriteQuotations} />
+      <QuotationCustomerEmails customer={customer} canWriteQuotations={canWriteQuotations} />
 
       <section className={styles.crmPanel}>
         <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>历史报价</span><h3>该客户报价记录</h3></div><small>点击查看报价详情</small></div>

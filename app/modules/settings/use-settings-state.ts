@@ -9,6 +9,8 @@ import type {
   CommissionFormulaForm,
   CommissionFormulaSettings,
   CompanyProfileForm,
+  CrmEmailIntegrationForm,
+  CrmEmailIntegrationSettings,
   CustomerForm,
   CustomerRow,
   ExchangeRateForm,
@@ -60,6 +62,8 @@ export function useSettingsState() {
   const [shipsgoIntegrationForm, setShipsgoIntegrationForm] = useState<ShipsgoIntegrationForm | null>(null);
   const [smsIntegrationSettings, setSmsIntegrationSettings] = useState<SmsIntegrationSettings | null>(null);
   const [smsIntegrationForm, setSmsIntegrationForm] = useState<SmsIntegrationForm | null>(null);
+  const [crmEmailIntegrationSettings, setCrmEmailIntegrationSettings] = useState<CrmEmailIntegrationSettings | null>(null);
+  const [crmEmailIntegrationForm, setCrmEmailIntegrationForm] = useState<CrmEmailIntegrationForm | null>(null);
   const [permissionConfig, setPermissionConfig] = useState<PermissionConfig | null>(null);
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
   const [pagination, setPagination] = useState<Record<SettingsTabKey, Pagination>>({
@@ -76,6 +80,7 @@ export function useSettingsState() {
     notificationTemplates: emptyPagination(PAGE_SIZE),
     shipsgoIntegration: emptyPagination(PAGE_SIZE),
     smsIntegration: emptyPagination(PAGE_SIZE),
+    crmEmailIntegration: emptyPagination(PAGE_SIZE),
     auditLogs: emptyPagination(AUDIT_PAGE_SIZE),
   });
   const [loadedTabs, setLoadedTabs] = useState<Set<SettingsTabKey>>(new Set());
@@ -110,6 +115,8 @@ export function useSettingsState() {
   const [shipsgoIntegrationMessage, setShipsgoIntegrationMessage] = useState("");
   const [smsIntegrationSaving, setSmsIntegrationSaving] = useState(false);
   const [smsIntegrationMessage, setSmsIntegrationMessage] = useState("");
+  const [crmEmailIntegrationSaving, setCrmEmailIntegrationSaving] = useState(false);
+  const [crmEmailIntegrationMessage, setCrmEmailIntegrationMessage] = useState("");
   const [activeSuppliers, setActiveSuppliers] = useState<SupplierRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -170,6 +177,10 @@ export function useSettingsState() {
     setSmsIntegrationSettings,
     smsIntegrationForm,
     setSmsIntegrationForm,
+    crmEmailIntegrationSettings,
+    setCrmEmailIntegrationSettings,
+    crmEmailIntegrationForm,
+    setCrmEmailIntegrationForm,
     permissionConfig,
     setPermissionConfig,
     salespeople,
@@ -240,6 +251,10 @@ export function useSettingsState() {
     setSmsIntegrationSaving,
     smsIntegrationMessage,
     setSmsIntegrationMessage,
+    crmEmailIntegrationSaving,
+    setCrmEmailIntegrationSaving,
+    crmEmailIntegrationMessage,
+    setCrmEmailIntegrationMessage,
     activeSuppliers,
     setActiveSuppliers,
     loading,

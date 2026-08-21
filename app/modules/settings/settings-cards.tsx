@@ -6,3 +6,4 @@ export { NotificationTemplateSettingsCard } from "./notification-template-settin
 export { OcrIntegrationSettingsCard } from "./ocr-integration-settings-card";
 export { FreightowerIntegrationSettingsCard } from "./freightower-integration-settings-card";
 export { SmsIntegrationSettingsCard } from "./sms-integration-settings-card";
+export { CrmEmailIntegrationSettingsCard } from "./crm-email-integration-settings-card";

@@ -92,6 +92,7 @@ export async function saveUser(request: AuditRequestLike, actor: ActorLike, inpu
   const protectsAdministratorInvariant = Boolean(id && isActiveAdministratorDemotion(before, role, approvalStatus));
   const data: Record<string, unknown> = {
     name,
+    englishName: String(input.englishName || "").trim().slice(0, 80) || null,
     email,
     role,
     avatarInitials: resolveAvatarInitials(input, name, before),

@@ -31,11 +31,11 @@ function storageError(message: string, status: number, code: string): StorageErr
 }
 
 export function quotationDocumentStorageDriver() {
-  const driver = String(process.env.QUOTATION_FILE_STORAGE_DRIVER || "r2").trim().toLowerCase();
-  if (driver !== "r2" && driver !== "local") {
+  const driver = String(process.env.QUOTATION_FILE_STORAGE_DRIVER || "object").trim().toLowerCase();
+  if (!["object", "s3", "r2", "local"].includes(driver)) {
     throw storageError("报价文件存储驱动配置无效", 500, "STORAGE_DRIVER_INVALID");
   }
-  return driver;
+  return driver === "s3" || driver === "r2" ? "object" : driver;
 }
 
 function assertLocalDriverAllowed() {
@@ -60,7 +60,7 @@ function localBucket(bucket: string | null) {
 function assertBody(input: StoreInput) {
   const body = Buffer.from(input.body);
   if (body.byteLength > input.maxBytes) {
-    throw storageError("文件超过安全写入上限", 413, "R2_OBJECT_TOO_LARGE");
+    throw storageError("文件超过安全写入上限", 413, "STORAGE_OBJECT_TOO_LARGE");
   }
   const sha256 = createHash("sha256").update(body).digest("hex");
   if (sha256 !== input.expectedSha256) {
@@ -71,7 +71,7 @@ function assertBody(input: StoreInput) {
 
 export async function storeQuotationDocumentObject(input: StoreInput) {
   const body = assertBody(input);
-  if (quotationDocumentStorageDriver() === "r2") {
+  if (quotationDocumentStorageDriver() === "object") {
     return uploadToR2({ key: input.key, body, contentType: input.contentType });
   }
   assertLocalDriverAllowed();
@@ -112,15 +112,15 @@ export async function deleteQuotationDocumentObject(bucket: string | null, key: 
     try {
       await deleteLocalQuotationDocument(key);
     } catch (error) {
-      if ((error as StorageError | null)?.code !== "R2_OBJECT_NOT_FOUND") throw error;
+      if (!["STORAGE_OBJECT_NOT_FOUND", "R2_OBJECT_NOT_FOUND"].includes(String((error as StorageError | null)?.code || ""))) throw error;
     }
     return;
   }
-  if (driver !== "r2") {
-    throw storageError("当前本地存储驱动无法删除 R2 报价文件", 409, "STORAGE_PROVIDER_MISMATCH");
+  if (driver !== "object") {
+    throw storageError("当前本地存储驱动无法删除对象存储报价文件", 409, "STORAGE_PROVIDER_MISMATCH");
   }
   // Reads and writes always use the currently configured canonical provider.
-  // A record can still contain its pre-migration R2 bucket after the same key
+  // A record can still contain its pre-migration object-storage bucket after the same key
   // has been copied to COS, so sending that legacy bucket to the COS endpoint
   // would make the cleanup task fail forever.
   await deleteR2Object(key);
