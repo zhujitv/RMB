@@ -18,6 +18,9 @@ const {
 } = await jiti.import<
   typeof import("../lib/platform/sales-execution-values.ts")
 >("../lib/platform/sales-execution-values.ts");
+const { independentShipmentEvidence, shipmentRegistrationDecision } = await jiti.import<
+  typeof import("../lib/platform/sales-execution-quantity-correction-receivable.ts")
+>("../lib/platform/sales-execution-quantity-correction-receivable.ts");
 
 const schema = readPrismaSchemaSource();
 const migration = readFileSync(
@@ -61,6 +64,10 @@ const directItemsService = readFileSync("lib/platform/sales-execution-direct-ite
 const quoteCreate = readFileSync("lib/platform/sales-execution-create-quotation.ts", "utf8");
 const mutationService = readFileSync("lib/platform/sales-execution-service.ts", "utf8");
 const quantityCorrectionService = readFileSync("lib/platform/sales-execution-quantity-correction.ts", "utf8");
+const quantityCorrectionReceivableService = readFileSync(
+  "lib/platform/sales-execution-quantity-correction-receivable.ts",
+  "utf8",
+);
 const quantityCorrectionRoute = readFileSync("app/api/sales-executions/[id]/quantity-correction/route.ts", "utf8");
 const quantityCorrectionMigration = readFileSync(
   "prisma/migrations/20260821152000_dispatched_quantity_correction/migration.sql",
@@ -539,18 +546,68 @@ test("dispatched direct-order quantity correction is an audited narrow channel",
   assert.match(quantityCorrectionService, /execution\.sourceType !== "DIRECT"/);
   assert.match(quantityCorrectionService, /execution\.shippingStartedAt \|\| item\.actualDeliveredQuantity !== null \|\| order\.actualDeliveryDate/);
   assert.match(quantityCorrectionService, /order\.settlement/);
-  assert.match(quantityCorrectionService, /BLOCKING_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
-  assert.match(quantityCorrectionService, /assertBusinessOrderWritableInTransaction/);
+  assert.match(quantityCorrectionReceivableService, /BLOCKING_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
+  assert.match(quantityCorrectionReceivableService, /assertBusinessOrderWritableInTransaction/);
+  assert.match(quantityCorrectionReceivableService, /String\(status \|\| ""\)\.trim\(\) === "草稿"/);
+  assert.match(quantityCorrectionReceivableService, /actualShipmentDate: null/);
+  assert.match(quantityCorrectionReceivableService, /actualShipmentAmount: null/);
+  assert.match(quantityCorrectionReceivableService, /actualShipmentAmountCny: null/);
+  assert.match(quantityCorrectionReceivableService, /数量更正时撤销草稿应收订单发货登记/);
+  assert.match(quantityCorrectionReceivableService, /国内物流起运记录/);
+  assert.match(quantityCorrectionReceivableService, /customsDeclarationNo: true/);
+  assert.match(quantityCorrectionReceivableService, /数量更正时同步应收订单金额/);
   assert.match(quantityCorrectionService, /app\.sales_quantity_correction/);
   assert.match(quantityCorrectionService, /salesExecutionItem\.updateMany/);
   assert.match(quantityCorrectionService, /factoryPurchaseOrderItem\.updateMany/);
   assert.match(quantityCorrectionService, /factoryPurchaseOrderSupplierPrice\.updateMany/);
-  assert.match(quantityCorrectionService, /receivableOrder\.updateMany/);
+  assert.match(quantityCorrectionReceivableService, /receivableOrder\.update/);
   assert.match(quantityCorrectionService, /factoryPurchaseOrderProductionReport\.create/);
   assert.match(quantityCorrectionService, /appendSalesExecutionVersion/);
   assert.match(quantityCorrectionService, /更正已下发订单数量/);
   assert.match(quantityCorrectionRoute, /requireApiWrite\(request, "salesExecution"\)/);
   assert.match(quantityCorrectionRoute, /correctSalesExecutionQuantity/);
+});
+
+test("draft receivables can reset stale shipment registration during quantity correction", () => {
+  assert.deepEqual(shipmentRegistrationDecision("草稿", new Date("2026-08-21"), null, null), {
+    registered: true,
+    resetAllowed: true,
+  });
+  assert.deepEqual(shipmentRegistrationDecision("草稿", null, null, "100.00"), {
+    registered: true,
+    resetAllowed: true,
+  });
+  assert.deepEqual(shipmentRegistrationDecision("已发货", null, "100.00", null), {
+    registered: true,
+    resetAllowed: false,
+  });
+  assert.deepEqual(shipmentRegistrationDecision("草稿", null, null, null), {
+    registered: false,
+    resetAllowed: false,
+  });
+});
+
+test("independent shipping evidence keeps draft receivables locked", () => {
+  assert.deepEqual(independentShipmentEvidence({ blNo: "BL-1" }), ["提单信息"]);
+  assert.deepEqual(independentShipmentEvidence({ customsDeclarationDate: new Date("2026-08-21") }), ["报关信息"]);
+  assert.deepEqual(independentShipmentEvidence({
+    domesticLogisticsInfos: [{
+      transportType: "TRUCK",
+      transportItems: [{ departureDate: "2026-08-21" }],
+    }],
+  }), ["国内物流起运记录"]);
+  assert.deepEqual(independentShipmentEvidence({
+    domesticLogisticsInfos: [{
+      transportType: "OCEAN",
+      transportItems: [{ departureDate: "2026-08-21" }],
+    }],
+  }), []);
+  assert.deepEqual(independentShipmentEvidence({
+    domesticLogisticsInfos: [{
+      transportType: "EXPRESS",
+      expressTrackingNo: "SF123456",
+    }],
+  }), ["快递单号"]);
 });
 
 test("database immutability allows only the explicit quantity-correction session", () => {

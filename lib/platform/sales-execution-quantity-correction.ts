@@ -7,7 +7,6 @@ import {
   codedError,
   writeAudit,
 } from "./shared";
-import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 import {
   assertExpectedSalesExecutionRevision,
   lockFactoryPurchaseOrders,
@@ -18,6 +17,10 @@ import {
 import { loadSalesExecution } from "./sales-execution-query-service";
 import { salesExecutionDecimal, serializeSalesExecution } from "./sales-execution-values";
 import { appendSalesExecutionVersion } from "./sales-execution-version";
+import {
+  loadQuantityCorrectionReceivable,
+  syncQuantityCorrectionReceivable,
+} from "./sales-execution-quantity-correction-receivable";
 
 type AuditRequest = Parameters<typeof writeAudit>[0];
 type LoadedExecution = Awaited<ReturnType<typeof loadSalesExecution>>;
@@ -25,7 +28,6 @@ type LoadedPurchaseOrder = LoadedExecution["purchaseOrders"][number];
 type LoadedPurchaseOrderItem = LoadedPurchaseOrder["items"][number];
 
 const ACTIVE_PURCHASE_ORDER_STATUSES = ["DISPATCHED", "ACCEPTED", "DELIVERY_PROPOSED"];
-const BLOCKING_PAYMENT_STATUSES = ["待确认", "已到账"];
 const MAX_ATTEMPTS = 3;
 
 function amount(quantity: Prisma.Decimal, unitPrice: Prisma.Decimal | null | undefined) {
@@ -93,27 +95,6 @@ function assertCorrectionOpen(execution: LoadedExecution, order: LoadedPurchaseO
   if (activeItemsForSalesLine.length !== 1) {
     throw codedError("该销售明细已拆分多家供应商，请先补专门的拆分变更流程", 409, "SALES_QUANTITY_CORRECTION_SPLIT_LINE");
   }
-}
-
-async function assertReceivableCanFollow(tx: Prisma.TransactionClient, execution: LoadedExecution, actorId: string) {
-  const linked = execution.receivableOrder;
-  if (!linked || linked.deletedAt) return null;
-  await assertBusinessOrderWritableInTransaction(tx, linked.id, "关联应收订单已提交退税归档，不能更正已下发数量。");
-  const order = await tx.receivableOrder.findUnique({
-    where: { id: linked.id },
-    select: {
-      id: true, exchangeRate: true, actualShipmentDate: true, actualShipmentAmount: true,
-      payments: { where: { deletedAt: null, status: { in: BLOCKING_PAYMENT_STATUSES } }, select: { id: true } },
-    },
-  });
-  if (!order) throw codedError("关联应收订单不存在，请联系管理员处理", 404, "SALES_QUANTITY_CORRECTION_RECEIVABLE_MISSING");
-  if (order.actualShipmentDate || order.actualShipmentAmount !== null) {
-    throw codedError("关联应收订单已登记实际发货，不能更正已下发数量", 409, "SALES_QUANTITY_CORRECTION_RECEIVABLE_SHIPPED");
-  }
-  if (order.payments.length) {
-    throw codedError("关联应收订单已有收款记录，不能更正已下发数量", 409, "SALES_QUANTITY_CORRECTION_RECEIVABLE_PAYMENT_EXISTS");
-  }
-  return { id: order.id, exchangeRate: order.exchangeRate, updatedById: actorId };
 }
 
 function latestCompleted(order: LoadedPurchaseOrder) {
@@ -199,7 +180,7 @@ export async function correctSalesExecutionQuantity(
     if (input.newQuantity.eq(item.allocatedQuantity)) {
       throw codedError("正确数量与当前数量一致，无需更正", 400, "SALES_QUANTITY_CORRECTION_UNCHANGED");
     }
-    const receivable = await assertReceivableCanFollow(tx, before, actorId);
+    const receivable = await loadQuantityCorrectionReceivable(tx, before, actorId);
     await tx.$executeRaw`SELECT set_config('app.sales_quantity_correction', 'on', true)`;
     const salesItem = before.items.find((candidate) => candidate.id === item.executionItemId);
     if (!salesItem) throw codedError("销售明细不存在，请刷新后重试", 404, "SALES_QUANTITY_CORRECTION_SALES_ITEM_NOT_FOUND");
@@ -254,19 +235,7 @@ export async function correctSalesExecutionQuantity(
       throw codedError("销售执行单已被其他用户更新，请刷新后重试", 409, "SALES_EXECUTION_REVISION_CONFLICT");
     }
     if (receivable) {
-      const amountCny = newSalesTotal.mul(receivable.exchangeRate).toDecimalPlaces(2);
-      await tx.receivableOrder.updateMany({
-        where: { id: receivable.id },
-        data: {
-          receivableAmount: newSalesTotal,
-          receivableAmountCny: amountCny,
-          estimatedReceivableAmount: newSalesTotal,
-          estimatedReceivableAmountCny: amountCny,
-          finalReceivableAmount: newSalesTotal,
-          finalReceivableAmountCny: amountCny,
-          updatedById: receivable.updatedById,
-        },
-      });
+      await syncQuantityCorrectionReceivable(tx, request, actorId, receivable, newSalesTotal, input.reason);
     }
     await appendSalesExecutionVersion(tx, before.id, actor);
     const saved = await loadSalesExecution(before.id, actor, tx);
