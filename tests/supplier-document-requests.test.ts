@@ -5,10 +5,15 @@ import test from "node:test";
 import { createJiti } from "jiti";
 import { readCssModuleGraphSource, readNotificationEngineSource, readRepairTaxRelationsSource, readSettingsModuleSource, readSupplierDocumentRequestsSource, readSupplierDocumentsModuleSource, readTaxRefundModuleSource } from "./source-helpers.ts";
 
+process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
+
 const jiti = createJiti(import.meta.url);
 const { transitionSettlementValidationError } = await jiti.import<
   typeof import("../app/modules/supplier-documents/use-transition-settlement-form.ts")
 >("../app/modules/supplier-documents/use-transition-settlement-form.ts");
+const { selectableCustomsItems, customsQuantityForSelection } = await jiti.import<
+  typeof import("../lib/platform/supplier-transition-settlement-context.ts")
+>("../lib/platform/supplier-transition-settlement-context.ts");
 
 const schema = readPrismaSchemaSource();
 const service = readSupplierDocumentRequestsSource();
@@ -70,6 +75,28 @@ test("transition settlement distinguishes unselected OCR rows and a short reason
     transitionSettlementValidationError({ ...input, items: [{ ...input.items[0], selected: true }] }),
     "请填写至少5个字的过渡原因。",
   );
+});
+
+test("transition settlement exposes multiple customs quantities for manual selection", () => {
+  const candidates = selectableCustomsItems([{
+    productName: "塑料制地板",
+    quantityUnits: [
+      { quantity: "16250", unit: "千克" },
+      { quantity: "80", unit: "平方米" },
+    ],
+  }]);
+  assert.deepEqual(candidates[0]?.quantityOptions, [
+    { index: 0, quantity: "16250", unit: "千克" },
+    { index: 1, quantity: "80", unit: "平方米" },
+  ]);
+  assert.equal(candidates[0]?.quantity, "16250");
+  assert.equal(candidates[0]?.unit, "千克");
+  assert.deepEqual(
+    customsQuantityForSelection({ quantityUnits: candidates[0]?.quantityOptions }, "平方米", "80", 1),
+    { index: 1, quantity: "80", unit: "平方米" },
+  );
+  assert.match(supplierCreateDialog, /选择第\$\{index \+ 1\}行成交数量/);
+  assert.match(supplierCreateDialog, /quantityOptions/);
 });
 
 test("supplier document template uses a Web-compatible binary response body", () => {

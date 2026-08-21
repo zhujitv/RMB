@@ -5,7 +5,7 @@ import { domesticContractIssues } from "./business-entity-domestic-bank";
 import type { SupplierTaxContractDraft, SupplierTaxContractItemDraft } from "./supplier-tax-contract-draft";
 import {
   FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE,
-  customsQuantity,
+  customsQuantityForSelection,
   decimalText,
   loadTransitionContext,
   nonNegativeMoney,
@@ -112,11 +112,11 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
       }
       seen.add(customsItemIndex);
       const candidate = candidates[customsItemIndex];
-      const declared = customsQuantity(candidate);
       const productName = nonEmpty(raw.productName).slice(0, 200);
       const unit = nonEmpty(raw.unit).slice(0, 40);
       if (!productName || !unit) throw codedError(`第${index + 1}行品名和单位不能为空。`, 400, "FACTORY_TRANSITION_ITEM_TEXT_REQUIRED");
       const quantity = positiveDecimal(raw.quantity, `第${index + 1}行数量`, 4);
+      const declared = customsQuantityForSelection(candidate, unit, quantity.toString(), raw.quantityOptionIndex);
       const declaredText = nonEmpty(declared.quantity).replace(/[,，\s]/g, "");
       if (declaredText && /^\d+(?:\.\d+)?$/.test(declaredText) && quantity.gt(new Prisma.Decimal(declaredText))) {
         throw codedError(`第${index + 1}行供应商数量不能超过报关数量${declaredText}。`, 409, "FACTORY_TRANSITION_QUANTITY_EXCEEDS_CUSTOMS");
@@ -127,6 +127,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
         unit,
         quantity,
         declaredQuantity: nonEmpty(declared.quantity),
+        quantityOptionIndex: Number.isInteger(Number(raw.quantityOptionIndex)) ? Number(raw.quantityOptionIndex) : null,
       };
     });
     const goodsTarget = cost.amount.sub(increaseAmount).add(decreaseAmount).toDecimalPlaces(2);
@@ -146,6 +147,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
         unit: item.unit,
         quantity: supplierTaxContractQuantityText(item.quantity, item.declaredQuantity),
         declaredQuantity: item.declaredQuantity,
+        quantityOptionIndex: item.quantityOptionIndex,
         unitPriceWithTax: decimalText(amount.div(item.quantity).toDecimalPlaces(6), 6),
         amountWithTax: amount.toFixed(2),
       };
