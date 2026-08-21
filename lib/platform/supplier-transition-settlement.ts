@@ -48,7 +48,7 @@ export async function assertFactoryPurchaseTransitionAllocationAvailable(
   input: { orderId: string; costId: string; itemSnapshot: Prisma.InputJsonValue },
 ) {
   const otherSettlements = await tx.factoryPurchaseTransitionSettlement.findMany({
-    where: { orderId: input.orderId, costId: { not: input.costId } },
+    where: { orderId: input.orderId, costId: { not: input.costId }, revokedAt: null },
     select: { itemSnapshot: true },
   });
   const items = Array.isArray(input.itemSnapshot)
@@ -87,15 +87,16 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
   let reason: string;
   let existingSettlementId: string | undefined;
 
-  if (cost.transitionSettlement) {
-    if (cost.transitionSettlement.customsDocumentId !== customsDocument.id) {
+  const activeTransitionSettlement = cost.transitionSettlements[0];
+  if (activeTransitionSettlement) {
+    if (activeTransitionSettlement.customsDocumentId !== customsDocument.id) {
       throw codedError("报关单已更新，已确认的过渡结算不能自动改写，请联系管理员处理。", 409, "FACTORY_TRANSITION_CUSTOMS_CHANGED");
     }
-    storedItems = cost.transitionSettlement.itemSnapshot as Array<Record<string, unknown>>;
-    increaseAmount = cost.transitionSettlement.increaseAmount;
-    decreaseAmount = cost.transitionSettlement.decreaseAmount;
-    reason = cost.transitionSettlement.reason;
-    existingSettlementId = cost.transitionSettlement.id;
+    storedItems = activeTransitionSettlement.itemSnapshot as Array<Record<string, unknown>>;
+    increaseAmount = activeTransitionSettlement.increaseAmount;
+    decreaseAmount = activeTransitionSettlement.decreaseAmount;
+    reason = activeTransitionSettlement.reason;
+    existingSettlementId = activeTransitionSettlement.id;
   } else {
     if (input.confirmed !== true && input.confirmed !== "true") {
       throw codedError("请确认该订单为已发货报关的历史过渡订单。", 400, "FACTORY_TRANSITION_CONFIRM_REQUIRED");
@@ -182,7 +183,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     throw codedError("人民币过渡成本的汇率必须为1，且折人民币金额必须与原金额一致。", 409, "FACTORY_TRANSITION_CNY_AMOUNT_INVALID");
   }
   const otherSettlements = await prisma.factoryPurchaseTransitionSettlement.findMany({
-    where: { orderId: cost.orderId, costId: { not: cost.id } },
+    where: { orderId: cost.orderId, costId: { not: cost.id }, revokedAt: null },
     select: { itemSnapshot: true },
   });
   const warnings = [...customs.warnings, "本合同由已发货报关的历史过渡订单结算凭证生成，未补造历史采购、生产和下发记录。"];

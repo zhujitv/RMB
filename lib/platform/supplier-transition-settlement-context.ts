@@ -99,7 +99,11 @@ export async function loadTransitionContext(costId: string) {
   const cost = await prisma.orderCost.findFirst({
     where: { id: costId, deletedAt: null, status: "ACTIVE" },
     include: {
-      transitionSettlement: true,
+      transitionSettlements: {
+        where: { revokedAt: null },
+        orderBy: { confirmedAt: "desc" },
+        take: 1,
+      },
       supplier: true,
       order: { include: { businessEntity: true } },
     },
@@ -129,13 +133,14 @@ export async function previewFactoryPurchaseTransitionSettlement(costId: string,
   if (actor?.role !== "管理员") throw codedError("只有管理员可以创建过渡结算。", 403, "FACTORY_TRANSITION_ADMIN_ONLY");
   assertWrite(actor, "supplierDocuments");
   const { cost, customsDocument } = await loadTransitionContext(costId);
-  if (cost.transitionSettlement) return {
+  const transitionSettlement = cost.transitionSettlements[0];
+  if (transitionSettlement) return {
     existing: true,
-    customsDocumentId: cost.transitionSettlement.customsDocumentId,
-    increaseAmount: cost.transitionSettlement.increaseAmount.toFixed(2),
-    decreaseAmount: cost.transitionSettlement.decreaseAmount.toFixed(2),
-    reason: cost.transitionSettlement.reason,
-    items: cost.transitionSettlement.itemSnapshot,
+    customsDocumentId: transitionSettlement.customsDocumentId,
+    increaseAmount: transitionSettlement.increaseAmount.toFixed(2),
+    decreaseAmount: transitionSettlement.decreaseAmount.toFixed(2),
+    reason: transitionSettlement.reason,
+    items: transitionSettlement.itemSnapshot,
   };
   const customs = await recognizedCustoms(customsDocument.storageKey);
   return {

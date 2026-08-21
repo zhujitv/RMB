@@ -300,6 +300,7 @@ const SUPPLIER_DOCUMENT_REQUEST_FILES = [
   "lib/platform/supplier-document-request-template.ts",
   "lib/platform/supplier-document-request-types.ts",
   "lib/platform/supplier-document-request-upload.ts",
+  "lib/platform/supplier-transition-settlement-reversal.ts",
 ];
 
 const NOTIFICATION_ENGINE_FILES = [

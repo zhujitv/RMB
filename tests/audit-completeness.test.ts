@@ -122,6 +122,7 @@ test("logistics bill, supplier document and ocean tracking workflows write audit
   }
   assertAudit(supplierDocuments, "通知供应商回传资料", "supplier_document_requests");
   assertAudit(supplierDocuments, "删除资料回传任务", "supplier_document_requests");
+  assertAudit(supplierDocuments, "撤销历史过渡结算", "factory_purchase_transition_settlements");
   assertAudit(supplierDocuments, "供应商上传回传资料", "order_documents");
   assertAudit(supplierDocuments, "下载供应商合同样本", "supplier_document_requests");
   assertAudit(shipsgoTracking, "创建飞驼可视海运跟踪", "shipsgo_trackings");

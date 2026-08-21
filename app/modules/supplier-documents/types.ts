@@ -52,6 +52,8 @@ export type SupplierDocumentTask = {
   sendError?: string;
   sentAt?: string;
   canDelete?: boolean;
+  canRevokeTransitionSettlement?: boolean;
+  transitionSettlementId?: string;
   hasTaxRefundDocuments?: boolean;
   taxRefundDocumentCount?: number;
   documents?: SupplierDocument[];

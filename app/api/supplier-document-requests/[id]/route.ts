@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiError, deleteSupplierDocumentRequest, getSupplierDocumentRequestDetail, parseJsonBody, resendSupplierDocumentRequestNotice } from "../../../../lib/platform-db";
+import { apiError, deleteSupplierDocumentRequest, getSupplierDocumentRequestDetail, parseJsonBody, resendSupplierDocumentRequestNotice, revokeSupplierDocumentTransitionSettlement } from "../../../../lib/platform-db";
 
 import { requireApiActor } from "../../../../lib/api-route-guard";
 
@@ -25,7 +25,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const actor = await requireApiActor(request);
     const { id } = await params;
-    const body = await parseJsonBody(request).catch(() => ({})) as { action?: string };
+    const body = await parseJsonBody(request).catch(() => ({})) as { action?: string; reason?: string };
+    if (body.action === "revokeTransitionSettlement") {
+      const requestRow = await revokeSupplierDocumentTransitionSettlement(request, actor, id, body);
+      return NextResponse.json({
+        success: true,
+        request: requestRow,
+        data: requestRow,
+        message: "过渡结算凭证已撤销，可重新创建资料回传任务。",
+      });
+    }
     if (body.action !== "resendNotice") {
       return NextResponse.json({ success: false, message: "不支持的资料回传操作" }, { status: 400 });
     }

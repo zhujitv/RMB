@@ -15,6 +15,7 @@ import {
   type SupplierDocumentRequestRow,
 } from "./supplier-document-request-types";
 import { supplierDocumentRequestOrderLocked } from "./supplier-document-request-state";
+import { FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE } from "./factory-purchase-transition-settlement-values";
 import { supplierTaxContractNumberFromJson } from "./supplier-tax-contract-number";
 import {
   normalizeSupplierTaxContractDraftValues,
@@ -24,6 +25,13 @@ import {
 function normalizedTaxContractJson(value: unknown, supplierName: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   return normalizeSupplierTaxContractDraftValues(value as Record<string, unknown>, { supplierName });
+}
+
+function transitionSettlementIdFromDraft(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const draft = value as Record<string, unknown>;
+  if (draft.sourceType !== FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE) return "";
+  return String(draft.transitionSettlementId || "").trim();
 }
 
 export function serializeSupplierDocumentRequest(
@@ -37,7 +45,8 @@ export function serializeSupplierDocumentRequest(
     ))
     .map((document) => serializeSupplierDocument(document));
   const factoryCostSlots = factoryCostSlotsForSupplierRequest(row);
-  const canDelete = actor?.role === "管理员" && !supplierDocumentRequestOrderLocked(row.order);
+  const orderLocked = supplierDocumentRequestOrderLocked(row.order);
+  const canDelete = actor?.role === "管理员" && !orderLocked;
   const taxRefundDocumentCount = documents.filter((document) => (
     document.uploadStatus === "SUCCESS"
   )).length;
@@ -46,6 +55,15 @@ export function serializeSupplierDocumentRequest(
     ? row.invoiceMatchJson as { matched?: unknown; issues?: unknown }
     : null;
   const contractSupplierName = row.supplier ? supplierTaxContractSupplierName(row.supplier) : "";
+  const cost = row.order?.costs?.find((item) => item.id === row.costId);
+  const transitionSettlementId = transitionSettlementIdFromDraft(row.contractDraft)
+    || transitionSettlementIdFromDraft(row.contractApproved)
+    || (cost?.sourceType === FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE ? String(cost.sourceId || "").trim() : "");
+  const canRevokeTransitionSettlement = actor?.role === "管理员"
+    && Boolean(transitionSettlementId)
+    && !orderLocked
+    && !row.invoiceConfirmedAt
+    && row.invoiceMatchStatus !== "CONFIRMED";
   return {
     id: row.id,
     orderId: row.orderId,
@@ -88,6 +106,8 @@ export function serializeSupplierDocumentRequest(
       ? ""
       : (row.requestedBy?.name || ""),
     canDelete,
+    canRevokeTransitionSettlement,
+    transitionSettlementId: canRevokeTransitionSettlement ? transitionSettlementId : "",
     hasTaxRefundDocuments: taxRefundDocumentCount > 0,
     taxRefundDocumentCount,
     documents,

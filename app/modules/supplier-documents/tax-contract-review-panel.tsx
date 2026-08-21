@@ -164,6 +164,30 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
     }
   }
 
+  async function revokeTransitionSettlement() {
+    const reason = window.prompt("请输入撤销原因；撤销后当前错误合同草稿和已上传回传资料会作废，原成本恢复为手工成本，可重新创建过渡结算。") || "";
+    if (!reason.trim()) return;
+    if (reason.trim().length < 5) {
+      window.alert("请填写至少5个字的撤销原因。");
+      return;
+    }
+    if (!window.confirm("确认撤销这条已冻结的过渡结算凭证？撤销后需要重新发起资料回传任务。")) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiJson(`/api/supplier-document-requests/${encodeURIComponent(task.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "revokeTransitionSettlement", reason }),
+      });
+      setMessage("过渡结算凭证已撤销，请重新发起资料回传任务。");
+      await onRefresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "撤销过渡结算失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!task.contractStatus || task.contractStatus === "LEGACY") return null;
   return (
     <section className={styles.supplierDocumentUploadCard} aria-label="退税合同与发票核验">
@@ -175,6 +199,12 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
         <div className={styles.supplierDocumentUploadBody}>
           <p>供方：{draft.supplierName || "-"}　需方：{draft.buyerName || "-"}　总金额：{draft.currency || "CNY"} {draft.totalAmountWithTax || "0.00"}</p>
           {isTransitionContract ? <p><b>历史过渡结算：</b>本合同基于已发货报关订单的冻结过渡凭证生成，未补造历史采购和生产记录。</p> : null}
+          {isTransitionContract && task.canRevokeTransitionSettlement ? (
+            <div className={styles.inlineError}>
+              <span>如果本次过渡结算冻结错误，可由管理员撤销后重新创建。</span>
+              <button className={styles.secondaryButton} type="button" disabled={busy} onClick={revokeTransitionSettlement}>撤销过渡结算</button>
+            </div>
+          ) : null}
           {isAdmin && canWrite && task.contractStatus === "PENDING_REVIEW" && !isTransitionContract ? (
             <ContractDraftEditor key={`${task.id}-${task.contractRevision || 1}`} items={draft.items || []} busy={busy} onSave={saveDraft} onDirtyChange={setDraftDirty} />
           ) : <div className={styles.tableScroll}>

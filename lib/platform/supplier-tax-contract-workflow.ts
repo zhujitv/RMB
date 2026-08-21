@@ -96,7 +96,7 @@ export async function reviewSupplierTaxContract(
     draft.transitionSettlementId
       ? prisma.factoryPurchaseTransitionSettlement.findUnique({
           where: { id: draft.transitionSettlementId },
-          select: { costId: true, orderId: true, supplierId: true, customsDocumentId: true, goodsAmountWithTax: true },
+          select: { costId: true, orderId: true, supplierId: true, customsDocumentId: true, goodsAmountWithTax: true, revokedAt: true },
         })
       : Promise.resolve(null),
   ]);
@@ -106,6 +106,7 @@ export async function reviewSupplierTaxContract(
   if (draft.sourceType === FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE) {
     if (
       !transitionSettlement
+      || transitionSettlement.revokedAt
       || transitionSettlement.costId !== row.costId
       || transitionSettlement.orderId !== row.orderId
       || transitionSettlement.supplierId !== row.supplierId

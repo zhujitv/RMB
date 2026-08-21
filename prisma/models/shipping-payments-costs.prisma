@@ -119,7 +119,7 @@ model OrderCost {
   documents                 OrderDocument[]
   generatedLogisticsExpense LogisticsExpense?         @relation("LogisticsExpenseGeneratedCost")
   supplierDocumentRequests  SupplierDocumentRequest[]
-  transitionSettlement      FactoryPurchaseTransitionSettlement?
+  transitionSettlements     FactoryPurchaseTransitionSettlement[]
 
   @@unique([sourceType, sourceId], map: "order_costs_source_unique")
   @@index([orderId])
