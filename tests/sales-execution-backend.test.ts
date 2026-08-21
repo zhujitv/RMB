@@ -73,6 +73,10 @@ const quantityCorrectionMigration = readFileSync(
   "prisma/migrations/20260821152000_dispatched_quantity_correction/migration.sql",
   "utf8",
 );
+const quantityCorrectionShippingResetMigration = readFileSync(
+  "prisma/migrations/20260821173000_quantity_correction_shipping_reset/migration.sql",
+  "utf8",
+);
 const voidNotificationService = readFileSync(
   "lib/platform/sales-execution-void-notifications.ts",
   "utf8",
@@ -548,6 +552,8 @@ test("dispatched direct-order quantity correction is an audited narrow channel",
   assert.match(quantityCorrectionService, /resetShippingStartedAt: Boolean\(execution\.shippingStartedAt\)/);
   assert.match(quantityCorrectionService, /shippingStartedAt: null/);
   assert.match(quantityCorrectionService, /shippingStartedMarkerReset/);
+  assert.match(quantityCorrectionService, /classifiedQuantityCorrectionDatabaseError/);
+  assert.match(quantityCorrectionService, /SALES_QUANTITY_CORRECTION_SHIPPING_ANCHOR_GUARD/);
   assert.match(quantityCorrectionService, /order\.settlement/);
   assert.match(quantityCorrectionReceivableService, /BLOCKING_PAYMENT_STATUSES = \["待确认", "已到账"\]/);
   assert.match(quantityCorrectionReceivableService, /assertBusinessOrderWritableInTransaction/);
@@ -620,7 +626,14 @@ test("database immutability allows only the explicit quantity-correction session
   assert.match(quantityCorrectionMigration, /quantity_correction IS NOT TRUE[\s\S]*NEW\."subtotal" IS DISTINCT FROM OLD\."subtotal"/);
   assert.match(quantityCorrectionMigration, /NEW\."penalty_base_amount" IS DISTINCT FROM OLD\."penalty_base_amount"[\s\S]*quantity_correction IS NOT TRUE/);
   assert.match(quantityCorrectionMigration, /NEW\."source" = 'INTERNAL_OFFLINE'[\s\S]*purchase_order_production_status = 'COMPLETED'/);
+  assert.match(quantityCorrectionShippingResetMigration, /CREATE OR REPLACE FUNCTION "protect_sales_execution_shipping_anchor"/);
+  assert.match(quantityCorrectionShippingResetMigration, /current_setting\('app\.sales_quantity_correction', true\) = 'on'/);
+  assert.match(quantityCorrectionShippingResetMigration, /quantity_correction IS TRUE[\s\S]*NEW\."shipping_started_at" IS NULL[\s\S]*NEW\."shipping_started_by" IS NULL/);
+  assert.match(quantityCorrectionShippingResetMigration, /RAISE EXCEPTION 'sales execution shipping handoff is immutable'/);
+  assert.match(quantityCorrectionShippingResetMigration, /unreleased_active_container_count/);
+  assert.match(quantityCorrectionShippingResetMigration, /purchase_order\."status" NOT IN \('REJECTED', 'VOIDED'\)/);
   assert.doesNotMatch(quantityCorrectionMigration, /DROP TRIGGER|DISABLE TRIGGER/);
+  assert.doesNotMatch(quantityCorrectionShippingResetMigration, /DROP TRIGGER|DISABLE TRIGGER/);
 });
 
 test("customer product history considers latest same-currency sales execution price", () => {

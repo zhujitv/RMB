@@ -160,6 +160,34 @@ async function runCorrection<T>(operation: (tx: Prisma.TransactionClient) => Pro
   throw new Error("订单数量更正事务重试次数已耗尽");
 }
 
+function classifiedQuantityCorrectionDatabaseError(error: unknown) {
+  const code = String((error as { code?: unknown } | null)?.code || "");
+  const message = String((error as { message?: unknown } | null)?.message || "");
+  if (code === "P2034") {
+    return codedError("销售执行单刚刚被其他操作更新，请刷新后重试。", 409, "SALES_QUANTITY_CORRECTION_CONCURRENT_UPDATE");
+  }
+  if (/sales execution shipping handoff is immutable/i.test(message)) {
+    return codedError(
+      "数据库仍在保护该订单的发货冻结标记，已阻止数量更正；请先完成最新数据库补丁后重试。",
+      409,
+      "SALES_QUANTITY_CORRECTION_SHIPPING_ANCHOR_GUARD",
+    );
+  }
+  if (
+    /dispatched sales execution (items|core fields) are immutable/i.test(message)
+    || /dispatched factory purchase order (items|core fields) are immutable/i.test(message)
+    || /factory purchase order penalty base is immutable/i.test(message)
+    || /production progress requires/i.test(message)
+  ) {
+    return codedError(
+      "数据库保护规则阻止了本次数量更正，请刷新页面；如果仍失败，请让管理员执行数量更正数据库补丁。",
+      409,
+      "SALES_QUANTITY_CORRECTION_DATABASE_GUARD",
+    );
+  }
+  return null;
+}
+
 export async function correctSalesExecutionQuantity(
   request: AuditRequest,
   actor: SalesExecutionActor,
@@ -170,7 +198,8 @@ export async function correctSalesExecutionQuantity(
   assertWrite(actor, "orders");
   const actorId = requireSalesExecutionActorId(actor);
   const input = normalizedInput(rawInput);
-  return runCorrection(async (tx) => {
+  try {
+    return await runCorrection(async (tx) => {
     await lockSalesExecution(tx, executionId);
     await lockFactoryPurchaseOrders(tx, executionId);
     const before = await loadSalesExecution(executionId, actor, tx);
@@ -257,5 +286,10 @@ export async function correctSalesExecutionQuantity(
       reason: input.reason,
     }, tx);
     return after;
-  });
+    });
+  } catch (error: unknown) {
+    const classified = classifiedQuantityCorrectionDatabaseError(error);
+    if (classified) throw classified;
+    throw error;
+  }
 }
