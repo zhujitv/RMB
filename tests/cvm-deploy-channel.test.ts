@@ -41,6 +41,13 @@ test("CVM deployment can recover when the server checkout has no readable HEAD",
   assert.match(remoteScript, /git checkout --force -B main FETCH_HEAD/);
 });
 
+test("CVM deployment repairs app checkout ownership before writing git state", () => {
+  assert.match(remoteScript, /ensure_checkout_writable\(\)/);
+  assert.match(remoteScript, /touch "\$app_probe" "\$git_probe"/);
+  assert.match(remoteScript, /chown -R "\$\(id -un\):\$\(id -gn\)" "\$APP_DIR"/);
+  assert.match(remoteScript, /ensure_checkout_writable[\s\S]*CURRENT_HEAD/);
+});
+
 test("CVM deployment stays migration-safe and uses the app build only", () => {
   assert.match(workflow, /RMB_CVM_ENV_FILE/);
   assert.match(remoteScript, /source "\$ENV_FILE"/);

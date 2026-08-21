@@ -25,6 +25,22 @@ if [[ -z "$SUDO_CMD" && "$(id -u)" != "0" ]] && command -v sudo >/dev/null 2>&1;
   SUDO_CMD="sudo"
 fi
 
+ensure_checkout_writable() {
+  local app_probe git_probe
+  app_probe="$APP_DIR/.rmb-deploy-write-check"
+  git_probe="$APP_DIR/.git/.rmb-deploy-write-check"
+  if touch "$app_probe" "$git_probe" 2>/dev/null; then
+    rm -f "$app_probe" "$git_probe"
+    return 0
+  fi
+  rm -f "$app_probe" "$git_probe" 2>/dev/null || true
+  [[ -n "$SUDO_CMD" ]] || fail "app checkout is not writable by $(id -un): $APP_DIR"
+  log "repairing app checkout ownership for $(id -un):$(id -gn)"
+  $SUDO_CMD chown -R "$(id -un):$(id -gn)" "$APP_DIR"
+  touch "$app_probe" "$git_probe" 2>/dev/null || fail "app checkout is still not writable after ownership repair: $APP_DIR"
+  rm -f "$app_probe" "$git_probe"
+}
+
 [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "RMB_DEPLOY_SHA must be a full commit SHA"
 [[ -n "$BUNDLE" && -f "$BUNDLE" ]] || fail "RMB_DEPLOY_BUNDLE must point to an uploaded git bundle"
 [[ -d "$APP_DIR/.git" ]] || fail "RMB_APP_DIR is not a git checkout: $APP_DIR"
@@ -35,6 +51,7 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$APP_DIR"
+ensure_checkout_writable
 
 CURRENT_HEAD="$(git rev-parse --verify HEAD 2>/dev/null || true)"
 if [[ -n "$CURRENT_HEAD" ]]; then
