@@ -66,6 +66,8 @@ export const DEFAULT_OCR_INTEGRATION_SETTINGS = {
   customsDeclarationEnabled: true,
   invoiceTextEnabled: false,
   logisticsInvoiceEnabled: false,
+  customsProductWhitelistEnabled: false,
+  customsProductWhitelist: [],
   fallbackToPdfText: true,
   timeoutMs: 15000,
 };

@@ -2,6 +2,7 @@ import { parseCustomsDeclarationDetailText } from "../customs-declaration-parser
 import { DEFAULT_OCR_INTEGRATION_SETTINGS } from "./shared-constants";
 import { codedError, isPlainRecord, nonEmpty, num, redactSensitiveText } from "./shared-base-utils";
 import { normalizeAliyunOcrApiUrl } from "./outbound-request-security";
+import { normalizeCustomsProductWhitelist } from "./customs-product-whitelist";
 
 export type OcrFeatureKey = "customsDeclaration" | "invoiceText" | "logisticsInvoice";
 export type CustomsDeclarationRecognitionMode = "AUTO" | "STRICT" | "MANUAL";
@@ -20,6 +21,8 @@ export type OcrIntegrationInput = {
   customsDeclarationEnabled?: unknown;
   invoiceTextEnabled?: unknown;
   logisticsInvoiceEnabled?: unknown;
+  customsProductWhitelistEnabled?: unknown;
+  customsProductWhitelist?: unknown;
   fallbackToPdfText?: unknown;
   timeoutMs?: unknown;
 };
@@ -212,6 +215,8 @@ export function normalizeOcrIntegrationSettings(value: unknown = {}) {
     customsDeclarationEnabled: customsDeclarationMode !== "MANUAL" && input.customsDeclarationEnabled !== false,
     invoiceTextEnabled: input.invoiceTextEnabled === true,
     logisticsInvoiceEnabled: input.logisticsInvoiceEnabled === true,
+    customsProductWhitelistEnabled: input.customsProductWhitelistEnabled === true,
+    customsProductWhitelist: normalizeCustomsProductWhitelist(input.customsProductWhitelist),
     fallbackToPdfText: input.fallbackToPdfText !== false,
     timeoutMs: cleanTimeoutMs(input.timeoutMs),
   };

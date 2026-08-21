@@ -4,6 +4,7 @@ import styles from "../../WorkspaceShell.module.css";
 import {
   OCR_FEATURE_OPTIONS
 } from "./constants";
+import { CustomsProductWhitelistCard } from "./customs-product-whitelist-card";
 import {
   ocrIntegrationFormFromSettings
 } from "./helpers";
@@ -186,6 +187,8 @@ export function OcrIntegrationSettingsCard({
       <TencentCustomsOcrTestCard
         credentialsConfigured={Boolean(currentForm.tencentSecretIdConfigured && currentForm.tencentSecretKeyConfigured)}
       />
+
+      <CustomsProductWhitelistCard form={currentForm} onChange={onChange} />
 
       <SettingsCard title="启用范围" icon="能">
         <div className={styles.commissionDeductionGrid}>

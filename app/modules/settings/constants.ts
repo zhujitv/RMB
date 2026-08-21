@@ -183,6 +183,8 @@ export const DEFAULT_OCR_INTEGRATION_FORM: OcrIntegrationForm = {
   tencentRegion: "ap-guangzhou",
   invoiceTextEnabled: false,
   logisticsInvoiceEnabled: false,
+  customsProductWhitelistEnabled: false,
+  customsProductWhitelist: [],
   timeoutMs: "15000",
 };
 export const DEFAULT_SMS_INTEGRATION_FORM: SmsIntegrationForm = {

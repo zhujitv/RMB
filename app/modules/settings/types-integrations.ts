@@ -56,6 +56,13 @@ export type SmsIntegrationSettings = Record<string, unknown>;
 export type CrmEmailIntegrationSettings = Record<string, unknown>;
 export type LogisticsInvoiceValidationRule = { label: string; keywords: string[] };
 export type LogisticsInvoiceValidationRules = Record<string, LogisticsInvoiceValidationRule>;
+export type CustomsProductWhitelistEntry = {
+  id: string;
+  standardName: string;
+  aliases: string[];
+  hsCodes: string[];
+  enabled: boolean;
+};
 export type PermissionOption = { value: string; label: string };
 
 export type PermissionConfig = {

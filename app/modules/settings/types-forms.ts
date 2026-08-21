@@ -1,5 +1,5 @@
 import type { CompanyProfileSettings } from "../../types";
-import type { NotificationVariableDefinition } from "./types-integrations";
+import type { CustomsProductWhitelistEntry, NotificationVariableDefinition } from "./types-integrations";
 import type { BusinessEntityBankAccountFields, SettingsTabKey } from "./types-records";
 
 export type ExchangeRateForm = {
@@ -85,6 +85,8 @@ export type OcrIntegrationForm = {
   tencentRegion: string;
   invoiceTextEnabled: boolean;
   logisticsInvoiceEnabled: boolean;
+  customsProductWhitelistEnabled: boolean;
+  customsProductWhitelist: CustomsProductWhitelistEntry[];
   timeoutMs: string;
 };
 

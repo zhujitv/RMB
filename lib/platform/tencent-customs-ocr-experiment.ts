@@ -11,6 +11,7 @@ import {
   candidateItemsFromTencentTables,
   type TencentCustomsExperimentTable,
 } from "./tencent-customs-ocr-table-parser";
+import { applyCustomsProductWhitelist } from "./customs-product-whitelist";
 
 const TencentOcrClient = ocr.v20181119.Client;
 const TENCENT_OCR_ENDPOINT = "ocr.tencentcloudapi.com";
@@ -213,7 +214,11 @@ export async function runTencentCustomsOcrExperiment(
   const warnings = [...table.warnings];
   if (dedicatedSettled.status === "rejected") warnings.unshift(`报关单专用识别失败：${providerError(dedicatedSettled.reason).message}`);
   if (tableSettled.status === "rejected") warnings.unshift(`表格识别失败：${providerError(tableSettled.reason).message}`);
-  const items = await mergedCustomsItemsFromTableAndText(file.body, candidateItemsFromTencentTables(table.tables), warnings);
+  const items = applyCustomsProductWhitelist(
+    await mergedCustomsItemsFromTableAndText(file.body, candidateItemsFromTencentTables(table.tables), warnings),
+    settings,
+    warnings,
+  );
   if (!items.length) warnings.push("未从表格结果中定位到完整商品表头，请查看原始表格并人工判断。");
   const result = {
     provider: "TENCENT_CLOUD",
@@ -255,8 +260,15 @@ export async function recognizeTencentCustomsGoods(buffer: Buffer) {
   const client = createTencentOcrClient(settings);
   const table = await recognizeTables(client, imageBase64);
   const warnings = [...table.warnings];
-  const items = await mergedCustomsItemsFromTableAndText(buffer, candidateItemsFromTencentTables(table.tables), warnings);
+  const items = applyCustomsProductWhitelist(
+    await mergedCustomsItemsFromTableAndText(buffer, candidateItemsFromTencentTables(table.tables), warnings),
+    settings,
+    warnings,
+  );
   if (!items.length) {
+    if (warnings.some((warning) => warning.includes("未命中报关品名白名单"))) {
+      throw codedError("报关单商品未命中报关品名白名单，请先在设置中维护标准报关品名或别名后重新识别。", 422, "CUSTOMS_GOODS_WHITELIST_NOT_MATCHED");
+    }
     throw codedError("未从报关单识别到商品明细，请检查文件清晰度后重试。", 422, "CUSTOMS_GOODS_NOT_RECOGNIZED");
   }
   return {

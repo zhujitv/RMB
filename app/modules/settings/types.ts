@@ -15,6 +15,7 @@ export type {
 } from "./types-forms";
 export type {
   CommissionFormulaSettings,
+  CustomsProductWhitelistEntry,
   ExchangeRateSettings,
   LogisticsInvoiceValidationRule,
   LogisticsInvoiceValidationRules,

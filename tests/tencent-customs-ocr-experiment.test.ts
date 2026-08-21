@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createJiti } from "jiti";
 
 process.env.DATABASE_URL ||= "postgresql://user:password@localhost:5432/rmb_test";
 
@@ -9,6 +10,8 @@ const service = readFileSync("lib/platform/tencent-customs-ocr-experiment.ts", "
 const settings = readFileSync("lib/platform/ocr-integration-settings.ts", "utf8");
 const config = readFileSync("lib/platform/ocr-integration-config.ts", "utf8");
 const card = readFileSync("app/modules/settings/tencent-customs-ocr-test-card.tsx", "utf8");
+const whitelistCard = readFileSync("app/modules/settings/customs-product-whitelist-card.tsx", "utf8");
+const jiti = createJiti(import.meta.url);
 
 test("Tencent customs OCR experiment is settings-admin only and memory-only", () => {
   assert.match(route, /requireApiWrite\(request, "settings"\)/);
@@ -38,9 +41,46 @@ test("experiment runs dedicated customs recognition and table V3 without enablin
   assert.match(service, /Promise\.allSettled/);
   assert.match(service, /extractPdfTextFromPdfBuffer/);
   assert.match(service, /candidateItemsFromCustomsText/);
+  assert.match(service, /applyCustomsProductWhitelist/);
+  assert.match(service, /CUSTOMS_GOODS_WHITELIST_NOT_MATCHED/);
   assert.match(service, /表格识别漏读的\$\{additions\.length\}行商品已从PDF文本补充/);
   assert.match(card, /报关单专用识别和表格识别 V3/);
   assert.match(card, /不写入订单、不保存附件、不修改报关或退税数据/);
+});
+
+test("customs product whitelist controls are exposed in OCR settings", () => {
+  assert.match(whitelistCard, /报关品名白名单/);
+  assert.match(whitelistCard, /启用白名单模式/);
+  assert.match(whitelistCard, /标准报关品名/);
+  assert.match(whitelistCard, /OCR 别名/);
+  assert.match(whitelistCard, /HS Code/);
+  assert.match(config, /customsProductWhitelistEnabled/);
+  assert.match(config, /normalizeCustomsProductWhitelist/);
+});
+
+test("customs product whitelist standardizes matched names and excludes unknown names", async () => {
+  const { applyCustomsProductWhitelist } = await jiti.import<
+    typeof import("../lib/platform/customs-product-whitelist.ts")
+  >("../lib/platform/customs-product-whitelist.ts");
+  const warnings: string[] = [];
+  const items = applyCustomsProductWhitelist([
+    { productName: "塑料墙板", commodityCode: "3918909000", quantityUnits: [{ quantity: "10", unit: "千克" }] },
+    { productName: "木制托盘", commodityCode: "4415209090", quantityUnits: [{ quantity: "2", unit: "件" }] },
+  ], {
+    customsProductWhitelistEnabled: true,
+    customsProductWhitelist: [{
+      id: "wall-panel",
+      standardName: "塑料制墙板",
+      aliases: ["塑料墙板"],
+      hsCodes: ["3918909000"],
+      enabled: true,
+    }],
+  }, warnings);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].productName, "塑料制墙板");
+  assert.equal(items[0].customsWhitelistMatched, true);
+  assert.match(warnings.join("；"), /白名单标准化为“塑料制墙板”/);
+  assert.match(warnings.join("；"), /未命中报关品名白名单/);
 });
 
 test("table candidates retain commodity name, code, quantity/unit and source coordinates", async () => {

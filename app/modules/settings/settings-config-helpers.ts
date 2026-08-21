@@ -1,7 +1,7 @@
 import type { CompanyProfileSettings } from "../../types";
 import { COMMISSION_FORMULA_DEDUCTIONS, COMMISSION_FORMULA_PRESETS, COMMISSION_FORMULA_SOURCES, DEFAULT_NOTIFICATION_TEMPLATE_FORM, DEFAULT_OCR_INTEGRATION_FORM, DEFAULT_SHIPSGO_INTEGRATION_FORM, DEFAULT_SMS_INTEGRATION_FORM, NOTIFICATION_RECIPIENT_EMAIL_OPTIONS } from "./constants";
+import { customsProductWhitelistFromSettings } from "./settings-ocr-whitelist-helpers";
 import type { CommissionFormulaForm, CommissionFormulaSettings, CompanyProfileForm, ExchangeRateForm, ExchangeRateSettings, NotificationDeliveryLogRow, NotificationTemplateForm, NotificationTemplateRow, NotificationTemplateSettings, OcrIntegrationForm, OcrIntegrationSettings, ShipsgoIntegrationForm, ShipsgoIntegrationSettings, SmsIntegrationForm, SmsIntegrationSettings } from "./types";
-
 export function companyProfileFormFromSettings(settings: CompanyProfileSettings | null): CompanyProfileForm {
   return {
     brandName: stringSetting(settings, "brandName", "NEXTWOOD"),
@@ -129,6 +129,8 @@ export function ocrIntegrationFormFromSettings(settings: OcrIntegrationSettings 
     tencentRegion: stringSetting(settings, "tencentRegion", DEFAULT_OCR_INTEGRATION_FORM.tencentRegion),
     invoiceTextEnabled: settings?.invoiceTextEnabled === true,
     logisticsInvoiceEnabled: settings?.logisticsInvoiceEnabled === true,
+    customsProductWhitelistEnabled: settings?.customsProductWhitelistEnabled === true,
+    customsProductWhitelist: customsProductWhitelistFromSettings(settings),
     timeoutMs: String(settings?.timeoutMs ?? DEFAULT_OCR_INTEGRATION_FORM.timeoutMs),
   };
 }
