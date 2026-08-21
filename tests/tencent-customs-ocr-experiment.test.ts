@@ -105,6 +105,48 @@ test("table candidates split customs rows collapsed into one OCR column", async 
   ]);
 });
 
+test("table candidates split multiple customs products merged into one OCR row", async () => {
+  const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  const items = candidateItemsFromTencentTables([{
+    page: 1,
+    tableIndex: 0,
+    type: 2,
+    rows: [
+      ["项号 商品编号 商品名称及规格型号 数量及单位 总价 币制"],
+      ["1 3918909000 塑料制地板 16250 千克 16250.00 USD 2 7326909000 不锈钢连接件 240 件 1800.00 USD"],
+    ],
+    cells: [],
+  }]);
+  assert.deepEqual(items.map((item) => ({
+    itemNo: item.itemNo,
+    commodityCode: item.commodityCode,
+    productName: item.productName,
+    quantityUnits: item.quantityUnits,
+  })), [
+    { itemNo: "1", commodityCode: "3918909000", productName: "塑料制地板", quantityUnits: [{ quantity: "16250", unit: "千克" }] },
+    { itemNo: "2", commodityCode: "7326909000", productName: "不锈钢连接件", quantityUnits: [{ quantity: "240", unit: "件" }] },
+  ]);
+});
+
+test("table candidates zip customs products split across multiline cells", async () => {
+  const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
+  const items = candidateItemsFromTencentTables([{
+    page: 1,
+    tableIndex: 0,
+    type: 2,
+    rows: [
+      ["项号", "商品编号", "品名", "成交数量", "成交单位", "总价"],
+      ["1\n2", "3918909000\n7326909000", "塑料制地板\n不锈钢连接件", "16250\n240", "千克\n件", "16250.00\n1800.00"],
+    ],
+    cells: [],
+  }]);
+  assert.equal(items.length, 2);
+  assert.equal(items[0].productName, "塑料制地板");
+  assert.deepEqual(items[0].quantityUnits, [{ quantity: "16250", unit: "千克" }]);
+  assert.equal(items[1].productName, "不锈钢连接件");
+  assert.deepEqual(items[1].quantityUnits, [{ quantity: "240", unit: "件" }]);
+});
+
 test("table candidates handle split quantity and unit columns", async () => {
   const { candidateItemsFromTencentTables } = await import("../lib/platform/tencent-customs-ocr-table-parser.ts");
   const items = candidateItemsFromTencentTables([{
