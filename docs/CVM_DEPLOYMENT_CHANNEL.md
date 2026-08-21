@@ -13,7 +13,7 @@
 7. CVM 加载 `/srv/rmb/shared/app.env`，让迁移状态检查和生产构建使用服务器真实配置。
 8. CVM 只执行 `npx prisma migrate status`，不自动执行数据库迁移。
 9. CVM 执行 `npm run build:app`，重启 `rmb-app.service`，再做本机健康检查。
-9. GitHub Runner 最后访问公网地址，确认 Nginx HTTPS 正常。
+10. GitHub Runner 最后访问公网地址，确认 Nginx HTTPS 正常。
 
 ## 安全边界
 
@@ -115,7 +115,7 @@ gh workflow run deploy-cvm.yml --repo zhujitv/RMB \
 工作流会在 CVM 上：
 
 1. 读取 `/srv/rmb/shared/app.env` 中的生产 `DATABASE_URL`。
-2. 自动确保 `/srv/rmb/shared/db-backups` 可写；如果 sudo 权限不足，则回退到部署用户私有目录 `~/rmb-db-backups`。
+2. 自动确保 `/srv/rmb/shared/db-backups` 可写；如果共享备份目录不可写，则停止迁移，避免备份散落到部署用户私人目录。
 3. 自动清理备份目录中超过 15 天的 RMB 数据库备份；可用 `RMB_CVM_DB_BACKUP_RETENTION_DAYS` 调整。
 4. 用与数据库大版本匹配的 PostgreSQL 工具做 `pg_dump` 备份，并兼容 Prisma 专用连接参数。
 5. 只执行指定 migration 的 `migration.sql`。
@@ -123,3 +123,40 @@ gh workflow run deploy-cvm.yml --repo zhujitv/RMB \
 7. 继续执行正常 CVM 部署。
 
 `safe_prisma_migration` 默认空，不会运行任何数据库迁移。这个通道只适合已人工确认的单条安全迁移；复杂迁移仍应单独制定维护窗口。
+
+## 数据库备份策略
+
+生产服务器应安装独立的每日逻辑备份任务，避免只有部署或迁移时才生成备份。仓库内提供可重复执行的安装脚本：
+
+```bash
+sudo bash scripts/install-cvm-db-backup-strategy.sh
+```
+
+安装后的策略：
+
+1. 备份目录固定为 `/srv/rmb/shared/db-backups`。
+2. 目录权限为 `700`，默认归属 `rmb-deploy:rmb-deploy`。
+3. 每天 03:20 左右执行一次，带 `20m` 随机延迟，服务为 `rmb-db-backup.service`，定时器为 `rmb-db-backup.timer`。
+4. 每次备份生成 `rmb-db-YYYYMMDDTHHMMSSZ.dump`。
+5. 自动删除超过 15 天的 RMB 数据库备份文件。
+6. 备份脚本会优先使用 PostgreSQL 18 的 `pg_dump`，并把 Prisma 连接串拆成 `PGHOST`、`PGPORT`、`PGUSER`、`PGPASSWORD`、`PGDATABASE`，避免 `schema`、`useLibPQCompat` 等应用参数污染 `pg_dump`。
+
+可覆盖参数：
+
+```text
+RMB_DB_BACKUP_USER=rmb-deploy
+RMB_DB_BACKUP_GROUP=rmb-deploy
+RMB_ENV_FILE=/srv/rmb/shared/app.env
+RMB_DB_BACKUP_DIR=/srv/rmb/shared/db-backups
+RMB_DB_BACKUP_RETENTION_DAYS=15
+RMB_RUN_BACKUP_NOW=true
+```
+
+检查命令：
+
+```bash
+systemctl is-enabled rmb-db-backup.timer
+systemctl is-active rmb-db-backup.timer
+systemctl list-timers rmb-db-backup.timer --no-pager
+find /srv/rmb/shared/db-backups -maxdepth 1 -type f -name 'rmb-db-*.dump' -printf '%TY-%Tm-%Td %TH:%TM %s bytes %p\n' | sort | tail -5
+```

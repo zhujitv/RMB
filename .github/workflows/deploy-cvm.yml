@@ -180,18 +180,20 @@ jobs:
             chmod 700 "$backup_dir" 2>/dev/null || true
           elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
             if ! sudo -n install -d -m 700 -o "$current_user" -g "$current_group" "$backup_dir"; then
-              echo "::warning::Cannot prepare shared backup directory with sudo; migrations will use the deploy user's private fallback."
+              echo "::error::Cannot prepare shared backup directory with sudo: $backup_dir"
+              exit 1
             fi
           else
-            echo "::warning::Shared backup directory is not writable and passwordless sudo is unavailable; migrations will use the deploy user's private fallback."
+            echo "::error::Shared backup directory is not writable and passwordless sudo is unavailable: $backup_dir"
+            exit 1
           fi
           if [[ -d "$backup_dir" && -w "$backup_dir" ]]; then
             printf '[rmb-cvm-deploy] shared DB backup directory ready: %s\n' "$backup_dir"
           else
-            printf '[rmb-cvm-deploy] shared DB backup directory not writable; private fallback remains enabled: %s\n' "$backup_dir"
+            printf '[rmb-cvm-deploy] shared DB backup directory not writable: %s\n' "$backup_dir" >&2
+            exit 1
           fi
           prune_old_backups "$backup_dir"
-          prune_old_backups "$HOME/rmb-db-backups"
           REMOTE_SCRIPT
 
       - name: Apply single safe Prisma migration
@@ -293,12 +295,11 @@ jobs:
               sudo install -d -m 700 -o "$(id -un)" -g "$(id -gn)" "$BACKUP_DIR" 2>/dev/null || true
             fi
             if ! mkdir -p "$BACKUP_DIR" 2>/dev/null; then
-              BACKUP_DIR="$HOME/rmb-db-backups"
-              log "shared backup directory is not writable; using $BACKUP_DIR"
-              mkdir -p "$BACKUP_DIR"
+              fail "shared backup directory is not writable: $BACKUP_DIR"
             fi
           fi
           chmod 700 "$BACKUP_DIR" 2>/dev/null || true
+          [[ -w "$BACKUP_DIR" ]] || fail "shared backup directory is not writable: $BACKUP_DIR"
           already_applied="$("$PSQL_BIN" "$POSTGRES_URL" --set=ON_ERROR_STOP=1 --set=migration_name="$MIGRATION_NAME" --tuples-only --no-align <<'SQL'
           SELECT COALESCE((
             SELECT 'true'

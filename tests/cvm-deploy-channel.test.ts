@@ -4,6 +4,7 @@ import test from "node:test";
 
 const workflow = readFileSync(".github/workflows/deploy-cvm.yml", "utf8");
 const remoteScript = readFileSync("scripts/deploy-cvm-from-bundle.sh", "utf8");
+const backupInstallScript = readFileSync("scripts/install-cvm-db-backup-strategy.sh", "utf8");
 const docs = readFileSync("docs/CVM_DEPLOYMENT_CHANNEL.md", "utf8");
 
 test("CVM deployment channel is manual by default and can be explicitly automated after CI", () => {
@@ -46,4 +47,18 @@ test("CVM deployment docs explain setup and rollback boundaries", () => {
   assert.match(docs, /不再依赖 CVM 直接连接 GitHub/);
   assert.match(docs, /不自动执行数据库迁移/);
   assert.match(docs, /RMB_CVM_AUTO_DEPLOY=true/);
+});
+
+test("CVM database backups use the shared server strategy without private fallback", () => {
+  assert.ok(existsSync("scripts/install-cvm-db-backup-strategy.sh"));
+  assert.match(workflow, /RMB_CVM_DB_BACKUP_DIR/);
+  assert.match(workflow, /shared backup directory is not writable/);
+  assert.doesNotMatch(workflow, /HOME\/rmb-db-backups|private fallback/);
+  assert.match(backupInstallScript, /rmb-db-backup\.timer/);
+  assert.match(backupInstallScript, /RMB_DB_BACKUP_RETENTION_DAYS:-15/);
+  assert.match(backupInstallScript, /\/srv\/rmb\/shared\/db-backups/);
+  assert.match(backupInstallScript, /\/usr\/pgsql-18\/bin\/pg_dump/);
+  assert.match(backupInstallScript, /PGPASSWORD/);
+  assert.match(docs, /数据库备份策略/);
+  assert.match(docs, /超过 15 天/);
 });
