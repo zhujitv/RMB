@@ -5,7 +5,9 @@ import { runNonCriticalTask } from "./shared-background-tasks";
 import { codedError, isPlainRecord, redactSensitiveText } from "./shared-base-utils";
 import { writeAudit } from "./shared-audit";
 import { readValidatedPdfUploadFile } from "./upload-validation";
+import { extractPdfTextFromPdfBuffer } from "../customs-declaration-parser";
 import {
+  candidateItemsFromCustomsText,
   candidateItemsFromTencentTables,
   type TencentCustomsExperimentTable,
 } from "./tencent-customs-ocr-table-parser";
@@ -94,6 +96,43 @@ function tablesFromResponse(response: Awaited<ReturnType<InstanceType<typeof Ten
   });
 }
 
+function itemQuantityKey(item: Record<string, unknown>) {
+  const rows = Array.isArray(item.quantityUnits) ? item.quantityUnits as Array<Record<string, unknown>> : [];
+  return rows.map((row) => `${row.quantity || ""}${row.unit || ""}`).join("|");
+}
+
+function customsItemKey(item: Record<string, unknown>) {
+  return [
+    item.itemNo || "",
+    item.commodityCode || "",
+    item.productName || item.nameAndSpecification || "",
+    itemQuantityKey(item),
+  ].join("|").toUpperCase().replace(/[\s,，。._\-\/\\（）()【】\[\]]/g, "");
+}
+
+async function fallbackItemsFromPdfText(buffer: Buffer, warnings: string[]) {
+  try {
+    const text = await extractPdfTextFromPdfBuffer(buffer, { requireText: false });
+    return candidateItemsFromCustomsText(text);
+  } catch (error) {
+    warnings.push(`PDF文本补充识别失败：${error instanceof Error ? error.message : String(error || "")}`);
+    return [];
+  }
+}
+
+async function mergedCustomsItemsFromTableAndText(buffer: Buffer, tableItems: Array<Record<string, unknown>>, warnings: string[]) {
+  const seen = new Set(tableItems.map(customsItemKey));
+  const fallbackItems = await fallbackItemsFromPdfText(buffer, warnings);
+  const additions = fallbackItems.filter((item) => {
+    const key = customsItemKey(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (additions.length) warnings.push(`表格识别漏读的${additions.length}行商品已从PDF文本补充，请人工核查。`);
+  return [...tableItems, ...additions];
+}
+
 function dedicatedResult(response: Awaited<ReturnType<InstanceType<typeof TencentOcrClient>["RecognizeGeneralInvoice"]>>) {
   const documents = (response.MixedInvoiceItems || []).map((item) => {
     const declaration = item.SingleInvoiceInfos?.CustomsDeclaration;
@@ -174,7 +213,7 @@ export async function runTencentCustomsOcrExperiment(
   const warnings = [...table.warnings];
   if (dedicatedSettled.status === "rejected") warnings.unshift(`报关单专用识别失败：${providerError(dedicatedSettled.reason).message}`);
   if (tableSettled.status === "rejected") warnings.unshift(`表格识别失败：${providerError(tableSettled.reason).message}`);
-  const items = candidateItemsFromTencentTables(table.tables);
+  const items = await mergedCustomsItemsFromTableAndText(file.body, candidateItemsFromTencentTables(table.tables), warnings);
   if (!items.length) warnings.push("未从表格结果中定位到完整商品表头，请查看原始表格并人工判断。");
   const result = {
     provider: "TENCENT_CLOUD",
@@ -215,7 +254,8 @@ export async function recognizeTencentCustomsGoods(buffer: Buffer) {
   const settings = await getOcrIntegrationSettings();
   const client = createTencentOcrClient(settings);
   const table = await recognizeTables(client, imageBase64);
-  const items = candidateItemsFromTencentTables(table.tables);
+  const warnings = [...table.warnings];
+  const items = await mergedCustomsItemsFromTableAndText(buffer, candidateItemsFromTencentTables(table.tables), warnings);
   if (!items.length) {
     throw codedError("未从报关单识别到商品明细，请检查文件清晰度后重试。", 422, "CUSTOMS_GOODS_NOT_RECOGNIZED");
   }
@@ -225,6 +265,6 @@ export async function recognizeTencentCustomsGoods(buffer: Buffer) {
     requestIds: table.requestIds,
     totalPages: table.totalPages,
     items,
-    warnings: table.warnings,
+    warnings,
   };
 }
