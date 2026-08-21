@@ -3,6 +3,15 @@ import type { SupplierTaxContractDraft, SupplierTaxContractItemDraft } from "./s
 import { codedError, nonEmpty } from "./shared-base-utils";
 import { supplierTaxContractQuantityText } from "./supplier-tax-contract-values";
 
+const MANUAL_AMOUNT_ISSUE_PREFIX = "人工修正后的商品金额合计";
+const EDITABLE_ITEM_MATCH_ISSUE = /^采购第(\d+)行无法可靠匹配报关单商品/;
+
+function resolvedByManualItemReview(issue: string, changedLineNumbers: Set<number>) {
+  if (issue.startsWith(MANUAL_AMOUNT_ISSUE_PREFIX)) return true;
+  const match = issue.match(EDITABLE_ITEM_MATCH_ISSUE);
+  return match ? changedLineNumbers.has(Number(match[1])) : false;
+}
+
 export type SupplierTaxContractDraftEdit = {
   purchaseOrderItemId?: unknown;
   productName?: unknown;
@@ -84,9 +93,16 @@ export function applySupplierTaxContractDraftEdits(
     new Prisma.Decimal(0),
   ).toDecimalPlaces(2);
   const expectedTotal = new Prisma.Decimal(draft.totalAmountWithTax);
+  const changedLineNumbers = new Set(changes.map((change) => change.lineNo));
+  const retainedBlockingIssues = (draft.blockingIssues || []).filter(
+    (issue) => !resolvedByManualItemReview(issue, changedLineNumbers),
+  );
   const blockingIssues = calculatedTotal.eq(expectedTotal)
-    ? []
-    : [`人工修正后的商品金额合计${calculatedTotal.toFixed(2)}与采购结算金额${expectedTotal.toFixed(2)}不一致。`];
+    ? retainedBlockingIssues
+    : [...new Set([
+        ...retainedBlockingIssues,
+        `人工修正后的商品金额合计${calculatedTotal.toFixed(2)}与采购结算金额${expectedTotal.toFixed(2)}不一致。`,
+      ])];
   const warnings = changes.length
     ? [`OCR识别结果已人工修正（${changes.map((row) => `第${row.lineNo}行${row.fields.join("、")}`).join("；")}），请继续对照报关单原件核查。`]
     : ["人工已核查商品行，未修改OCR识别结果。"];

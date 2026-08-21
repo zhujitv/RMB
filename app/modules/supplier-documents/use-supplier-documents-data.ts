@@ -171,8 +171,9 @@ export function useSupplierDocumentsData() {
     }
   }
 
-  function openTask(taskId: string) {
+  async function openTask(taskId: string) {
     setExpandedTaskId(taskId);
+    await loadTaskDetail(taskId, { force: true });
   }
 
   function toggleTask(taskId: string) {

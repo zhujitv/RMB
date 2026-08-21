@@ -121,6 +121,7 @@ export function SupplierDocumentsModule({
   useWorkspaceTabReactivation(() => {
     void loadRows(page, pageSize, submittedKeyword);
     void loadStats(submittedKeyword);
+    if (expandedTaskId) void loadTaskDetail(expandedTaskId, { force: true, silent: true });
   });
 
   async function refreshTaskAfterReview(taskId: string) {
@@ -178,7 +179,7 @@ export function SupplierDocumentsModule({
       }}
       onToggleTask={toggleTask}
       onOpenTask={openTask}
-      onRefreshTask={(taskId) => void refreshTaskAfterReview(taskId)}
+      onRefreshTask={refreshTaskAfterReview}
       onUpload={uploadDocument}
       onDeleteTask={(task) => void deleteTask(task)}
       onResendNotice={(task) => void resendNotice(task)}

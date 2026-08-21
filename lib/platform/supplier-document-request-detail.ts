@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import type { Prisma } from "../generated/prisma/client.js";
 import {
   FILE_ASSET_ROLES,
   FILE_ASSET_SOURCE_TABLES,
@@ -6,6 +7,7 @@ import {
   assertRead,
   assertWrite,
   codedError,
+  isProductSupplierOperatorRole,
   runNonCriticalTask,
   scheduleTaxRefundCompletenessRefresh,
   softDeleteFileAssetBySource,
@@ -24,11 +26,27 @@ import {
   serializeSupplierDocumentRequest,
   supplierDocumentRequestOrderLocked,
 } from "./supplier-document-request-serialization";
+import { refreshSupplierTaxContractParties } from "./supplier-tax-contract-parties";
+import type { SupplierTaxContractDraft } from "./supplier-tax-contract-draft";
+
+function pendingContractDraft(value: Prisma.JsonValue | null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw codedError("合同草稿不存在，请重新创建任务。", 409, "SUPPLIER_TAX_CONTRACT_DRAFT_MISSING");
+  }
+  return value as unknown as SupplierTaxContractDraft;
+}
 
 export async function getSupplierDocumentRequestDetail(id: string, actor: ActorLike) {
   assertRead(actor, "supplierDocuments");
   const row = await loadSupplierDocumentRequest(id, actor);
-  return serializeSupplierDocumentRequest(row, actor);
+  if (row.contractStatus !== "PENDING_REVIEW" || isProductSupplierOperatorRole(actor?.role)) {
+    return serializeSupplierDocumentRequest(row, actor);
+  }
+  const contractDraft = await refreshSupplierTaxContractParties(pendingContractDraft(row.contractDraft));
+  return serializeSupplierDocumentRequest({
+    ...row,
+    contractDraft: contractDraft as unknown as Prisma.JsonValue,
+  }, actor);
 }
 
 export async function deleteSupplierDocumentRequest(
