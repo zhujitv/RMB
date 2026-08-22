@@ -9,6 +9,7 @@ enum FactoryPurchaseOrderProductionStatus {
 enum FactoryPurchasePaymentKind {
   PREPAYMENT
   BALANCE
+  REFUND
 }
 
 enum FactoryPurchaseLedgerStatus {
@@ -42,6 +43,7 @@ enum FactoryPurchasePriceCorrectionStatus {
 enum FactoryPurchaseSettlementStatus {
   PENDING_PAYMENT
   SETTLED
+  PENDING_REFUND
 }
 
 model FactoryPurchaseOrderPayment {
@@ -131,6 +133,22 @@ model FactoryPurchaseOrderPriceCorrection {
   sourceUnitPriceType     String                               @default("PURCHASE_ORDER") @map("source_unit_price_type")
   idempotencyKey          String                               @map("idempotency_key")
   adjustmentId            String?                              @unique @map("adjustment_id")
+  settlementFinalPayableBefore Decimal?                        @map("settlement_final_payable_before") @db.Decimal(18, 2)
+  settlementFinalPayableAfter  Decimal?                        @map("settlement_final_payable_after") @db.Decimal(18, 2)
+  settlementStatusBefore       FactoryPurchaseSettlementStatus? @map("settlement_status_before")
+  settlementStatusAfter        FactoryPurchaseSettlementStatus? @map("settlement_status_after")
+  settlementRevisionBefore     Int?                            @map("settlement_revision_before")
+  settlementRevisionAfter      Int?                            @map("settlement_revision_after")
+  settlementIncreaseBefore     Decimal?                        @map("settlement_increase_before") @db.Decimal(18, 2)
+  settlementIncreaseAfter      Decimal?                        @map("settlement_increase_after") @db.Decimal(18, 2)
+  settlementDecreaseBefore     Decimal?                        @map("settlement_decrease_before") @db.Decimal(18, 2)
+  settlementDecreaseAfter      Decimal?                        @map("settlement_decrease_after") @db.Decimal(18, 2)
+  settlementPaidBefore         Decimal?                        @map("settlement_paid_before") @db.Decimal(18, 2)
+  settlementPaidAfter          Decimal?                        @map("settlement_paid_after") @db.Decimal(18, 2)
+  settlementSettledAtBefore    DateTime?                       @map("settlement_settled_at_before")
+  settlementSettledAtAfter     DateTime?                       @map("settlement_settled_at_after")
+  settlementSettledByBeforeId  String?                         @map("settlement_settled_by_before")
+  settlementSettledByAfterId   String?                         @map("settlement_settled_by_after")
   requestedById           String                               @map("requested_by")
   reviewedById            String?                              @map("reviewed_by")
   requestedAt             DateTime                             @default(now()) @map("requested_at")
@@ -167,6 +185,7 @@ model FactoryPurchaseOrderSettlement {
   exchangeRateDate       DateTime                        @map("exchange_rate_date") @db.Date
   paidAmountAtSettlement Decimal                         @map("paid_amount_at_settlement") @db.Decimal(18, 2)
   status                 FactoryPurchaseSettlementStatus @default(PENDING_PAYMENT)
+  revision               Int                             @default(1)
   settledAt              DateTime?                       @map("settled_at")
   settledById            String?                         @map("settled_by")
   createdById            String                          @map("created_by")
