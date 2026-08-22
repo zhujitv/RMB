@@ -1,4 +1,5 @@
 import { PDFDocument } from "pdf-lib";
+import sharp from "sharp";
 import { prisma } from "../prisma";
 import { readR2Object, safeFileName, uploadToR2 } from "../r2";
 import { assertRead, assertWrite } from "./shared-access";
@@ -6,6 +7,10 @@ import { codedError, logServerError, nonEmpty } from "./shared-base-utils";
 import { deleteManagedStoredFile } from "./file-center";
 import { FILE_ASSET_ROLES, FILE_ASSET_SOURCE_TABLES } from "./file-asset-data";
 import { serializeBusinessEntitySettings } from "./business-entity-core";
+import {
+  locateSupplierContractSealAnchor,
+} from "./supplier-contract-seal-position";
+import { supplierContractSealPlacement } from "./supplier-contract-seal-position-math";
 import { writeAudit } from "./shared-audit";
 
 type ActorLike = { id?: string | null; role?: string | null } | null | undefined;
@@ -231,23 +236,52 @@ export async function readBusinessEntityElectronicSealImage(actor: ActorLike, bu
   };
 }
 
-export async function stampPdfWithElectronicSeal(pdfBody: Buffer, sealPngBody: Buffer) {
-  const pdf = await PDFDocument.load(pdfBody);
-  const seal = await pdf.embedPng(sealPngBody);
+async function drawElectronicSealAtAnchor(
+  pdf: PDFDocument,
+  sealPngBody: Buffer,
+  anchor: Parameters<typeof supplierContractSealPlacement>[0],
+) {
   const pages = pdf.getPages();
-  const page = pages[pages.length - 1];
-  if (!page) throw codedError("合同 PDF 没有可盖章页面。", 400, "SUPPLIER_CONTRACT_PDF_EMPTY");
-  const pageWidth = page.getWidth();
-  const sealWidth = Math.min(128, Math.max(88, pageWidth * 0.18));
-  const sealHeight = sealWidth * (seal.height / Math.max(1, seal.width));
+  const pageSizes = pages.map((page) => ({ width: page.getWidth(), height: page.getHeight() }));
+  const pageSize = pageSizes[anchor.pageIndex];
+  if (!pageSize) throw codedError("合同盖章页不存在。", 400, "SUPPLIER_CONTRACT_SEAL_PAGE_INVALID");
+  const optimizedSealPng = await sharp(sealPngBody)
+    .rotate()
+    .resize({ width: 450, height: 450, fit: "inside", withoutEnlargement: true })
+    .png({ compressionLevel: 9, palette: true, quality: 95 })
+    .toBuffer();
+  const seal = await pdf.embedPng(optimizedSealPng);
+  const placement = supplierContractSealPlacement(anchor, pageSize, seal.height / Math.max(1, seal.width));
+  const page = pages[placement.pageIndex];
+  if (!page) throw codedError("合同盖章页不存在。", 400, "SUPPLIER_CONTRACT_SEAL_PAGE_INVALID");
   page.drawImage(seal, {
-    x: Math.max(32, pageWidth - sealWidth - 96),
-    y: 64,
-    width: sealWidth,
-    height: sealHeight,
+    x: placement.x,
+    y: placement.y,
+    width: placement.width,
+    height: placement.height,
     opacity: 0.92,
   });
-  return Buffer.from(await pdf.save({ useObjectStreams: false }));
+  return Buffer.from(await pdf.save({ useObjectStreams: true }));
+}
+
+export async function stampPdfWithElectronicSealAtAnchor(
+  pdfBody: Buffer,
+  sealPngBody: Buffer,
+  anchor: Parameters<typeof supplierContractSealPlacement>[0],
+) {
+  const pdf = await PDFDocument.load(pdfBody);
+  const pages = pdf.getPages();
+  if (!pages.length) throw codedError("合同 PDF 没有可盖章页面。", 400, "SUPPLIER_CONTRACT_PDF_EMPTY");
+  return drawElectronicSealAtAnchor(pdf, sealPngBody, anchor);
+}
+
+export async function stampPdfWithElectronicSeal(pdfBody: Buffer, sealPngBody: Buffer) {
+  const pdf = await PDFDocument.load(pdfBody);
+  const pages = pdf.getPages();
+  if (!pages.length) throw codedError("合同 PDF 没有可盖章页面。", 400, "SUPPLIER_CONTRACT_PDF_EMPTY");
+  const pageSizes = pages.map((page) => ({ width: page.getWidth(), height: page.getHeight() }));
+  const anchor = await locateSupplierContractSealAnchor(pdfBody, pageSizes);
+  return drawElectronicSealAtAnchor(pdf, sealPngBody, anchor);
 }
 
 export async function stampSupplierPurchaseContractForBusinessEntity(businessEntityId: string, pdfBody: Buffer) {
@@ -260,6 +294,7 @@ export async function stampSupplierPurchaseContractForBusinessEntity(businessEnt
     return { body, sealed: true, sealFileName: sealAsset.fileName || "电子章.png" };
   } catch (error) {
     logServerError("供应商合同自动盖章失败", error, { businessEntityId });
+    if (["SUPPLIER_CONTRACT_SEAL_POSITION_NOT_FOUND", "SUPPLIER_CONTRACT_SEAL_OCR_UNAVAILABLE"].includes((error as { code?: string } | null)?.code || "")) throw error;
     throw codedError("业务主体电子章配置异常，无法生成已盖章合同；请管理员重新上传透明 PNG 电子章。", 409, "BUSINESS_ENTITY_SEAL_STAMP_FAILED");
   }
 }

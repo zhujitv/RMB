@@ -208,6 +208,10 @@ test("business entities maintain a private electronic seal for supplier contract
   assert.match(service, /PDFDocument/);
   assert.match(service, /embedPng/);
   assert.match(service, /page\.drawImage\(seal/);
+  assert.match(service, /locateSupplierContractSealAnchor/);
+  assert.match(service, /supplierContractSealPlacement/);
+  assert.match(service, /resize\(\{ width: 450, height: 450/);
+  assert.doesNotMatch(service, /y:\s*64/);
   assert.match(service, /business-entities\/\$\{safeEntityId\}\/electronic-seal/);
   assert.match(service, /serializeBusinessEntitySettings\(row, serializeBusinessEntityElectronicSeal/);
   assert.match(service, /hasElectronicSeal/);

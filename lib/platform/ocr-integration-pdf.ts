@@ -3,7 +3,7 @@ import {
   type RasterizedPdfPage,
 } from "./ocr-integration-shared";
 
-export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<RasterizedPdfPage | null> {
+export async function rasterizePdfPageForOcr(buffer: Buffer, pageNumber = 1): Promise<RasterizedPdfPage | null> {
   if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") return null;
   try {
     const canvasModule = await import("@napi-rs/canvas");
@@ -29,7 +29,9 @@ export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<Raste
       }>;
       destroy?: () => Promise<void>;
     };
-    const page = await pdf.getPage(1);
+    const pageCount = Number(pdf.numPages || 1);
+    const safePageNumber = Math.max(1, Math.min(pageCount, Math.trunc(pageNumber || 1)));
+    const page = await pdf.getPage(safePageNumber);
     const baseViewport = page.getViewport({ scale: 1 });
     const longestSide = Math.max(baseViewport.width, baseViewport.height);
     const scale = Math.min(3, Math.max(1.5, 2200 / Math.max(longestSide, 1)));
@@ -40,7 +42,6 @@ export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<Raste
     context.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvas: null, canvasContext: context, viewport }).promise;
     const pngBuffer = canvas.toBuffer("image/png");
-    const pageCount = Number(pdf.numPages || 1);
     await pdf.destroy?.().catch(() => undefined);
     await loadingTask.destroy?.().catch(() => undefined);
     return {
@@ -50,7 +51,11 @@ export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<Raste
       pageCount,
     };
   } catch (error) {
-    console.error("customs-pdf-rasterize-for-ocr-failed", { message: ocrErrorText(error) });
+    console.error("pdf-rasterize-for-ocr-failed", { pageNumber, message: ocrErrorText(error) });
     return null;
   }
+}
+
+export async function rasterizeFirstPdfPageForOcr(buffer: Buffer): Promise<RasterizedPdfPage | null> {
+  return rasterizePdfPageForOcr(buffer, 1);
 }

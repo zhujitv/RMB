@@ -76,7 +76,7 @@ export function BusinessEntitySealField({
   return (
     <div className={styles.documentGroupCard}>
       <strong>需方电子章</strong>
-      <div className={styles.emptyState}>上传透明背景 PNG。供应商回传工厂采购合同时，系统会按订单业务主体自动在合同底部需方处盖章。</div>
+      <div className={styles.emptyState}>上传透明背景 PNG。供应商回传工厂采购合同时，系统会识别每份合同中的“需方（盖章）”位置后自动盖章；无法可靠识别时会停止上传，避免盖错。</div>
       {entity?.hasElectronicSeal ? (
         <div className={styles.fileUploadFile}>
           <img
