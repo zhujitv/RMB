@@ -2,9 +2,16 @@
 .hero .subtitle { color: rgba(255,255,255,.72); }
 .eyebrow { font-size: 22rpx; letter-spacing: 3rpx; opacity: .72; margin-bottom: 12rpx; }
 .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 18rpx; }
+.metrics .metric:only-child { grid-column: 1 / -1; }
 .metric { margin-bottom: 22rpx; }
 .metric-value { font-size: 54rpx; font-weight: 750; color: #145b42; }
 .metric-label { color: #68776f; margin-top: 8rpx; }
 .action { display: flex; align-items: center; justify-content: space-between; }
 .action .section-title { margin-bottom: 8rpx; }
 .action > text { font-size: 54rpx; color: #6b7b73; }
+.list-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 10rpx 4rpx 18rpx; }
+.list-heading .section-title { margin-bottom: 0; }
+.action-side { display: flex; align-items: center; gap: 14rpx; flex-shrink: 0; }
+.action-side > text { font-size: 48rpx; color: #6b7b73; }
+.module-status { color: #77847e; background: #f0f2f1; padding: 7rpx 14rpx; border-radius: 999rpx; font-size: 21rpx; }
+.module-status.available { color: #176c4e; background: #e8f4ee; }

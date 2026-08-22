@@ -2,6 +2,15 @@
   "pages": [
     "pages/login/index",
     "pages/home/index",
+    "pages/customer-quotes/index",
+    "pages/quotation-detail/index",
+    "pages/quotation-form/index",
+    "pages/sales-executions/index",
+    "pages/sales-execution-detail/index",
+    "pages/sales-execution-form/index",
+    "pages/orders/index",
+    "pages/order-detail/index",
+    "pages/order-form/index",
     "pages/purchase-orders/index",
     "pages/purchase-order-detail/index",
     "pages/documents/index",
@@ -11,7 +20,7 @@
   "window": {
     "navigationBarBackgroundColor": "#12372a",
     "navigationBarTextStyle": "white",
-    "navigationBarTitleText": "NEXTWOOD 供应商",
+    "navigationBarTitleText": "NEXTWOOD RMB",
     "backgroundColor": "#f3f5f2",
     "backgroundTextStyle": "dark"
   },

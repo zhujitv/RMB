@@ -4,7 +4,7 @@ App({
     user: null,
   },
   onLaunch() {
-    const override = wx.getStorageSync("supplierMiniApiBaseUrl");
+    const override = wx.getStorageSync("rmbMiniApiBaseUrl") || wx.getStorageSync("supplierMiniApiBaseUrl");
     if (override) this.globalData.apiBaseUrl = String(override).replace(/\/$/, "");
   },
 });

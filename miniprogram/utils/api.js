@@ -1,4 +1,4 @@
-const TOKEN_KEY = "supplierMiniSessionToken";
+const TOKEN_KEY = "rmbMiniSessionToken";
 
 function baseUrl() {
   return getApp().globalData.apiBaseUrl.replace(/\/$/, "");

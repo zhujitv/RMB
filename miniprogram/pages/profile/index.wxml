@@ -1,6 +1,6 @@
 <view class="page">
   <view wx:if="{{error}}" class="error">{{error}}</view>
-  <view wx:if="{{user}}" class="card profile"><view class="avatar">{{user.displayInitials}}</view><view class="title">{{user.name}}</view><view class="subtitle">{{user.supplierName}}</view><view class="details"><view><text>账号</text><strong>{{user.email}}</strong></view><view><text>角色</text><strong>{{user.role}}</strong></view><view><text>供应商类型</text><strong>{{user.supplierType}}</strong></view></view></view>
-  <view class="card help"><view class="section-title">使用说明</view><view>· 价格、交期和完成数量请按实际情况填报。</view><view>· 所有回复和文件上传都会留下操作记录。</view><view>· 不使用小程序时，可继续联系采购人员代为登记。</view></view>
+  <view wx:if="{{user}}" class="card profile"><view class="avatar">{{user.displayInitials}}</view><view class="title">{{user.name}}</view><view class="subtitle">{{user.department || 'RMB 业务协同账号'}}</view><view class="details"><view><text>账号</text><strong>{{user.email}}</strong></view><view><text>角色</text><strong>{{user.role}}</strong></view><view wx:if="{{user.supplierName}}"><text>绑定供应商</text><strong>{{user.supplierName}}</strong></view><view wx:if="{{user.supplierType}}"><text>供应商类型</text><strong>{{user.supplierType}}</strong></view></view></view>
+  <view class="card help"><view class="section-title">使用说明</view><view>· 首页功能根据当前账号角色和权限自动显示。</view><view>· 小程序与 RMB 网页端共用账号和业务数据。</view><view>· 尚未接入小程序的模块请暂时在网页端使用。</view></view>
   <button class="danger" loading="{{loggingOut}}" bindtap="logout">退出登录</button>
 </view>

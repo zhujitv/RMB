@@ -11,7 +11,7 @@ Page({
     } catch (error) { this.setData({ error: error.message }); }
   },
   logout() {
-    wx.showModal({ title: "退出登录", content: "确定退出当前供应商账号吗？", success: async (result) => {
+    wx.showModal({ title: "退出登录", content: "确定退出当前 RMB 账号吗？", success: async (result) => {
       if (!result.confirm) return;
       this.setData({ loggingOut: true });
       try { await request({ url: "/api/auth/logout", method: "POST" }); } catch {}

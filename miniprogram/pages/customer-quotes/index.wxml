@@ -1,0 +1,22 @@
+<view class="page">
+  <view class="hero"><view class="eyebrow">销售环节 · 第一步</view><view class="title">客户与报价</view><view class="subtitle">查询客户档案、历史报价，并创建可继续流转的报价草稿。</view></view>
+  <view class="tabs"><view class="tab {{tab === 'customers' ? 'active' : ''}}" data-tab="customers" bindtap="switchTab">客户档案</view><view class="tab {{tab === 'quotations' ? 'active' : ''}}" data-tab="quotations" bindtap="switchTab">报价记录</view></view>
+  <view class="toolbar card"><input class="search" value="{{keyword}}" bindinput="onKeyword" bindconfirm="search" confirm-type="search" placeholder="{{tab === 'customers' ? '搜索客户、联系人、电话或邮箱' : '搜索报价号、客户或产品'}}"/><button class="primary small" bindtap="search">查询</button></view>
+  <picker wx:if="{{tab === 'quotations'}}" mode="selector" range="{{statusOptions}}" value="{{statusIndex}}" bindchange="onStatus"><view class="filter card">状态：{{statusOptions[statusIndex]}}<text>⌄</text></view></picker>
+  <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{loading}}" class="loading">正在读取业务数据…</view>
+  <block wx:elif="{{tab === 'customers'}}">
+    <view wx:if="{{!customers.length}}" class="card empty">当前范围内暂无客户。</view>
+    <view wx:for="{{customers}}" wx:key="id" class="card customer" data-id="{{item.id}}" bindtap="viewCustomerQuotes">
+      <view class="row"><view><view class="section-title">{{item.displayName || item.shortName || item.name}}</view><view class="muted legal-name">{{item.name}}</view></view><text class="arrow">›</text></view>
+      <view class="details"><view><text>国家/地区</text><strong>{{item.country || '未填写'}}</strong></view><view><text>联系人</text><strong>{{item.contactPerson || '未填写'}}</strong></view><view><text>电话</text><strong>{{item.contactPhone || '未填写'}}</strong></view><view><text>邮箱</text><strong>{{item.contactEmail || '未填写'}}</strong></view></view>
+      <view class="open-hint">查看该客户报价记录</view>
+    </view>
+  </block>
+  <block wx:elif="{{!loading}}">
+    <button wx:if="{{canWrite}}" class="primary create" bindtap="createQuotation">＋ 新建报价草稿</button>
+    <view class="muted count">共 {{quoteTotal}} 条报价</view>
+    <view wx:if="{{!quotations.length}}" class="card empty">当前条件下没有报价。</view>
+    <view wx:for="{{quotations}}" wx:key="id" class="card quote" data-id="{{item.id}}" bindtap="viewQuotation"><view class="row"><view><view class="section-title">{{item.quoteNo || '未编号报价'}}</view><view class="muted">{{item.customerDisplay}}</view></view><view class="status">{{item.statusDisplay}}</view></view><view class="quote-metrics"><view><text>金额</text><strong>{{item.currency}} {{item.totalDisplay}}</strong></view><view><text>有效期</text><strong>{{item.validUntilDisplay}}</strong></view><view><text>更新</text><strong>{{item.updatedDisplay}}</strong></view></view></view>
+    <view wx:if="{{totalPages > 1}}" class="pagination"><button class="secondary small" disabled="{{page <= 1}}" bindtap="previousPage">上一页</button><text>{{page}} / {{totalPages}}</text><button class="secondary small" disabled="{{page >= totalPages}}" bindtap="nextPage">下一页</button></view>
+  </block>
+</view>

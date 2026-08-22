@@ -17,13 +17,13 @@ Page({
     if (this.data.submitting) return;
     const email = this.data.email.trim();
     if (!email || !this.data.password) {
-      this.setData({ error: "请输入 RMB 供应商账号和密码" });
+      this.setData({ error: "请输入 RMB 账号和密码" });
       return;
     }
     this.setData({ submitting: true, error: "" });
     try {
       const result = await request({
-        url: "/api/supplier-mini/auth/login",
+        url: "/api/mini/auth/login",
         method: "POST",
         data: { email, password: this.data.password },
       });

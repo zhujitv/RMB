@@ -2,7 +2,7 @@
   "appid": "wx1f1d7b39c44c7949",
   "compileType": "miniprogram",
   "libVersion": "3.17.0",
-  "projectname": "nextwood-supplier-mini",
+  "projectname": "nextwood-rmb-mini",
   "setting": {
     "es6": true,
     "enhance": true,
@@ -10,5 +10,6 @@
     "postcss": true,
     "urlCheck": true,
     "minifyWXML": true
-  }
+  },
+  "simulatorPluginLibVersion": {}
 }
