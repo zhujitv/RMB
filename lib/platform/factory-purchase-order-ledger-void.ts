@@ -12,8 +12,9 @@ import {
 } from "./factory-purchase-order-ledger-values";
 import {
   confirmedFactoryPaymentTotal,
-  syncFactorySettlementCostPayment,
+  finalizeFactorySettlementAfterPayment,
 } from "./factory-purchase-order-settlement";
+import { assertFactoryPaymentRunningBalance } from "./factory-purchase-order-settlement-values";
 import { todayInChina } from "./quotation-date-values";
 import {
   lockFactoryPurchaseOrder,
@@ -85,8 +86,8 @@ export async function voidFactoryPurchaseOrderPayment(
     }
     const orderId = payment.purchaseOrder.execution.receivableOrder?.id || "";
     if (payment.purchaseOrder.settlement) {
-      if (payment.kind !== "BALANCE") {
-        throw codedError("最终应付确认后只能冲销尾款记录", 409, "FACTORY_SETTLEMENT_BALANCE_VOID_ONLY");
+      if (!(payment.kind === "BALANCE" || payment.kind === "REFUND")) {
+        throw codedError("最终应付确认后只能冲销尾款或退款记录", 409, "FACTORY_SETTLEMENT_PAYMENT_VOID_KIND_INVALID");
       }
       if (!orderId) {
         throw codedError("销售执行单尚未生成应收订单，不能冲销结算尾款", 409, "FACTORY_SETTLEMENT_RECEIVABLE_ORDER_REQUIRED");
@@ -101,18 +102,34 @@ export async function voidFactoryPurchaseOrderPayment(
     if (purchaseOrder.settlement) {
       const activePaymentsAfter = purchaseOrder.payments.filter((row) => row.id !== payment.id && row.status === "CONFIRMED");
       const paidAmountAfter = confirmedFactoryPaymentTotal(activePaymentsAfter);
-      const latestPaidAt = activePaymentsAfter.reduce<Date | null>(
-        (latest, row) => !latest || row.paidAt.getTime() > latest.getTime() ? row.paidAt : latest,
-        null,
-      );
-      await syncFactorySettlementCostPayment(
+      if (paidAmountAfter.lt(0)) {
+        throw codedError("冲销后累计退款将超过已付款金额，不能冲销", 409, "FACTORY_SETTLEMENT_VOID_NEGATIVE_NET_PAID");
+      }
+      assertFactoryPaymentRunningBalance(activePaymentsAfter);
+      const settlementBefore = purchaseOrder.settlement;
+      await finalizeFactorySettlementAfterPayment(
         tx,
         purchaseOrder.id,
         actorId,
-        purchaseOrder.settlement.finalPayableAmount,
-        paidAmountAfter,
-        latestPaidAt,
+        settlementBefore,
+        activePaymentsAfter,
+        voidedAt,
       );
+      const settlementAfter = await tx.factoryPurchaseOrderSettlement.findUniqueOrThrow({
+        where: { id: settlementBefore.id },
+      });
+      if (settlementBefore.status !== settlementAfter.status) {
+        await writeAudit(
+          request,
+          { id: actorId },
+          "冲销工厂采购款项重算结算状态",
+          "factory_purchase_order_settlements",
+          settlementBefore.id,
+          settlementBefore,
+          settlementAfter,
+          tx,
+        );
+      }
     }
     const required = factoryPrepaymentRequiredAmount(purchaseOrder.penaltyBaseAmount, purchaseOrder.prepaymentRatio);
     const paidAfter = activePaidPrepayment(purchaseOrder.payments, payment.id);

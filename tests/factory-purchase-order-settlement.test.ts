@@ -19,6 +19,7 @@ const service = [
   "lib/platform/factory-purchase-order-settlement-cost.ts",
 ].map((file) => readFileSync(file, "utf8")).join("\n");
 const paymentService = readFileSync("lib/platform/factory-purchase-order-execution.ts", "utf8");
+const executionSharedService = readFileSync("lib/platform/factory-purchase-order-execution-shared.ts", "utf8");
 const voidService = readFileSync("lib/platform/factory-purchase-order-ledger-void.ts", "utf8");
 const executionPanel = readFileSync("app/modules/sales-execution/purchase-order-execution-panel.tsx", "utf8");
 const route = readFileSync(
@@ -409,14 +410,15 @@ test("settlement confirms provisional adjustments and creates or reuses one conf
   assert.match(mutation, /confirmedAt: now/);
 });
 
-test("settlement blocks overpayment and atomically creates the snapshot plus the existing-system factory cost", () => {
+test("settlement records overpayment as pending refund and atomically creates the snapshot plus the existing-system factory cost", () => {
   const mutation = exportedFunctionSource("settleFactoryPurchaseOrder", service);
 
-  assert.match(mutation, /paidAmount\.gt\(finalPayableAmount\)/);
-  assert.match(mutation, /FACTORY_SETTLEMENT_PAYMENT_EXCEEDS_PAYABLE/);
+  assert.doesNotMatch(mutation, /paidAmount\.gt\(finalPayableAmount\)/);
+  assert.match(mutation, /factorySettlementStatusForNetPaid\(finalPayableAmount, paidAmount\)/);
+  assert.match(service, /PENDING_REFUND/);
   assert.match(mutation, /factoryPurchaseOrderSettlement\.create/);
   assert.match(mutation, /paidAmountAtSettlement: paidAmount/);
-  assert.match(mutation, /status: fullyPaid \? "SETTLED" : "PENDING_PAYMENT"/);
+  assert.match(mutation, /status: settlementStatus/);
   assert.match(service, /sourceType: FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE/);
   assert.match(service, /costType: "工厂货款"/);
   assert.match(service, /costConfirmed: true/);
@@ -426,18 +428,19 @@ test("settlement blocks overpayment and atomically creates the snapshot plus the
   assert.match(service, /writeAudit\([\s\S]*?order_costs/);
 });
 
-test("post-settlement payments remain archive-independent, balance-only, and capped", () => {
+test("post-settlement supplement and supplier refund entries remain archive-independent and capped", () => {
   const paymentMutation = exportedFunctionSource("recordFactoryPurchaseOrderPayment", paymentService);
 
-  assert.match(paymentMutation, /before\.settlement\?\.status === "SETTLED"/);
-  assert.match(paymentMutation, /kind !== "BALANCE"/);
-  assert.match(paymentMutation, /amount\.gt\(remaining\)/);
+  assert.match(paymentMutation, /assertFactorySettlementPaymentAllowed/);
+  assert.match(paymentService, /kind === "REFUND"/);
+  assert.match(executionSharedService, /FACTORY_SETTLEMENT_PAYMENT_EXCEEDS_PAYABLE/);
+  assert.match(executionSharedService, /FACTORY_SETTLEMENT_REFUND_EXCEEDS_PENDING/);
   assert.doesNotMatch(paymentMutation, /assertBusinessOrderWritableInTransaction/);
   assert.doesNotMatch(paymentMutation, /assertCommissionOrderWritableInTransaction/);
   assert.match(paymentMutation, /finalizeFactorySettlementAfterPayment/);
-  assert.match(service, /factoryPurchaseOrderSettlement\.updateMany\([\s\S]*?paidAmountAtSettlement: paidAmount,[\s\S]*?status: "SETTLED"/);
+  assert.match(service, /factoryPurchaseOrderSettlement\.updateMany\([\s\S]*?paidAmountAtSettlement: netPaidAmount,[\s\S]*?status: nextStatus/);
   assert.match(service, /syncFactorySettlementCostPayment/);
-  assert.match(service, /paymentStatus: fullyPaid \? "已支付" : partiallyPaid \? "部分支付" : "待支付"/);
+  assert.match(service, /paymentStatus: "待退款"/);
 });
 
 test("payment, adjustment and production writes require an internally accepted purchase order", () => {
@@ -460,10 +463,10 @@ test("settlement freezes fees while payment reversals remain archive-independent
   assert.match(adjustmentMutation, /FACTORY_SETTLEMENT_ADJUSTMENTS_FROZEN/);
   assert.match(adjustmentMutation, /assertBusinessOrderWritableInTransaction/);
   assert.match(paymentVoid, /settlement\?\.status === "SETTLED"/);
-  assert.match(paymentVoid, /payment\.kind !== "BALANCE"/);
+  assert.match(paymentVoid, /payment\.kind === "BALANCE" \|\| payment\.kind === "REFUND"/);
   assert.doesNotMatch(paymentVoid, /assertBusinessOrderWritableInTransaction/);
   assert.doesNotMatch(paymentVoid, /assertCommissionOrderWritableInTransaction/);
-  assert.match(paymentVoid, /syncFactorySettlementCostPayment/);
+  assert.match(paymentVoid, /finalizeFactorySettlementAfterPayment/);
   assert.match(adjustmentVoid, /adjustment\.purchaseOrder\.settlement/);
   assert.match(adjustmentVoid, /FACTORY_SETTLEMENT_ADJUSTMENTS_FROZEN/);
   assert.match(adjustmentVoid, /assertBusinessOrderWritableInTransaction/);

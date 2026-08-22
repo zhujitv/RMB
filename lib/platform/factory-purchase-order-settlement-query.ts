@@ -24,12 +24,26 @@ export const settlementPurchaseOrderSelect = Prisma.validator<Prisma.FactoryPurc
   items: {
     orderBy: [{ lineNumber: "asc" }],
     select: {
+      id: true,
       actualDeliveredQuantity: true,
       purchaseUnitPrice: true,
       supplierPrice: { select: { unitPrice: true } },
     },
   },
   settlement: true,
+  priceCorrections: {
+    where: { status: { in: ["PENDING", "APPROVED"] } },
+    orderBy: [{ sequenceNo: "asc" }],
+    select: {
+      id: true,
+      purchaseOrderItemId: true,
+      status: true,
+      quantitySnapshot: true,
+      oldUnitPrice: true,
+      newUnitPrice: true,
+      deltaAmount: true,
+    },
+  },
   payments: {
     where: { status: "CONFIRMED" },
     orderBy: [{ sequenceNo: "asc" }],

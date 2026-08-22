@@ -5,6 +5,10 @@ import { recognizeTencentCustomsGoods } from "./tencent-customs-ocr-experiment";
 import { codedError, nonEmpty } from "./shared-base-utils";
 import { domesticContractIssues } from "./business-entity-domestic-bank";
 import {
+  correctedFactoryGoodsAmount,
+  latestApprovedFactoryPrice,
+} from "./factory-purchase-price-correction-contract";
+import {
   customsQuantityForUnit,
   customsQuantityKey,
   customsUnitKey,
@@ -114,6 +118,16 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     include: {
       supplier: true,
       settlement: true,
+      priceCorrections: {
+        where: { status: { in: ["PENDING", "APPROVED"] } },
+        orderBy: [{ sequenceNo: "asc" }],
+        select: {
+          status: true,
+          purchaseOrderItemId: true,
+          oldUnitPrice: true,
+          newUnitPrice: true,
+        },
+      },
       items: { include: { supplierPrice: true }, orderBy: [{ lineNumber: "asc" }] },
       execution: {
         include: {
@@ -135,6 +149,10 @@ export async function buildSupplierTaxContractDraft(costId: string) {
   if (!purchaseOrder?.settlement || !purchaseOrder.execution.receivableOrder) {
     throw codedError("采购单尚未完成最终结算或未生成应收订单，不能生成退税合同。", 409, "SUPPLIER_TAX_CONTRACT_SETTLEMENT_REQUIRED");
   }
+  if (purchaseOrder.priceCorrections.some((correction) => correction.status === "PENDING")) {
+    throw codedError("采购单存在待审核的价格更正申请，请先完成审核再生成退税合同。", 409, "SUPPLIER_TAX_CONTRACT_PRICE_CORRECTION_PENDING");
+  }
+  const approvedPriceCorrections = purchaseOrder.priceCorrections.filter((correction) => correction.status === "APPROVED");
   const customsDocument = await prisma.orderDocument.findFirst({
     where: {
       orderId: cost.orderId,
@@ -155,7 +173,11 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     if (item.actualDeliveredQuantity == null) {
       throw codedError(`采购单第${item.lineNumber}行尚未确认实际装柜数量。`, 409, "ACTUAL_LOADED_QUANTITY_REQUIRED");
     }
-    const price = item.supplierPrice?.unitPrice ?? item.purchaseUnitPrice;
+    const price = latestApprovedFactoryPrice(
+      approvedPriceCorrections,
+      item.id,
+      item.supplierPrice?.unitPrice ?? item.purchaseUnitPrice,
+    );
     if (price == null) throw codedError(`采购单第${item.lineNumber}行缺少确认含税单价。`, 409, "SUPPLIER_UNIT_PRICE_REQUIRED");
     const quantity = new Prisma.Decimal(item.actualDeliveredQuantity);
     const candidate = candidateForSupplierTaxContractItem({ ...item, actualDeliveredQuantity: quantity }, candidates, index);
@@ -218,7 +240,12 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     }
   }
   const calculatedTotal = items.reduce((sum, item) => sum.add(item.amountWithTax), new Prisma.Decimal(0)).toDecimalPlaces(2);
-  if (!calculatedTotal.eq(purchaseOrder.settlement.baseAmount)) {
+  const correctedGoodsAmount = correctedFactoryGoodsAmount(
+    purchaseOrder.settlement.baseAmount,
+    approvedPriceCorrections,
+    purchaseOrder.items,
+  );
+  if (!calculatedTotal.eq(correctedGoodsAmount)) {
     throw codedError("实际装柜数量乘确认单价与采购结算货款基数不一致，请先修复结算数据。", 409, "SUPPLIER_TAX_CONTRACT_AMOUNT_MISMATCH");
   }
   const contractNo = purchaseOrder.execution.customerOrderNo;

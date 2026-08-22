@@ -83,6 +83,19 @@ test("cost report summary separates confirmation, payment, and invoice risks", (
   assert.equal(metric("confirmationRate"), 0.6);
 });
 
+test("cost report treats supplier-refund costs as paid and exposes a separate refund risk", () => {
+  const summary = buildReportSummary("costs", [
+    { id: "refund", costType: "工厂货款", amountCny: 250, costConfirmed: true, paymentStatus: "待退款", invoiceStatus: "已收到" },
+    { id: "unpaid", costType: "海运费", amountCny: 100, costConfirmed: true, paymentStatus: "待支付", invoiceStatus: "已收到" },
+  ]);
+  const metric = (key: string) => summary.metrics.find((item) => item.key === key);
+
+  assert.equal(metric("paid")?.value, 250);
+  assert.equal(metric("unpaid")?.value, 100);
+  assert.equal(metric("refundPending")?.value, 1);
+  assert.equal(metric("refundPending")?.note, "1 笔退款待处理");
+});
+
 test("report date filters use the report business date instead of any updated timestamp", () => {
   const rows = [{
     id: "payment-1",

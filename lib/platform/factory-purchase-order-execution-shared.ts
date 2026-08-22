@@ -54,6 +54,35 @@ export function confirmedPrepaymentTotal(payments: Array<{
     .toDecimalPlaces(2);
 }
 
+export function assertFactorySettlementPaymentAllowed(
+  settlement: { status: string; finalPayableAmount: Prisma.Decimal } | null,
+  payments: Array<{ status: string; kind: string; amount: Prisma.Decimal; paidAt: Date }>,
+  kind: string,
+  amount: Prisma.Decimal,
+) {
+  if (!settlement) {
+    if (kind === "REFUND") {
+      throw codedError("只有结算状态为待退款时才可以登记供应商退款", 409, "FACTORY_SETTLEMENT_REFUND_NOT_AVAILABLE");
+    }
+    return;
+  }
+  if (settlement.status === "SETTLED") {
+    throw codedError("该工厂采购单已结清，不能继续登记付款或退款", 409, "FACTORY_SETTLEMENT_ALREADY_SETTLED");
+  }
+  const netPaid = confirmedFactoryPaymentTotal(payments);
+  if (settlement.status === "PENDING_PAYMENT") {
+    if (kind !== "BALANCE") throw codedError("当前结算状态只允许登记补付尾款", 409, "FACTORY_SETTLEMENT_BALANCE_ONLY");
+    const remaining = settlement.finalPayableAmount.sub(netPaid).toDecimalPlaces(2);
+    if (!remaining.gt(0)) throw codedError("该工厂采购单已无待付余额", 409, "FACTORY_SETTLEMENT_NO_REMAINING_BALANCE");
+    if (amount.gt(remaining)) throw codedError("尾款不能超过采购结算剩余应付金额", 409, "FACTORY_SETTLEMENT_PAYMENT_EXCEEDS_PAYABLE");
+    return;
+  }
+  if (kind !== "REFUND") throw codedError("当前结算状态只允许登记供应商退款", 409, "FACTORY_SETTLEMENT_REFUND_ONLY");
+  const pendingRefund = netPaid.sub(settlement.finalPayableAmount).toDecimalPlaces(2);
+  if (!pendingRefund.gt(0)) throw codedError("该工厂采购单已无待退款金额", 409, "FACTORY_SETTLEMENT_NO_PENDING_REFUND");
+  if (amount.gt(pendingRefund)) throw codedError("退款金额不能超过采购结算待退款金额", 409, "FACTORY_SETTLEMENT_REFUND_EXCEEDS_PENDING");
+}
+
 type FinancePurchaseOrder = Prisma.FactoryPurchaseOrderGetPayload<{
   include: typeof factoryPurchaseOrderFinanceInclude;
 }>;
@@ -64,6 +93,9 @@ export function buildFactoryPaymentSummary(purchaseOrder: FinancePurchaseOrder) 
   const totalPaid = confirmedFactoryPaymentTotal(purchaseOrder.payments);
   const remainingPayable = purchaseOrder.settlement
     ? Prisma.Decimal.max(purchaseOrder.settlement.finalPayableAmount.sub(totalPaid), 0).toDecimalPlaces(2)
+    : null;
+  const remainingRefund = purchaseOrder.settlement
+    ? Prisma.Decimal.max(totalPaid.sub(purchaseOrder.settlement.finalPayableAmount), 0).toDecimalPlaces(2)
     : null;
   return {
     purchaseOrderId: purchaseOrder.id,
@@ -79,6 +111,7 @@ export function buildFactoryPaymentSummary(purchaseOrder: FinancePurchaseOrder) 
       finalPayableAmount: purchaseOrder.settlement.finalPayableAmount.toString(),
       paidAmount: totalPaid.toString(),
       remainingPayableAmount: remainingPayable?.toString() || "0",
+      remainingRefundAmount: remainingRefund?.toString() || "0",
       settledAt: purchaseOrder.settlement.settledAt,
     } : null,
     payments: purchaseOrder.payments.map((payment) => ({

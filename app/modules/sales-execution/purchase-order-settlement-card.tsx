@@ -27,13 +27,26 @@ export function PurchaseOrderSettlementCard({
   const busyRef = useRef(false);
   const settlement = order.settlement;
   const eligible = shippingStarted && order.status === "ACCEPTED" && order.productionStatus === "COMPLETED" && Boolean(order.actualDeliveryDate);
+  const settlementRevision = Number(settlement?.revision || 1);
+  const refundPending = settlement?.status === "PENDING_REFUND";
+  const remainingRefundAmount = Number(settlement?.remainingRefundAmount ?? Math.max(
+    Number(settlement?.currentPaidAmount || 0) - Number(settlement?.finalPayableAmount || 0),
+    0,
+  ));
+  const latestSettlementCorrection = [...(order.priceCorrections || [])]
+    .reverse()
+    .find((correction) => (
+      correction.status === "APPROVED"
+      && correction.settlementFinalPayableAfter !== null
+      && correction.settlementFinalPayableAfter !== undefined
+    ));
 
   if (!eligible && !settlement) return null;
 
   async function settle() {
     if (busyRef.current || !canSettle) return;
     if (currency !== "CNY" && (!exchangeRate || Number(exchangeRate) <= 0)) return;
-    if (!window.confirm("确认生成工厂最终结算单吗？临时费用、违约金与最终应付将冻结，之后只允许登记尾款。")) return;
+    if (!window.confirm("确认生成工厂最终结算单吗？临时费用和违约金将冻结；此后价格错误必须走更正申请，付款差额通过尾款或供应商退款处理。")) return;
     busyRef.current = true;
     setBusy(true);
     setError("");
@@ -56,10 +69,10 @@ export function PurchaseOrderSettlementCard({
   }
 
   return (
-    <section className={styles.workflowCard} data-tone={settlement?.status === "SETTLED" ? "success" : "neutral"}>
+    <section className={styles.workflowCard} data-tone={settlement?.status === "SETTLED" ? "success" : refundPending ? "warning" : "neutral"}>
       <div className={styles.workflowHeader}>
-        <div><strong>工厂最终结算</strong><small>{settlement ? `结算日 ${formatDate(settlement.exchangeRateDate)}` : "发货流程开始后确认最终成本与违约金"}</small></div>
-        {settlement ? <span className={styles.settlementStatus} data-status={settlement.status}>{settlement.status === "SETTLED" ? "采购已结清" : "等待尾款"}</span> : null}
+        <div><strong>工厂最终结算{settlement ? ` · V${settlementRevision}` : ""}</strong><small>{settlement ? `结算日 ${formatDate(settlement.exchangeRateDate)}` : "发货流程开始后确认最终成本与违约金"}</small></div>
+        {settlement ? <span className={styles.settlementStatus} data-status={settlement.status}>{settlement.status === "SETTLED" ? "采购已结清" : refundPending ? "等待供应商退款" : "等待尾款"}</span> : null}
       </div>
       <p className={styles.auditLine}>结算货款按逐行批准的实际装柜数量计算，留仓不计供应商货款；延误违约金仍按原合同采购基数计算。</p>
 
@@ -71,9 +84,21 @@ export function PurchaseOrderSettlementCard({
             <div><span>其他扣减</span><strong>- {formatCurrencyAmount(currency, settlement.decreaseAmount || 0)}</strong></div>
             <div><span>延误违约金</span><strong>- {formatCurrencyAmount(currency, settlement.delayPenaltyAmount || 0)} · {settlement.delayDays || 0} 天</strong></div>
             <div><span>最终应付</span><strong>{formatCurrencyAmount(currency, settlement.finalPayableAmount || 0)}</strong></div>
-            <div><span>已付 / 待付</span><strong>{formatCurrencyAmount(currency, settlement.currentPaidAmount || 0)} / {formatCurrencyAmount(currency, settlement.remainingAmount || 0)}</strong></div>
+            <div><span>{refundPending ? "已付 / 待退" : "已付 / 待付"}</span><strong>{formatCurrencyAmount(currency, settlement.currentPaidAmount || 0)} / {formatCurrencyAmount(currency, refundPending ? remainingRefundAmount : settlement.remainingAmount || 0)}</strong></div>
           </div>
-          <p className={styles.auditLine}>{settlement.status === "SETTLED" ? `结清时间：${formatDateTime(settlement.settledAt)}${settlement.settledBy?.name ? ` · ${settlement.settledBy.name}` : ""}` : "请在上方登记“尾款”；累计付款达到最终应付后系统自动核销并结清。"}</p>
+          {latestSettlementCorrection ? (
+            <p className={styles.auditLine}>
+              结算更正凭证：当前 V{settlementRevision}
+              {latestSettlementCorrection.settlementFinalPayableBefore !== null && latestSettlementCorrection.settlementFinalPayableBefore !== undefined
+                ? ` · 最终应付 ${formatCurrencyAmount(currency, latestSettlementCorrection.settlementFinalPayableBefore)} → ${formatCurrencyAmount(currency, latestSettlementCorrection.settlementFinalPayableAfter || 0)}`
+                : ""}
+            </p>
+          ) : null}
+          <p className={styles.auditLine}>{settlement.status === "SETTLED"
+            ? `结清时间：${formatDateTime(settlement.settledAt)}${settlement.settledBy?.name ? ` · ${settlement.settledBy.name}` : ""}`
+            : refundPending
+              ? "更正后的最终应付低于已付款金额，请在上方登记“供应商退款”；退款完成后系统自动核销并结清。"
+              : "请在上方登记“尾款”；累计付款达到最终应付后系统自动核销并结清。"}</p>
         </>
       ) : canSettle ? (
         <div className={styles.workflowControls}>

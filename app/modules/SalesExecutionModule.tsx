@@ -60,6 +60,7 @@ export function SalesExecutionModule({
   const canReadOrders = canReadPermission(currentUser, permissions, "orders", ["管理员", "业务员", "财务"]);
   const canRecordFactoryPayment = canWritePermission(currentUser, permissions, "payments", ["管理员", "财务"]);
   const canAddFactoryAdjustment = canWritePermission(currentUser, permissions, "costs", ["管理员", "业务员"]);
+  const canReviewFactoryPriceCorrection = currentUser.role === "管理员";
   const dispatch = useSalesExecutionDispatch({ canWrite, onSaved: executionDispatched });
   const shipping = useSalesExecutionShipping({ canWrite: canWrite && canWriteOrders, onSaved: executionDispatched });
   const voidAction = useSalesExecutionVoid({ canWrite, onSaved: executionDispatched });
@@ -272,7 +273,7 @@ export function SalesExecutionModule({
       retryingPurchaseOrderId={emailRetry.retryingPurchaseOrderId} dispatchEmailRetryError={emailRetry.error}
       voiding={voidAction.voiding} voidError={voidAction.error} voidConfirmation={voidAction.confirmation}
       deleting={deleteAction.deleting} deleteError={deleteAction.error} deleteConfirmation={deleteAction.confirmation}
-      canWrite={canWrite} canDelete={canDelete} canEnterShipping={canWrite && canWriteOrders} canOpenReceivableOrder={canReadOrders && Boolean(onOpenReceivableOrder)} canRecordFactoryPayment={canRecordFactoryPayment} canAddFactoryAdjustment={canAddFactoryAdjustment} onKeyword={setKeyword} onStatus={setStatus}
+      canWrite={canWrite} canDelete={canDelete} canEnterShipping={canWrite && canWriteOrders} canOpenReceivableOrder={canReadOrders && Boolean(onOpenReceivableOrder)} canRecordFactoryPayment={canRecordFactoryPayment} canAddFactoryAdjustment={canAddFactoryAdjustment} canReviewFactoryPriceCorrection={canReviewFactoryPriceCorrection} onKeyword={setKeyword} onStatus={setStatus}
       onSearch={submitSearch} onReset={() => { if ((conversionDraft || createOpen || editExecution) && !confirmDiscard()) return; setKeyword(""); setSubmittedKeyword(""); setStatus(""); setSubmittedStatus(""); closeEditors(); void loadRows(1, "", ""); }}
       onRefresh={() => void loadRows(page, submittedKeyword, submittedStatus)}
       onToggleCreate={() => { if ((conversionDraft || createOpen || editExecution) && !confirmDiscard()) return; const nextOpen = !createOpen; closeEditors(); setCreateOpen(nextOpen); setNotice(""); }}

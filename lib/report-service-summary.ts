@@ -141,8 +141,9 @@ function paymentSummary(rows: ReportRow[]): ReportSummary {
 
 function costSummary(rows: ReportRow[]): ReportSummary {
   const confirmed = rows.filter((row) => Boolean(row.costConfirmed));
-  const paid = rows.filter((row) => row.paymentStatus === "已支付");
-  const unpaid = rows.filter((row) => !["已支付", "已取消"].includes(text(row.paymentStatus)));
+  const paid = rows.filter((row) => ["已支付", "待退款"].includes(text(row.paymentStatus)));
+  const refundPending = rows.filter((row) => row.paymentStatus === "待退款");
+  const unpaid = rows.filter((row) => !["已支付", "待退款", "已取消"].includes(text(row.paymentStatus)));
   const missingInvoice = rows.filter((row) => row.invoiceStatus !== "已收到");
   const total = sum(rows, "amountCny");
   return {
@@ -151,6 +152,7 @@ function costSummary(rows: ReportRow[]): ReportSummary {
       moneyMetric("confirmed", "已确认成本", sum(confirmed, "amountCny"), "positive"),
       moneyMetric("paid", "已支付成本", sum(paid, "amountCny"), "positive"),
       moneyMetric("unpaid", "待支付成本", sum(unpaid, "amountCny"), unpaid.length ? "warning" : "positive", `${unpaid.length} 笔待支付`),
+      countMetric("refundPending", "待供应商退款", refundPending.length, refundPending.length ? "danger" : "positive", `${refundPending.length} 笔退款待处理`),
       moneyMetric("missingInvoice", "缺票金额", sum(missingInvoice, "amountCny"), missingInvoice.length ? "danger" : "positive", `${missingInvoice.length} 笔缺票`),
       percentMetric("confirmationRate", "成本确认率", sum(confirmed, "amountCny"), total, confirmed.length === rows.length ? "positive" : "warning"),
     ],

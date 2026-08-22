@@ -11,14 +11,20 @@ export const FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE = "FACTORY_PURCHASE_SETTLEM
 export const FACTORY_PURCHASE_SETTLEMENT_PENALTY_SOURCE_TYPE = "FACTORY_PURCHASE_SETTLEMENT_DELAY_PENALTY";
 
 export type FactoryPaymentLike = {
+  id?: string;
+  sequenceNo?: number;
   status: string;
+  kind?: string;
   amount: Prisma.Decimal;
   paidAt: Date;
 };
 
+export type FactoryPurchaseSettlementStatus = "PENDING_PAYMENT" | "PENDING_REFUND" | "SETTLED";
+
 type SettlementSnapshotLike = {
   id: string;
   purchaseOrderId: string;
+  revision: number;
   baseAmount: Prisma.Decimal;
   increaseAmount: Prisma.Decimal;
   decreaseAmount: Prisma.Decimal;
@@ -126,7 +132,38 @@ export function calculateFactorySettlementAmounts({
 }
 
 export function confirmedFactoryPaymentTotal(payments: FactoryPaymentLike[]) {
-  return decimalSum(payments.filter((payment) => payment.status === "CONFIRMED").map((payment) => payment.amount));
+  return decimalSum(payments
+    .filter((payment) => payment.status === "CONFIRMED")
+    .map((payment) => payment.kind === "REFUND" ? payment.amount.negated() : payment.amount));
+}
+
+export function assertFactoryPaymentRunningBalance(payments: FactoryPaymentLike[]) {
+  let running = new Prisma.Decimal(0);
+  const confirmed = payments
+    .filter((payment) => payment.status === "CONFIRMED")
+    .sort((left, right) => left.paidAt.getTime() - right.paidAt.getTime()
+      || Number(left.sequenceNo || 0) - Number(right.sequenceNo || 0)
+      || String(left.id || "").localeCompare(String(right.id || "")));
+  for (const payment of confirmed) {
+    running = payment.kind === "REFUND" ? running.sub(payment.amount) : running.add(payment.amount);
+    if (running.lt(0)) {
+      throw codedError(
+        "按付款日期核算时退款早于或超过此前付款，请核对退款日期和金额",
+        409,
+        "FACTORY_SETTLEMENT_RUNNING_BALANCE_NEGATIVE",
+      );
+    }
+  }
+  return running.toDecimalPlaces(2);
+}
+
+export function factorySettlementStatusForNetPaid(
+  finalPayableAmount: Prisma.Decimal,
+  netPaidAmount: Prisma.Decimal,
+): FactoryPurchaseSettlementStatus {
+  if (netPaidAmount.lt(finalPayableAmount)) return "PENDING_PAYMENT";
+  if (netPaidAmount.gt(finalPayableAmount)) return "PENDING_REFUND";
+  return "SETTLED";
 }
 
 export function latestConfirmedFactoryPaymentDate(payments: FactoryPaymentLike[], fallback: Date) {
@@ -145,6 +182,7 @@ export function factorySettlementDto(
   return {
     id: settlement.id,
     purchaseOrderId: settlement.purchaseOrderId,
+    revision: settlement.revision,
     baseAmount: settlement.baseAmount.toString(),
     increaseAmount: settlement.increaseAmount.toString(),
     decreaseAmount: settlement.decreaseAmount.toString(),

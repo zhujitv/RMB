@@ -7,6 +7,7 @@ import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 import { factoryPrepaymentRequiredAmount } from "./factory-purchase-order-financials";
 import {
   activeSupplierStatuses,
+  assertFactorySettlementPaymentAllowed,
   buildFactoryPaymentSummary,
   confirmedPrepaymentTotal,
   factoryPurchaseOrderFinanceInclude,
@@ -20,7 +21,8 @@ import {
   requiredFactoryLedgerDate,
   runFactoryPurchaseMutation,
 } from "./factory-purchase-order-ledger-values";
-import { confirmedFactoryPaymentTotal, finalizeFactorySettlementAfterPayment } from "./factory-purchase-order-settlement";
+import { finalizeFactorySettlementAfterPayment } from "./factory-purchase-order-settlement";
+import { assertFactoryPaymentRunningBalance } from "./factory-purchase-order-settlement-values";
 import {
   lockFactoryPurchaseOrder,
   requireSalesExecutionActorId,
@@ -57,7 +59,7 @@ export async function recordFactoryPurchaseOrderPayment(
   const actorId = requireSalesExecutionActorId(actor);
   const input = factoryLedgerInput(rawInput, "付款记录");
   const kind = String(input.kind || "PREPAYMENT");
-  if (!(kind === "PREPAYMENT" || kind === "BALANCE")) {
+  if (!(kind === "PREPAYMENT" || kind === "BALANCE" || kind === "REFUND")) {
     throw codedError("付款类型无效", 400, "FACTORY_PAYMENT_KIND_INVALID");
   }
   const amount = factoryLedgerAmount(input.amount);
@@ -85,27 +87,20 @@ export async function recordFactoryPurchaseOrderPayment(
       }
       return paymentSummary(before);
     }
-    if (before.settlement?.status === "SETTLED") {
-      throw codedError("该工厂采购单已结清，不能继续登记付款", 409, "FACTORY_SETTLEMENT_ALREADY_SETTLED");
-    }
     const orderId = before.execution.receivableOrder?.id || "";
     if (before.settlement) {
       if (!orderId) {
-        throw codedError("销售执行单尚未生成应收订单，不能登记结算尾款", 409, "FACTORY_SETTLEMENT_RECEIVABLE_ORDER_REQUIRED");
+        throw codedError("销售执行单尚未生成应收订单，不能登记结算款项", 409, "FACTORY_SETTLEMENT_RECEIVABLE_ORDER_REQUIRED");
       }
-      if (kind !== "BALANCE") {
-        throw codedError("最终应付确认后只允许登记尾款", 409, "FACTORY_SETTLEMENT_BALANCE_ONLY");
-      }
-      const paidBefore = confirmedFactoryPaymentTotal(before.payments);
-      const remaining = before.settlement.finalPayableAmount.sub(paidBefore).toDecimalPlaces(2);
-      if (!remaining.gt(0)) {
-        throw codedError("该工厂采购单已无待付余额", 409, "FACTORY_SETTLEMENT_NO_REMAINING_BALANCE");
-      }
-      if (amount.gt(remaining)) {
-        throw codedError("尾款不能超过采购结算剩余应付金额", 409, "FACTORY_SETTLEMENT_PAYMENT_EXCEEDS_PAYABLE");
-      }
+    } else if (kind === "REFUND") {
+      throw codedError("只有结算状态为待退款时才可以登记供应商退款", 409, "FACTORY_SETTLEMENT_REFUND_NOT_AVAILABLE");
     }
+    assertFactorySettlementPaymentAllowed(before.settlement, before.payments, kind, amount);
     const sequenceNo = (before.payments.at(-1)?.sequenceNo || 0) + 1;
+    assertFactoryPaymentRunningBalance([
+      ...before.payments,
+      { id: "pending", sequenceNo, status: "CONFIRMED", kind, amount, paidAt },
+    ]);
     const created = await tx.factoryPurchaseOrderPayment.create({
       data: {
         purchaseOrderId: before.id,
@@ -134,7 +129,7 @@ export async function recordFactoryPurchaseOrderPayment(
         before.settlement,
         [
           ...before.payments,
-          { status: "CONFIRMED", amount, paidAt },
+          { status: "CONFIRMED", kind, amount, paidAt },
         ],
         paidAt,
       );
@@ -148,12 +143,25 @@ export async function recordFactoryPurchaseOrderPayment(
       },
     });
     const saved = await loadPurchaseOrderForFinance(tx, before.id, actor);
-    await writeAudit(request, { id: actorId }, "登记工厂采购付款", "factory_purchase_order_payments", created.id, null, created, tx);
-    if (before.settlement?.status === "PENDING_PAYMENT" && saved.settlement?.status === "SETTLED") {
+    await writeAudit(
+      request,
+      { id: actorId },
+      kind === "REFUND" ? "登记工厂采购退款" : "登记工厂采购付款",
+      "factory_purchase_order_payments",
+      created.id,
+      null,
+      created,
+      tx,
+    );
+    if (before.settlement && saved.settlement && before.settlement.status !== saved.settlement.status) {
       await writeAudit(
         request,
         { id: actorId },
-        "工厂采购尾款付清并结清",
+        saved.settlement.status === "SETTLED"
+          ? "工厂采购款项结清"
+          : saved.settlement.status === "PENDING_REFUND"
+            ? "工厂采购结算转为待退款"
+            : "工厂采购结算转为待付款",
         "factory_purchase_order_settlements",
         saved.settlement.id,
         before.settlement,

@@ -1,8 +1,8 @@
 import { Prisma } from "../generated/prisma/client.js";
 import { calculateFactoryDelayPenalty, factoryPrepaymentRequiredAmount } from "./factory-purchase-order-financials";
-import { productVisibleDescription } from "./quotation-calculations";
 import { serializeSalesExecutionShipping } from "./sales-execution-shipping-serialization";
 import { serializePurchaseOrderRelations, serializePurchaseOrderSettlement } from "./sales-execution-purchase-order-relations";
+import { effectivePurchaseOrderSubtotal, serializePurchaseOrderItem } from "./sales-execution-purchase-order-item-serialization";
 import { serializeFactoryConfirmationEvents } from "./sales-execution-confirmation-events";
 import { serializeInternalContainerLoad, type InternalContainerLoadRow } from "./sales-execution-container-load-serialization";
 type LooseRecord = Record<string, unknown>;
@@ -46,46 +46,6 @@ function serializeExecutionItem(value: unknown) {
     createdAt: item.createdAt,
   };
 }
-function serializePurchaseOrderItem(value: unknown) {
-  const item = executionRecord(value);
-  const supplierPrice = executionRecord(item.supplierPrice);
-  const productNameSnapshot = String(item.productNameSnapshot || "");
-  const specificationSnapshot = String(item.specificationSnapshot || "");
-  const purchaseUnitPrice = nullableDecimalText(item.purchaseUnitPrice);
-  const supplierConfirmedUnitPrice = nullableDecimalText(supplierPrice.unitPrice);
-  const amount = nullableDecimalText(item.amount);
-  const supplierConfirmedAmount = nullableDecimalText(supplierPrice.amount);
-  return {
-    id: String(item.id || ""),
-    executionItemId: String(item.executionItemId || ""),
-    lineNumber: Number(item.lineNumber || 0),
-    productDescription: productVisibleDescription(productNameSnapshot, specificationSnapshot),
-    productNameSnapshot,
-    specificationSnapshot,
-    unitSnapshot: String(item.unitSnapshot || ""),
-    allocatedQuantity: decimalText(item.allocatedQuantity),
-    actualDeliveredQuantity: nullableDecimalText(item.actualDeliveredQuantity),
-    purchaseUnitPrice,
-    supplierConfirmedUnitPrice,
-    effectivePurchaseUnitPrice: supplierConfirmedUnitPrice ?? purchaseUnitPrice,
-    amount,
-    supplierConfirmedAmount,
-    effectiveAmount: supplierConfirmedAmount ?? amount,
-    supplierPriceConfirmedAt: supplierPrice.confirmedAt || null,
-    remark: String(item.remark || ""),
-  };
-}
-function effectivePurchaseOrderSubtotal(items: Array<ReturnType<typeof serializePurchaseOrderItem>>) {
-  if (!items.length || items.some((item) => item.effectiveAmount === null)) return null;
-  try {
-    return items
-      .reduce((sum, item) => sum.add(item.effectiveAmount || 0), new Prisma.Decimal(0))
-      .toDecimalPlaces(2)
-      .toString();
-  } catch {
-    return null;
-  }
-}
 function serializePurchaseOrder(value: unknown) {
   const order = executionRecord(value);
   const supplier = executionRecord(order.supplier);
@@ -94,7 +54,6 @@ function serializePurchaseOrder(value: unknown) {
   const productionStartedBy = executionRecord(order.productionStartedBy);
   const productionCompletedBy = executionRecord(order.productionCompletedBy);
   const actualDeliveryRecordedBy = executionRecord(order.actualDeliveryRecordedBy);
-  const items = Array.isArray(order.items) ? order.items.map(serializePurchaseOrderItem) : [];
   const {
     responseHistory,
     payments,
@@ -104,6 +63,21 @@ function serializePurchaseOrder(value: unknown) {
     deliveryQuantityVariances,
     loadingResults,
   } = serializePurchaseOrderRelations(order);
+  const latestApprovedCorrectionByItemId = new Map<string, (typeof priceCorrections)[number]>();
+  priceCorrections.forEach((correction) => {
+    if (correction.status !== "APPROVED" || !correction.purchaseOrderItemId) return;
+    const current = latestApprovedCorrectionByItemId.get(correction.purchaseOrderItemId);
+    if (!current || correction.sequenceNo > current.sequenceNo) {
+      latestApprovedCorrectionByItemId.set(correction.purchaseOrderItemId, correction);
+    }
+  });
+  const items = Array.isArray(order.items) ? order.items.map((itemValue) => {
+    const item = executionRecord(itemValue);
+    return serializePurchaseOrderItem(
+      itemValue,
+      latestApprovedCorrectionByItemId.get(String(item.id || "")),
+    );
+  }) : [];
   const effectiveSubtotal = effectivePurchaseOrderSubtotal(items);
   const penaltyBaseAmount = nullableDecimalText(order.penaltyBaseAmount) ?? effectiveSubtotal;
   const prepaymentRequiredAmount = factoryPrepaymentRequiredAmount(
@@ -117,7 +91,9 @@ function serializePurchaseOrder(value: unknown) {
     .toString();
   const confirmedPaymentAmount = payments
     .filter((payment) => payment.status === "CONFIRMED")
-    .reduce((sum, payment) => sum.add(payment.amount), new Prisma.Decimal(0))
+    .reduce((sum, payment) => (
+      payment.kind === "REFUND" ? sum.sub(payment.amount) : sum.add(payment.amount)
+    ), new Prisma.Decimal(0))
     .toDecimalPlaces(2);
   const estimatedPenalty = calculateFactoryDelayPenalty({
     initialDeliveryDate: order.initialSupplierDeliveryDate as Date | string | null | undefined,

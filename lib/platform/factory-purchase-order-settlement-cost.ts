@@ -4,9 +4,35 @@ import type { SettlementPurchaseOrder } from "./factory-purchase-order-settlemen
 import {
   FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE,
   confirmedFactoryPaymentTotal,
+  factorySettlementStatusForNetPaid,
   latestConfirmedFactoryPaymentDate,
   type FactoryPaymentLike,
 } from "./factory-purchase-order-settlement-values";
+
+type SettlementCostPurchaseOrder = {
+  id: string;
+  supplierId: string;
+  supplierNameSnapshot: string;
+  purchaseCurrency: string;
+  execution: { receivableOrder: { id: string } | null };
+};
+
+export function settlementCostPaymentState(
+  finalPayableAmount: Prisma.Decimal,
+  netPaidAmount: Prisma.Decimal,
+) {
+  const settlementStatus = factorySettlementStatusForNetPaid(finalPayableAmount, netPaidAmount);
+  if (settlementStatus === "PENDING_REFUND") {
+    return { settlementStatus, paymentStatus: "待退款", paid: true };
+  }
+  if (settlementStatus === "SETTLED") {
+    return { settlementStatus, paymentStatus: "已支付", paid: true };
+  }
+  if (netPaidAmount.gt(0)) {
+    return { settlementStatus, paymentStatus: "部分支付", paid: true };
+  }
+  return { settlementStatus, paymentStatus: "待支付", paid: false };
+}
 
 export function settlementOrderCost(tx: Prisma.TransactionClient, purchaseOrderId: string) {
   return tx.orderCost.findUnique({
@@ -44,7 +70,7 @@ export function settlementOrderCost(tx: Prisma.TransactionClient, purchaseOrderI
 
 export function assertMatchingExistingSettlementCost(
   cost: Awaited<ReturnType<typeof settlementOrderCost>>,
-  purchaseOrder: SettlementPurchaseOrder,
+  purchaseOrder: SettlementCostPurchaseOrder,
   finalPayableAmount: Prisma.Decimal,
   exchangeRate: Prisma.Decimal,
   exchangeRateDate: Date,
@@ -93,9 +119,8 @@ export async function createOrReuseSettlementCost(
   assertMatchingExistingSettlementCost(existing, purchaseOrder, finalPayableAmount, exchangeRate, exchangeRateDate);
   if (existing) return { cost: existing, created: false };
 
-  const fullyPaid = paidAmount.eq(finalPayableAmount);
-  const partiallyPaid = paidAmount.gt(0) && !fullyPaid;
-  const paymentDate = fullyPaid || partiallyPaid
+  const paymentState = settlementCostPaymentState(finalPayableAmount, paidAmount);
+  const paymentDate = paymentState.paid
     ? latestConfirmedFactoryPaymentDate(purchaseOrder.payments, purchaseOrder.actualDeliveryDate || now)
     : null;
   const orderId = purchaseOrder.execution.receivableOrder?.id;
@@ -116,8 +141,8 @@ export async function createOrReuseSettlementCost(
       exchangeRateType: purchaseOrder.purchaseCurrency === "CNY" ? "人民币" : "采购结算",
       amount: finalPayableAmount,
       amountCny: finalPayableAmount.mul(exchangeRate).toDecimalPlaces(2),
-      paymentStatus: fullyPaid ? "已支付" : partiallyPaid ? "部分支付" : "待支付",
-      paid: fullyPaid || partiallyPaid,
+      paymentStatus: paymentState.paymentStatus,
+      paid: paymentState.paid,
       paidAt: paymentDate,
       paymentDate,
       costConfirmed: true,
@@ -142,8 +167,7 @@ export async function syncFactorySettlementCostPayment(
   paidAmount: Prisma.Decimal,
   paymentDate: Date | null,
 ) {
-  const fullyPaid = paidAmount.eq(finalPayableAmount);
-  const partiallyPaid = paidAmount.gt(0) && !fullyPaid;
+  const paymentState = settlementCostPaymentState(finalPayableAmount, paidAmount);
   const changed = await tx.orderCost.updateMany({
     where: {
       sourceType: FACTORY_PURCHASE_SETTLEMENT_SOURCE_TYPE,
@@ -152,10 +176,10 @@ export async function syncFactorySettlementCostPayment(
       status: "ACTIVE",
     },
     data: {
-      paymentStatus: fullyPaid ? "已支付" : partiallyPaid ? "部分支付" : "待支付",
-      paid: fullyPaid || partiallyPaid,
-      paidAt: fullyPaid || partiallyPaid ? paymentDate : null,
-      paymentDate: fullyPaid || partiallyPaid ? paymentDate : null,
+      paymentStatus: paymentState.paymentStatus,
+      paid: paymentState.paid,
+      paidAt: paymentState.paid ? paymentDate : null,
+      paymentDate: paymentState.paid ? paymentDate : null,
       updatedById: actorId,
     },
   });
@@ -168,36 +192,45 @@ export async function finalizeFactorySettlementAfterPayment(
   tx: Prisma.TransactionClient,
   purchaseOrderId: string,
   actorId: string,
-  settlement: { id: string; status: string; finalPayableAmount: Prisma.Decimal },
+  settlement: { id: string; revision: number; status: string; finalPayableAmount: Prisma.Decimal },
   payments: FactoryPaymentLike[],
   paidAt: Date,
 ) {
-  const paidAmount = confirmedFactoryPaymentTotal(payments);
-  if (paidAmount.gt(settlement.finalPayableAmount)) {
-    throw codedError("累计采购付款不能超过最终应付金额", 409, "FACTORY_SETTLEMENT_PAYMENT_EXCEEDS_PAYABLE");
+  const netPaidAmount = confirmedFactoryPaymentTotal(payments);
+  if (netPaidAmount.lt(0)) {
+    throw codedError("累计退款不能超过已付款金额", 409, "FACTORY_SETTLEMENT_REFUND_EXCEEDS_PAID");
   }
+  const nextStatus = factorySettlementStatusForNetPaid(settlement.finalPayableAmount, netPaidAmount);
   const latestPaidAt = latestConfirmedFactoryPaymentDate(payments, paidAt);
+  const zeroSettlementPaymentDate = nextStatus === "SETTLED" && settlement.finalPayableAmount.eq(0)
+    ? (await tx.factoryPurchaseOrder.findUnique({
+      where: { id: purchaseOrderId },
+      select: { actualDeliveryDate: true },
+    }))?.actualDeliveryDate || paidAt
+    : null;
   await syncFactorySettlementCostPayment(
     tx,
     purchaseOrderId,
     actorId,
     settlement.finalPayableAmount,
-    paidAmount,
-    paidAmount.gt(0) ? latestPaidAt : null,
+    netPaidAmount,
+    netPaidAmount.gt(0) ? latestPaidAt : zeroSettlementPaymentDate,
   );
-  if (paidAmount.eq(settlement.finalPayableAmount) && settlement.status !== "SETTLED") {
-    const changed = await tx.factoryPurchaseOrderSettlement.updateMany({
-      where: { id: settlement.id, status: "PENDING_PAYMENT" },
-      data: {
-        paidAmountAtSettlement: paidAmount,
-        status: "SETTLED",
-        settledAt: new Date(),
-        settledById: actorId,
-      },
-    });
-    if (changed.count !== 1) {
-      throw codedError("采购结算状态已变化，请刷新后重试", 409, "FACTORY_SETTLEMENT_STATE_CONFLICT");
-    }
+  const changed = await tx.factoryPurchaseOrderSettlement.updateMany({
+    where: { id: settlement.id, revision: settlement.revision },
+    data: {
+      paidAmountAtSettlement: netPaidAmount,
+      status: nextStatus,
+      settledAt: nextStatus === "SETTLED" ? new Date() : null,
+      settledById: nextStatus === "SETTLED" ? actorId : null,
+    },
+  });
+  if (changed.count !== 1) {
+    throw codedError("采购结算状态已变化，请刷新后重试", 409, "FACTORY_SETTLEMENT_STATE_CONFLICT");
   }
-  return { paidAmount, fullyPaid: paidAmount.eq(settlement.finalPayableAmount) };
+  return {
+    paidAmount: netPaidAmount,
+    fullyPaid: nextStatus === "SETTLED",
+    status: nextStatus,
+  };
 }

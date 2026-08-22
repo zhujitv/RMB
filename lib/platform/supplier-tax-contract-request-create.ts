@@ -11,6 +11,8 @@ import { assertSupplierDocumentRequestCostAvailable } from "./supplier-document-
 import { duplicateSupplierDocumentRequestError, supplierDocumentRequestInclude, type ActorLike, type AuditRequestLike, type SupplierDocumentRequestInput } from "./supplier-document-request-types";
 import { actorId, adminCcEmails, dateFromInput, loadFactorySupplierReturnCostForRequest, requiredDocumentTypes, serializeSupplierDocumentRequest, supplierDocumentRequestTemplateVariables, supplierRecipientEmails } from "./supplier-document-request-serialization";
 import { buildSupplierTaxContractDraft, type SupplierTaxContractDraft } from "./supplier-tax-contract-draft";
+import { assertSupplierTaxContractFinancialsCurrent } from "./factory-purchase-price-correction-contract";
+import { lockFactoryPurchaseOrder } from "./sales-execution-access";
 import { assertFactoryPurchaseTransitionAllocationAvailable, FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE, prepareFactoryPurchaseTransitionSettlement } from "./supplier-transition-settlement";
 
 const REQUIRED_TYPES = ["SUPPLIER_PURCHASE_CONTRACT", "SUPPLIER_INVOICE"];
@@ -51,6 +53,10 @@ export async function createSupplierTaxContractRequest(request: AuditRequestLike
   let created;
   try {
     created = await prisma.$transaction(async (tx) => {
+      if (!preparedTransition) {
+        await lockFactoryPurchaseOrder(tx, draft.purchaseOrderId);
+        await assertSupplierTaxContractFinancialsCurrent(tx, draft);
+      }
       await assertBusinessOrderWritableInTransaction(tx, order.id, "该订单已提交退税或归档，不能创建退税合同。");
       await assertSupplierDocumentRequestCostAvailable(factoryCost, tx);
       if (preparedTransition?.settlementData) {
@@ -75,7 +81,11 @@ export async function createSupplierTaxContractRequest(request: AuditRequestLike
       });
     });
   } catch (error: unknown) {
-    if (["P2002", "P2034"].includes(String((error as { code?: string })?.code || ""))) throw duplicateSupplierDocumentRequestError();
+    const code = String((error as { code?: string })?.code || "");
+    if (code === "P2002") throw duplicateSupplierDocumentRequestError();
+    if (code === "P2034") {
+      throw codedError("采购价格或资料状态正在更新，请刷新后重试。", 409, "SUPPLIER_TAX_CONTRACT_CONCURRENT_UPDATE");
+    }
     throw error;
   }
   if (preparedTransition?.settlementData && draft.transitionSettlementId) {

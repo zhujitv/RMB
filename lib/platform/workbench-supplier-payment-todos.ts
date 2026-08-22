@@ -191,6 +191,7 @@ export async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
             OR: [
               { paid: false },
               { paymentStatus: { in: ["待支付", "部分支付"] } },
+              { paymentStatus: "待退款" },
             ],
           },
         ],
@@ -256,7 +257,7 @@ export async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
         documents: cost.documents || [],
       }],
     } satisfies WorkbenchWorkflowOrder;
-    if (!doneSupplierDocumentRequests(workflowOrder)) return;
+    if (cost.paymentStatus !== "待退款" && !doneSupplierDocumentRequests(workflowOrder)) return;
     handledCostIds.add(cost.id);
     todos.push(buildTodo());
   }
@@ -280,12 +281,13 @@ export async function listFactoryPaymentTodos(context: WorkbenchTodoContext) {
     owner: roleOwner(context, "FINANCE"),
   })));
   unpaidCosts.forEach((cost) => addCostTodo(cost, () => todoForCost({
-    type: "FACTORY_PAYMENT_REGISTER",
-    title: "工厂付款待登记",
-    module: "成本管理",
+    type: cost.paymentStatus === "待退款" ? "FACTORY_SUPPLIER_REFUND" : "FACTORY_PAYMENT_REGISTER",
+    title: cost.paymentStatus === "待退款" ? "供应商退款待登记" : "工厂付款待登记",
+    module: cost.paymentStatus === "待退款" ? "销售执行" : "成本管理",
     cost,
     context,
     dueAt: cost.paymentDate || cost.order.expectedShipmentDate || cost.order.dueDate,
+    href: cost.paymentStatus === "待退款" && cost.order.sourceSalesExecutionId ? orderHref("/sales-execution", cost.order, { executionId: cost.order.sourceSalesExecutionId }) : undefined,
     owner: roleOwner(context, "FINANCE"),
   })));
   return todos;

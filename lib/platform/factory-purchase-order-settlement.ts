@@ -13,10 +13,12 @@ import {
 } from "./factory-purchase-order-settlement-cost";
 import { effectiveFactoryPurchaseOrderDeliveredAmount } from "./factory-purchase-order-financials";
 import { loadPurchaseOrderForSettlement } from "./factory-purchase-order-settlement-query";
+import { reconcilePriceCorrectionsForFinalSettlement } from "./factory-purchase-order-settlement-price-corrections";
 import {
   FACTORY_PURCHASE_SETTLEMENT_PENALTY_SOURCE_TYPE,
   calculateFactorySettlementAmounts,
   confirmedFactoryPaymentTotal,
+  factorySettlementStatusForNetPaid,
   factorySettlementDto,
   factorySettlementExchangeRate,
   factorySettlementExchangeRateDate,
@@ -107,6 +109,13 @@ export async function settleFactoryPurchaseOrder(
       }
       return factorySettlementDto(purchaseOrder.settlement, cost);
     }
+    if (purchaseOrder.priceCorrections.some((correction) => correction.status === "PENDING")) {
+      throw codedError(
+        "该采购单还有待审核的采购价格更正申请，请先审核后再确认最终应付",
+        409,
+        "FACTORY_SETTLEMENT_PENDING_PRICE_CORRECTION",
+      );
+    }
     const orderId = purchaseOrder.execution.receivableOrder.id;
     await assertBusinessOrderWritableInTransaction(
       tx,
@@ -118,12 +127,21 @@ export async function settleFactoryPurchaseOrder(
       throw codedError("采购单状态已变化，请刷新后重试", 409, "FACTORY_SETTLEMENT_REVISION_CONFLICT");
     }
 
+    const now = new Date();
+    const correctionReconciliations = await reconcilePriceCorrectionsForFinalSettlement(
+      tx,
+      request,
+      actorId,
+      purchaseOrder,
+      now,
+    );
+    const settlementAdjustments = [...purchaseOrder.adjustments, ...correctionReconciliations];
     const amounts = calculateFactorySettlementAmounts({
       baseAmount: deliveredGoodsAmount,
       penaltyBaseAmount: purchaseOrder.penaltyBaseAmount,
       initialDeliveryDate: purchaseOrder.initialSupplierDeliveryDate,
       actualDeliveryDate: purchaseOrder.actualDeliveryDate,
-      adjustments: purchaseOrder.adjustments,
+      adjustments: settlementAdjustments,
       graceDays: purchaseOrder.delayGraceDays,
       ratePerDay: purchaseOrder.delayPenaltyRatePerDay,
       capRatio: purchaseOrder.delayPenaltyCapRatio,
@@ -140,9 +158,8 @@ export async function settleFactoryPurchaseOrder(
     )) {
       throw codedError("现有违约金调整与自动计算结果不一致，请先核对", 409, "FACTORY_SETTLEMENT_DELAY_PENALTY_CONFLICT");
     }
-    const now = new Date();
     if (!existingPenalty && amounts.delayPenaltyAmount.gt(0)) {
-      const sequenceNo = purchaseOrder.adjustments.reduce((max, adjustment) => Math.max(max, adjustment.sequenceNo), 0) + 1;
+      const sequenceNo = settlementAdjustments.reduce((max, adjustment) => Math.max(max, adjustment.sequenceNo), 0) + 1;
       const dailyRatePercent = purchaseOrder.delayPenaltyRatePerDay.mul(100).toString();
       const capText = purchaseOrder.delayPenaltyCapRatio === null
         ? ""
@@ -197,10 +214,10 @@ export async function settleFactoryPurchaseOrder(
       throw codedError("费用扣减超过采购基准金额，请先核对调整项", 409, "FACTORY_SETTLEMENT_FINAL_PAYABLE_NEGATIVE");
     }
     const paidAmount = confirmedFactoryPaymentTotal(purchaseOrder.payments);
-    if (paidAmount.gt(finalPayableAmount)) {
-      throw codedError("累计采购付款已超过最终应付金额，请先冲销多付记录", 409, "FACTORY_SETTLEMENT_PAYMENT_EXCEEDS_PAYABLE");
+    if (paidAmount.lt(0)) {
+      throw codedError("累计退款不能超过已付款金额", 409, "FACTORY_SETTLEMENT_REFUND_EXCEEDS_PAID");
     }
-    const fullyPaid = paidAmount.eq(finalPayableAmount);
+    const settlementStatus = factorySettlementStatusForNetPaid(finalPayableAmount, paidAmount);
     const settlement = await tx.factoryPurchaseOrderSettlement.create({
       data: {
         purchaseOrderId: purchaseOrder.id,
@@ -214,9 +231,9 @@ export async function settleFactoryPurchaseOrder(
         exchangeRate,
         exchangeRateDate,
         paidAmountAtSettlement: paidAmount,
-        status: fullyPaid ? "SETTLED" : "PENDING_PAYMENT",
-        settledAt: fullyPaid ? now : null,
-        settledById: fullyPaid ? actorId : null,
+        status: settlementStatus,
+        settledAt: settlementStatus === "SETTLED" ? now : null,
+        settledById: settlementStatus === "SETTLED" ? actorId : null,
         createdById: actorId,
       },
     });

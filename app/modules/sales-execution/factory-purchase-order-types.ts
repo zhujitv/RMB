@@ -39,7 +39,7 @@ export type FactoryPurchaseOrderConfirmationEvent = {
 export type FactoryPurchaseOrderPayment = {
   id: string;
   sequenceNo?: number;
-  kind?: "PREPAYMENT" | "BALANCE" | string;
+  kind?: "PREPAYMENT" | "BALANCE" | "REFUND" | string;
   amount?: string | number | null;
   currency?: string | null;
   paidAt?: string | null;
@@ -78,6 +78,22 @@ export type FactoryPurchaseOrderPriceCorrection = {
   reviewRemark?: string | null;
   sourceUnitPriceType?: string | null;
   adjustmentId?: string | null;
+  settlementStatusBefore?: string | null;
+  settlementStatusAfter?: string | null;
+  settlementFinalPayableBefore?: string | number | null;
+  settlementFinalPayableAfter?: string | number | null;
+  settlementRevisionBefore?: number | null;
+  settlementRevisionAfter?: number | null;
+  settlementIncreaseBefore?: string | number | null;
+  settlementIncreaseAfter?: string | number | null;
+  settlementDecreaseBefore?: string | number | null;
+  settlementDecreaseAfter?: string | number | null;
+  settlementPaidBefore?: string | number | null;
+  settlementPaidAfter?: string | number | null;
+  settlementSettledAtBefore?: string | null;
+  settlementSettledAtAfter?: string | null;
+  settlementSettledByBeforeId?: string | null;
+  settlementSettledByAfterId?: string | null;
   requestedAt?: string | null;
   reviewedAt?: string | null;
   requestedBy?: { id?: string; name?: string | null } | null;
@@ -86,6 +102,7 @@ export type FactoryPurchaseOrderPriceCorrection = {
 
 export type FactoryPurchaseOrderSettlement = {
   id: string;
+  revision?: number | null;
   baseAmount?: string | number | null;
   increaseAmount?: string | number | null;
   decreaseAmount?: string | number | null;
@@ -98,7 +115,8 @@ export type FactoryPurchaseOrderSettlement = {
   paidAmountAtSettlement?: string | number | null;
   currentPaidAmount?: string | number | null;
   remainingAmount?: string | number | null;
-  status?: "PENDING_PAYMENT" | "SETTLED" | string;
+  remainingRefundAmount?: string | number | null;
+  status?: "PENDING_PAYMENT" | "PENDING_REFUND" | "SETTLED" | string;
   settledAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;

@@ -56,6 +56,15 @@ test("CIF ocean freight remains a normal order cost", () => {
   assert.equal(summary.expectedGrossProfit, 700);
 });
 
+test("confirmed cost waiting for supplier refund remains paid for cash and commission calculations", () => {
+  const order = financialOrder("CIF");
+  order.costs[0]!.paymentStatus = "待退款";
+  const summary = summarizeOrder(order);
+
+  assert.equal(summary.paidConfirmedCostCny, 300);
+  assert.equal(summary.netCashFlowCny, 700);
+});
+
 test("FOB ocean freight entry fails with a business-readable policy error", () => {
   assert.throws(() => assertOrderCostAllowedByTradeTerm("FOB", "海运费"), (error: unknown) => {
     const value = error as { code?: string; status?: number; message?: string };

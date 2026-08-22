@@ -173,7 +173,11 @@ test("manual explains factory payment, penalty, settlement, and cost sync", () =
   assert.match(manualModule, /留仓不计供应商货款/);
   assert.match(manualModule, /延误违约金，默认不设上限/);
   assert.match(manualModule, /人民币结算汇率固定为 1；外币结算必须填写有效汇率/);
-  assert.match(manualModule, /累计付款达到最终应付时系统自动核销并结清/);
+  assert.match(manualModule, /采购价格更正申请/);
+  assert.match(manualModule, /系统按实际交付数量计算差额/);
+  assert.match(manualModule, /登记供应商退款/);
+  assert.match(manualModule, /净付款达到更正后的最终应付时系统重新结清/);
+  assert.match(manualModule, /不会覆盖原采购价、原最终应付或原审核依据/);
   assert.match(manualModule, /成本管理中的工厂货款成本/);
   assert.match(manualModule, /工厂结算生成的成本由采购执行管理/);
 });

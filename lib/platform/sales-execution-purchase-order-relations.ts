@@ -16,6 +16,11 @@ function decimalText(value: unknown, fallback = "0") {
   return Prisma.Decimal.isDecimal(value) ? value.toString() : String(value);
 }
 
+function nullableDecimalText(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  return Prisma.Decimal.isDecimal(value) ? value.toString() : String(value);
+}
+
 export function serializePurchaseOrderRelations(order: LooseRecord) {
   const responseHistory = Array.isArray(order.supplierResponses)
     ? order.supplierResponses.map((responseValue) => {
@@ -113,6 +118,30 @@ export function serializePurchaseOrderRelations(order: LooseRecord) {
         reviewRemark: String(correction.reviewRemark || ""),
         sourceUnitPriceType: String(correction.sourceUnitPriceType || "PURCHASE_ORDER"),
         adjustmentId: correction.adjustmentId ? String(correction.adjustmentId) : null,
+        settlementStatusBefore: correction.settlementStatusBefore
+          ? String(correction.settlementStatusBefore)
+          : null,
+        settlementStatusAfter: correction.settlementStatusAfter
+          ? String(correction.settlementStatusAfter)
+          : null,
+        settlementFinalPayableBefore: nullableDecimalText(correction.settlementFinalPayableBefore),
+        settlementFinalPayableAfter: nullableDecimalText(correction.settlementFinalPayableAfter),
+        settlementRevisionBefore: correction.settlementRevisionBefore === null
+          || correction.settlementRevisionBefore === undefined ? null : Number(correction.settlementRevisionBefore),
+        settlementRevisionAfter: correction.settlementRevisionAfter === null
+          || correction.settlementRevisionAfter === undefined ? null : Number(correction.settlementRevisionAfter),
+        settlementIncreaseBefore: nullableDecimalText(correction.settlementIncreaseBefore),
+        settlementIncreaseAfter: nullableDecimalText(correction.settlementIncreaseAfter),
+        settlementDecreaseBefore: nullableDecimalText(correction.settlementDecreaseBefore),
+        settlementDecreaseAfter: nullableDecimalText(correction.settlementDecreaseAfter),
+        settlementPaidBefore: nullableDecimalText(correction.settlementPaidBefore),
+        settlementPaidAfter: nullableDecimalText(correction.settlementPaidAfter),
+        settlementSettledAtBefore: correction.settlementSettledAtBefore || null,
+        settlementSettledAtAfter: correction.settlementSettledAtAfter || null,
+        settlementSettledByBeforeId: correction.settlementSettledByBeforeId
+          ? String(correction.settlementSettledByBeforeId) : null,
+        settlementSettledByAfterId: correction.settlementSettledByAfterId
+          ? String(correction.settlementSettledByAfterId) : null,
         requestedAt: correction.requestedAt || null,
         reviewedAt: correction.reviewedAt || null,
         requestedBy: requestedBy.id
@@ -216,10 +245,12 @@ export function serializePurchaseOrderSettlement(
   if (!settlement.id) return null;
   const finalPayable = new Prisma.Decimal(decimalText(settlement.finalPayableAmount));
   const remaining = finalPayable.sub(confirmedPaymentAmount);
+  const remainingRefund = confirmedPaymentAmount.sub(finalPayable);
   const createdBy = record(settlement.createdBy);
   const settledBy = record(settlement.settledBy);
   return {
-    id: String(settlement.id), baseAmount: decimalText(settlement.baseAmount),
+    id: String(settlement.id), revision: Number(settlement.revision || 1),
+    baseAmount: decimalText(settlement.baseAmount),
     increaseAmount: decimalText(settlement.increaseAmount), decreaseAmount: decimalText(settlement.decreaseAmount),
     delayDays: Number(settlement.delayDays || 0), delayPenaltyAmount: decimalText(settlement.delayPenaltyAmount),
     finalPayableAmount: finalPayable.toString(), currency: String(settlement.currency || order.purchaseCurrency || ""),
@@ -227,6 +258,7 @@ export function serializePurchaseOrderSettlement(
     paidAmountAtSettlement: decimalText(settlement.paidAmountAtSettlement),
     currentPaidAmount: confirmedPaymentAmount.toString(),
     remainingAmount: (remaining.gt(0) ? remaining : new Prisma.Decimal(0)).toDecimalPlaces(2).toString(),
+    remainingRefundAmount: (remainingRefund.gt(0) ? remainingRefund : new Prisma.Decimal(0)).toDecimalPlaces(2).toString(),
     status: String(settlement.status || "PENDING_PAYMENT"), settledAt: settlement.settledAt || null,
     createdAt: settlement.createdAt || null, updatedAt: settlement.updatedAt || null,
     createdBy: createdBy.id ? { id: String(createdBy.id), name: String(createdBy.name || "") } : null,

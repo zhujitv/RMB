@@ -88,7 +88,7 @@ export function CostDetailDrawer({
       {!manualCost ? (
         <div className={styles.infoStrip}>
           {settlementCost
-            ? cost.paymentStatus === "已支付"
+            ? isPaymentVoucherEvidenceEnabled(cost)
               ? "该成本由采购结算自动生成，结算金额与付款状态在采购执行模块维护；最终付款凭证可在资料中上传或查看。"
               : "该成本由采购结算自动生成，结算金额与付款状态在采购执行模块维护；全额结清后可上传最终付款凭证。"
             : "系统生成的成本记录不可在此直接编辑。"}

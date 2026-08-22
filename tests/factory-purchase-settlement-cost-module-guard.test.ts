@@ -72,7 +72,7 @@ test("all legacy cost mutation paths block settlement-owned fields before writin
   );
   assert.match(paymentShared, /if \(mutationAction\) assertFactoryPurchaseSettlementCostCanBeManagedInCostModule\(cost, mutationAction\)/);
   assert.match(paymentShared, /loadCostForPaymentVoucher[\s\S]*const cost = await loadCostForPayment\(actor, id\)/);
-  assert.match(paymentShared, /isFactoryPurchaseSettlementCost\(cost\) && cost\.paymentStatus !== "已支付"/);
+  assert.match(paymentShared, /isFactoryPurchaseSettlementCost\(cost\) && !\["已支付", "待退款"\]\.includes\(cost\.paymentStatus\)/);
   assert.match(paymentShared, /FACTORY_PURCHASE_SETTLEMENT_NOT_FULLY_PAID/);
   assert.match(paymentMutations, /resolveProductSupplierCostPaymentVoucher[\s\S]*loadCostForPayment\(currentActor, id\)/);
 });
@@ -84,7 +84,8 @@ test("settlement costs keep financial fields locked while allowing payment evide
   assert.doesNotMatch(paymentMutations, /previousFileId: previousStorageKey|nextFileId: storedFile\.storageKey/);
   assert.match(costUi, /canManagePayment=\{canManageFactoryPayments && !factorySettlementGenerated && !voided\}/);
   assert.match(costUi, /canUploadVoucher=\{canManageFactoryPayments && voucherEvidenceEnabled && !voided\}/);
-  assert.match(costUi, /function isPaymentVoucherEvidenceEnabled[\s\S]*paymentStatus === "已支付"/);
+  assert.match(costUi, /function isPaymentVoucherEvidenceEnabled[\s\S]*\["已支付", "待退款"\]\.includes\(cost\.paymentStatus \|\| ""\)/);
+  assert.match(costUi, /voucherEvidenceEnabled[\s\S]*最终付款凭证/);
   assert.match(paymentUi, /canManagePayment \|\| canUploadVoucher/);
   assert.match(paymentUi, /\{canManagePayment \? \(/);
   assert.match(paymentUi, /\{canUploadVoucher \? \(/);

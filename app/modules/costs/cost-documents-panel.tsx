@@ -76,7 +76,7 @@ export function CostDocumentsDrawer({
   const deleteAllowed = canDeleteCost(cost);
   const voidAllowed = canVoidCost(cost);
   const readOnlyReason = factorySettlementGenerated
-    ? cost.paymentStatus === "已支付"
+    ? voucherEvidenceEnabled
       ? "该成本由采购结算自动生成，结算金额与付款状态在采购执行模块维护；此处仅可查看或上传最终付款凭证。"
       : "该成本由采购结算自动生成，结算金额与付款状态在采购执行模块维护；全额结清后可上传最终付款凭证。"
     : logisticsGenerated

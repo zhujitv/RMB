@@ -54,6 +54,7 @@ export function ExecutionDetailDrawer({
   canStartProduction,
   canRecordFactoryPayment,
   canAddFactoryAdjustment,
+  canReviewFactoryPriceCorrection,
   canEnterShipping,
   canOpenReceivableOrder,
   dispatching,
@@ -87,6 +88,7 @@ export function ExecutionDetailDrawer({
   canStartProduction: boolean;
   canRecordFactoryPayment: boolean;
   canAddFactoryAdjustment: boolean;
+  canReviewFactoryPriceCorrection: boolean;
   canEnterShipping: boolean;
   canOpenReceivableOrder: boolean;
   dispatching: boolean;
@@ -192,6 +194,7 @@ export function ExecutionDetailDrawer({
                 canStartProduction={canStartProduction}
                 canRecordPayment={canRecordFactoryPayment}
                 canAddAdjustment={canAddFactoryAdjustment}
+                canReviewFactoryPriceCorrection={canReviewFactoryPriceCorrection}
                 onExecutionChanged={onFactoryExecutionChanged}
               />
             </section>

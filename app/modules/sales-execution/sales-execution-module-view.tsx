@@ -44,6 +44,7 @@ export function SalesExecutionModuleView({
   canOpenReceivableOrder,
   canRecordFactoryPayment,
   canAddFactoryAdjustment,
+  canReviewFactoryPriceCorrection,
   onKeyword,
   onStatus,
   onSearch,
@@ -113,6 +114,7 @@ export function SalesExecutionModuleView({
   canOpenReceivableOrder: boolean;
   canRecordFactoryPayment: boolean;
   canAddFactoryAdjustment: boolean;
+  canReviewFactoryPriceCorrection: boolean;
   onKeyword: (value: string) => void;
   onStatus: (value: string) => void;
   onSearch: () => void;
@@ -182,7 +184,7 @@ export function SalesExecutionModuleView({
       {notice ? <div className={shell.infoStrip} role="status">{notice}</div> : null}
       <ExecutionList rows={rows} loading={loading} page={page} total={total} totalPages={totalPages} onPage={onPage} onOpen={onOpen} />
 
-      {detailExecution ? <ExecutionDetailDrawer execution={detailExecution} loading={detailLoading} error={detailError} canEdit={canWrite && detailExecution.status === "DRAFT" && !detailLoading && !detailError} canDispatch={canWrite && detailExecution.status === "DRAFT" && !detailLoading && !detailError} canVoid={canWrite && ["DRAFT", "DISPATCHED"].includes(String(detailExecution.status || "")) && !detailExecution.receivableOrder && !detailExecution.shippingStartedAt && !detailLoading && !detailError} canDelete={canDelete && detailExecution.status === "VOIDED" && !detailLoading && !detailError} canRetryDispatchEmail={canWrite && detailExecution.status === "DISPATCHED" && !detailExecution.receivableOrder && !detailLoading && !detailError} canStartProduction={canWrite && detailExecution.status === "DISPATCHED"} canRecordFactoryPayment={canRecordFactoryPayment} canAddFactoryAdjustment={canAddFactoryAdjustment} canEnterShipping={canEnterShipping && !detailLoading && !detailError} canOpenReceivableOrder={canOpenReceivableOrder} dispatching={dispatching} shippingStarting={shippingStarting} voiding={voiding} deleting={deleting} dispatchError={dispatchError} shippingError={shippingError} voidError={voidError} deleteError={deleteError} retryingPurchaseOrderId={retryingPurchaseOrderId} dispatchEmailRetryError={dispatchEmailRetryError} onEdit={onEdit} onDispatch={onDispatch} onEnterShipping={onEnterShipping} onVoid={onVoid} onDelete={onDelete} onOpenReceivableOrder={onOpenReceivableOrder} onRetryDispatchEmail={onRetryDispatchEmail} onFactoryExecutionChanged={onFactoryExecutionChanged} onClose={onCloseDetail} /> : null}
+      {detailExecution ? <ExecutionDetailDrawer execution={detailExecution} loading={detailLoading} error={detailError} canEdit={canWrite && detailExecution.status === "DRAFT" && !detailLoading && !detailError} canDispatch={canWrite && detailExecution.status === "DRAFT" && !detailLoading && !detailError} canVoid={canWrite && ["DRAFT", "DISPATCHED"].includes(String(detailExecution.status || "")) && !detailExecution.receivableOrder && !detailExecution.shippingStartedAt && !detailLoading && !detailError} canDelete={canDelete && detailExecution.status === "VOIDED" && !detailLoading && !detailError} canRetryDispatchEmail={canWrite && detailExecution.status === "DISPATCHED" && !detailExecution.receivableOrder && !detailLoading && !detailError} canStartProduction={canWrite && detailExecution.status === "DISPATCHED"} canRecordFactoryPayment={canRecordFactoryPayment} canAddFactoryAdjustment={canAddFactoryAdjustment} canReviewFactoryPriceCorrection={canReviewFactoryPriceCorrection} canEnterShipping={canEnterShipping && !detailLoading && !detailError} canOpenReceivableOrder={canOpenReceivableOrder} dispatching={dispatching} shippingStarting={shippingStarting} voiding={voiding} deleting={deleting} dispatchError={dispatchError} shippingError={shippingError} voidError={voidError} deleteError={deleteError} retryingPurchaseOrderId={retryingPurchaseOrderId} dispatchEmailRetryError={dispatchEmailRetryError} onEdit={onEdit} onDispatch={onDispatch} onEnterShipping={onEnterShipping} onVoid={onVoid} onDelete={onDelete} onOpenReceivableOrder={onOpenReceivableOrder} onRetryDispatchEmail={onRetryDispatchEmail} onFactoryExecutionChanged={onFactoryExecutionChanged} onClose={onCloseDetail} /> : null}
       {confirmation ? <ConfirmationDialog state={confirmation} onCancel={onCancelConfirmation} onConfirm={onConfirmConfirmation} /> : null}
       {shippingConfirmation ? <ConfirmationDialog state={shippingConfirmation} onCancel={onCancelShippingConfirmation} onConfirm={onConfirmShippingConfirmation} /> : null}
       {voidConfirmation ? <ConfirmationDialog state={voidConfirmation} onCancel={onCancelVoidConfirmation} onConfirm={onConfirmVoidConfirmation} onInputChange={onUpdateVoidConfirmationInput} /> : null}

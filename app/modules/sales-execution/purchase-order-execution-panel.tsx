@@ -58,6 +58,7 @@ export function PurchaseOrderExecutionPanel({
   canStartProduction,
   canRecordPayment,
   canAddAdjustment,
+  canReviewFactoryPriceCorrection,
   onChanged,
 }: {
   executionId: string;
@@ -67,6 +68,7 @@ export function PurchaseOrderExecutionPanel({
   canStartProduction: boolean;
   canRecordPayment: boolean;
   canAddAdjustment: boolean;
+  canReviewFactoryPriceCorrection: boolean;
   onChanged: () => void | Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -88,6 +90,7 @@ export function PurchaseOrderExecutionPanel({
   const currency = String(order.purchaseCurrency || order.currency || "CNY");
   const active = order.status === "ACCEPTED";
   const settlementPending = order.settlement?.status === "PENDING_PAYMENT";
+  const settlementRefundPending = order.settlement?.status === "PENDING_REFUND";
   const settlementClosed = order.settlement?.status === "SETTLED";
 
   async function run(task: () => Promise<unknown>, successMessage: string) {
@@ -126,7 +129,7 @@ export function PurchaseOrderExecutionPanel({
 
   function submitPayment() {
     void run(async () => {
-      const kind = order.settlement ? "BALANCE" : paymentKind;
+      const kind = settlementRefundPending ? "REFUND" : order.settlement ? "BALANCE" : paymentKind;
       const payload = { kind, amount: paymentAmount, paidAt, bankReference, remark: paymentRemark };
       await apiJson(`/api/factory-purchase-orders/${encodeURIComponent(order.id)}/payments`, {
         method: "POST",
@@ -140,7 +143,7 @@ export function PurchaseOrderExecutionPanel({
       setPaymentAmount("");
       setBankReference("");
       setPaymentRemark("");
-    }, "采购付款已登记");
+    }, settlementRefundPending ? "供应商退款已登记" : "采购付款已登记");
   }
 
   function submitAdjustment() {
@@ -213,22 +216,26 @@ export function PurchaseOrderExecutionPanel({
         <PurchaseOrderOfflineQuantityVariance executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
         <PurchaseOrderOfflineProductionCompletion executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
         <PurchaseOrderQuantityCorrection executionId={executionId} executionRevision={executionRevision} shippingStarted={shippingStarted} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
-        <PurchaseOrderPriceCorrection executionId={executionId} order={order} canManage={canAddAdjustment} onChanged={onChanged} onSaved={showOfflineSaved} />
+        <PurchaseOrderPriceCorrection executionId={executionId} order={order} canRequest={canAddAdjustment} canReview={canReviewFactoryPriceCorrection} onChanged={onChanged} onSaved={showOfflineSaved} />
         {canStartProduction && active && order.productionStatus === "READY" ? <button type="button" disabled={busy} onClick={startProduction}>开始生产</button> : null}
         {order.productionStatus === "IN_PRODUCTION" ? <span className={styles.warning}>{order.productionProgress?.allCompleted ? "进度已达 100%，等待确认生产完成" : "等待供应商持续填报生产进度"}</span> : null}
         {order.productionStatus === "WAITING_PREPAYMENT" ? <span className={styles.warning}>预付款到账后才可生产</span> : null}
-        {canRecordPayment && active && !settlementClosed ? <button type="button" disabled={busy} onClick={() => { if (settlementPending) setPaymentKind("BALANCE"); setPaymentOpen((value) => !value); }}>{settlementPending ? "登记尾款" : "登记采购付款"}</button> : null}
+        {canRecordPayment && active && !settlementClosed ? <button type="button" disabled={busy} onClick={() => {
+          if (settlementRefundPending) setPaymentKind("REFUND");
+          else if (settlementPending) setPaymentKind("BALANCE");
+          setPaymentOpen((value) => !value);
+        }}>{settlementRefundPending ? "登记供应商退款" : settlementPending ? "登记尾款" : "登记采购付款"}</button> : null}
         {canAddAdjustment && active && !order.settlement ? <button type="button" disabled={busy} onClick={() => setAdjustmentOpen((value) => !value)}>登记临时费用</button> : null}
       </div>
 
       {paymentOpen ? (
         <div className={styles.entryGrid}>
-          <label>付款类型<select value={order.settlement ? "BALANCE" : paymentKind} disabled={Boolean(order.settlement)} onChange={(event) => setPaymentKind(event.target.value)}>{order.settlement ? <option value="BALANCE">尾款</option> : <><option value="PREPAYMENT">预付款</option><option value="BALANCE">尾款</option></>}</select></label>
-          <label>付款金额<input inputMode="decimal" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></label>
-          <label>付款日期<input type="date" max={todayInShanghai()} value={paidAt} onChange={(event) => setPaidAt(event.target.value)} /></label>
+          <label>{settlementRefundPending ? "退款类型" : "付款类型"}<select value={settlementRefundPending ? "REFUND" : order.settlement ? "BALANCE" : paymentKind} disabled={Boolean(order.settlement)} onChange={(event) => setPaymentKind(event.target.value)}>{settlementRefundPending ? <option value="REFUND">供应商退款</option> : order.settlement ? <option value="BALANCE">尾款</option> : <><option value="PREPAYMENT">预付款</option><option value="BALANCE">尾款</option></>}</select></label>
+          <label>{settlementRefundPending ? "退款金额" : "付款金额"}<input inputMode="decimal" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></label>
+          <label>{settlementRefundPending ? "退款日期" : "付款日期"}<input type="date" max={todayInShanghai()} value={paidAt} onChange={(event) => setPaidAt(event.target.value)} /></label>
           <label>银行流水号<input value={bankReference} onChange={(event) => setBankReference(event.target.value)} /></label>
-          <label className={styles.wide}>付款备注<input value={paymentRemark} onChange={(event) => setPaymentRemark(event.target.value)} /></label>
-          <button type="button" disabled={busy || numeric(paymentAmount) <= 0 || !paidAt} onClick={submitPayment}>确认登记</button>
+          <label className={styles.wide}>{settlementRefundPending ? "退款备注" : "付款备注"}<input value={paymentRemark} onChange={(event) => setPaymentRemark(event.target.value)} /></label>
+          <button type="button" disabled={busy || numeric(paymentAmount) <= 0 || !paidAt} onClick={submitPayment}>{settlementRefundPending ? "确认登记退款" : "确认登记"}</button>
         </div>
       ) : null}
 
@@ -241,7 +248,7 @@ export function PurchaseOrderExecutionPanel({
         </div>
       ) : null}
 
-      {activePayments.length ? <div className={styles.ledgerList}><strong>付款记录</strong>{activePayments.map((payment) => <span key={payment.id}>{payment.kind === "PREPAYMENT" ? "预付款" : "尾款"} · {formatCurrencyAmount(currency, payment.amount || 0)} · {formatDate(payment.paidAt)}{canRecordPayment && !settlementClosed && (!order.settlement || payment.kind === "BALANCE") ? <button type="button" disabled={busy} onClick={() => voidPayment(payment.id)}>冲销</button> : null}</span>)}</div> : null}
+      {activePayments.length ? <div className={styles.ledgerList}><strong>付款与退款记录</strong>{activePayments.map((payment) => <span key={payment.id}>{payment.kind === "PREPAYMENT" ? "预付款" : payment.kind === "REFUND" ? "供应商退款" : "尾款"} · {payment.kind === "REFUND" ? "-" : ""}{formatCurrencyAmount(currency, payment.amount || 0)} · {formatDate(payment.paidAt)}{canRecordPayment && !settlementClosed && (!order.settlement || payment.kind === "BALANCE" || payment.kind === "REFUND") ? <button type="button" disabled={busy} onClick={() => voidPayment(payment.id)}>冲销</button> : null}</span>)}</div> : null}
       {activeAdjustments.length ? <div className={styles.ledgerList}><strong>费用调整</strong>{activeAdjustments.map((adjustment) => <span key={adjustment.id}>{adjustment.description || "费用调整"} · {adjustment.direction === "DECREASE" ? "-" : "+"}{formatCurrencyAmount(currency, adjustment.amount || 0)} · {adjustment.status === "CONFIRMED" ? "已确认" : "待结算"}{canAddAdjustment && !order.settlement ? <button type="button" disabled={busy} onClick={() => voidAdjustment(adjustment.id)}>作废</button> : null}</span>)}</div> : null}
       <PurchaseOrderSettlementCard executionId={executionId} shippingStarted={shippingStarted} order={order} canSettle={canRecordPayment} onChanged={onChanged} />
     </section>

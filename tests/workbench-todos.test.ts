@@ -186,6 +186,11 @@ test("workbench todos api uses backend aggregation and current actor", () => {
   assert.match(workbenchSource, /completedTodos/);
   assert.match(workbenchSource, /CUSTOMER_PAYMENT_CONFIRMATION/);
   assert.match(workbenchSource, /PAYMENT_VOUCHER_UPLOAD/);
+  assert.match(workbenchSource, /\{ paymentStatus: "待退款" \}/);
+  assert.match(workbenchSource, /type: cost\.paymentStatus === "待退款" \? "FACTORY_SUPPLIER_REFUND" : "FACTORY_PAYMENT_REGISTER"/);
+  assert.match(workbenchSource, /title: cost\.paymentStatus === "待退款" \? "供应商退款待登记" : "工厂付款待登记"/);
+  assert.match(workbenchSource, /orderHref\("\/sales-execution", cost\.order, \{ executionId: cost\.order\.sourceSalesExecutionId \}\)/);
+  assert.notEqual(workbenchRules.todoActivationRuleForType("FACTORY_SUPPLIER_REFUND").activationCondition, "source-specific active business condition");
   assert.match(sharedConstantsSource, /PAYMENT_VOUCHER_REMINDER_DEFAULT_START_DATE = "2026-06-30"/);
   assert.match(sharedConstantsSource, /paymentVoucherReminderStartDate: PAYMENT_VOUCHER_REMINDER_DEFAULT_START_DATE/);
   assert.match(sharedExchangeSource, /paymentVoucherReminderStartDate: normalizeSettingsDate/);

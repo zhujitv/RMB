@@ -94,6 +94,25 @@ test("VAT invoice must match supplier, buyer, tax ids, product name, quantity, u
   assert.match(mismatch.issues.join("|"), /合同外商品/);
 });
 
+test("VAT invoice cannot swap amounts between products while keeping the same total", () => {
+  const twoProductContract = {
+    ...contract,
+    items: [
+      { ...contract.items[0], amountWithTax: "500.00" },
+      { ...contract.items[0], lineNo: 2, purchaseOrderItemId: "item-2", productName: "不锈钢连接件", unit: "套", quantity: "5", amountWithTax: "630.00" },
+    ],
+  };
+  const result = matchSupplierInvoiceToContract(invoice({
+    items: [
+      { lineNo: "1", name: "木塑复合地板", unit: "平方米", quantity: "10", amountWithoutTax: "530.97", taxAmount: "69.03" },
+      { lineNo: "2", name: "不锈钢连接件", unit: "套", quantity: "5", amountWithoutTax: "469.03", taxAmount: "60.97" },
+    ],
+  }) as never, twoProductContract as never);
+  assert.equal(result.matched, false);
+  assert.match(result.issues.join("|"), /发票价税金额600.*合同含税金额500/);
+  assert.match(result.issues.join("|"), /发票价税金额530.*合同含税金额630/);
+});
+
 test("generated tax contract workbook contains no specification column and freezes approved customs values", async () => {
   const body = await generateSupplierTaxContractXlsx({
     ...contract,

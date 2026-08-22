@@ -58,6 +58,7 @@ export type TodoOrder = {
   taxSubmittedAt?: Date | string | null;
   taxArchived?: boolean | null;
   taxRefundStatus?: string | null;
+  sourceSalesExecutionId?: string | null;
   salespersonUserId?: string | null;
   customer?: { shortName?: string | null; salespersonUserId?: string | null } | null;
   salesperson?: { id?: string | null; name?: string | null; email?: string | null; role?: string | null } | null;

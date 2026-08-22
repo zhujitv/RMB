@@ -6,6 +6,7 @@ export const WORKBENCH_DEEP_LINK_PARAM = "workbenchTarget";
 
 const WORKBENCH_ROUTE_QUERY_KEYS = new Map<string, ReadonlySet<string>>([
   ["/account", new Set()],
+  ["/sales-execution", new Set(["orderId", "keyword", "action", "quotationId", "executionId"])],
   ["/orders", new Set(["orderId", "keyword"])],
   ["/payments", new Set(["orderId", "keyword", "paymentId"])],
   ["/costs", new Set(["orderId", "keyword", "costId"])],

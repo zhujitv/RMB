@@ -43,12 +43,12 @@ export function isProductSupplierPaymentEnabled(cost: CostRow) {
 }
 
 export function isPaymentVoucherEvidenceEnabled(cost: CostRow) {
-  if (isFactoryPurchaseSettlementCost(cost)) return cost.paymentStatus === "已支付";
+  if (isFactoryPurchaseSettlementCost(cost)) return ["已支付", "待退款"].includes(cost.paymentStatus || "");
   return isProductSupplierPaymentEnabled(cost);
 }
 
 export function isProductSupplierPaid(cost: CostRow) {
-  return Boolean(cost.paid) || cost.paymentStatus === "已支付" || cost.paymentStatus === "部分支付";
+  return Boolean(cost.paid) || ["已支付", "部分支付", "待退款"].includes(cost.paymentStatus || "");
 }
 
 export function isVoidedCost(cost: Pick<CostRow, "status" | "paymentStatus">) {

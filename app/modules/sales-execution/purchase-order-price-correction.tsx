@@ -28,6 +28,13 @@ function statusText(status?: string | null) {
   return "待管理员审核";
 }
 
+function settlementStatusText(status?: string | null) {
+  if (status === "PENDING_PAYMENT") return "待补付";
+  if (status === "PENDING_REFUND") return "待供应商退款";
+  if (status === "SETTLED") return "已结清";
+  return status || "-";
+}
+
 function requestKey(ref: { current: { fingerprint: string; key: string } | null }, fingerprint: string) {
   if (!ref.current || ref.current.fingerprint !== fingerprint) {
     ref.current = { fingerprint, key: `factory-price-correction-${Date.now()}-${crypto.randomUUID()}` };
@@ -35,34 +42,45 @@ function requestKey(ref: { current: { fingerprint: string; key: string } | null 
   return ref.current.key;
 }
 
-function unavailableReason(order: FactoryPurchaseOrder, activePayments: unknown[], canManage: boolean, itemCount: number) {
-  if (!canManage) return "没有采购价格更正权限";
+function unavailableReason(order: FactoryPurchaseOrder, canRequest: boolean, itemCount: number) {
+  if (!canRequest) return "没有采购价格更正权限";
   if (!itemCount) return "该采购单没有产品行，不能申请采购价格更正";
   if (order.status !== "ACCEPTED") return "工厂采购单确认接受后，才可以申请采购价格更正";
-  if (order.settlement) return "该采购单已进入最终应付确认，不能申请采购价格更正";
-  if (activePayments.length) return "已有付款记录，采购价格需走财务冲销或补差流程";
+  return "";
+}
+
+function correctionSettlementNotice(order: FactoryPurchaseOrder, activePaymentCount: number) {
+  if (order.settlement) {
+    return "该采购单已有最终应付确认。审核通过后系统会保留原结算，生成结算更正凭证，并按更正后的应付金额计算补付或供应商退款。";
+  }
+  if (activePaymentCount > 0) {
+    return "该采购单已有付款记录。审核通过后系统会保留原付款流水，并生成可审计的价格差额凭证。";
+  }
   return "";
 }
 
 export function PurchaseOrderPriceCorrection({
   executionId,
   order,
-  canManage,
+  canRequest,
+  canReview,
   onChanged,
   onSaved,
 }: {
   executionId: string;
   order: FactoryPurchaseOrder;
-  canManage: boolean;
+  canRequest: boolean;
+  canReview: boolean;
   onChanged: () => void | Promise<void>;
   onSaved: (message: string) => void;
 }) {
   const items = order.items || [];
   const corrections = order.priceCorrections || [];
   const activePayments = (order.payments || []).filter((payment) => payment.status === "CONFIRMED");
-  const reasonUnavailable = unavailableReason(order, activePayments, canManage, items.length);
+  const reasonUnavailable = unavailableReason(order, canRequest, items.length);
+  const settlementNotice = correctionSettlementNotice(order, activePayments.length);
   const available = !reasonUnavailable;
-  const showEntry = canManage && items.length > 0 && order.status !== "DRAFT";
+  const showEntry = canRequest && items.length > 0 && order.status !== "DRAFT";
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [itemId, setItemId] = useState(items[0]?.id || "");
@@ -98,7 +116,9 @@ export function PurchaseOrderPriceCorrection({
       });
       requestRef.current = null;
       setOpen(false);
-      onSaved("采购价格更正申请已提交，等待管理员审核");
+      onSaved(order.settlement
+        ? "采购价格更正申请已提交，审核通过后将生成结算更正凭证"
+        : "采购价格更正申请已提交，等待管理员审核");
       await onChanged();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "提交采购价格更正申请失败");
@@ -115,11 +135,19 @@ export function PurchaseOrderPriceCorrection({
     setBusy(true);
     setError("");
     try {
-      await apiJson(`/api/sales-executions/${encodeURIComponent(executionId)}/purchase-orders/${encodeURIComponent(order.id)}/price-corrections/${encodeURIComponent(correctionId)}`, {
+      const result = await apiJson<{ correction?: { status?: string | null } }>(`/api/sales-executions/${encodeURIComponent(executionId)}/purchase-orders/${encodeURIComponent(order.id)}/price-corrections/${encodeURIComponent(correctionId)}`, {
         method: "PATCH",
         body: JSON.stringify({ action, reviewRemark: reviewRemark?.trim() || "" }),
       });
-      onSaved(action === "APPROVE" ? "采购价格更正已通过，差额已进入结算调整" : "采购价格更正已驳回");
+      const expectedStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
+      if (String(result.correction?.status || "") !== expectedStatus) {
+        throw new Error(`采购价格更正审核结果未生效，预期状态为 ${expectedStatus}`);
+      }
+      onSaved(action === "APPROVE"
+        ? order.settlement
+          ? "采购价格更正已通过，结算更正凭证已生成"
+          : "采购价格更正已通过，差额已进入结算调整"
+        : "采购价格更正已驳回");
       await onChanged();
     } catch (reviewError) {
       setError(reviewError instanceof Error ? reviewError.message : "审核采购价格更正失败");
@@ -134,6 +162,7 @@ export function PurchaseOrderPriceCorrection({
         <button type="button" disabled={busy || !available} title={reasonUnavailable || undefined} onClick={openForm}>采购价格更正申请</button>
       ) : null}
       {showEntry && !available ? <span className={styles.warning}>{reasonUnavailable}</span> : null}
+      {showEntry && available && settlementNotice ? <span className={styles.warning}>{settlementNotice}</span> : null}
       {open ? (
         <div className={styles.entryGrid}>
           <label className={styles.wide}>产品行
@@ -169,9 +198,16 @@ export function PurchaseOrderPriceCorrection({
               · {statusText(correction.status)}
               · {correction.oldUnitPrice} → {correction.newUnitPrice}
               · {Number(correction.deltaAmount || 0) >= 0 ? "+" : "-"}{formatCurrencyAmount(correction.currency || order.purchaseCurrency || "CNY", Math.abs(numeric(correction.deltaAmount)))}
+              {correction.settlementFinalPayableAfter !== null && correction.settlementFinalPayableAfter !== undefined
+                ? ` · 结算更正：最终应付 ${formatCurrencyAmount(correction.currency || order.purchaseCurrency || "CNY", correction.settlementFinalPayableBefore || 0)} → ${formatCurrencyAmount(correction.currency || order.purchaseCurrency || "CNY", correction.settlementFinalPayableAfter)}`
+                : ""}
+              {correction.settlementStatusAfter
+                ? ` · ${settlementStatusText(correction.settlementStatusBefore)} → ${settlementStatusText(correction.settlementStatusAfter)}`
+                : ""}
+              {correction.settlementRevisionAfter ? ` · 结算版本 V${correction.settlementRevisionBefore} → V${correction.settlementRevisionAfter}` : ""}
               {correction.requestedBy?.name ? ` · 申请人 ${correction.requestedBy.name}` : ""}
               {correction.requestedAt ? ` · ${formatDateTime(correction.requestedAt)}` : ""}
-              {correction.status === "PENDING" && canManage ? (
+              {correction.status === "PENDING" && canReview ? (
                 <>
                   <button type="button" disabled={busy} onClick={() => review(correction.id, "APPROVE")}>通过</button>
                   <button type="button" disabled={busy} onClick={() => review(correction.id, "REJECT")}>驳回</button>

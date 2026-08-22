@@ -38,6 +38,7 @@ export const WORKBENCH_TODO_ACTIVATION_RULES: Record<string, WorkbenchTodoActiva
   CUSTOMER_PAYMENT_CONFIRMATION: { flowStage: "SALES_ORDER_CREATED", prerequisiteStage: "SALES_ORDER_CREATED", activationCondition: "customer payment exists AND payment.status == '待确认'" },
   CUSTOMER_PAYMENT_CONFIRMED: { flowStage: "SALES_ORDER_CREATED", prerequisiteStage: "SALES_ORDER_CREATED", activationCondition: "customer payment.status == '已到账'" },
   FACTORY_PAYMENT_REGISTER: { flowStage: "SUPPLIER_PAYMENT_COMPLETED", prerequisiteStage: "SUPPLIER_DOCUMENT_COMPLETED", activationCondition: "product-supplier cost exists AND payment is not fully registered" },
+  FACTORY_SUPPLIER_REFUND: { flowStage: "SUPPLIER_PAYMENT_COMPLETED", prerequisiteStage: "SUPPLIER_PAYMENT_COMPLETED", activationCondition: "factory purchase settlement paymentStatus == '待退款'" },
   FACTORY_PAYMENT_COMPLETED: { flowStage: "SUPPLIER_PAYMENT_COMPLETED", prerequisiteStage: "SUPPLIER_DOCUMENT_COMPLETED", activationCondition: "product-supplier payment has been registered" },
   PAYMENT_VOUCHER_UPLOAD: { flowStage: "SUPPLIER_PAYMENT_COMPLETED", prerequisiteStage: "SUPPLIER_PAYMENT_COMPLETED", activationCondition: "product-supplier cost is paid AND payment voucher is missing" },
   PAID_WITHOUT_PAYMENT_TIME: { flowStage: "SUPPLIER_PAYMENT_COMPLETED", prerequisiteStage: "SUPPLIER_PAYMENT_COMPLETED", activationCondition: "product-supplier cost is paid AND paidAt is missing" },

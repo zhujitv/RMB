@@ -107,6 +107,10 @@ const notificationCronRoute = readFileSync("app/api/cron/notification-outbox/rou
 const queryService = readFileSync("lib/platform/sales-execution-query-service.ts", "utf8");
 const valuesService = readFileSync("lib/platform/sales-execution-values.ts", "utf8");
 const serializationService = readFileSync("lib/platform/sales-execution-serialization.ts", "utf8");
+const purchaseItemSerializationService = readFileSync(
+  "lib/platform/sales-execution-purchase-order-item-serialization.ts",
+  "utf8",
+);
 const accessService = readFileSync("lib/platform/sales-execution-access.ts", "utf8");
 const customerProducts = readFileSync("lib/platform/quotation-customer-products.ts", "utf8");
 const customerProductValues = readFileSync("lib/platform/quotation-values.ts", "utf8");
@@ -520,8 +524,8 @@ test("factory drafts inherit the customer requested date without rewriting the c
 });
 
 test("purchase order serialization never embeds customer or sales prices", () => {
-  const purchaseSerializer = serializationService.match(
-    /function serializePurchaseOrderItem[\s\S]*?(?=\nexport function serializeSalesExecution)/,
+  const purchaseSerializer = purchaseItemSerializationService.match(
+    /export function serializePurchaseOrderItem[\s\S]*?(?=\nexport function effectivePurchaseOrderSubtotal)/,
   )?.[0] || "";
   assert.match(purchaseSerializer, /productDescription:\s*productVisibleDescription/);
   assert.match(purchaseSerializer, /productNameSnapshot/);

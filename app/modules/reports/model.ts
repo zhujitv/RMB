@@ -123,7 +123,7 @@ export const REPORT_READ_ROLES: Record<string, string[]> = {
 
 export const ORDER_STATUSES = ["", "草稿", "已确认", "部分收款", "已收齐", "多收款", "已逾期", "已关闭", "已取消"];
 export const PAYMENT_STATUSES = ["", "待确认", "已到账", "已退回", "已取消"];
-export const COST_PAYMENT_STATUSES = ["", "待支付", "部分支付", "已支付", "已取消"];
+export const COST_PAYMENT_STATUSES = ["", "待支付", "部分支付", "已支付", "待退款", "已取消"];
 export const COST_TYPES = ["", "工厂货款", "原材料货款", "采购货款", "产品货款", ...LOGISTICS_COST_TYPES, "银行手续费", "国外佣金", "样品费", "其他费用"];
 export const COST_TYPE_LABELS: Record<string, string> = Object.fromEntries([
   ["", "全部"],

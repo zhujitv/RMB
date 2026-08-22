@@ -66,6 +66,7 @@ export function PurchaseOrderDraftList({
   canStartProduction = false,
   canRecordPayment = false,
   canAddAdjustment = false,
+  canReviewFactoryPriceCorrection = false,
   onExecutionChanged,
 }: {
   orders: FactoryPurchaseOrder[];
@@ -79,6 +80,7 @@ export function PurchaseOrderDraftList({
   canStartProduction?: boolean;
   canRecordPayment?: boolean;
   canAddAdjustment?: boolean;
+  canReviewFactoryPriceCorrection?: boolean;
   onExecutionChanged?: () => void | Promise<void>;
 }) {
   if (!orders.length) return <div className={shell.emptyState}>尚未生成工厂采购单，请先完成工厂分配。</div>;
@@ -155,6 +157,7 @@ export function PurchaseOrderDraftList({
                 canStartProduction={canStartProduction}
                 canRecordPayment={canRecordPayment}
                 canAddAdjustment={canAddAdjustment}
+                canReviewFactoryPriceCorrection={canReviewFactoryPriceCorrection}
                 onChanged={onExecutionChanged || (() => undefined)}
               />
             ) : null}

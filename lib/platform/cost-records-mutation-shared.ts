@@ -90,9 +90,9 @@ export async function loadCostForPaymentVoucher(actor: CostActor, id: string) {
   // Purchase-settlement costs keep their financial fields immutable, but the
   // final payment voucher remains an independently managed piece of evidence.
   const cost = await loadCostForPayment(actor, id);
-  if (isFactoryPurchaseSettlementCost(cost) && cost.paymentStatus !== "已支付") {
+  if (isFactoryPurchaseSettlementCost(cost) && !["已支付", "待退款"].includes(cost.paymentStatus)) {
     throw codedError(
-      "采购结算全额结清后才能上传最终付款凭证。",
+      "采购结算已结清或进入供应商退款流程后才能上传最终付款凭证。",
       409,
       "FACTORY_PURCHASE_SETTLEMENT_NOT_FULLY_PAID",
     );

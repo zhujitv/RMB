@@ -65,6 +65,15 @@ test("supplier purchase order links preserve only the supplier portal detail tar
   assert.equal(parseWorkbenchInternalHref("/supplier-purchase-orders?purchaseOrderId=one&purchaseOrderId=two"), null);
 });
 
+test("factory refund todos may deep-link to the owning sales execution", () => {
+  const target = "/sales-execution?orderId=order-1&keyword=PV271&executionId=execution-1";
+  const safe = parseWorkbenchInternalHref(target);
+
+  assert.equal(safe?.pathname, "/sales-execution");
+  assert.equal(safe?.searchParams.get("executionId"), "execution-1");
+  assert.equal(parseWorkbenchInternalHref(`${target}&purchaseOrderId=po-1`), null);
+});
+
 test("cost todo links preserve and open the exact cost target", () => {
   const target = "/costs?orderId=order-1&keyword=NW-1&costId=cost-1";
   const safe = parseWorkbenchInternalHref(target);

@@ -10,6 +10,8 @@ import { applySupplierTaxContractDraftEdits } from "./supplier-tax-contract-draf
 import { generateSupplierTaxContractXlsx } from "./supplier-tax-contract-xlsx";
 import { refreshSupplierTaxContractParties } from "./supplier-tax-contract-parties";
 import { normalizeSupplierTaxContractNumber } from "./supplier-tax-contract-number";
+import { assertSupplierTaxContractFinancialsCurrent } from "./factory-purchase-price-correction-contract";
+import { lockFactoryPurchaseOrder } from "./sales-execution-access";
 import {
   actorId,
   jsonStringArray,
@@ -86,13 +88,12 @@ export async function reviewSupplierTaxContract(
   if (!draft.supplierTaxNumber || !draft.buyerTaxNumber) {
     throw codedError("请先在供应商和业务主体设置中完整填写纳税人识别号。", 409, "SUPPLIER_TAX_ID_REQUIRED");
   }
-  const [latestCustoms, settlement, transitionSettlement] = await Promise.all([
+  const [latestCustoms, transitionSettlement] = await Promise.all([
     prisma.orderDocument.findFirst({
       where: { orderId: row.orderId, documentType: "CUSTOMS_ENTRY_FORM", uploadStatus: "SUCCESS", deletedAt: null },
       orderBy: [{ uploadedAt: "desc" }, { createdAt: "desc" }],
       select: { id: true },
     }),
-    prisma.factoryPurchaseOrderSettlement.findUnique({ where: { purchaseOrderId: draft.purchaseOrderId }, select: { baseAmount: true } }),
     draft.transitionSettlementId
       ? prisma.factoryPurchaseTransitionSettlement.findUnique({
           where: { id: draft.transitionSettlementId },
@@ -115,8 +116,8 @@ export async function reviewSupplierTaxContract(
     ) {
       throw codedError("历史过渡结算凭证与合同草稿不一致，不能通过审核。", 409, "SUPPLIER_TAX_CONTRACT_TRANSITION_CHANGED");
     }
-  } else if (!settlement || !new Prisma.Decimal(draft.totalAmountWithTax).eq(settlement.baseAmount)) {
-    throw codedError("采购结算金额已变化，请重新生成合同草稿。", 409, "SUPPLIER_TAX_CONTRACT_SETTLEMENT_CHANGED");
+  } else {
+    await assertSupplierTaxContractFinancialsCurrent(prisma, draft);
   }
   const body = await generateSupplierTaxContractXlsx(draft);
   const { bucket } = ensureR2Configured();
@@ -132,6 +133,10 @@ export async function reviewSupplierTaxContract(
   let updated;
   try {
     updated = await prisma.$transaction(async (tx) => {
+      if (draft.sourceType !== FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE) {
+        await lockFactoryPurchaseOrder(tx, draft.purchaseOrderId);
+        await assertSupplierTaxContractFinancialsCurrent(tx, draft);
+      }
       const claimed = await tx.supplierDocumentRequest.updateMany({
         where: { id: row.id, deletedAt: null, contractStatus: "PENDING_REVIEW" },
         data: {

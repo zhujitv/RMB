@@ -38,7 +38,7 @@ export function confirmedCost(cost: CostLike) {
 }
 
 export function paidConfirmedCost(cost: CostLike) {
-  return confirmedCost(cost) && cost.paymentStatus === "已支付";
+  return confirmedCost(cost) && ["已支付", "待退款"].includes(cost.paymentStatus || "");
 }
 
 export function costParticipatesInOrderFinancials(order: OrderLike, cost: CostLike) {
@@ -141,7 +141,7 @@ export function summarizeOrder(order: OrderLike, commissionFormulaSettings?: Rec
     .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
   const paidConfirmedCostCny = (order.costs || [])
     .filter((cost) => costParticipatesInOrderFinancials(order, cost)
-      && cost.costConfirmed === true && cost.paymentStatus === "已支付")
+      && cost.costConfirmed === true && ["已支付", "待退款"].includes(cost.paymentStatus || ""))
     .reduce((sum, cost) => sum + Number(cost.amountCny), 0);
   const excludedFobSeaFreightCostCny = (order.costs || [])
     .filter((cost) => validCost(cost) && isOrderCostExcludedByTradeTerm(order.tradeTerm, cost.costType))
