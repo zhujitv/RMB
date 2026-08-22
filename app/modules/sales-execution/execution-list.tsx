@@ -3,7 +3,7 @@ import { formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import styles from "./sales-execution.module.css";
 import { salesExecutionStatusLabel, statusTone } from "./status-values";
-import { businessEntityName, customerOrderNumber, executionCustomerName, salesExecutionTotal, type SalesExecutionRow } from "./types";
+import { businessEntityName, customerOrderNumber, executionCustomerFullName, executionCustomerName, salesExecutionTotal, type SalesExecutionRow } from "./types";
 
 function statusClass(status: unknown, shippingStarted = false, linkedOrderStatus?: unknown) {
   const tone = statusTone(status, shippingStarted, linkedOrderStatus);
@@ -52,7 +52,7 @@ export function ExecutionList({
             ) : rows.length ? rows.map((row) => (
               <tr className={shell.clickableRow} key={row.id} onClick={() => onOpen(row)}>
                 <td className={shell.orderNoColumn}><strong>{customerOrderNumber(row) || "-"}</strong></td>
-                <td className={shell.customerColumn}><span className={styles.customerCell}><strong>{executionCustomerName(row)}</strong><small>{row.customer?.fullName || row.customerNameSnapshot || ""}</small></span></td>
+                <td className={shell.customerColumn} title={executionCustomerFullName(row)}><strong>{executionCustomerName(row)}</strong></td>
                 <td><span className={`${styles.sourcePill} ${row.sourceType === "QUOTATION" ? styles.sourceQuote : ""}`}>{row.sourceType === "QUOTATION" ? "报价转入" : "直接创建"}</span></td>
                 <td>{businessEntityName(row.businessEntity) !== "-" ? businessEntityName(row.businessEntity) : row.businessEntityNameSnapshot || "-"}</td>
                 <td className={shell.amountColumn}>{formatCurrencyAmount(row.currency || "CNY", salesExecutionTotal(row))}</td>

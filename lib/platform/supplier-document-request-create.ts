@@ -80,6 +80,7 @@ import {
   supplierDocumentRequestOrderLocked,
   supplierDocumentRequestTemplateVariables,
   supplierRecipientEmails,
+  defaultSupplierDocumentRequestDueDate,
   uniqueEmails,
 } from "./supplier-document-request-serialization";
 
@@ -88,7 +89,7 @@ export async function createSupplierDocumentRequest(request: AuditRequestLike, a
   assertWrite(actor, "supplierDocuments");
   const requestedById = actorId(actor);
   const requiredTypes = requiredDocumentTypes(input.requiredDocumentTypes);
-  const dueDate = dateFromInput(input.dueDate);
+  const dueDate = dateFromInput(input.dueDate) || defaultSupplierDocumentRequestDueDate();
   const message = nonEmpty(input.message).slice(0, 1000);
   const [factoryCost, template] = await Promise.all([
     loadFactorySupplierReturnCostForRequest(input),

@@ -227,7 +227,11 @@ export function customerOrderNumber(row?: SalesExecutionRow | null) {
 }
 
 export function executionCustomerName(row?: SalesExecutionRow | null) {
-  return String(row?.customer?.displayName || row?.customer?.shortName || row?.customerShortName || row?.customerNameSnapshot || row?.customerName || row?.customer?.name || "-");
+  return String(row?.customer?.shortName || row?.customerShortName || row?.customer?.displayName || row?.customerNameSnapshot || row?.customerName || row?.customer?.name || "-");
+}
+
+export function executionCustomerFullName(row?: SalesExecutionRow | null) {
+  return String(row?.customer?.fullName || row?.customer?.name || row?.customerNameSnapshot || row?.customerName || executionCustomerName(row));
 }
 
 export function businessEntityName(entity?: BusinessEntityOption | null) {

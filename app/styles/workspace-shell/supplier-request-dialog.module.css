@@ -2,8 +2,8 @@
 /* Supplier document callback and customs file lists.
  * Extracted from WorkspaceShell.module.css; keep original selector order through the index module. */
 .supplierDocumentsPage {
-  width: min(100%, 1040px);
-  max-width: 1040px;
+  width: min(100%, 1280px);
+  max-width: 1280px;
   margin: 0 auto;
   padding: 24px;
 }

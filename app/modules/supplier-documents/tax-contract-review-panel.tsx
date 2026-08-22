@@ -33,6 +33,7 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
   const issues = task.invoiceMatch?.issues || [];
   const hasInvoice = (task.documents || []).some((document) => document.documentType === "SUPPLIER_INVOICE");
   const isTransitionContract = draft?.sourceType === "FACTORY_PURCHASE_TRANSITION_SETTLEMENT";
+  const showContractScanIssues = task.contractStatus !== "APPROVED";
   const canEditInvoice = isAdmin && canWrite && task.contractStatus === "APPROVED" && hasInvoice
     && !["PROCESSING", "CONFIRMED"].includes(task.invoiceMatchStatus || "NOT_UPLOADED");
   const effectiveInvoice = task.invoiceEffective || task.invoiceMatch?.invoice || null;
@@ -211,8 +212,12 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
               <tbody>{(draft.items || []).map((item) => <tr key={`${item.lineNo}-${item.productName}`}><td>{item.productName}</td><td>{item.quantity}</td><td>{item.unit}</td><td>{item.unitPriceWithTax}</td><td>{item.amountWithTax}</td></tr>)}</tbody>
             </table>
           </div>}
-          {(draft.warnings || []).map((warning) => <div className={styles.inlineError} key={warning}>{warning}</div>)}
-          {(draft.blockingIssues || []).map((issue) => <div className={styles.inlineError} key={issue}>禁止通过：{issue}</div>)}
+          {showContractScanIssues ? (
+            <>
+              {(draft.warnings || []).map((warning) => <div className={styles.inlineError} key={warning}>{warning}</div>)}
+              {(draft.blockingIssues || []).map((issue) => <div className={styles.inlineError} key={issue}>禁止通过：{issue}</div>)}
+            </>
+          ) : null}
           {message ? <p>{message}</p> : null}
         </div>
       ) : null}

@@ -1,5 +1,5 @@
 import { safeFileName } from "../r2";
-import { codedError, dateToInput, nonEmpty } from "./shared";
+import { addDays, codedError, dateFromInput as sharedDateFromInput, dateToInput, nonEmpty, todayInputInChina } from "./shared";
 import {
   EXCEL_TEMPLATE_MIME,
   LEGACY_EXCEL_TEMPLATE_MIME,
@@ -16,6 +16,10 @@ export function dateFromInput(value: unknown) {
     throw codedError("截止日期格式错误", 400, "INVALID_DUE_DATE");
   }
   return date;
+}
+
+export function defaultSupplierDocumentRequestDueDate(now = todayInputInChina()) {
+  return addDays(sharedDateFromInput(now), 3);
 }
 
 export function supplierDocumentRequestTemplateVariables({

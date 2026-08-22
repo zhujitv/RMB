@@ -20,6 +20,9 @@ const { candidateForSupplierTaxContractItem } = await jiti.import<
 const { customsQuantityForUnit } = await jiti.import<
   typeof import("../lib/platform/supplier-tax-contract-customs-match.ts")
 >("../lib/platform/supplier-tax-contract-customs-match.ts");
+const { defaultSupplierDocumentRequestDueDate } = await jiti.import<
+  typeof import("../lib/platform/supplier-document-request-template-data.ts")
+>("../lib/platform/supplier-document-request-template-data.ts");
 
 const schema = readPrismaSchemaSource();
 const service = readSupplierDocumentRequestsSource();
@@ -283,6 +286,9 @@ test("supplier portal does not render customer identity fields", () => {
   assert.match(supplierModule, /styles\.supplierDocumentsPage/);
   assert.match(supplierModule, /styles\.supplierDocumentTaskCard/);
   assert.match(supplierModule, /styles\.supplierDocumentUploadCard/);
+  assert.match(supplierModule, /const showContractScanIssues = task\.contractStatus !== "APPROVED"/);
+  assert.match(supplierModule, /showContractScanIssues \? \(/);
+  assert.match(supplierDocumentStyles, /max-width:\s*1280px/);
   assert.match(supplierModule, /styles\.supplierDocumentTaskDetailMobileHeader/);
   assert.match(supplierModule, /onClick=\{onToggle\}[\s\S]*关闭/);
   assert.match(supplierModule, /选择 PDF 文件/);
@@ -358,6 +364,10 @@ test("supplier document reminders are owned by the supplier return module", () =
   assert.doesNotMatch(supplierCreateDialog, /\/api\/receivables\/search/);
   assert.doesNotMatch(supplierCreateDialog, /\/api\/suppliers\/search/);
   assert.match(supplierCreateDialog, /formData\.append\("requiredDocumentTypes", requiredTypes\.join\(","\)\)/);
+  assert.match(supplierCreateDialog, /defaultSupplierDocumentRequestDueDate/);
+  assert.match(supplierCreateDialog, /setDate\(date\.getDate\(\) \+ 3\)/);
+  assert.match(supplierRequestCreateService, /dateFromInput\(input\.dueDate\) \|\| defaultSupplierDocumentRequestDueDate\(\)/);
+  assert.equal(defaultSupplierDocumentRequestDueDate("2026-08-22")?.toISOString(), "2026-08-25T00:00:00.000Z");
   assert.match(supplierCreateDialog, /SUPPLIER_PURCHASE_CONTRACT/);
   assert.match(supplierCreateDialog, /SUPPLIER_INVOICE/);
   assert.match(supplierCreateDialog, /上传供应商签章采购合同 PDF/);

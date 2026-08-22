@@ -15,7 +15,7 @@ const {
   singleSupplierIdFromItems,
   validateSalesExecutionDraft,
 } = await jiti.import<typeof import("../app/modules/sales-execution/draft-utils.ts")>("../app/modules/sales-execution/draft-utils.ts");
-const { customerOrderNumber, filterSupplierOptions } = await jiti.import<typeof import("../app/modules/sales-execution/types.ts")>("../app/modules/sales-execution/types.ts");
+const { customerOrderNumber, executionCustomerName, filterSupplierOptions } = await jiti.import<typeof import("../app/modules/sales-execution/types.ts")>("../app/modules/sales-execution/types.ts");
 const {
   factoryPurchaseOrderStatusLabel,
   salesExecutionStatusLabel,
@@ -97,6 +97,18 @@ test("sales execution surfaces customer order numbers instead of internal execut
   assert.match(viewSource, /placeholder="搜索客户订单号 \/ 客户 \/ 报价号"/);
   assert.doesNotMatch(salesExecutionUiSource, /执行单号/);
   assert.doesNotMatch(salesExecutionUiSource, /executionNumber|\.executionNo/);
+});
+
+test("sales execution list displays only customer short names", () => {
+  assert.equal(executionCustomerName({
+    id: "execution-1",
+    customerOrderNo: "PO-CUSTOMER-20260809",
+    requestedDeliveryDate: "2026-09-15",
+    customer: { id: "customer-1", displayName: "Very Long Customer Legal Name Limited", shortName: "VLCL" },
+    customerNameSnapshot: "Very Long Customer Legal Name Limited",
+  }), "VLCL");
+  assert.match(listSource, /title=\{executionCustomerFullName\(row\)\}/);
+  assert.doesNotMatch(listSource, /<small>\{row\.customer\?\.fullName \|\| row\.customerNameSnapshot \|\| ""\}<\/small>/);
 });
 
 test("sales execution list omits version and standalone sales currency columns", () => {

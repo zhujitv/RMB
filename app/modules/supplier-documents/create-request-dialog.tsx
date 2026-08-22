@@ -44,6 +44,16 @@ const DOCUMENT_TYPE_OPTIONS = [
 ];
 
 const DEFAULT_DOCUMENT_TYPES = DOCUMENT_TYPE_OPTIONS.map((item) => item.value);
+
+export function defaultSupplierDocumentRequestDueDate(now = new Date()) {
+  const date = new Date(now.getTime());
+  date.setDate(date.getDate() + 3);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function CreateSupplierDocumentRequestDialog({
   onClose,
   onCreated,
@@ -53,7 +63,7 @@ export function CreateSupplierDocumentRequestDialog({
 }) {
   const [selectedCost, setSelectedCost] = useState<FactoryCostCandidate | null>(null);
   const [requiredTypes, setRequiredTypes] = useState<string[]>(DEFAULT_DOCUMENT_TYPES);
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(() => defaultSupplierDocumentRequestDueDate());
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
