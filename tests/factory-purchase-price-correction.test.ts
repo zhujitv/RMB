@@ -90,7 +90,10 @@ test("purchase execution UI exposes price correction request and review feedback
   assert.match(panel, /PurchaseOrderPriceCorrection/);
   assert.match(component, /采购价格更正申请/);
   assert.match(component, /待管理员审核/);
+  assert.match(component, /title=\{reasonUnavailable \|\| undefined\}/);
+  assert.match(component, /disabled=\{busy \|\| !available\}/);
   assert.match(component, /已有付款记录，采购价格需走财务冲销或补差流程/);
+  assert.match(component, /工厂采购单确认接受后，才可以申请采购价格更正/);
   assert.match(component, /通过/);
   assert.match(component, /驳回/);
   assert.match(serializer, /priceCorrections/);

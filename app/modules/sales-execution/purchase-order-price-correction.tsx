@@ -35,6 +35,15 @@ function requestKey(ref: { current: { fingerprint: string; key: string } | null 
   return ref.current.key;
 }
 
+function unavailableReason(order: FactoryPurchaseOrder, activePayments: unknown[], canManage: boolean, itemCount: number) {
+  if (!canManage) return "没有采购价格更正权限";
+  if (!itemCount) return "该采购单没有产品行，不能申请采购价格更正";
+  if (order.status !== "ACCEPTED") return "工厂采购单确认接受后，才可以申请采购价格更正";
+  if (order.settlement) return "该采购单已进入最终应付确认，不能申请采购价格更正";
+  if (activePayments.length) return "已有付款记录，采购价格需走财务冲销或补差流程";
+  return "";
+}
+
 export function PurchaseOrderPriceCorrection({
   executionId,
   order,
@@ -51,7 +60,9 @@ export function PurchaseOrderPriceCorrection({
   const items = order.items || [];
   const corrections = order.priceCorrections || [];
   const activePayments = (order.payments || []).filter((payment) => payment.status === "CONFIRMED");
-  const available = canManage && order.status === "ACCEPTED" && !order.settlement && !activePayments.length && items.length > 0;
+  const reasonUnavailable = unavailableReason(order, activePayments, canManage, items.length);
+  const available = !reasonUnavailable;
+  const showEntry = canManage && items.length > 0 && order.status !== "DRAFT";
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [itemId, setItemId] = useState(items[0]?.id || "");
@@ -61,7 +72,7 @@ export function PurchaseOrderPriceCorrection({
   const requestRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const selectedCurrent = useMemo(() => priceText(order, itemId), [order, itemId]);
 
-  if (!items.length && !corrections.length) return null;
+  if (!showEntry && !corrections.length) return null;
 
   function openForm() {
     const first = items[0]?.id || "";
@@ -119,10 +130,10 @@ export function PurchaseOrderPriceCorrection({
 
   return (
     <>
-      {available ? <button type="button" disabled={busy} onClick={openForm}>采购价格更正申请</button> : null}
-      {!available && canManage && order.status === "ACCEPTED" && !order.settlement && activePayments.length ? (
-        <span className={styles.warning}>已有付款记录，采购价格需走财务冲销或补差流程</span>
+      {showEntry ? (
+        <button type="button" disabled={busy || !available} title={reasonUnavailable || undefined} onClick={openForm}>采购价格更正申请</button>
       ) : null}
+      {showEntry && !available ? <span className={styles.warning}>{reasonUnavailable}</span> : null}
       {open ? (
         <div className={styles.entryGrid}>
           <label className={styles.wide}>产品行
