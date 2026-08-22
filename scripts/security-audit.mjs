@@ -6,9 +6,9 @@ const PUBLIC_API_ROUTES = new Set([
   "app/api/auth/logout/route.ts",
   "app/api/auth/register/route.ts",
   "app/api/auth/verify-email/route.ts",
-  // Mini-program login cannot use the ERP cookie. It requires a short-lived WeChat
-  // login code, verified ERP credentials, account-state checks and login rate limiting.
-  "app/api/wechat-mini/auth/login/route.ts",
+  // Native supplier mini-program login returns a short-lived bearer session.
+  // The route applies the shared login rate limit and account-state checks.
+  "app/api/supplier-mini/auth/login/route.ts",
   "app/api/company-profile/route.ts",
   "app/api/freightower/webhook/route.ts",
   // CRM email inbound callbacks are called by the mail gateway without ERP
@@ -30,7 +30,6 @@ const AUTH_PATTERNS = [
   /\bwithApiWrite\b/,
   /\breportGetHandler\b/,
   /\bassertCronSecret\b/,
-  /\brequireWechatMiniActor\b/,
 ];
 const DANGEROUS_PATTERNS = [
   { pattern: /dangerouslySetInnerHTML/, label: "dangerouslySetInnerHTML" },

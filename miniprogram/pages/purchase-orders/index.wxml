@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="search-row">
+    <input class="input search" value="{{keyword}}" bindinput="onKeyword" bindconfirm="search" confirm-type="search" placeholder="采购单号 / 客户订单号" />
+    <button class="secondary search-button" bindtap="search">查询</button>
+  </view>
+  <scroll-view scroll-x class="filters">
+    <view class="filter-row">
+      <view class="filter {{status === '' ? 'active' : ''}}" data-status="" bindtap="setStatus">全部</view>
+      <view class="filter {{status === 'DISPATCHED' ? 'active' : ''}}" data-status="DISPATCHED" bindtap="setStatus">待回复</view>
+      <view class="filter {{status === 'ACCEPTED' ? 'active' : ''}}" data-status="ACCEPTED" bindtap="setStatus">已接受</view>
+      <view class="filter {{status === 'DELIVERY_PROPOSED' ? 'active' : ''}}" data-status="DELIVERY_PROPOSED" bindtap="setStatus">改期中</view>
+    </view>
+  </scroll-view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{!loading && !rows.length}}" class="empty">暂无符合条件的采购单</view>
+  <view wx:for="{{rows}}" wx:key="id" class="card order" data-id="{{item.id}}" bindtap="open">
+    <view class="row"><view class="order-no">{{item.poNo}}</view><view class="status">{{item.statusLabel}}</view></view>
+    <view class="meta">客户订单号：{{item.customerOrderNo || '-'}}</view>
+    <view class="meta">要求交期：{{item.requestedDeliveryDateText}}</view>
+    <view class="row footer"><text>{{item.items.length}} 项产品 · {{item.purchaseCurrency}}</text><text>生产 {{item.progressText}} ›</text></view>
+  </view>
+  <view wx:if="{{loading}}" class="loading">正在读取…</view>
+  <view wx:if="{{!hasMore && rows.length}}" class="end">已显示全部采购单</view>
+</view>

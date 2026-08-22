@@ -128,11 +128,6 @@ model User {
   wechatOfficialBinding                       WechatOfficialBinding?
   wechatOfficialSubscriptions                 WechatOfficialSubscription[]
   wechatOfficialDeliveries                    WechatOfficialDelivery[]
-  wechatMiniBinding                           WechatMiniBinding?
-  wechatMiniSessions                          WechatMiniSession[]
-  wechatMiniSubscriptionGrants                WechatMiniSubscriptionGrant[]
-  wechatMiniDeliveries                        WechatMiniDelivery[]
-
   @@index([supplierId])
   @@index([approvalStatus])
   @@index([deletedAt])

@@ -1,0 +1,4 @@
+{
+  "desc": "供应商业务页面不允许微信索引",
+  "rules": [{ "action": "disallow", "page": "*" }]
+}

@@ -1,0 +1,17 @@
+<view class="page login-page">
+  <view class="brand-card">
+    <view class="eyebrow">NEXTWOOD · RMB</view>
+    <view class="title">供应商协同</view>
+    <view class="subtitle">查看工厂采购单、回复交期、填报生产进度并回传退税资料。</view>
+  </view>
+  <view class="card form-card">
+    <view class="section-title">登录现有供应商账号</view>
+    <text class="label">邮箱</text>
+    <input class="input" type="text" value="{{email}}" bindinput="onEmail" placeholder="supplier@example.com" />
+    <text class="label">密码</text>
+    <input class="input" password value="{{password}}" bindinput="onPassword" placeholder="请输入密码" confirm-type="done" bindconfirm="submit" />
+    <view wx:if="{{error}}" class="error">{{error}}</view>
+    <button class="primary submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">{{submitting ? '登录中…' : '登录'}}</button>
+    <view class="hint">本小程序为可选协同入口。如未开通账号，仍可继续通过微信、电话或邮件与采购人员确认。</view>
+  </view>
+</view>

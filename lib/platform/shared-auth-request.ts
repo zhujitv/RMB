@@ -6,6 +6,9 @@ import { UNSAFE_METHODS } from "./shared-permission-data";
 import { permissionError } from "./shared-access";
 import { randomToken, sessionTokenHash } from "./shared-auth-password";
 import { boundedUserAgent } from "./shared-auth-input";
+import { requestBearerToken } from "./shared-auth-bearer";
+
+export { requestBearerToken } from "./shared-auth-bearer";
 
 export type RequestLike = {
   url?: string;
@@ -62,6 +65,7 @@ export function requestSessionToken(request: RequestLike) {
   return request?.cookies?.get(SESSION_COOKIE_NAME)?.value
     || request?.cookies?.get("fta_session")?.value
     || request?.cookies?.get("__Host-fta_session")?.value
+    || requestBearerToken(request)
     || "";
 }
 
@@ -121,6 +125,10 @@ export function isAllowedRequestOrigin(candidateOrigin: string, expectedOrigin: 
 export function assertSameOriginRequest(request: RequestLike) {
   const method = String(request?.method || "GET").toUpperCase();
   if (!UNSAFE_METHODS.includes(method)) return;
+  // Bearer credentials are explicitly attached by the native supplier mini
+  // program and are not ambient browser credentials, so they are not exposed
+  // to cookie-based CSRF. Session validity is still checked by getActor.
+  if (requestBearerToken(request)) return;
   const expectedOrigin = requestOrigin(request);
   if (!expectedOrigin) return;
   const origin = headerOrigin(request?.headers?.get("origin"));

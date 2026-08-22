@@ -1,0 +1,6 @@
+<view class="page">
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{user}}" class="card profile"><view class="avatar">{{user.displayInitials}}</view><view class="title">{{user.name}}</view><view class="subtitle">{{user.supplierName}}</view><view class="details"><view><text>账号</text><strong>{{user.email}}</strong></view><view><text>角色</text><strong>{{user.role}}</strong></view><view><text>供应商类型</text><strong>{{user.supplierType}}</strong></view></view></view>
+  <view class="card help"><view class="section-title">使用说明</view><view>· 价格、交期和完成数量请按实际情况填报。</view><view>· 所有回复和文件上传都会留下操作记录。</view><view>· 不使用小程序时，可继续联系采购人员代为登记。</view></view>
+  <button class="danger" loading="{{loggingOut}}" bindtap="logout">退出登录</button>
+</view>

@@ -1,0 +1,7 @@
+.profile { text-align: center; padding-top: 42rpx; }
+.avatar { width: 108rpx; height: 108rpx; border-radius: 50%; background: #176c4e; color: #fff; display: flex; align-items: center; justify-content: center; margin: 0 auto 22rpx; font-size: 42rpx; font-weight: 700; }
+.details { text-align: left; margin-top: 34rpx; border-top: 1rpx solid #e7ece9; }
+.details view { display: flex; justify-content: space-between; gap: 20rpx; padding: 20rpx 0; border-bottom: 1rpx solid #edf0ee; }
+.details text { color: #718078; }
+.details strong { text-align: right; }
+.help { line-height: 1.9; color: #5f6e67; }

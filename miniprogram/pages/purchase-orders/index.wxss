@@ -1,0 +1,11 @@
+.search-row { display: flex; align-items: center; gap: 14rpx; }
+.search { flex: 1; margin-top: 0; }
+.search-button { width: 126rpx; margin: 0; }
+.filters { white-space: nowrap; margin: 24rpx 0; }
+.filter-row { display: flex; gap: 14rpx; }
+.filter { display: inline-flex; padding: 14rpx 24rpx; background: #e8ece9; border-radius: 999rpx; color: #617068; }
+.filter.active { background: #176c4e; color: #fff; }
+.order-no { font-size: 31rpx; font-weight: 700; color: #173f30; }
+.meta { margin-top: 16rpx; color: #5f6f67; }
+.footer { border-top: 1rpx solid #edf0ee; padding-top: 18rpx; margin-top: 20rpx; color: #68776f; font-size: 24rpx; }
+.end { text-align: center; color: #89938e; padding: 24rpx; }

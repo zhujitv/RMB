@@ -1,0 +1,22 @@
+<view class="page">
+  <view class="hero">
+    <view class="eyebrow">供应商工作台</view>
+    <view class="title">{{user ? user.supplierName : '正在读取账号'}}</view>
+    <view class="subtitle">{{user ? user.name + '，今天也请按实际进度更新。' : ''}}</view>
+  </view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{loading}}" class="loading">正在同步待办…</view>
+  <block wx:else>
+    <view class="metrics">
+      <view class="metric card" bindtap="openPurchaseOrders">
+        <view class="metric-value">{{purchaseTotal}}</view><view class="metric-label">工厂采购单</view>
+      </view>
+      <view class="metric card" bindtap="openDocuments">
+        <view class="metric-value">{{documentPending}}</view><view class="metric-label">待回传资料</view>
+      </view>
+    </view>
+    <view class="card action" bindtap="openPurchaseOrders"><view><view class="section-title">采购单与生产</view><view class="muted">回复价格和交期，填报累计完成数量</view></view><text>›</text></view>
+    <view class="card action" bindtap="openDocuments"><view><view class="section-title">资料回传</view><view class="muted">上传盖章采购合同和增值税发票 PDF</view></view><text>›</text></view>
+    <view class="card action" bindtap="openProfile"><view><view class="section-title">账号与帮助</view><view class="muted">查看绑定工厂、退出登录</view></view><text>›</text></view>
+  </block>
+</view>

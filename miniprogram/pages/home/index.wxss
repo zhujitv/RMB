@@ -1,0 +1,10 @@
+.hero { background: linear-gradient(145deg, #12372a, #1d6a4e); color: #fff; border-radius: 26rpx; padding: 38rpx; margin-bottom: 24rpx; }
+.hero .subtitle { color: rgba(255,255,255,.72); }
+.eyebrow { font-size: 22rpx; letter-spacing: 3rpx; opacity: .72; margin-bottom: 12rpx; }
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 18rpx; }
+.metric { margin-bottom: 22rpx; }
+.metric-value { font-size: 54rpx; font-weight: 750; color: #145b42; }
+.metric-label { color: #68776f; margin-top: 8rpx; }
+.action { display: flex; align-items: center; justify-content: space-between; }
+.action .section-title { margin-bottom: 8rpx; }
+.action > text { font-size: 54rpx; color: #6b7b73; }

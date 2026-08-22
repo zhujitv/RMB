@@ -1,0 +1,6 @@
+.login-page { min-height: 100vh; padding-top: 90rpx; }
+.brand-card { padding: 34rpx 14rpx 48rpx; }
+.eyebrow { color: #1c7657; font-size: 23rpx; font-weight: 700; letter-spacing: 3rpx; margin-bottom: 18rpx; }
+.form-card { padding: 34rpx; }
+.submit { margin-top: 34rpx; }
+.hint { color: #78857f; font-size: 23rpx; line-height: 1.65; margin-top: 28rpx; }

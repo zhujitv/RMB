@@ -1,0 +1,21 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/home/index",
+    "pages/purchase-orders/index",
+    "pages/purchase-order-detail/index",
+    "pages/documents/index",
+    "pages/document-detail/index",
+    "pages/profile/index"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#12372a",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "NEXTWOOD 供应商",
+    "backgroundColor": "#f3f5f2",
+    "backgroundTextStyle": "dark"
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
+}

@@ -11,7 +11,7 @@ test("微信公众号和小程序入口保持移除且物流通知只走邮件",
     "app/api/wechat-mini/trackings/route.ts",
     "app/wechat-mini/tracking-map/page.tsx",
     "app/wx/route.ts",
-    "miniprogram/app.json",
+    "miniprogram/pages/trackings/index.js",
   ]) assert.equal(existsSync(path), false, path);
 
   const trackingNotifications = readFileSync("lib/platform/shipsgo-tracking-notifications.ts", "utf8");
@@ -19,4 +19,22 @@ test("微信公众号和小程序入口保持移除且物流通知只走邮件",
   assert.match(trackingNotifications, /sendDurableFreightowerTrackingEmail/);
   assert.doesNotMatch(trackingNotifications, /enqueueWechat/);
   assert.doesNotMatch(notificationCron, /processWechat/);
+});
+
+test("已作废的小程序数据模型保持移除", () => {
+  const wechatModels = readFileSync("prisma/models/wechat.prisma", "utf8");
+  const identityModels = readFileSync("prisma/models/identity.prisma", "utf8");
+  const removalMigration = readFileSync(
+    "prisma/migrations/20260822210000_remove_legacy_wechat_mini_program/migration.sql",
+    "utf8",
+  );
+
+  assert.doesNotMatch(wechatModels, /model WechatMini/);
+  assert.doesNotMatch(identityModels, /WechatMini/);
+  for (const table of [
+    "wechat_mini_deliveries",
+    "wechat_mini_subscription_grants",
+    "wechat_mini_sessions",
+    "wechat_mini_bindings",
+  ]) assert.match(removalMigration, new RegExp(`DROP TABLE IF EXISTS "${table}"`));
 });

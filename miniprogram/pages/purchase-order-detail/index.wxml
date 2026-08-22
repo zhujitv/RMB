@@ -1,0 +1,39 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">正在读取采购单…</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{notice}}" class="notice">{{notice}}</view>
+  <block wx:if="{{order}}">
+    <view class="card summary">
+      <view class="row"><view class="title">{{order.poNo}}</view><view class="status">{{order.statusLabel}}</view></view>
+      <view class="grid"><view><text>客户订单号</text><strong>{{order.customerOrderNo}}</strong></view><view><text>采购币种</text><strong>{{order.purchaseCurrency}}</strong></view><view><text>要求交期</text><strong>{{order.requestedDeliveryDateText || '-'}}</strong></view><view><text>当前交期</text><strong>{{order.supplierDeliveryDateText || '-'}}</strong></view></view>
+      <view wx:if="{{order.purchaseRemark}}" class="remark">采购备注：{{order.purchaseRemark}}</view>
+    </view>
+    <view class="card">
+      <view class="section-title">产品明细</view>
+      <view wx:for="{{priceRows}}" wx:key="id" class="product">
+        <view class="product-name">{{item.productDescription}}</view>
+        <view class="row muted"><text>{{item.quantity}} {{item.unit}}</text><text>{{order.purchaseCurrency}}</text></view>
+        <text class="label">采购单价{{item.priceRequired ? '（必填）' : ''}}</text>
+        <input class="input" type="digit" value="{{item.unitPriceInput}}" data-index="{{index}}" bindinput="onPrice" placeholder="请输入单价" />
+      </view>
+    </view>
+    <view wx:if="{{order.status === 'DISPATCHED' || order.status === 'DELIVERY_PROPOSED'}}" class="card">
+      <view class="section-title">回复采购单</view>
+      <view class="action-tabs"><view class="tab {{action === 'ACCEPTED' ? 'active' : ''}}" data-action="ACCEPTED" bindtap="setAction">接受</view><view class="tab {{action === 'DELIVERY_PROPOSED' ? 'active' : ''}}" data-action="DELIVERY_PROPOSED" bindtap="setAction">提出新交期</view><view class="tab {{action === 'REJECTED' ? 'active danger-tab' : ''}}" data-action="REJECTED" bindtap="setAction">拒绝</view></view>
+      <block wx:if="{{action !== 'REJECTED'}}"><text class="label">确认交货日期</text><picker mode="date" value="{{deliveryDate}}" bindchange="onDeliveryDate"><view class="input">{{deliveryDate || '请选择日期'}}</view></picker></block>
+      <text class="label">{{action === 'REJECTED' || action === 'DELIVERY_PROPOSED' ? '原因说明（必填）' : '回复备注'}}</text>
+      <textarea class="input textarea" value="{{remark}}" bindinput="onRemark" maxlength="2000" placeholder="请填写实际情况" />
+      <button class="primary" loading="{{saving}}" disabled="{{saving}}" bindtap="submitResponse">提交回复</button>
+    </view>
+    <view wx:if="{{order.status === 'ACCEPTED' && order.productionStatus !== 'COMPLETED'}}" class="card">
+      <view class="section-title">填报累计生产进度</view>
+      <view class="progress-head">当前整单进度 {{order.productionProgress.percent}}%</view>
+      <view wx:for="{{progressRows}}" wx:key="id" class="product">
+        <view class="product-name">{{item.productDescription}}</view><view class="muted">目标 {{item.quantity}} {{item.unit}}</view>
+        <input class="input" type="digit" value="{{item.completedQuantity}}" data-index="{{index}}" bindinput="onProgress" placeholder="累计完成数量" />
+      </view>
+      <text class="label">进度说明</text><textarea class="input textarea" value="{{progressRemark}}" bindinput="onProgressRemark" maxlength="2000" placeholder="可选" />
+      <button class="primary" loading="{{saving}}" disabled="{{saving}}" bindtap="submitProgress">提交生产进度</button>
+    </view>
+  </block>
+</view>

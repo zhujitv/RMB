@@ -1,0 +1,15 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">正在读取资料任务…</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{notice}}" class="notice">{{notice}}</view>
+  <block wx:if="{{task}}">
+    <view class="card"><view class="row"><view class="title">{{task.purchaseOrderNo}}</view><view class="status">{{task.status}}</view></view><view class="subtitle">截止日期：{{task.dueDate || '-'}}</view><view wx:if="{{task.message}}" class="message">{{task.message}}</view><button wx:if="{{task.hasTemplate}}" class="secondary template" bindtap="downloadTemplate">下载采购合同样本</button></view>
+    <view wx:for="{{task.requiredCards}}" wx:key="type" class="card document-card">
+      <view class="row"><view class="section-title">{{item.label}}</view><view class="status">{{item.document ? '已上传' : '待上传'}}</view></view>
+      <view wx:if="{{item.document}}" class="file" data-url="{{item.document.fileUrl}}" bindtap="openDocument"><view class="file-name">{{item.document.displayFileName || item.document.fileName}}</view><view class="muted">点击预览原件</view></view>
+      <view wx:if="{{uploadingType === item.type}}" class="recognizing">正在上传{{item.type === 'SUPPLIER_INVOICE' ? '并识别发票' : ''}}，请勿关闭页面…</view>
+      <button class="primary" data-type="{{item.type}}" loading="{{uploadingType === item.type}}" disabled="{{uploadingType !== ''}}" bindtap="chooseFile">{{item.document ? '替换 PDF' : '选择 PDF 上传'}}</button>
+    </view>
+    <view wx:if="{{task.invoiceMatchStatus && task.invoiceMatchStatus !== 'NOT_UPLOADED'}}" class="card"><view class="section-title">发票核验状态</view><view class="status">{{task.invoiceMatchStatus}}</view><view wx:if="{{task.invoiceMatch && task.invoiceMatch.issues.length}}" class="issues"><view wx:for="{{task.invoiceMatch.issues}}" wx:key="*this">· {{item}}</view></view></view>
+  </block>
+</view>

@@ -1,0 +1,11 @@
+<view class="page">
+  <view class="intro card"><view class="section-title">工厂退税资料</view><view class="muted">仅上传当前任务要求的盖章合同和增值税发票 PDF。</view></view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{loading}}" class="loading">正在读取回传任务…</view>
+  <view wx:if="{{!loading && !rows.length}}" class="empty">当前没有资料回传任务</view>
+  <view wx:for="{{rows}}" wx:key="id" class="card task" data-id="{{item.id}}" bindtap="open">
+    <view class="row"><view class="order-no">{{item.purchaseOrderNo || '未填采购单号'}}</view><view class="status">{{item.status}}</view></view>
+    <view class="meta">截止日期：{{item.dueDateText}}</view>
+    <view class="row footer"><text>已上传 {{item.progressText}}</text><text>上传资料 ›</text></view>
+  </view>
+</view>

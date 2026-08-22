@@ -1,0 +1,4 @@
+.intro { background: #eaf4ef; }
+.order-no { font-size: 31rpx; font-weight: 700; }
+.meta { color: #66756e; margin-top: 18rpx; }
+.footer { border-top: 1rpx solid #edf0ee; padding-top: 18rpx; margin-top: 20rpx; color: #68776f; font-size: 24rpx; }
