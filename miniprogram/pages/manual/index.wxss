@@ -1,0 +1,1 @@
+.hero{background:linear-gradient(145deg,#4c3523,#9a6a35);color:#fff;border-radius:26rpx;padding:34rpx;margin-bottom:22rpx}.hero .subtitle{color:rgba(255,255,255,.76)}.eyebrow{font-size:22rpx;opacity:.78;margin-bottom:10rpx}.text{color:#52635b;line-height:1.8}

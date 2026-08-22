@@ -48,13 +48,14 @@ test("统一首页按权限展示模块且供应商能力只是其中一部分",
   assert.match(home, /\/api\/auth\/permissions/);
   assert.match(home, /menuKeys\.includes\("supplierPurchaseOrders"\)/);
   assert.match(home, /menuKeys\.includes\("supplierDocuments"\)/);
-  assert.match(home, /网页端可用/);
+  assert.match(home, /status: "小程序可用"/);
+  assert.match(home, /business-module/);
   assert.match(home, /key === "quotations"[\s\S]*customer-quotes/);
   const manifest = JSON.parse(readFileSync("miniprogram/app.json", "utf8"));
   assert.equal(manifest.window.navigationBarTitleText, "NEXTWOOD RMB");
 });
 
-test("客户与报价已接入小程序查询详情和报价草稿闭环", () => {
+test("客户与报价已接入小程序查询编辑发送和确认闭环", () => {
   const manifest = JSON.parse(readFileSync("miniprogram/app.json", "utf8"));
   for (const page of ["pages/customer-quotes/index", "pages/quotation-detail/index", "pages/quotation-form/index"]) {
     assert.ok(manifest.pages.includes(page));
@@ -68,6 +69,9 @@ test("客户与报价已接入小程序查询详情和报价草稿闭环", () =>
   assert.match(form, /\/api\/business-entities/);
   assert.match(form, /method: this\.data\.id \? "PATCH" : "POST"/);
   assert.match(form, /expectedVersionNumber/);
+  const actions = readFileSync("miniprogram/pages/quotation-actions/index.js", "utf8");
+  assert.match(actions, /\/email`/);
+  assert.match(actions, /manual-confirmation/);
 });
 
 test("销售执行已接入小程序列表详情和直接创建闭环", () => {
@@ -81,6 +85,8 @@ test("销售执行已接入小程序列表详情和直接创建闭环", () => {
   assert.match(form, /\/api\/suppliers\/available/);
   assert.match(form, /sourceType: "DIRECT"/);
   assert.match(form, /executionLineNumber: i \+ 1/);
+  assert.match(detail, /\/dispatch`/);
+  assert.match(detail, /expectedRevision/);
 });
 
 test("应收订单已接入小程序列表详情和草稿创建闭环", () => {
@@ -94,7 +100,24 @@ test("应收订单已接入小程序列表详情和草稿创建闭环", () => {
   assert.match(detail, /\/api\/orders\/\$\{encodeURIComponent\(this\.data\.id\)\}/);
   assert.match(form, /tradeTerm !== "EXW"/);
   assert.match(form, /estimatedReceivableAmount: Number/);
-  assert.match(form, /method: "POST"/);
+  assert.match(form, /editing \? "PATCH" : "POST"/);
+  assert.match(detail, /pages\/payment-form/);
+});
+
+test("剩余业务模块均已接入小程序真实接口和操作页", () => {
+  const manifest = JSON.parse(readFileSync("miniprogram/app.json", "utf8"));
+  for (const page of ["pages/payments/index", "pages/payment-form/index", "pages/business-module/index", "pages/operation-form/index", "pages/module-action/index", "pages/manual/index", "pages/settings/index"]) assert.ok(manifest.pages.includes(page));
+  const config = readFileSync("miniprogram/pages/business-module/config.js", "utf8");
+  for (const endpoint of ["/api/overview", "/api/costs", "/api/profit", "/api/domestic-logistics", "/api/customer-communications", "/api/freightower/ocean-trackings/control-tower", "/api/logistics-costs", "/api/tax-refund/list", "/api/reports"]) assert.match(config, new RegExp(endpoint.replaceAll("/", "\\/")));
+  const operations = readFileSync("miniprogram/pages/operation-form/index.js", "utf8");
+  assert.match(operations, /kind === "cost"/);
+  assert.match(operations, /kind === "logisticsFee"/);
+  assert.match(operations, /\/api\/domestic-logistics/);
+  const actions = readFileSync("miniprogram/pages/module-action/index.js", "utf8");
+  assert.match(actions, /sendCustomsClearanceDocs/);
+  assert.match(actions, /\/sync`/);
+  assert.match(actions, /action: "refreshCompleteness"/);
+  assert.match(actions, /action === "markPaid"/);
 });
 
 test("供应商采购和资料页面仍由统一小程序提供", () => {

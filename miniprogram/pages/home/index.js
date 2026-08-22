@@ -19,6 +19,7 @@ const MODULES = {
   manual: ["操作手册", "查看业务流程与操作规范"],
   settings: ["系统设置", "维护用户与基础资料"],
 };
+const MINI_AVAILABLE = Object.keys(MODULES);
 
 Page({
   data: {
@@ -53,8 +54,8 @@ Page({
         key,
         label: MODULES[key][0],
         description: MODULES[key][1],
-        available: ["quotations", "salesExecution", "orders", "supplierPurchaseOrders", "supplierDocuments"].includes(key),
-        status: ["quotations", "salesExecution", "orders", "supplierPurchaseOrders", "supplierDocuments"].includes(key) ? "小程序可用" : "网页端可用",
+        available: MINI_AVAILABLE.includes(key),
+        status: "小程序可用",
       }));
       getApp().globalData.user = user;
       this.setData({
@@ -78,9 +79,12 @@ Page({
     if (key === "quotations") return wx.navigateTo({ url: "/pages/customer-quotes/index" });
     if (key === "salesExecution") return wx.navigateTo({ url: "/pages/sales-executions/index" });
     if (key === "orders") return wx.navigateTo({ url: "/pages/orders/index" });
+    if (key === "payments") return wx.navigateTo({ url: "/pages/payments/index" });
     if (key === "supplierPurchaseOrders") return this.openPurchaseOrders();
     if (key === "supplierDocuments") return this.openDocuments();
-    wx.showToast({ title: "请先在 RMB 网页端使用", icon: "none" });
+    if (key === "manual") return wx.navigateTo({ url: "/pages/manual/index" });
+    if (key === "settings") return wx.navigateTo({ url: "/pages/settings/index" });
+    return wx.navigateTo({ url: `/pages/business-module/index?key=${encodeURIComponent(key)}` });
   },
   openProfile() { wx.navigateTo({ url: "/pages/profile/index" }); },
 });
