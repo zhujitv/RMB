@@ -33,6 +33,12 @@ enum FactoryPurchaseAdjustmentStatus {
   VOIDED
 }
 
+enum FactoryPurchasePriceCorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum FactoryPurchaseSettlementStatus {
   PENDING_PAYMENT
   SETTLED
@@ -96,6 +102,7 @@ model FactoryPurchaseOrderAdjustment {
   createdBy     User                 @relation("FactoryPurchaseOrderAdjustmentsCreated", fields: [createdById], references: [id], onDelete: Restrict)
   confirmedBy   User?                @relation("FactoryPurchaseOrderAdjustmentsConfirmed", fields: [confirmedById], references: [id], onDelete: Restrict)
   voidedBy      User?                @relation("FactoryPurchaseOrderAdjustmentsVoided", fields: [voidedById], references: [id], onDelete: Restrict)
+  priceCorrection FactoryPurchaseOrderPriceCorrection?
 
   @@unique([purchaseOrderId, sequenceNo])
   @@unique([purchaseOrderId, sourceType, sourceId])
@@ -104,6 +111,46 @@ model FactoryPurchaseOrderAdjustment {
   @@index([confirmedById])
   @@index([voidedById])
   @@map("factory_purchase_order_adjustments")
+}
+
+model FactoryPurchaseOrderPriceCorrection {
+  id                      String                               @id @default(cuid())
+  purchaseOrderId         String                               @map("purchase_order_id")
+  purchaseOrderItemId     String                               @map("purchase_order_item_id")
+  sequenceNo              Int                                  @map("sequence_no")
+  status                  FactoryPurchasePriceCorrectionStatus @default(PENDING)
+  quantitySnapshot        Decimal                              @map("quantity_snapshot") @db.Decimal(18, 4)
+  oldUnitPrice            Decimal                              @map("old_unit_price") @db.Decimal(18, 6)
+  newUnitPrice            Decimal                              @map("new_unit_price") @db.Decimal(18, 6)
+  oldAmount               Decimal                              @map("old_amount") @db.Decimal(18, 2)
+  newAmount               Decimal                              @map("new_amount") @db.Decimal(18, 2)
+  deltaAmount             Decimal                              @map("delta_amount") @db.Decimal(18, 2)
+  currency                String
+  reason                  String                               @db.Text
+  reviewRemark            String?                              @map("review_remark") @db.Text
+  sourceUnitPriceType     String                               @default("PURCHASE_ORDER") @map("source_unit_price_type")
+  idempotencyKey          String                               @map("idempotency_key")
+  adjustmentId            String?                              @unique @map("adjustment_id")
+  requestedById           String                               @map("requested_by")
+  reviewedById            String?                              @map("reviewed_by")
+  requestedAt             DateTime                             @default(now()) @map("requested_at")
+  reviewedAt              DateTime?                            @map("reviewed_at")
+  createdAt               DateTime                             @default(now()) @map("created_at")
+  updatedAt               DateTime                             @updatedAt @map("updated_at")
+
+  purchaseOrder     FactoryPurchaseOrder            @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  purchaseOrderItem FactoryPurchaseOrderItem        @relation(fields: [purchaseOrderItemId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict)
+  adjustment        FactoryPurchaseOrderAdjustment? @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+  requestedBy       User                            @relation("FactoryPurchasePriceCorrectionsRequested", fields: [requestedById], references: [id], onDelete: Restrict)
+  reviewedBy        User?                           @relation("FactoryPurchasePriceCorrectionsReviewed", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderId, sequenceNo], map: "fpo_price_corrections_po_sequence_key")
+  @@unique([purchaseOrderId, idempotencyKey], map: "fpo_price_corrections_po_idempotency_key")
+  @@index([purchaseOrderId, status, requestedAt])
+  @@index([purchaseOrderItemId, status])
+  @@index([requestedById])
+  @@index([reviewedById])
+  @@map("factory_purchase_order_price_corrections")
 }
 
 model FactoryPurchaseOrderSettlement {

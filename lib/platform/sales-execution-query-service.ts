@@ -92,6 +92,13 @@ export const salesExecutionDetailInclude = {
       },
       payments: { orderBy: [{ sequenceNo: "asc" as const }] },
       adjustments: { orderBy: [{ sequenceNo: "asc" as const }] },
+      priceCorrections: {
+        orderBy: [{ sequenceNo: "asc" as const }],
+        include: {
+          requestedBy: { select: userSelect },
+          reviewedBy: { select: userSelect },
+        },
+      },
       settlement: {
         include: {
           createdBy: { select: userSelect },

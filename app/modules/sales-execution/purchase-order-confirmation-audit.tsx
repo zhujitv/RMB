@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ChangeEvent } from "react";
-import { formatCurrencyAmount, formatDate, formatDateTime } from "../../formatters";
+import { formatCurrencyAmount, formatCurrencyUnitPrice, formatDate, formatDateTime } from "../../formatters";
 import { useWorkspaceTabBusy } from "../../workspace/workspace-tab-context";
 import styles from "./purchase-order-actions.module.css";
 import {
@@ -123,7 +123,7 @@ export function PurchaseOrderConfirmationAudit({
           <span>工厂联系人：{event.supplierContact || "-"} · {completion ? "实际完工" : "实际回复"}：{formatDateTime(event.occurredAt)}</span>
           <span>系统登记：{formatDateTime(event.recordedAt)}{event.recordedBy?.name ? ` · ${event.recordedBy.name}` : ""}</span>
           {event.deliveryDate ? <span>本次回复交期：{formatDate(event.deliveryDate)}</span> : null}
-          {event.priceChanges?.length ? <span>本次确认价格：{event.priceChanges.map((price) => formatCurrencyAmount(currency, price.unitPrice)).join("、")}</span> : null}
+          {event.priceChanges?.length ? <span>本次确认价格：{event.priceChanges.map((price) => formatCurrencyUnitPrice(currency, price.unitPrice)).join("、")}</span> : null}
           {event.remark ? <span>{completion ? "完工说明" : "回复说明"}：{event.remark}</span> : null}
           {note ? <span>依据说明：{note}</span> : null}
           {fileName ? <span>确认凭证：{fileName}</span> : null}

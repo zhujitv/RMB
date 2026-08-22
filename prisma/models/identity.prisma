@@ -72,6 +72,8 @@ model User {
   createdFactoryPurchaseOrderAdjustments      FactoryPurchaseOrderAdjustment[]               @relation("FactoryPurchaseOrderAdjustmentsCreated")
   confirmedFactoryPurchaseOrderAdjustments    FactoryPurchaseOrderAdjustment[]               @relation("FactoryPurchaseOrderAdjustmentsConfirmed")
   voidedFactoryPurchaseOrderAdjustments       FactoryPurchaseOrderAdjustment[]               @relation("FactoryPurchaseOrderAdjustmentsVoided")
+  requestedFactoryPurchasePriceCorrections    FactoryPurchaseOrderPriceCorrection[]           @relation("FactoryPurchasePriceCorrectionsRequested")
+  reviewedFactoryPurchasePriceCorrections     FactoryPurchaseOrderPriceCorrection[]           @relation("FactoryPurchasePriceCorrectionsReviewed")
   createdFactoryPurchaseOrderSettlements      FactoryPurchaseOrderSettlement[]               @relation("FactoryPurchaseOrderSettlementsCreated")
   settledFactoryPurchaseOrderSettlements      FactoryPurchaseOrderSettlement[]               @relation("FactoryPurchaseOrderSettlementsSettled")
   confirmedFactoryPurchaseTransitionSettlements FactoryPurchaseTransitionSettlement[]          @relation("FactoryPurchaseTransitionSettlementsConfirmed")

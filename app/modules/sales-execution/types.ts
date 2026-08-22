@@ -4,6 +4,7 @@ import type { FactoryPurchaseOrder } from "./factory-purchase-order-types";
 export type {
   FactoryPurchaseOrder,
   FactoryPurchaseOrderAdjustment,
+  FactoryPurchaseOrderPriceCorrection,
   FactoryPurchaseOrderConfirmationEvent,
   FactoryPurchaseOrderPayment,
   FactoryPurchaseOrderProductionStatus,

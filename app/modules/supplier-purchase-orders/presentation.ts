@@ -42,9 +42,13 @@ export function isValidSupplierUnitPrice(value: string | null | undefined) {
   return SUPPLIER_UNIT_PRICE_PATTERN.test(text) && Number.isFinite(Number(text));
 }
 
-export function formatPrice(value: string | null | undefined, currency: string) {
+export function formatPrice(value: string | null | undefined, currency: string, fractionDigits = 2) {
   if (!value) return "-";
-  return currency ? `${currency} ${value}` : value;
+  const numeric = Number(value);
+  const text = Number.isFinite(numeric)
+    ? new Intl.NumberFormat("zh-CN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(numeric)
+    : value;
+  return currency ? `${currency} ${text}` : text;
 }
 
 export function dateInputValue(value: string | null | undefined) {

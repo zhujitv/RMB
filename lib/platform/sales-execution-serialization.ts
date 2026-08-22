@@ -99,6 +99,7 @@ function serializePurchaseOrder(value: unknown) {
     responseHistory,
     payments,
     adjustments,
+    priceCorrections,
     productionProgress,
     deliveryQuantityVariances,
     loadingResults,
@@ -201,6 +202,7 @@ function serializePurchaseOrder(value: unknown) {
     respondedBy: respondedBy.id ? { id: String(respondedBy.id), name: String(respondedBy.name || "") } : null,
     payments,
     adjustments,
+    priceCorrections,
     settlement: serializePurchaseOrderSettlement(order, confirmedPaymentAmount),
     items,
     createdAt: order.createdAt,
@@ -294,7 +296,4 @@ export function serializeSalesExecution(value: unknown, includeDetail = false) {
     updatedAt: execution.updatedAt,
   };
 }
-export function salesExecutionSnapshot(value: unknown) {
-  const { versions: _versions, ...snapshot } = serializeSalesExecution(value, true);
-  return snapshot as unknown as Prisma.InputJsonValue;
-}
+export function salesExecutionSnapshot(value: unknown) { const { versions: _versions, ...snapshot } = serializeSalesExecution(value, true); return snapshot as unknown as Prisma.InputJsonValue; }

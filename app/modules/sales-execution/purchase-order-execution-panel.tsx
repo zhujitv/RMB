@@ -12,6 +12,7 @@ import { PurchaseOrderOfflineQuantityVariance } from "./purchase-order-offline-q
 import { PurchaseOrderOfflineProductionCompletion } from "./purchase-order-offline-production-completion";
 import { PurchaseOrderOfflineProductionProgress } from "./purchase-order-offline-production-progress";
 import { PurchaseOrderOfflineResponse } from "./purchase-order-offline-response";
+import { PurchaseOrderPriceCorrection } from "./purchase-order-price-correction";
 import { PurchaseOrderProductionProgressSummary } from "./purchase-order-production-progress-summary";
 import { PurchaseOrderQuantityCorrection } from "./purchase-order-quantity-correction";
 import { PurchaseOrderReassignmentCard } from "./purchase-order-reassignment-card";
@@ -212,6 +213,7 @@ export function PurchaseOrderExecutionPanel({
         <PurchaseOrderOfflineQuantityVariance executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
         <PurchaseOrderOfflineProductionCompletion executionId={executionId} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
         <PurchaseOrderQuantityCorrection executionId={executionId} executionRevision={executionRevision} shippingStarted={shippingStarted} order={order} canManage={canStartProduction} onChanged={onChanged} onSaved={showOfflineSaved} />
+        <PurchaseOrderPriceCorrection executionId={executionId} order={order} canManage={canAddAdjustment} onChanged={onChanged} onSaved={showOfflineSaved} />
         {canStartProduction && active && order.productionStatus === "READY" ? <button type="button" disabled={busy} onClick={startProduction}>开始生产</button> : null}
         {order.productionStatus === "IN_PRODUCTION" ? <span className={styles.warning}>{order.productionProgress?.allCompleted ? "进度已达 100%，等待确认生产完成" : "等待供应商持续填报生产进度"}</span> : null}
         {order.productionStatus === "WAITING_PREPAYMENT" ? <span className={styles.warning}>预付款到账后才可生产</span> : null}

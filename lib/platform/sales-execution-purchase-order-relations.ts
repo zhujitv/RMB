@@ -93,6 +93,36 @@ export function serializePurchaseOrderRelations(order: LooseRecord) {
         status: String(adjustment.status || "PROVISIONAL"),
       };
     }) : [];
+  const priceCorrections = Array.isArray(order.priceCorrections)
+    ? order.priceCorrections.map((correctionValue) => {
+      const correction = record(correctionValue);
+      const requestedBy = record(correction.requestedBy);
+      const reviewedBy = record(correction.reviewedBy);
+      return {
+        id: String(correction.id || ""), sequenceNo: Number(correction.sequenceNo || 0),
+        purchaseOrderItemId: String(correction.purchaseOrderItemId || ""),
+        status: String(correction.status || "PENDING"),
+        quantity: decimalText(correction.quantitySnapshot),
+        oldUnitPrice: decimalText(correction.oldUnitPrice),
+        newUnitPrice: decimalText(correction.newUnitPrice),
+        oldAmount: decimalText(correction.oldAmount),
+        newAmount: decimalText(correction.newAmount),
+        deltaAmount: decimalText(correction.deltaAmount),
+        currency: String(correction.currency || order.purchaseCurrency || ""),
+        reason: String(correction.reason || ""),
+        reviewRemark: String(correction.reviewRemark || ""),
+        sourceUnitPriceType: String(correction.sourceUnitPriceType || "PURCHASE_ORDER"),
+        adjustmentId: correction.adjustmentId ? String(correction.adjustmentId) : null,
+        requestedAt: correction.requestedAt || null,
+        reviewedAt: correction.reviewedAt || null,
+        requestedBy: requestedBy.id
+          ? { id: String(requestedBy.id), name: String(requestedBy.name || "") }
+          : null,
+        reviewedBy: reviewedBy.id
+          ? { id: String(reviewedBy.id), name: String(reviewedBy.name || "") }
+          : null,
+      };
+    }) : [];
   const deliveryQuantityVariances = Array.isArray(order.deliveryQuantityVariances)
     ? order.deliveryQuantityVariances.map((varianceValue) => {
       const variance = record(varianceValue);
@@ -171,6 +201,7 @@ export function serializePurchaseOrderRelations(order: LooseRecord) {
     responseHistory,
     payments,
     adjustments,
+    priceCorrections,
     productionProgress,
     deliveryQuantityVariances,
     loadingResults,

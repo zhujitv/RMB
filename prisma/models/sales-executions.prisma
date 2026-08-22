@@ -231,6 +231,7 @@ model FactoryPurchaseOrder {
   loadingResults            FactoryPurchaseOrderLoadingResult[]
   payments                  FactoryPurchaseOrderPayment[]
   adjustments               FactoryPurchaseOrderAdjustment[]
+  priceCorrections          FactoryPurchaseOrderPriceCorrection[]
   settlement                FactoryPurchaseOrderSettlement?
 
   @@unique([executionId, sequenceNo])
@@ -275,6 +276,7 @@ model FactoryPurchaseOrderItem {
   deliveryQuantityVarianceItems FactoryPurchaseOrderDeliveryQuantityVarianceItem[]
   containerLoadAllocations      ContainerLoadAllocation[]
   loadingResultItems            FactoryPurchaseOrderLoadingResultItem[]
+  priceCorrections              FactoryPurchaseOrderPriceCorrection[]
 
   @@unique([purchaseOrderId, executionItemId])
   @@unique([purchaseOrderId, lineNumber])

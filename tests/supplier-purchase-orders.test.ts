@@ -11,6 +11,7 @@ const {
   normalizeSupplierPurchaseOrderResponse,
   serializeSupplierPurchaseOrder,
 } = await jiti.import<typeof import("../lib/platform/supplier-purchase-orders-values.ts")>("../lib/platform/supplier-purchase-orders-values.ts");
+const { formatPrice } = await jiti.import<typeof import("../app/modules/supplier-purchase-orders/presentation.ts")>("../app/modules/supplier-purchase-orders/presentation.ts");
 
 function purchaseOrderRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -167,6 +168,11 @@ test("supplier purchase order DTO exposes only effective factory-facing price da
   assert.equal(confirmed.items[0]?.unitPrice, "12.5");
   assert.equal(confirmed.items[0]?.amount, "25");
   assert.equal(confirmed.items[0]?.supplierFilledPrice, true);
+});
+
+test("supplier portal displays supplier-filled unit prices with three decimals and amounts with two", () => {
+  assert.equal(formatPrice("12.5", "CNY", 3), "CNY 12.500");
+  assert.equal(formatPrice("25", "CNY"), "CNY 25.00");
 });
 
 test("supplier progress DTO never exposes an internal offline recorder", () => {

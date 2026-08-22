@@ -163,7 +163,7 @@ export function SupplierPurchaseOrderDetail({
                         </div>
                       ) : (
                         <div className={styles.priceEntry}>
-                          <strong className={styles.priceValue}>{formatPrice(item.unitPrice, detail.purchaseCurrency)}</strong>
+                          <strong className={styles.priceValue}>{formatPrice(item.unitPrice, detail.purchaseCurrency, item.supplierFilledPrice ? 3 : 2)}</strong>
                           <span className={styles.priceBadge} data-source={item.supplierFilledPrice ? "supplier" : "purchase"}>
                             {item.supplierFilledPrice ? "供应商回填" : "采购单价格"}
                           </span>

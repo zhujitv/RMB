@@ -7,6 +7,11 @@ export function formatAmount(value: unknown) {
   return new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric);
 }
 
+export function formatFixed(value: unknown, fractionDigits: number) {
+  const numeric = Number(value || 0);
+  return new Intl.NumberFormat("zh-CN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(numeric);
+}
+
 const CURRENCY_SYMBOLS: Record<string, string> = {
   CNY: "¥",
   USD: "$",
@@ -23,6 +28,11 @@ export function currencySymbol(currency = "CNY") {
 export function formatCurrencyAmount(currency = "CNY", value: unknown) {
   const normalized = String(currency || "CNY").toUpperCase();
   return `${currencySymbol(normalized)} ${formatAmount(value)}`;
+}
+
+export function formatCurrencyUnitPrice(currency = "CNY", value: unknown) {
+  const normalized = String(currency || "CNY").toUpperCase();
+  return `${currencySymbol(normalized)} ${formatFixed(value, 3)}`;
 }
 
 export function moneyText(currency = "CNY", amount: unknown, amountCny: unknown) {

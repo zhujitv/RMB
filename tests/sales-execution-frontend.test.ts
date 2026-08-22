@@ -214,6 +214,12 @@ test("purchase unit price can stay empty without creating a false zero total", (
   assert.match(detailSource, /成本待回填/);
 });
 
+test("supplier-filled purchase unit prices display three decimals while purchase amounts stay two decimals", () => {
+  assert.match(purchaseDraftSource, /formatCurrencyUnitPrice\(currency,\s*unitPrice\)/);
+  assert.match(purchaseDraftSource, /formatCurrencyAmount\(currency,\s*amount\)/);
+  assert.match(salesExecutionUiSource, /本次确认价格[\s\S]*formatCurrencyUnitPrice\(currency,\s*price\.unitPrice\)/);
+});
+
 test("unit net weight survives drafts and payloads while remaining editable for quotation sources", () => {
   const draft = validDraft();
   draft.items[0]!.id = "execution-item-1";

@@ -62,6 +62,28 @@ export type FactoryPurchaseOrderAdjustment = {
   status?: "PROVISIONAL" | "CONFIRMED" | "VOIDED" | string;
 };
 
+export type FactoryPurchaseOrderPriceCorrection = {
+  id: string;
+  sequenceNo?: number;
+  purchaseOrderItemId?: string | null;
+  status?: "PENDING" | "APPROVED" | "REJECTED" | string;
+  quantity?: string | number | null;
+  oldUnitPrice?: string | number | null;
+  newUnitPrice?: string | number | null;
+  oldAmount?: string | number | null;
+  newAmount?: string | number | null;
+  deltaAmount?: string | number | null;
+  currency?: string | null;
+  reason?: string | null;
+  reviewRemark?: string | null;
+  sourceUnitPriceType?: string | null;
+  adjustmentId?: string | null;
+  requestedAt?: string | null;
+  reviewedAt?: string | null;
+  requestedBy?: { id?: string; name?: string | null } | null;
+  reviewedBy?: { id?: string; name?: string | null } | null;
+};
+
 export type FactoryPurchaseOrderSettlement = {
   id: string;
   baseAmount?: string | number | null;
@@ -197,6 +219,7 @@ export type FactoryPurchaseOrder = {
   respondedBy?: { id?: string; name?: string | null } | null;
   payments?: FactoryPurchaseOrderPayment[];
   adjustments?: FactoryPurchaseOrderAdjustment[];
+  priceCorrections?: FactoryPurchaseOrderPriceCorrection[];
   settlement?: FactoryPurchaseOrderSettlement | null;
   remark?: string | null;
   items?: PurchaseOrderItem[];

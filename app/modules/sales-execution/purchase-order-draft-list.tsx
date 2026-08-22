@@ -1,4 +1,4 @@
-import { formatCurrencyAmount, formatDate, formatDateTime } from "../../formatters";
+import { formatCurrencyAmount, formatCurrencyUnitPrice, formatDate, formatDateTime } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import styles from "./sales-execution.module.css";
 import actionStyles from "./purchase-order-actions.module.css";
@@ -137,7 +137,7 @@ export function PurchaseOrderDraftList({
                         <td>{description}</td>
                         <td>{item.unitSnapshot || "-"}</td>
                         <td>{quantity.toLocaleString("zh-CN")}</td>
-                        <td className={unitPrice === null ? styles.balancePending : undefined}>{unitPrice === null ? "待供应商回填" : `${formatCurrencyAmount(currency, unitPrice)}${supplierFilled ? "（工厂回填）" : ""}`}</td>
+                        <td className={unitPrice === null ? styles.balancePending : undefined}>{unitPrice === null ? "待供应商回填" : `${supplierFilled ? formatCurrencyUnitPrice(currency, unitPrice) : formatCurrencyAmount(currency, unitPrice)}${supplierFilled ? "（工厂回填）" : ""}`}</td>
                         <td className={`${styles.amountCell} ${amount === null ? styles.balancePending : ""}`}>{amount === null ? "待供应商回填" : formatCurrencyAmount(currency, amount)}</td>
                         <td>{item.remark || "-"}</td>
                       </tr>
