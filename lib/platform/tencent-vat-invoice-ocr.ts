@@ -69,6 +69,7 @@ export async function recognizeTencentVatInvoice(buffer: Buffer) {
     items: items.map((item, index) => ({
       lineNo: text(item.LineNo) || String(index + 1),
       name: text(item.Name),
+      spec: text(item.Spec),
       unit: text(item.Unit),
       quantity: text(item.Quantity),
       unitPrice: text(item.UnitPrice),
@@ -80,3 +81,5 @@ export async function recognizeTencentVatInvoice(buffer: Buffer) {
     rawJson: JSON.parse(JSON.stringify(response)),
   };
 }
+
+export type TencentVatInvoiceResult = Awaited<ReturnType<typeof recognizeTencentVatInvoice>>;

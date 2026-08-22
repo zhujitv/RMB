@@ -47,6 +47,10 @@ export type SupplierDocumentTask = {
   contractReviewRemark?: string;
   invoiceMatchStatus?: string;
   invoiceMatch?: SupplierInvoiceMatch | null;
+  invoiceOcrTaskId?: string;
+  invoiceReviewRevision?: number;
+  invoiceEffective?: SupplierInvoiceData | null;
+  invoiceManualEditedAt?: string;
   invoiceNo?: string;
   sendStatus?: string;
   sendError?: string;
@@ -77,22 +81,65 @@ export type SupplierTaxContractDraft = {
   transitionSettlementId?: string;
   warnings?: string[];
   blockingIssues?: string[];
-  items?: Array<{
-    lineNo?: number;
-    purchaseOrderItemId?: string;
-    productName?: string;
-    quantity?: string;
-    unit?: string;
-    unitPriceWithTax?: string;
-    amountWithTax?: string;
-  }>;
+  items?: SupplierTaxContractDraftItem[];
+};
+
+export type SupplierTaxContractDraftItem = {
+  rowId?: string;
+  lineNo?: number | string;
+  purchaseOrderItemId?: string;
+  customsItemNo?: string;
+  customsCommodityCode?: string;
+  productName?: string;
+  quantity?: string;
+  unit?: string;
+  unitPriceWithTax?: string;
+  amountWithTax?: string;
+};
+
+export type SupplierInvoiceHeader = {
+  invoiceName?: string;
+  invoiceCode?: string;
+  invoiceNo?: string;
+  invoiceDate?: string;
+  sellerName?: string;
+  sellerTaxNo?: string;
+  buyerName?: string;
+  buyerTaxNo?: string;
+  amountWithoutTax?: string;
+  taxAmount?: string;
+  amountWithTax?: string;
+  checkCode?: string;
+};
+
+export type SupplierInvoiceItem = {
+  rowId?: string;
+  lineNo?: string;
+  name?: string;
+  spec?: string;
+  unit?: string;
+  quantity?: string;
+  unitPrice?: string;
+  amountWithoutTax?: string;
+  taxRate?: string;
+  taxAmount?: string;
+  amountWithTax?: string;
+  taxClassifyCode?: string;
+};
+
+export type SupplierInvoiceData = {
+  provider?: string;
+  apiName?: string;
+  requestId?: string;
+  header?: SupplierInvoiceHeader;
+  items?: SupplierInvoiceItem[];
 };
 
 export type SupplierInvoiceMatch = {
   matched?: boolean;
   issues?: string[];
   checkedAt?: string;
-  invoice?: Record<string, unknown>;
+  invoice?: SupplierInvoiceData;
 };
 
 export type SupplierDocumentsResponse = {

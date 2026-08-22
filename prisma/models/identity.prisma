@@ -89,6 +89,7 @@ model User {
   uploadedDocuments                           OrderDocument[]                                @relation("DocumentsUploaded")
   confirmedOcrTasks                           OcrTask[]                                      @relation("OcrTaskConfirmedBy")
   rejectedOcrTasks                            OcrTask[]                                      @relation("OcrTaskRejectedBy")
+  manuallyEditedOcrTasks                      OcrTask[]                                      @relation("OcrTaskManualEditedBy")
   commissionSettlements                       ReceivableOrder[]                              @relation("CommissionSettlements")
   commissionSettlementRecords                 CommissionSettlement[]                         @relation("CommissionSettlementSettledBy")
   commissionSettlementReversals               CommissionSettlement[]                         @relation("CommissionSettlementReversedBy")

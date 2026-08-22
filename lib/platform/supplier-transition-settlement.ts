@@ -79,7 +79,12 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
   const { cost, customsDocument } = await loadTransitionContext(costId);
   const supplier = cost.supplier!;
   const supplierId = cost.supplierId!;
-  const customs = await recognizedCustoms(customsDocument.storageKey);
+  const transitionReferences = cost.order.sourceSalesExecution?.items.map((item) => ({
+    productName: item.productNameSnapshot,
+    unit: item.unitSnapshot,
+    quantity: item.quantity,
+  })) || [];
+  const customs = await recognizedCustoms(customsDocument.storageKey, transitionReferences);
   const candidates = customs.items as Array<Record<string, unknown>>;
   let storedItems: Array<Record<string, unknown>>;
   let increaseAmount: Prisma.Decimal;
@@ -156,6 +161,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
   }
 
   const items: SupplierTaxContractItemDraft[] = storedItems.map((item, index) => ({
+    rowId: `transition:${cost.id}:${item.customsItemIndex}`,
     lineNo: index + 1,
     purchaseOrderItemId: `transition:${cost.id}:${item.customsItemIndex}`,
     customsItemNo: nonEmpty(item.customsItemNo) || String(index + 1),
@@ -238,6 +244,7 @@ export async function prepareFactoryPurchaseTransitionSettlement(costId: string,
     currency: cost.currency,
     totalAmountWithTax: goodsAmount.toFixed(2),
     items,
+    ocrOriginalItems: items.map((item) => ({ ...item })),
     customsSnapshot: relevantCustomsSnapshot,
     warnings: [...new Set(warnings)],
     blockingIssues: domesticContractIssues(entity),

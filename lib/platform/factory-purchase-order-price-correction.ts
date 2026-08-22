@@ -17,6 +17,7 @@ import {
   settlementOrderCost,
 } from "./factory-purchase-order-settlement-cost";
 import { assertPriceCorrectionSupplierDocumentsWithdrawn } from "./factory-purchase-price-correction-contract";
+import { reviewPriceCorrectionAsBatchWhenNeeded } from "./factory-purchase-order-price-correction-batch-dispatch";
 import {
   confirmedFactoryPaymentTotal,
   factorySettlementStatusForNetPaid,
@@ -127,6 +128,10 @@ export async function reviewFactoryPurchaseOrderPriceCorrection(
   if (action === "REJECT" && !reviewRemark) {
     throw codedError("驳回采购价格更正时请填写审核备注", 400, "FACTORY_PRICE_CORRECTION_REJECT_REMARK_REQUIRED");
   }
+  const batchReview = await reviewPriceCorrectionAsBatchWhenNeeded(
+    request, actor, executionId, purchaseOrderId, correctionId, rawInput,
+  );
+  if (batchReview) return batchReview;
   return runFactoryPurchaseMutation(() => prisma.$transaction(async (tx) => {
     await lockFactoryPurchaseOrder(tx, purchaseOrderId);
     const before = await loadPurchaseOrderWithPriceCorrections(tx, executionId, purchaseOrderId, actor);

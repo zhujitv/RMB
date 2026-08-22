@@ -96,6 +96,11 @@ model OcrTask {
   rawText          String?   @map("raw_text")
   resultJson       Json?     @map("result_json")
   validationJson   Json?     @map("validation_json")
+  manualResultJson Json?     @map("manual_result_json")
+  manualValidationJson Json? @map("manual_validation_json")
+  reviewRevision   Int       @default(1) @map("review_revision")
+  manualEditedById String?   @map("manual_edited_by_id")
+  manualEditedAt   DateTime? @map("manual_edited_at")
   confirmedById    String?   @map("confirmed_by_id")
   confirmedAt      DateTime? @map("confirmed_at")
   rejectedById     String?   @map("rejected_by_id")
@@ -110,6 +115,7 @@ model OcrTask {
   supplier    Supplier?                @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   confirmedBy User?                    @relation("OcrTaskConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
   rejectedBy  User?                    @relation("OcrTaskRejectedBy", fields: [rejectedById], references: [id], onDelete: SetNull)
+  manualEditedBy User?                 @relation("OcrTaskManualEditedBy", fields: [manualEditedById], references: [id], onDelete: Restrict)
   results     OcrResult[]
 
   @@index([module])
@@ -120,6 +126,7 @@ model OcrTask {
   @@index([status])
   @@index([validationStatus])
   @@index([documentType])
+  @@index([manualEditedById])
   @@map("ocr_tasks")
 }
 

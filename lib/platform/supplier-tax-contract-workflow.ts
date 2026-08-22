@@ -43,6 +43,14 @@ function contractDraft(value: Prisma.JsonValue | null): SupplierTaxContractDraft
   return normalizeSupplierTaxContractNumber(value as unknown as SupplierTaxContractDraft);
 }
 
+function contractReviewRevision(value: unknown) {
+  const revision = Number(value);
+  if (!Number.isInteger(revision) || revision < 1) {
+    throw codedError("合同草稿版本无效，请刷新后重试。", 409, "SUPPLIER_TAX_CONTRACT_REVISION_INVALID");
+  }
+  return revision;
+}
+
 export async function reviewSupplierTaxContract(
   request: AuditRequestLike,
   actor: ActorLike,
@@ -52,27 +60,38 @@ export async function reviewSupplierTaxContract(
   const reviewedById = requireAdmin(actor);
   const decision = nonEmpty(input.decision).toUpperCase();
   const remark = nonEmpty(input.remark).slice(0, 1000);
+  const expectedRevision = contractReviewRevision(input.expectedRevision);
   const row = await prisma.supplierDocumentRequest.findFirst({
     where: { id: requestId, deletedAt: null },
     include: supplierDocumentRequestInclude(),
   });
   if (!row) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
   if (row.contractStatus !== "PENDING_REVIEW") throw codedError("当前合同不在待审核状态。", 409, "SUPPLIER_TAX_CONTRACT_NOT_PENDING");
+  if (row.contractRevision !== expectedRevision) {
+    throw codedError("合同草稿已被其他人修改，请刷新后重新核对。", 409, "SUPPLIER_TAX_CONTRACT_REVIEW_REVISION_CONFLICT");
+  }
   if (decision === "REJECTED") {
     const rejectedDraft = contractDraft(row.contractDraft);
-    const updated = await prisma.supplierDocumentRequest.update({
-      where: { id: row.id },
-      data: {
-        contractNo: rejectedDraft.contractNo,
-        contractDraft: rejectedDraft as unknown as Prisma.InputJsonValue,
-        contractStatus: "REJECTED",
-        contractReviewedById: reviewedById,
-        contractReviewedAt: new Date(),
-        contractReviewRemark: remark || "人工审核未通过",
-      },
-      include: supplierDocumentRequestInclude(),
+    const updated = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.supplierDocumentRequest.updateMany({
+        where: { id: row.id, deletedAt: null, contractStatus: "PENDING_REVIEW", contractRevision: expectedRevision },
+        data: {
+          contractNo: rejectedDraft.contractNo,
+          contractDraft: rejectedDraft as unknown as Prisma.InputJsonValue,
+          contractStatus: "REJECTED",
+          contractReviewedById: reviewedById,
+          contractReviewedAt: new Date(),
+          contractReviewRemark: remark || "人工审核未通过",
+        },
+      });
+      if (claimed.count !== 1) {
+        throw codedError("合同草稿已被其他人修改或审核，请刷新后查看。", 409, "SUPPLIER_TAX_CONTRACT_REVIEW_CONFLICT");
+      }
+      const saved = await tx.supplierDocumentRequest.findUnique({ where: { id: row.id }, include: supplierDocumentRequestInclude() });
+      if (!saved) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
+      await writeAudit(request, actor, "退税合同审核不通过", "supplier_document_requests", row.id, row, saved, tx);
+      return saved;
     });
-    await writeAudit(request, actor, "退税合同审核不通过", "supplier_document_requests", row.id, null, { remark });
     return serializeSupplierDocumentRequest(updated, actor);
   }
   if (decision !== "APPROVED" || input.confirmed !== true) {
@@ -138,7 +157,7 @@ export async function reviewSupplierTaxContract(
         await assertSupplierTaxContractFinancialsCurrent(tx, draft);
       }
       const claimed = await tx.supplierDocumentRequest.updateMany({
-        where: { id: row.id, deletedAt: null, contractStatus: "PENDING_REVIEW" },
+        where: { id: row.id, deletedAt: null, contractStatus: "PENDING_REVIEW", contractRevision: expectedRevision },
         data: {
           contractNo: draft.contractNo,
           contractStatus: "APPROVED",
@@ -160,17 +179,13 @@ export async function reviewSupplierTaxContract(
       const saved = await tx.supplierDocumentRequest.findUnique({ where: { id: row.id }, include: supplierDocumentRequestInclude() });
       if (!saved) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
       await upsertFileAssetForSupplierRequestTemplate(tx, saved);
+      await writeAudit(request, actor, "退税合同审核通过", "supplier_document_requests", row.id, row, saved, tx);
       return saved;
     });
   } catch (error) {
     await deleteR2Object(storageKey).catch(() => null);
     throw error;
   }
-  await writeAudit(request, actor, "退税合同审核通过", "supplier_document_requests", row.id, null, {
-    contractNo: draft.contractNo,
-    totalAmountWithTax: draft.totalAmountWithTax,
-    itemCount: draft.items.length,
-  });
   const recipientEmails = jsonStringArray(updated.recipientEmails);
   if (updated.supplier?.allowFactoryDocumentUpload && recipientEmails.length) {
     return resendSupplierDocumentRequestNotice(request, actor, updated.id);
@@ -196,7 +211,7 @@ export async function saveSupplierTaxContractDraftEdits(
   requestId: string,
   input: Record<string, unknown>,
 ) {
-  requireAdmin(actor);
+  const editedById = requireAdmin(actor);
   const expectedRevision = Number(input.expectedRevision);
   if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
     throw codedError("合同草稿版本无效，请刷新后重试。", 400, "SUPPLIER_TAX_CONTRACT_REVISION_INVALID");
@@ -210,35 +225,35 @@ export async function saveSupplierTaxContractDraftEdits(
     throw codedError("只有待审核合同草稿可以修改。", 409, "SUPPLIER_TAX_CONTRACT_NOT_PENDING");
   }
   const currentDraft = contractDraft(row.contractDraft);
-  if (currentDraft.sourceType === FACTORY_PURCHASE_TRANSITION_SETTLEMENT_SOURCE_TYPE) {
-    throw codedError("过渡结算合同的商品行已与冻结凭证绑定，如需修改请驳回并按纠错流程处理。", 409, "SUPPLIER_TAX_CONTRACT_TRANSITION_IMMUTABLE");
-  }
   const edited = applySupplierTaxContractDraftEdits(
     currentDraft,
     Array.isArray(input.items) ? input.items as Array<Record<string, unknown>> : [],
   );
-  const claimed = await prisma.supplierDocumentRequest.updateMany({
-    where: { id: row.id, deletedAt: null, contractStatus: "PENDING_REVIEW", contractRevision: expectedRevision },
-    data: {
-      contractDraft: edited.draft as unknown as Prisma.InputJsonValue,
-      contractRevision: { increment: 1 },
-      contractReviewRemark: "合同商品信息已人工核查并保存",
-    },
-  });
-  if (claimed.count !== 1) {
-    throw codedError("合同草稿已被其他人修改，请刷新后重新核查。", 409, "SUPPLIER_TAX_CONTRACT_EDIT_CONFLICT");
-  }
-  const saved = await prisma.supplierDocumentRequest.findUnique({
-    where: { id: row.id },
-    include: supplierDocumentRequestInclude(),
-  });
-  if (!saved) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
-  await writeAudit(request, actor, "人工修正退税合同草稿", "supplier_document_requests", row.id, null, {
-    contractNo: row.contractNo,
-    previousRevision: expectedRevision,
-    revision: expectedRevision + 1,
-    changes: edited.changes,
-    calculatedTotal: edited.calculatedTotal,
+  const saved = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.supplierDocumentRequest.updateMany({
+      where: { id: row.id, deletedAt: null, contractStatus: "PENDING_REVIEW", contractRevision: expectedRevision },
+      data: {
+        contractDraft: { ...edited.draft, manualEditedById: editedById } as unknown as Prisma.InputJsonValue,
+        contractRevision: { increment: 1 },
+        contractReviewRemark: "合同商品信息已人工核查并保存",
+      },
+    });
+    if (claimed.count !== 1) {
+      throw codedError("合同草稿已被其他人修改，请刷新后重新核查。", 409, "SUPPLIER_TAX_CONTRACT_EDIT_CONFLICT");
+    }
+    const updated = await tx.supplierDocumentRequest.findUnique({
+      where: { id: row.id },
+      include: supplierDocumentRequestInclude(),
+    });
+    if (!updated) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
+    await writeAudit(request, actor, "人工修正退税合同草稿", "supplier_document_requests", row.id, row, {
+      contractNo: row.contractNo,
+      previousRevision: expectedRevision,
+      revision: expectedRevision + 1,
+      changes: edited.changes,
+      calculatedTotal: edited.calculatedTotal,
+    }, tx);
+    return updated;
   });
   return serializeSupplierDocumentRequest(saved, actor);
 }

@@ -133,6 +133,15 @@ export function supplierDocumentRequestInclude() {
     },
     requestedBy: { select: { id: true, name: true, email: true } },
     completedBy: { select: { id: true, name: true, email: true } },
+    ocrTasks: {
+      where: { module: "SUPPLIER_TAX_INVOICE", documentType: "SUPPLIER_INVOICE" },
+      select: {
+        id: true,
+        reviewRevision: true,
+        manualEditedAt: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    },
     documents: {
       where: { deletedAt: null },
       include: {

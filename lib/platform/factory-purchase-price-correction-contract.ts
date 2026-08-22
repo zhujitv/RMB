@@ -8,6 +8,8 @@ type ApprovedCorrection = {
   purchaseOrderItemId: string;
   oldUnitPrice: Prisma.Decimal;
   newUnitPrice: Prisma.Decimal;
+  batchId?: string | null;
+  batchLineNo?: number | null;
 };
 
 type DeliveredItem = {
@@ -66,6 +68,8 @@ async function currentContractFinancials(client: SalesExecutionClient, purchaseO
           purchaseOrderItemId: true,
           oldUnitPrice: true,
           newUnitPrice: true,
+          batchId: true,
+          batchLineNo: true,
         },
         orderBy: [{ sequenceNo: "asc" }],
       },
@@ -93,12 +97,13 @@ export async function assertSupplierTaxContractFinancialsCurrent(
   draft: SupplierTaxContractDraft,
 ) {
   const purchaseOrder = await currentContractFinancials(client, draft.purchaseOrderId);
-  const draftItems = new Map(draft.items.map((item) => [item.purchaseOrderItemId, item]));
-  if (draftItems.size !== purchaseOrder.items.length || draftItems.size !== draft.items.length) {
+  const financialSourceItems = draft.ocrOriginalItems?.length ? draft.ocrOriginalItems : draft.items;
+  const financialSnapshot = new Map(financialSourceItems.map((item) => [item.purchaseOrderItemId, item]));
+  if (financialSnapshot.size !== purchaseOrder.items.length || financialSnapshot.size !== financialSourceItems.length) {
     throw codedError("采购商品行已变化，请删除当前草稿并重新生成合同。", 409, "SUPPLIER_TAX_CONTRACT_PRICE_CHANGED");
   }
   for (const item of purchaseOrder.items) {
-    const draftItem = draftItems.get(item.id);
+    const draftItem = financialSnapshot.get(item.id);
     const expectedPrice = latestApprovedFactoryPrice(
       purchaseOrder.priceCorrections,
       item.id,

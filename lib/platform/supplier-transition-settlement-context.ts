@@ -168,8 +168,31 @@ export async function loadTransitionContext(costId: string) {
   return { cost, customsDocument };
 }
 
-export async function recognizedCustoms(storageKey: string) {
-  return recognizeTencentCustomsGoods(await readR2Object(storageKey));
+export async function recognizedCustoms(
+  storageKey: string,
+  fallbackItems: Array<{ productName?: unknown; unit?: unknown; quantity?: unknown }> = [],
+) {
+  try {
+    return await recognizeTencentCustomsGoods(await readR2Object(storageKey));
+  } catch (error) {
+    const items = (fallbackItems.length ? fallbackItems : [{}]).map((item, index) => ({
+      itemNo: String(index + 1),
+      productName: nonEmpty(item.productName),
+      nameAndSpecification: nonEmpty(item.productName),
+      commodityCode: "",
+      quantityUnits: nonEmpty(item.quantity) && nonEmpty(item.unit)
+        ? [{ quantity: nonEmpty(item.quantity), unit: nonEmpty(item.unit) }]
+        : [],
+    }));
+    return {
+      provider: "TENCENT_CLOUD",
+      apiName: "RecognizeTableAccurateOCR",
+      requestIds: [],
+      totalPages: 0,
+      items,
+      warnings: [`OCR未能完整预填报关商品：${error instanceof Error ? error.message : "识别失败"}。请由人工补录并核对原件。`],
+    };
+  }
 }
 
 export async function previewFactoryPurchaseTransitionSettlement(costId: string, actor: ActorLike) {
@@ -185,12 +208,13 @@ export async function previewFactoryPurchaseTransitionSettlement(costId: string,
     reason: transitionSettlement.reason,
     items: transitionSettlement.itemSnapshot,
   };
-  const customs = await recognizedCustoms(customsDocument.storageKey);
   const orderQuantityReferences = cost.order.sourceSalesExecution?.items.map((item) => ({
     productName: item.productNameSnapshot,
     unit: item.unitSnapshot,
     quantity: item.quantity,
   })) || [];
+  const customs = await recognizedCustoms(customsDocument.storageKey, orderQuantityReferences);
+  const selectable = selectableCustomsItems(customs.items as Array<Record<string, unknown>>, orderQuantityReferences);
   return {
     existing: false,
     customsDocumentId: customsDocument.id,
@@ -198,7 +222,7 @@ export async function previewFactoryPurchaseTransitionSettlement(costId: string,
     finalPayableAmount: cost.amount.toFixed(2),
     currency: cost.currency,
     warnings: customs.warnings,
-    items: selectableCustomsItems(customs.items as Array<Record<string, unknown>>, orderQuantityReferences)
+    items: (selectable.length ? selectable : [{ customsItemIndex: 0, productName: "", unit: "", quantity: "", quantityOptionIndex: null, quantityOptions: [] }])
       .map((item) => ({ ...item, selected: false })),
   };
 }

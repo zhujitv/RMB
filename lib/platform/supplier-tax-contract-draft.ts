@@ -20,60 +20,17 @@ import {
   supplierTaxContractSigningDate,
   supplierTaxContractSupplierName,
 } from "./supplier-tax-contract-values";
+import type {
+  SupplierTaxContractDraft,
+  SupplierTaxContractItemDraft,
+} from "./supplier-tax-contract-draft-types";
+
+export type {
+  SupplierTaxContractDraft,
+  SupplierTaxContractItemDraft,
+} from "./supplier-tax-contract-draft-types";
 
 const ACTIVE_PURCHASE_ORDER_STATUSES = ["DISPATCHED", "ACCEPTED", "DELIVERY_PROPOSED"] as const;
-
-export type SupplierTaxContractItemDraft = {
-  lineNo: number;
-  purchaseOrderItemId: string;
-  customsItemNo: string;
-  customsCommodityCode: string;
-  productName: string;
-  unit: string;
-  quantity: string;
-  declaredQuantity: string;
-  unitPriceWithTax: string;
-  amountWithTax: string;
-};
-
-export type SupplierTaxContractDraft = {
-  contractNo: string;
-  customerOrderNo: string;
-  orderId: string;
-  costId: string;
-  purchaseOrderId: string;
-  purchaseOrderNo: string;
-  customsDocumentId: string;
-  customsDeclarationNo: string;
-  supplierId: string;
-  supplierName: string;
-  supplierTaxNumber: string;
-  supplierAddress: string;
-  supplierPhone: string;
-  supplierBankName: string;
-  supplierBankAccount: string;
-  buyerBusinessEntityId: string;
-  buyerName: string;
-  buyerTaxNumber: string;
-  buyerAddress: string;
-  buyerPhone: string;
-  buyerBankName: string;
-  buyerBankAccount: string;
-  signingPlace: string;
-  signingDate: string;
-  latestDeliveryDate: string;
-  currency: string;
-  totalAmountWithTax: string;
-  items: SupplierTaxContractItemDraft[];
-  customsSnapshot: Array<Record<string, unknown>>;
-  warnings: string[];
-  blockingIssues: string[];
-  generatedAt: string;
-  manualEditedAt?: string;
-  ocrRequestIds: string[];
-  sourceType?: string;
-  transitionSettlementId?: string;
-};
 
 function decimalText(value: Prisma.Decimal, places: number) {
   const fixed = value.toFixed(places);
@@ -126,6 +83,8 @@ export async function buildSupplierTaxContractDraft(costId: string) {
           purchaseOrderItemId: true,
           oldUnitPrice: true,
           newUnitPrice: true,
+          batchId: true,
+          batchLineNo: true,
         },
       },
       items: { include: { supplierPrice: true }, orderBy: [{ lineNumber: "asc" }] },
@@ -165,7 +124,19 @@ export async function buildSupplierTaxContractDraft(costId: string) {
   if (!customsDocument?.storageKey) {
     throw codedError("请先在退税资料上传有效报关单 PDF。", 400, "CUSTOMS_DOCUMENT_REQUIRED");
   }
-  const customs = await recognizeTencentCustomsGoods(await readR2Object(customsDocument.storageKey));
+  let customs: Awaited<ReturnType<typeof recognizeTencentCustomsGoods>>;
+  try {
+    customs = await recognizeTencentCustomsGoods(await readR2Object(customsDocument.storageKey));
+  } catch (error) {
+    customs = {
+      provider: "TENCENT_CLOUD",
+      apiName: "RecognizeTableAccurateOCR",
+      requestIds: [],
+      totalPages: 0,
+      items: [],
+      warnings: [`OCR未能完整预填报关商品：${error instanceof Error ? error.message : "识别失败"}。请由人工补录并核对原件。`],
+    };
+  }
   const candidates = customs.items as Array<Record<string, unknown>>;
   const warnings = [...customs.warnings];
   const blockingIssues = domesticContractIssues(purchaseOrder.execution.businessEntity);
@@ -180,16 +151,16 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     );
     if (price == null) throw codedError(`采购单第${item.lineNumber}行缺少确认含税单价。`, 409, "SUPPLIER_UNIT_PRICE_REQUIRED");
     const quantity = new Prisma.Decimal(item.actualDeliveredQuantity);
-    const candidate = candidateForSupplierTaxContractItem({ ...item, actualDeliveredQuantity: quantity }, candidates, index);
-    if (!candidate) throw codedError("报关单商品行数量不足，无法生成合同草稿。", 422, "CUSTOMS_ITEM_MAPPING_REQUIRED");
+    const candidate = candidateForSupplierTaxContractItem({ ...item, actualDeliveredQuantity: quantity }, candidates, index) || {};
     const customsQuantity = customsQuantityForUnit(candidate, item.unitSnapshot, quantity);
     const unitPrice = new Prisma.Decimal(price);
     const amount = quantity.mul(unitPrice).toDecimalPlaces(2);
-    const productName = nonEmpty(candidate.productName || candidate.nameAndSpecification);
+    const productName = nonEmpty(candidate.productName || candidate.nameAndSpecification || item.productNameSnapshot) || `待人工补录品名${index + 1}`;
     const unit = nonEmpty(customsQuantity.unit || item.unitSnapshot);
     const declaredQuantity = nonEmpty(customsQuantity.quantity);
     if (matchScore(item.unitSnapshot, quantity, candidate) <= 0) {
-      warnings.push(`采购第${item.lineNumber}行未按数量或单位命中报关商品，已按报关单顺序生成，请人工核查。`);
+      warnings.push(`采购第${item.lineNumber}行未按数量或单位命中报关商品，已生成可编辑预填行，请人工核查。`);
+      blockingIssues.push(`采购第${item.lineNumber}行无法可靠匹配报关单商品，需人工保存确认后的商品信息。`);
     }
     if (!hasCustomsUnit(candidate, item.unitSnapshot)) {
       warnings.push(`采购第${item.lineNumber}行未在报关商品中找到单位“${item.unitSnapshot}”的数量组，已按采购单位生成，请人工核查。`);
@@ -198,6 +169,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     }
     return {
       lineNo: index + 1,
+      rowId: item.id,
       purchaseOrderItemId: item.id,
       customsItemNo: nonEmpty(candidate.itemNo) || String(index + 1),
       customsCommodityCode: nonEmpty(candidate.commodityCode),
@@ -279,6 +251,7 @@ export async function buildSupplierTaxContractDraft(costId: string) {
     currency: purchaseOrder.purchaseCurrency,
     totalAmountWithTax: calculatedTotal.toFixed(2),
     items,
+    ocrOriginalItems: items.map((item) => ({ ...item })),
     customsSnapshot: candidates,
     warnings: [...new Set(warnings)],
     blockingIssues: [...new Set(blockingIssues)],

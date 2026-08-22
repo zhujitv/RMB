@@ -66,6 +66,9 @@ export type FactoryPurchaseOrderPriceCorrection = {
   id: string;
   sequenceNo?: number;
   purchaseOrderItemId?: string | null;
+  batchId?: string | null;
+  batchLineNo?: number | null;
+  batchLineCount?: number | null;
   status?: "PENDING" | "APPROVED" | "REJECTED" | string;
   quantity?: string | number | null;
   oldUnitPrice?: string | number | null;

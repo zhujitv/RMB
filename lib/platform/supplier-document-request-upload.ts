@@ -85,12 +85,16 @@ import {
   resolveUniqueFactoryCostForSupplierReturn,
 } from "./supplier-document-request-serialization";
 import { processSupplierInvoiceOcr } from "./supplier-invoice-review";
+import { assertBusinessOrderWritableInTransaction } from "./business-archive";
 
 export async function uploadSupplierDocumentRequestDocument(request: AuditRequestLike, actor: ActorLike, requestId: string, input: SupplierDocumentUploadInput) {
   assertWrite(actor, "supplierDocuments");
   const uploadedById = actorId(actor);
   const row = await loadSupplierDocumentRequest(requestId, actor);
   const documentType = normalizeSupplierReturnDocumentType(nonEmpty(input.documentType)) as OrderDocumentType;
+  if (supplierDocumentRequestOrderLocked(row.order)) {
+    throw codedError("该订单已提交退税或归档，不能再上传资料。", 409, "BUSINESS_ARCHIVED_READ_ONLY");
+  }
   const requiredTypes = requiredDocumentTypes(row.requiredDocumentTypes);
   if (!requiredTypes.includes(documentType)) {
     throw codedError("该任务不需要上传此类资料。", 400, "DOCUMENT_TYPE_NOT_ALLOWED");
@@ -101,6 +105,9 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     && (row.contractStatus !== "APPROVED" || !row.contractApproved)
   ) {
     throw codedError("退税合同尚未完成审核，不能上传发票。", 409, "SUPPLIER_TAX_CONTRACT_NOT_APPROVED");
+  }
+  if (documentType === "SUPPLIER_INVOICE" && (row.invoiceMatchStatus === "CONFIRMED" || row.invoiceConfirmedAt)) {
+    throw codedError("该发票已人工确认，不能再上传或替换。", 409, "SUPPLIER_INVOICE_ALREADY_CONFIRMED");
   }
   const uploadedFile = await readManagedUploadFile(input.file, "pdf", "supplier-document.pdf");
   const { originalFileName, mimeType, fileSize } = uploadedFile;
@@ -118,6 +125,24 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
   let document;
   try {
     document = await prisma.$transaction(async (tx) => {
+      await assertBusinessOrderWritableInTransaction(
+        tx,
+        row.orderId,
+        "该订单已提交退税或归档，不能再上传资料。",
+      );
+      await tx.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "supplier_document_requests" WHERE "id" = ${row.id} FOR UPDATE
+      `);
+      const current = await tx.supplierDocumentRequest.findFirst({ where: { id: row.id, deletedAt: null } });
+      if (!current) throw codedError("资料回传任务不存在。", 404, "SUPPLIER_DOCUMENT_REQUEST_NOT_FOUND");
+      if (documentType === "SUPPLIER_INVOICE") {
+        if (current.invoiceMatchStatus === "CONFIRMED" || current.invoiceConfirmedAt) {
+          throw codedError("该发票已人工确认，不能再上传或替换。", 409, "SUPPLIER_INVOICE_ALREADY_CONFIRMED");
+        }
+        if (current.contractStatus !== "LEGACY" && (current.contractStatus !== "APPROVED" || !current.contractApproved)) {
+          throw codedError("退税合同尚未完成审核，不能上传发票。", 409, "SUPPLIER_TAX_CONTRACT_NOT_APPROVED");
+        }
+      }
       const created = await tx.orderDocument.create({
         data: {
           orderId: row.orderId,
@@ -144,6 +169,12 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
       });
       await upsertFileAssetForOrderDocument(tx, created);
       await refreshSupplierDocumentRequestStatus(tx, row.id);
+      if (documentType === "SUPPLIER_INVOICE" && current.contractStatus === "APPROVED") {
+        await tx.supplierDocumentRequest.update({
+          where: { id: current.id },
+          data: { invoiceMatchStatus: "PROCESSING", invoiceRejectReason: null },
+        });
+      }
       return created;
     });
   } catch (error: unknown) {

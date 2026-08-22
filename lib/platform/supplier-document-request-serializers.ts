@@ -21,6 +21,7 @@ import {
   normalizeSupplierTaxContractDraftValues,
   supplierTaxContractSupplierName,
 } from "./supplier-tax-contract-values";
+import { supplierInvoiceForClient } from "./supplier-invoice-manual-values";
 
 function normalizedTaxContractJson(value: unknown, supplierName: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
@@ -52,8 +53,9 @@ export function serializeSupplierDocumentRequest(
   )).length;
   const supplierActor = isProductSupplierOperatorRole(actor?.role);
   const invoiceMatch = row.invoiceMatchJson && typeof row.invoiceMatchJson === "object" && !Array.isArray(row.invoiceMatchJson)
-    ? row.invoiceMatchJson as { matched?: unknown; issues?: unknown }
+    ? row.invoiceMatchJson as { matched?: unknown; issues?: unknown; invoice?: unknown }
     : null;
+  const currentInvoiceOcrTask = row.ocrTasks?.find((task) => task.id === row.invoiceOcrTaskId);
   const contractSupplierName = row.supplier ? supplierTaxContractSupplierName(row.supplier) : "";
   const cost = row.order?.costs?.find((item) => item.id === row.costId);
   const transitionSettlementId = transitionSettlementIdFromDraft(row.contractDraft)
@@ -94,6 +96,12 @@ export function serializeSupplierDocumentRequest(
     invoiceMatch: supplierActor && invoiceMatch
       ? { matched: Boolean(invoiceMatch.matched), issues: Array.isArray(invoiceMatch.issues) ? invoiceMatch.issues.map(String) : [] }
       : row.invoiceMatchJson,
+    invoiceOcrTaskId: supplierActor ? "" : (row.invoiceOcrTaskId || ""),
+    invoiceReviewRevision: currentInvoiceOcrTask?.reviewRevision || 1,
+    invoiceEffective: supplierActor || !invoiceMatch?.invoice
+      ? null
+      : supplierInvoiceForClient(invoiceMatch.invoice),
+    invoiceManualEditedAt: supplierActor ? null : (currentInvoiceOcrTask?.manualEditedAt || null),
     invoiceNo: row.invoiceNo || "",
     sendStatus: row.sendStatus || "pending",
     sendError: row.sendError || "",

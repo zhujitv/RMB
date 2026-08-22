@@ -179,9 +179,10 @@ test("supplier tax contract keeps the purchase unit when same quantity has a dif
   assert.equal(customsQuantityForUnit({ quantityUnits: [{ quantity: "1200", unit: "千克" }] }, "支", "1200").unit, "支");
 });
 
-test("supplier tax contract does not block on order and customs product name differences", () => {
+test("supplier tax contract turns unreliable OCR matches into editable rows requiring manual save", () => {
   const source = readFileSync("lib/platform/supplier-tax-contract-draft.ts", "utf8");
-  assert.doesNotMatch(source, /无法可靠匹配报关单商品/);
+  assert.match(source, /已生成可编辑预填行，请人工核查/);
+  assert.match(source, /无法可靠匹配报关单商品，需人工保存确认后的商品信息/);
   assert.doesNotMatch(source, /品名“.*已按报关品名/);
 });
 

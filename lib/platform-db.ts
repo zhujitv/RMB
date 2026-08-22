@@ -23,3 +23,4 @@ export * from "./platform/supplier-tax-contract-preview";
 export * from "./platform/supplier-tax-contract-request-create";
 export * from "./platform/supplier-transition-settlement";
 export * from "./platform/supplier-invoice-review";
+export * from "./platform/supplier-invoice-manual-review";

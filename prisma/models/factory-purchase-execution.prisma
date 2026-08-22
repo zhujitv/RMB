@@ -132,6 +132,9 @@ model FactoryPurchaseOrderPriceCorrection {
   reviewRemark            String?                              @map("review_remark") @db.Text
   sourceUnitPriceType     String                               @default("PURCHASE_ORDER") @map("source_unit_price_type")
   idempotencyKey          String                               @map("idempotency_key")
+  batchId                 String?                              @map("batch_id")
+  batchLineNo             Int?                                 @map("batch_line_no")
+  batchLineCount          Int?                                 @map("batch_line_count")
   adjustmentId            String?                              @unique @map("adjustment_id")
   settlementFinalPayableBefore Decimal?                        @map("settlement_final_payable_before") @db.Decimal(18, 2)
   settlementFinalPayableAfter  Decimal?                        @map("settlement_final_payable_after") @db.Decimal(18, 2)
@@ -164,7 +167,9 @@ model FactoryPurchaseOrderPriceCorrection {
 
   @@unique([purchaseOrderId, sequenceNo], map: "fpo_price_corrections_po_sequence_key")
   @@unique([purchaseOrderId, idempotencyKey], map: "fpo_price_corrections_po_idempotency_key")
+  @@unique([purchaseOrderId, batchId, batchLineNo], map: "fpo_price_corrections_po_batch_line_key")
   @@index([purchaseOrderId, status, requestedAt])
+  @@index([purchaseOrderId, batchId, status], map: "fpo_price_corrections_po_batch_status_idx")
   @@index([purchaseOrderItemId, status])
   @@index([requestedById])
   @@index([reviewedById])

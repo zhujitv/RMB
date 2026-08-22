@@ -291,10 +291,10 @@ test("manual quantity correction is saved but blocks approval when the settlemen
   }]);
   assert.equal(edited.draft.items[0]?.amountWithTax, "1017.00");
   assert.match(edited.draft.blockingIssues.join("|"), /采购结算金额1130\.00不一致/);
-  assert.throws(() => applySupplierTaxContractDraftEdits(contract as never, []), /完整提交合同中的全部商品行/);
+  assert.throws(() => applySupplierTaxContractDraftEdits(contract as never, []), /1至200行/);
 });
 
-test("manual corrections preserve customs and quantity blockers and only replace their own amount blocker", () => {
+test("manual corrections preserve shipment and quantity blockers while replacing editable OCR match blockers", () => {
   const preservedIssues = [
     "采购单1仍有商品未确认实际装柜数量。",
     "报关商品“木塑复合地板”的全部供应商实际装柜合计9与报关数量10不一致。",
@@ -312,7 +312,7 @@ test("manual corrections preserve customs and quantity blockers and only replace
     quantity: "10",
     unit: "平方米",
   }]);
-  assert.deepEqual(restored.draft.blockingIssues, [...preservedIssues, editableMatchIssue]);
+  assert.deepEqual(restored.draft.blockingIssues, preservedIssues);
 
   const changed = applySupplierTaxContractDraftEdits(withIssues as never, [{
     purchaseOrderItemId: "item-1",
@@ -325,7 +325,7 @@ test("manual corrections preserve customs and quantity blockers and only replace
   assert.ok(!changed.draft.blockingIssues.includes(editableMatchIssue));
 });
 
-test("manual correction only clears the editable blocker for rows that actually changed", () => {
+test("saving the complete manual table clears OCR match blockers for every submitted row", () => {
   const secondItem = {
     ...contract.items[0],
     lineNo: 2,
@@ -351,7 +351,7 @@ test("manual correction only clears the editable blocker for rows that actually 
     unit: secondItem.unit,
   }]);
   assert.ok(!edited.draft.blockingIssues.includes(firstIssue));
-  assert.ok(edited.draft.blockingIssues.includes(secondIssue));
+  assert.ok(!edited.draft.blockingIssues.includes(secondIssue));
 });
 
 test("pending contracts refresh both parties while preserving non-invoice compliance blockers", () => {
@@ -460,7 +460,7 @@ test("approved contracts can rerun Tencent invoice OCR for an already uploaded P
   const panel = readFileSync("app/modules/supplier-documents/tax-contract-review-panel.tsx", "utf8");
   assert.match(review, /retrySupplierInvoiceOcr/);
   assert.match(review, /readR2Object\(document\.storageKey/);
-  assert.match(review, /processSupplierInvoiceOcr\(row\.id, document\.id, body\)/);
+  assert.match(review, /preserveManualFromTaskId: row\.invoiceOcrTaskId/);
   assert.match(route, /decision === "RETRY_OCR"/);
   assert.match(panel, /重新执行腾讯云 OCR/);
 });

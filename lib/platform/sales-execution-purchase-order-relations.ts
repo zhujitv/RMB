@@ -106,6 +106,11 @@ export function serializePurchaseOrderRelations(order: LooseRecord) {
       return {
         id: String(correction.id || ""), sequenceNo: Number(correction.sequenceNo || 0),
         purchaseOrderItemId: String(correction.purchaseOrderItemId || ""),
+        batchId: correction.batchId ? String(correction.batchId) : null,
+        batchLineNo: correction.batchLineNo === null || correction.batchLineNo === undefined
+          ? null : Number(correction.batchLineNo),
+        batchLineCount: correction.batchLineCount === null || correction.batchLineCount === undefined
+          ? null : Number(correction.batchLineCount),
         status: String(correction.status || "PENDING"),
         quantity: decimalText(correction.quantitySnapshot),
         oldUnitPrice: decimalText(correction.oldUnitPrice),

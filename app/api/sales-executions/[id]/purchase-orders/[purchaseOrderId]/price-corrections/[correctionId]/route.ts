@@ -11,7 +11,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await requireApiActor(request);
     const { id, purchaseOrderId, correctionId } = await params;
-    const correction = await reviewFactoryPurchaseOrderPriceCorrection(
+    const result = await reviewFactoryPurchaseOrderPriceCorrection(
       request,
       actor,
       id,
@@ -19,7 +19,22 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       correctionId,
       await parseJsonBody(request),
     );
-    return NextResponse.json({ success: true, correction, data: correction, message: "采购价格更正审核已保存" });
+    const isBatch = result && typeof result === "object" && "corrections" in result;
+    const corrections = (isBatch ? result.corrections : [result]) as Array<{
+      id?: string;
+      status: string;
+      deltaAmount?: unknown;
+    }>;
+    const correction = corrections.find((row) => row.id === correctionId) || corrections[0] || null;
+    return NextResponse.json({
+      success: true,
+      correction,
+      corrections,
+      batchId: isBatch ? result.batchId : null,
+      totalDeltaAmount: isBatch ? result.totalDeltaAmount : correction?.deltaAmount || null,
+      data: isBatch ? result : correction,
+      message: isBatch ? "批量采购价格更正已整批审核保存" : "采购价格更正审核已保存",
+    });
   } catch (error: unknown) {
     return apiError(error, "审核采购价格更正失败");
   }

@@ -117,7 +117,10 @@ test("manual covers the complete workspace application map", () => {
   assert.match(manualModule, /资料回传 → 任务详情 → 退税合同与发票核验/);
   assert.match(manualModule, /发票上传完成后系统自动调用腾讯云发票 OCR/);
   assert.match(manualModule, /重新执行腾讯云 OCR/);
-  assert.match(manualModule, /OCR 只是辅助识别和匹配工具，识别成功不等于审核完成/);
+  assert.match(manualModule, /OCR 只是辅助识别和匹配工具/);
+  assert.match(manualModule, /品名、数量、单位、单价、总价/);
+  assert.match(manualModule, /可新增或删除商品行/);
+  assert.match(manualModule, /原始 OCR 快照禁止覆盖/);
   assert.match(manualModule, /历史任务标记为“历史合同”，不会显示该区域/);
   assert.match(manualModule, /上传文件最终归集到退税资料，资料回传不是独立资料库/);
   assert.match(manualModule, /经营总览展示核心经营指标、趋势、风险和绩效/);
@@ -173,8 +176,9 @@ test("manual explains factory payment, penalty, settlement, and cost sync", () =
   assert.match(manualModule, /留仓不计供应商货款/);
   assert.match(manualModule, /延误违约金，默认不设上限/);
   assert.match(manualModule, /人民币结算汇率固定为 1；外币结算必须填写有效汇率/);
-  assert.match(manualModule, /采购价格更正申请/);
-  assert.match(manualModule, /系统按实际交付数量计算差额/);
+  assert.match(manualModule, /批量采购价格更正/);
+  assert.match(manualModule, /批量价格更正会逐行形成差额凭证/);
+  assert.match(manualModule, /最终结算会按实际交付数量另生成自动补正凭证/);
   assert.match(manualModule, /登记供应商退款/);
   assert.match(manualModule, /净付款达到更正后的最终应付时系统重新结清/);
   assert.match(manualModule, /不会覆盖原采购价、原最终应付或原审核依据/);

@@ -49,6 +49,47 @@
 .ledgerList span { display: inline-flex; align-items: center; gap: 6px; }
 .ledgerList button { border: 0; background: transparent; color: #b91c1c; padding: 2px 4px; font: inherit; font-weight: 700; cursor: pointer; }
 .ledgerList button:disabled { cursor: wait; opacity: .55; }
+.priceCorrectionForm { flex: 1 0 100%; min-width: 0; grid-template-columns: 1fr; }
+.priceCorrectionHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.priceCorrectionHeading > div { display: grid; gap: 3px; }
+.priceCorrectionHeading strong { color: #431407; font-size: 13px; }
+.priceCorrectionHeading small, .priceCorrectionHint { color: #78716c; font-size: 11px; line-height: 1.45; }
+.priceCorrectionHeading > span { flex: 0 0 auto; border-radius: 999px; background: #ffedd5; color: #9a3412; padding: 4px 8px; font-size: 11px; font-weight: 800; }
+.priceCorrectionTableWrap, .priceCorrectionHistoryWrap { max-width: 100%; overflow-x: auto; border: 1px solid #fed7aa; border-radius: 9px; background: #fff; }
+.priceCorrectionTable, .priceCorrectionHistoryTable { width: 100%; min-width: 760px; border-collapse: collapse; }
+.priceCorrectionTable th, .priceCorrectionTable td,
+.priceCorrectionHistoryTable th, .priceCorrectionHistoryTable td { border-bottom: 1px solid #ffedd5; padding: 8px; color: #57534e; font-size: 11px; text-align: left; vertical-align: middle; }
+.priceCorrectionTable th, .priceCorrectionHistoryTable th { background: #fff7ed; color: #9a3412; font-weight: 800; white-space: nowrap; }
+.priceCorrectionTable tbody tr:last-child td, .priceCorrectionHistoryTable tbody tr:last-child td { border-bottom: 0; }
+.priceCorrectionTable tbody tr[data-selected="true"] { background: #fffbeb; }
+.priceCorrectionTable td:nth-child(2) { min-width: 250px; }
+.priceCorrectionTable td:nth-child(2) strong { display: block; color: #292524; }
+.priceCorrectionTable td:nth-child(2) small { display: block; margin-top: 3px; color: #b45309; }
+.priceCorrectionTable td:nth-child(n + 3) { white-space: nowrap; }
+.priceCorrectionTable input[type="checkbox"] { width: 17px; height: 17px; accent-color: #ea580c; }
+.priceCorrectionTable input:not([type="checkbox"]) { width: 120px; min-width: 0; border: 1px solid #d6d3d1; border-radius: 7px; padding: 7px 8px; font: inherit; }
+.priceCorrectionTable input:disabled { background: #f5f5f4; color: #a8a29e; }
+.priceCorrectionTotals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.priceCorrectionTotals > div { display: grid; gap: 3px; border: 1px solid #ffedd5; border-radius: 8px; background: #fff7ed; padding: 8px 10px; }
+.priceCorrectionTotals span { color: #78716c; font-size: 10px; }
+.priceCorrectionTotals strong { color: #431407; font-size: 13px; }
+.priceIncrease { color: #b45309 !important; }
+.priceDecrease { color: #166534 !important; }
+.priceCorrectionLedger { flex: 1 0 100%; min-width: 0; display: grid; gap: 8px; color: #57534e; font-size: 12px; }
+.priceCorrectionLedger > strong { color: #431407; }
+.priceCorrectionBatch { min-width: 0; display: grid; gap: 8px; border: 1px solid #fed7aa; border-radius: 10px; background: #fff; padding: 10px; }
+.priceCorrectionBatch header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.priceCorrectionBatch header > div { min-width: 0; display: grid; gap: 3px; }
+.priceCorrectionBatch header strong { color: #431407; font-size: 12px; }
+.priceCorrectionBatch header small { color: #78716c; font-size: 10px; line-height: 1.45; }
+.priceCorrectionBatch header > b { flex: 0 0 auto; color: #431407; font-size: 12px; }
+.priceCorrectionBatch p { margin: 0; color: #78716c; font-size: 11px; line-height: 1.5; }
+.priceCorrectionHistoryTable { min-width: 660px; }
+.priceCorrectionHistoryTable td:nth-child(2) { min-width: 220px; color: #292524; font-weight: 700; }
+.priceCorrectionReviewActions { display: flex; flex-wrap: wrap; gap: 7px; }
+.priceCorrectionReviewActions button { border: 1px solid #fb923c; border-radius: 7px; background: #fff7ed; color: #9a3412; padding: 6px 9px; font: inherit; font-weight: 750; cursor: pointer; }
+.priceCorrectionReviewActions button:last-child { border-color: #fca5a5; background: #fff; color: #b91c1c; }
+.priceCorrectionReviewActions button:disabled { cursor: wait; opacity: .55; }
 .workflowCard { display: grid; gap: 9px; border: 1px solid #d6d3d1; border-radius: 10px; background: #fafaf9; padding: 10px; }
 .workflowCard[data-tone="warning"] { border-color: #fbbf24; background: #fffbeb; }
 .workflowCard[data-tone="danger"] { border-color: #fca5a5; background: #fef2f2; }
@@ -80,6 +121,8 @@
 .settlementGrid strong { color: #292524; font-size: 12px; }
 
 @media (max-width: 700px) {
-  .metricGrid, .entryGrid, .settlementGrid { grid-template-columns: 1fr; }
+  .metricGrid, .entryGrid, .settlementGrid, .priceCorrectionTotals { grid-template-columns: 1fr; }
   .wide { grid-column: auto; }
+  .priceCorrectionHeading, .priceCorrectionBatch header { align-items: stretch; flex-direction: column; }
+  .priceCorrectionHeading > span, .priceCorrectionBatch header > b { width: fit-content; }
 }

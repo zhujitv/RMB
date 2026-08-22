@@ -37,6 +37,9 @@ export const settlementPurchaseOrderSelect = Prisma.validator<Prisma.FactoryPurc
     select: {
       id: true,
       purchaseOrderItemId: true,
+      batchId: true,
+      batchLineNo: true,
+      batchLineCount: true,
       status: true,
       quantitySnapshot: true,
       oldUnitPrice: true,
