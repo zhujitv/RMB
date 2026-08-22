@@ -54,7 +54,10 @@ const settingsCards = readSettingsModuleSource();
 const settingsController = readSettingsModuleSource();
 const settingsView = readSettingsModuleSource();
 const settingsRoute = readFileSync("app/api/settings/business-entities/route.ts", "utf8");
+const settingsSealRoute = readFileSync("app/api/settings/business-entities/[id]/seal/route.ts", "utf8");
 const workspaceStyles = readWorkspaceStylesSource();
+const fileAssetData = readFileSync("lib/platform/file-asset-data.ts", "utf8");
+const packageJson = readFileSync("package.json", "utf8");
 const rowStyleHelper = readFileSync("app/modules/business-entity-row-style.ts", "utf8");
 const paymentsModule = readPaymentsModuleSource();
 const paymentsService = readPaymentsServiceSource();
@@ -85,6 +88,7 @@ test("business entities are modeled as order-level markers", () => {
 
 test("order APIs assign default business entity and protect transfers", () => {
   assert.match(shared, /export \* from "\.\/business-entities"/);
+  assert.match(shared, /export \* from "\.\/business-entity-seal"/);
   assert.match(service, /DEFAULT_BUSINESS_ENTITY_NAME = "浙江莱诺建材有限公司"/);
   assert.match(service, /displayName: shortName \|\| name/);
   assert.match(service, /getDefaultBusinessEntity/);
@@ -187,10 +191,31 @@ test("settings can maintain business entities without making it multi tenant", (
   assert.match(settingsCards, /PI 页头显示公司电话/);
   assert.match(settingsCards, /PI 页头显示公司邮箱/);
   assert.match(settingsCards, /PI 页头显示公司网址/);
+  assert.match(settingsCards, /需方电子章/);
+  assert.match(settingsCards, /透明背景 PNG/);
+  assert.match(settingsCards, /\/api\/settings\/business-entities\/\$\{encodeURIComponent\(entityId\)\}\/seal/);
+  assert.match(settingsCards, /validateElectronicSealUploadFile/);
+  assert.match(settingsCards, /onSealSaved/);
   assert.match(settingsCards, /公司地址始终显示/);
   assert.match(settingsController, /请填写公司全称/);
   assert.match(settingsController, /\/api\/settings\/business-entities/);
   assert.match(settingsView, /activeTab === "businessEntities"/);
+});
+
+test("business entities maintain a private electronic seal for supplier contracts", () => {
+  assert.match(fileAssetData, /BUSINESS_ENTITIES: "business_entities"/);
+  assert.match(fileAssetData, /BUSINESS_ENTITY_ELECTRONIC_SEAL/);
+  assert.match(service, /PDFDocument/);
+  assert.match(service, /embedPng/);
+  assert.match(service, /page\.drawImage\(seal/);
+  assert.match(service, /business-entities\/\$\{safeEntityId\}\/electronic-seal/);
+  assert.match(service, /serializeBusinessEntitySettings\(row, serializeBusinessEntityElectronicSeal/);
+  assert.match(service, /hasElectronicSeal/);
+  assert.match(settingsSealRoute, /uploadBusinessEntityElectronicSeal/);
+  assert.match(settingsSealRoute, /readBusinessEntityElectronicSealImage/);
+  assert.match(settingsSealRoute, /deleteBusinessEntityElectronicSeal/);
+  assert.match(settingsSealRoute, /assertMultipartRequestWithinLimit/);
+  assert.match(packageJson, /"pdf-lib"/);
 });
 
 test("business entity rows use one shared non-default highlight rule", () => {

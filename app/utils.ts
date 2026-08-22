@@ -67,6 +67,8 @@ export const PDF_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 export const PDF_UPLOAD_MAX_SIZE_LABEL = "10MB";
 export const PAYMENT_VOUCHER_UPLOAD_ACCEPT = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 export const PAYMENT_VOUCHER_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+export const ELECTRONIC_SEAL_UPLOAD_ACCEPT = ".png,image/png";
+export const ELECTRONIC_SEAL_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
 
 export function isPdfFile(file: File) {
   return file.name.toLowerCase().endsWith(".pdf") && file.type === "application/pdf";
@@ -86,6 +88,13 @@ export function validatePaymentVoucherUploadFile(file: File | null) {
   const allowedType = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
   if (!allowedName || !allowedType) return "付款凭证仅支持 jpg、jpeg、png、webp 图片";
   if (file.size > PAYMENT_VOUCHER_UPLOAD_MAX_BYTES) return "文件大小不能超过 10MB";
+  return "";
+}
+
+export function validateElectronicSealUploadFile(file: File | null) {
+  if (!file) return "请选择透明背景 PNG 电子章";
+  if (!file.name.toLowerCase().endsWith(".png") || file.type !== "image/png") return "电子章仅支持透明背景 PNG 图片";
+  if (file.size > ELECTRONIC_SEAL_UPLOAD_MAX_BYTES) return "电子章图片不能超过 2MB";
   return "";
 }
 

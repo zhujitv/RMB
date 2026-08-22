@@ -227,6 +227,10 @@ test("supplier document workflow uses existing factory tax document types", () =
   assert.match(service, /scheduleTaxRefundCompletenessRefresh\(row\.orderId\)/);
   assert.match(service, /syncCostInvoiceStatus/);
   assert.match(service, /readManagedUploadFile\(input\.file, "pdf", "supplier-document\.pdf"\)/);
+  assert.match(service, /stampSupplierPurchaseContractForBusinessEntity/);
+  assert.match(service, /documentType === "SUPPLIER_PURCHASE_CONTRACT"/);
+  assert.match(service, /fileForStorage/);
+  assert.match(service, /电子章/);
   assert.match(service, /readValidatedExcelTemplate/);
   assert.match(service, /合同样本仅支持 \.xls 或 \.xlsx Excel 文件/);
   assert.match(service, /MAX_EXCEL_TEMPLATE_BYTES = 4 \* 1024 \* 1024/);

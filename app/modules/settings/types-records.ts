@@ -104,6 +104,13 @@ export type BusinessEntityRow = {
   status?: string;
   sortOrder?: number;
   remark?: string;
+  hasElectronicSeal?: boolean;
+  electronicSeal?: {
+    fileName?: string;
+    mimeType?: string;
+    fileSize?: number;
+    uploadedAt?: string | Date | null;
+  } | null;
 };
 
 export type UserRow = {

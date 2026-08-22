@@ -10,6 +10,7 @@ import {
   CrmEmailIntegrationSettingsCard,
 } from "./settings-cards";
 import {
+  businessEntityFormFromRow,
   commissionFormulaFormFromSettings,
   companyProfileFormFromSettings,
   exchangeFormFromSettings,
@@ -74,6 +75,7 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
     smsIntegrationMessage,
     crmEmailIntegrationSaving,
     crmEmailIntegrationMessage,
+    loadTab,
     selectTab,
     startCreateBusinessEntity,
     startEditBusinessEntity,
@@ -145,6 +147,10 @@ export function SettingsModuleTabContent({ settings }: { settings: SettingsContr
           if (confirmDiscardCurrentSettings()) cancelBusinessEntityEdit();
         }}
         onSubmit={saveBusinessEntityForm}
+        onSealSaved={(entity) => {
+          setBusinessEntityForm(businessEntityFormFromRow(entity));
+          void loadTab("businessEntities");
+        }}
       />
     );
   }

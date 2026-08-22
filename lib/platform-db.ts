@@ -24,3 +24,4 @@ export * from "./platform/supplier-tax-contract-request-create";
 export * from "./platform/supplier-transition-settlement";
 export * from "./platform/supplier-invoice-review";
 export * from "./platform/supplier-invoice-manual-review";
+export * from "./platform/business-entity-seal";

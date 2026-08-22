@@ -26,6 +26,12 @@ export type BusinessEntityLike = {
   sortOrder?: number | null;
   remark?: string | null;
 };
+export type BusinessEntityElectronicSealLike = {
+  fileName?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  uploadedAt?: unknown;
+} | null | undefined;
 
 export function activeBusinessEntityWhere(): Prisma.BusinessEntityWhereInput {
   return {
@@ -49,7 +55,7 @@ export function serializeBusinessEntity(entity: BusinessEntityLike | null | unde
   };
 }
 
-export function serializeBusinessEntitySettings(entity: BusinessEntityLike | null | undefined) {
+export function serializeBusinessEntitySettings(entity: BusinessEntityLike | null | undefined, electronicSeal?: BusinessEntityElectronicSealLike) {
   return {
     ...serializeBusinessEntity(entity),
     nameEn: entity?.nameEn || "",
@@ -64,5 +70,12 @@ export function serializeBusinessEntitySettings(entity: BusinessEntityLike | nul
     showContactEmailOnPi: Boolean(entity?.showContactEmailOnPi),
     showWebsiteOnPi: Boolean(entity?.showWebsiteOnPi),
     bankAccounts: serializeBusinessEntityBankAccounts(entity?.bankAccounts),
+    hasElectronicSeal: Boolean(electronicSeal),
+    electronicSeal: electronicSeal ? {
+      fileName: electronicSeal.fileName || "电子章.png",
+      mimeType: electronicSeal.mimeType || "image/png",
+      fileSize: Number(electronicSeal.fileSize || 0),
+      uploadedAt: electronicSeal.uploadedAt || null,
+    } : null,
   };
 }

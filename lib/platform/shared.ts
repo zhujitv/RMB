@@ -17,6 +17,7 @@ export * from "./notification-engine";
 export * from "./file-center";
 export * from "./file-assets";
 export * from "./business-entities";
+export * from "./business-entity-seal";
 export * from "./audit-log-retention";
 export * from "./shared-serialization";
 export * from "./shared-tax";

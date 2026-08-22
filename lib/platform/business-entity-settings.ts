@@ -1,19 +1,12 @@
 import { prisma } from "../prisma";
 import { assertRead, assertWrite, canRead, permissionError } from "./shared-access";
 import { writeAudit } from "./shared-audit";
+import { codedError, logServerError, nonEmpty, normalizeEmail, requireText, validEmail } from "./shared-base-utils";
+import { activeBusinessEntityWhere, serializeBusinessEntity } from "./business-entity-core";
 import {
-  codedError,
-  logServerError,
-  nonEmpty,
-  normalizeEmail,
-  requireText,
-  validEmail,
-} from "./shared-base-utils";
-import {
-  activeBusinessEntityWhere,
-  serializeBusinessEntity,
-  serializeBusinessEntitySettings,
-} from "./business-entity-core";
+  serializeBusinessEntitySettingsRowsWithSeals,
+  serializeBusinessEntitySettingsWithSeal,
+} from "./business-entity-seal";
 import {
   BUSINESS_ENTITY_BANK_ACCOUNT_CURRENCIES,
   type BusinessEntityBankAccountCurrency,
@@ -215,7 +208,7 @@ export async function listBusinessEntitySettings(actor: ActorLike) {
     include: { bankAccounts: { orderBy: { currency: "asc" } } },
     take: BUSINESS_ENTITY_LIST_LIMIT,
   });
-  return rows.map(serializeBusinessEntitySettings);
+  return serializeBusinessEntitySettingsRowsWithSeals(rows);
 }
 
 export async function createBusinessEntitySetting(request: AuditRequestLike, actor: ActorLike, input: BusinessEntityInput) {
@@ -237,7 +230,7 @@ export async function createBusinessEntitySetting(request: AuditRequestLike, act
   });
   writeAudit(request, actor, "新增业务主体", "business_entities", created.id, null, businessEntityAuditValue(created))
     .catch((error) => logServerError("新增业务主体日志写入失败", error, { businessEntityId: created.id }));
-  return serializeBusinessEntitySettings(created);
+  return serializeBusinessEntitySettingsWithSeal(created);
 }
 
 export async function updateBusinessEntitySetting(request: AuditRequestLike, actor: ActorLike, id: string, input: BusinessEntityInput) {
@@ -295,5 +288,5 @@ export async function updateBusinessEntitySetting(request: AuditRequestLike, act
     businessEntityAuditValue(after),
   )
     .catch((error) => logServerError("修改业务主体日志写入失败", error, { businessEntityId: id }));
-  return serializeBusinessEntitySettings(after);
+  return serializeBusinessEntitySettingsWithSeal(after);
 }

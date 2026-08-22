@@ -5,6 +5,7 @@ import type { CompanyProfileSettings } from "../../types";
 import { uploadFormDataWithProgress, validatePdfUploadFile } from "../../utils";
 import { BooleanSelect } from "./common-controls";
 import { BusinessEntityBankAccountFields } from "./business-entity-bank-account-fields";
+import { BusinessEntitySealField } from "./business-entity-seal-field";
 import {
   COMMISSION_FORMULA_DEDUCTIONS,
   COMMISSION_FORMULA_PRESETS,
@@ -65,6 +66,7 @@ export function BusinessEntitySettingsCard({
   onEdit,
   onCancel,
   onSubmit,
+  onSealSaved,
 }: {
   entities: BusinessEntityRow[];
   form: BusinessEntityForm | null;
@@ -76,8 +78,10 @@ export function BusinessEntitySettingsCard({
   onEdit: (entity: BusinessEntityRow) => void;
   onCancel: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSealSaved: (entity: BusinessEntityRow) => void | Promise<void>;
 }) {
   const currentForm = form || null;
+  const currentEntity = currentForm?.id ? entities.find((entity) => entity.id === currentForm.id) : null;
 
   function setField<K extends keyof BusinessEntityForm>(key: K, value: BusinessEntityForm[K]) {
     if (!currentForm) return;
@@ -209,6 +213,7 @@ export function BusinessEntitySettingsCard({
               checked={currentForm.showWebsiteOnPi}
               onChange={(value) => setField("showWebsiteOnPi", value)}
             />
+            <BusinessEntitySealField entityId={currentForm.id} entity={currentEntity || null} onSealSaved={onSealSaved} />
             <BusinessEntityBankAccountFields form={currentForm} onChange={onChange} />
             <label>
               状态

@@ -86,6 +86,7 @@ import {
 } from "./supplier-document-request-serialization";
 import { processSupplierInvoiceOcr } from "./supplier-invoice-review";
 import { assertBusinessOrderWritableInTransaction } from "./business-archive";
+import { stampSupplierPurchaseContractForBusinessEntity } from "./business-entity-seal";
 
 export async function uploadSupplierDocumentRequestDocument(request: AuditRequestLike, actor: ActorLike, requestId: string, input: SupplierDocumentUploadInput) {
   assertWrite(actor, "supplierDocuments");
@@ -110,7 +111,14 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     throw codedError("该发票已人工确认，不能再上传或替换。", 409, "SUPPLIER_INVOICE_ALREADY_CONFIRMED");
   }
   const uploadedFile = await readManagedUploadFile(input.file, "pdf", "supplier-document.pdf");
-  const { originalFileName, mimeType, fileSize } = uploadedFile;
+  const businessEntityId = row.order.businessEntity?.id || "";
+  const sealedContract = documentType === "SUPPLIER_PURCHASE_CONTRACT"
+    ? await stampSupplierPurchaseContractForBusinessEntity(businessEntityId, uploadedFile.body)
+    : { body: uploadedFile.body, sealed: false };
+  const fileForStorage = sealedContract.sealed
+    ? { ...uploadedFile, body: sealedContract.body, fileSize: sealedContract.body.byteLength }
+    : uploadedFile;
+  const { originalFileName, mimeType, fileSize } = fileForStorage;
   const standardFilename = `${row.order.orderNo || row.orderId}_${SUPPLIER_DOCUMENT_LABELS[documentType] || documentType}.pdf`;
   const uniqueFactoryCost = await resolveUniqueFactoryCostForSupplierReturn(row.orderId, row.supplierId, nonEmpty(input.costId));
   const storageFileName = safeFileName(`${row.order.orderNo || row.orderId}_${documentType}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.pdf`);
@@ -121,7 +129,7 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     supplierId: row.supplierId,
     fileName: storageFileName,
   });
-  const storedFile = await uploadManagedFileToStorage({ file: uploadedFile, storageKey, fileName: standardFilename });
+  const storedFile = await uploadManagedFileToStorage({ file: fileForStorage, storageKey, fileName: standardFilename });
   let document;
   try {
     document = await prisma.$transaction(async (tx) => {
@@ -210,6 +218,8 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
     costId: uniqueFactoryCost?.id || "",
     documentType,
     requestId: row.id,
+    businessEntityId,
+    electronicSealApplied: sealedContract.sealed,
   }));
   const refreshed = await loadSupplierDocumentRequest(row.id, actor);
   return {
@@ -219,6 +229,8 @@ export async function uploadSupplierDocumentRequestDocument(request: AuditReques
       ? invoiceOcrResult?.matched
         ? "上传成功，OCR已完整匹配，等待人工确认"
         : "上传成功，但OCR核验存在不匹配项，请查看详情"
-      : "上传成功",
+      : sealedContract.sealed
+        ? "上传成功，已自动加盖需方电子章"
+        : "上传成功",
   };
 }
