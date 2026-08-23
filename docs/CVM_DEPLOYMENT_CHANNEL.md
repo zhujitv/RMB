@@ -7,22 +7,26 @@
 1. GitHub Actions 先解析要发布的 `main` 提交。
 2. 默认要求该提交已有成功的 `CI` workflow。
 3. GitHub Runner 通过 SSH 读取 CVM 当前运行代码的 Git SHA。
-4. Runner 生成从 CVM 当前 SHA 到目标 SHA 的增量 Git bundle，并上传到 CVM。
-5. CVM 从本地 bundle 快进，不再依赖 CVM 直接连接 GitHub。
-6. 如果 `package.json` 或 `package-lock.json` 没变化，则跳过 `npm ci`；否则重新安装依赖。
-7. CVM 加载 `/srv/rmb/shared/app.env`，让迁移状态检查和生产构建使用服务器真实配置。
-8. CVM 只执行 `npx prisma migrate status`，不自动执行数据库迁移。
-9. CVM 执行 `npm run build:app`，重启 `rmb-app.service`，再做本机健康检查。
-10. GitHub Runner 最后访问公网地址，确认 Nginx HTTPS 正常。
+4. Runner 以成功写入的 `.rmb-deployed-sha` 判断实际运行版本；首次使用标记时回退到最近一次成功部署记录，不再把可能已提前快进的 Git HEAD 误当成已上线版本。
+5. 无生产权限的 Build job 在干净检出中使用非敏感构建参数生成默认 `.next` 归档；带生产权限的 Deploy job 只下载该归档，并生成从 CVM 当前 SHA 到同一目标 SHA 的 Git bundle。
+6. CVM 校验构建归档、依赖契约、Prisma 变更边界和 systemd 运行配置；Deploy job 和 CVM 都不执行 `npm ci`、不构建、不读取 `/srv/rmb/shared/app.env`，也不在普通发布中连接生产数据库。
+7. CVM 保留旧源码状态和旧 `.next`，切换源码与新构建后重启 `rmb-app.service`；本机或公网 `/api/health` 未通过时恢复旧源码与旧构建。
+8. `/api/health` 会实际执行数据库就绪查询，从而确认 systemd 已把受保护运行配置注入新进程。
+9. 全部就绪检查成功后，CVM 才写入 `.rmb-deployed-sha` 并删除临时回滚文件。
+10. GitHub Runner 最后再次访问公网 `/api/health`，确认外部网络路径正常。
 
 ## 安全边界
 
 - 不使用 Vercel 发布入口。
 - 不在普通部署中执行 `npm run db:deploy`、`npm run build:release` 或 `prisma migrate deploy`。
+- 普通构建不读取、复制或输出生产环境文件；`RMB_CVM_ENV_FILE` 仅供显式安全迁移与独立备份流程使用。
+- 普通原地部署不允许运行依赖发生变化；依赖变化必须使用完整 release 部署，避免在线替换 `node_modules`。
+- 如果相对已部署版本存在未批准的 Prisma schema 或 migration 变化，普通部署会直接停止。
 - 不允许非快进部署；服务器当前 SHA 必须是目标 SHA 的祖先。
 - 同一时间只允许一个生产部署运行。
 - SSH 必须启用严格主机校验；`RMB_CVM_KNOWN_HOSTS` 必须由人工确认后写入 GitHub Secret。
-- 建议使用专用 Linux 用户 `rmb-deploy`，只允许写入 `/srv/rmb/app` 并通过 sudo 重启/查看 `rmb-app.service`。
+- 建议使用专用 Linux 用户 `rmb-deploy`，只允许写入 `/srv/rmb/app`，并通过免密 sudo 仅执行 `systemctl restart rmb-app.service`；`show`、`is-active` 和 `status` 均以普通用户只读执行。
+- Build job 不绑定 `production` Environment，也不会注入或落盘任何腾讯云 SSH 凭据；SSH 私钥只在 Deploy job 下载并核对构建产物后创建，任务结束即删除。
 - 上传到 CVM 的 bundle 是临时文件，远程脚本结束后会删除。
 
 ## GitHub 配置
@@ -65,6 +69,14 @@ RMB_CVM_AUTO_DEPLOY=false
 - `RMB_CVM_LOCAL_HEALTH_URL` 未配置时使用 `http://127.0.0.1:3000/`
 - `RMB_CVM_PUBLIC_HEALTH_URL` 未配置时使用 `https://www.nextwood.net`
 
+部署用户的 sudoers 至少需要允许实际 `systemctl` 路径对应的重启命令，例如：
+
+```text
+rmb-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart rmb-app.service
+```
+
+可先在 CVM 上用 `command -v systemctl` 确认路径；部署会在切换源码和构建前以无交互方式核验这条权限。
+
 ## 手动部署
 
 在 GitHub Actions 页面运行 `Deploy CVM` workflow，`ref` 默认填 `main`。
@@ -93,7 +105,7 @@ RMB_CVM_AUTO_DEPLOY=true
 
 ## 数据库迁移
 
-如果本次代码包含 Prisma migration，普通部署只会报告 migration 状态，不会自动执行迁移。应先完成数据库备份，再在维护窗口显式执行：
+如果本次代码包含 Prisma migration，普通部署不会读取生产数据库，也不会执行或检查迁移状态。应先完成数据库备份，再在维护窗口显式执行：
 
 ```bash
 npm run db:deploy

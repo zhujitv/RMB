@@ -359,7 +359,7 @@ gh workflow run deploy-cvm.yml --repo zhujitv/RMB -f ref=main -f require_ci_succ
 ```
 
 4. `Deploy CVM` 会通过 SSH 读取 CVM 当前 SHA，由 GitHub Runner 生成增量 Git bundle 并上传到 CVM；CVM 不再直接连接 GitHub 拉取代码。
-5. 部署脚本只做快进更新，执行 `npx prisma migrate status`、`npm run build:app`、重启 `rmb-app.service`，并核对本机和公网健康状态。
+5. 无生产权限的 Build job 在干净环境生成 `.next` 构建归档，Deploy job 再下载同一提交的产物；CVM 校验后切换源码和构建、重启 `rmb-app.service`，并通过会访问数据库且返回构建版本的 `/api/health` 核对本机和公网状态。普通部署不会读取生产环境文件、连接生产数据库或在线替换 `node_modules`。
 6. 核对 systemd 服务正常、仅一个 `next-server` 进程、应用只监听本机端口，Nginx HTTPS 正常。
 7. 确认服务器运行 SHA 与 GitHub SHA 一致，`www` 返回 200、裸域名正确跳转，再登录验收核心业务。
 

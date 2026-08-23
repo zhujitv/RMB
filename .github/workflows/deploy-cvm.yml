@@ -42,10 +42,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy to Tencent Cloud CVM
+  build:
+    name: Build deployment artifact
     runs-on: ubuntu-latest
-    environment: production
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (
@@ -53,32 +52,38 @@ jobs:
         github.event.workflow_run.head_branch == 'main' &&
         vars.RMB_CVM_AUTO_DEPLOY == 'true'
       )
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      migration_name: ${{ steps.migration.outputs.name }}
+      artifact_name: ${{ steps.artifact.outputs.name }}
     env:
-      DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
-      DEPLOY_PORT: ${{ secrets.RMB_CVM_PORT }}
-      DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
-      DEPLOY_SSH_KEY: ${{ secrets.RMB_CVM_SSH_KEY }}
-      DEPLOY_KNOWN_HOSTS: ${{ secrets.RMB_CVM_KNOWN_HOSTS }}
-      APP_DIR: ${{ vars.RMB_CVM_APP_DIR }}
-      SERVICE_NAME: ${{ vars.RMB_CVM_SERVICE }}
-      ENV_FILE: ${{ vars.RMB_CVM_ENV_FILE }}
-      DB_BACKUP_DIR: ${{ vars.RMB_CVM_DB_BACKUP_DIR }}
-      DB_BACKUP_RETENTION_DAYS: ${{ vars.RMB_CVM_DB_BACKUP_RETENTION_DAYS }}
-      LOCAL_HEALTH_URL: ${{ vars.RMB_CVM_LOCAL_HEALTH_URL }}
       PUBLIC_HEALTH_URL: ${{ vars.RMB_CVM_PUBLIC_HEALTH_URL }}
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Resolve deploy target
         id: target
+        env:
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_REQUIRE_CI_SUCCESS: ${{ inputs.require_ci_success }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
-            printf 'ref=%s\n' '${{ github.event.workflow_run.head_sha }}' >> "$GITHUB_OUTPUT"
-            printf 'require_ci_success=false\n' >> "$GITHUB_OUTPUT"
+            deploy_ref="$WORKFLOW_RUN_SHA"
+            require_ci_success="false"
           else
-            printf 'ref=%s\n' '${{ inputs.ref }}' >> "$GITHUB_OUTPUT"
-            printf 'require_ci_success=%s\n' '${{ inputs.require_ci_success }}' >> "$GITHUB_OUTPUT"
+            deploy_ref="${INPUT_REF:-main}"
+            require_ci_success="${INPUT_REQUIRE_CI_SUCCESS:-true}"
           fi
+          git check-ref-format --branch "$deploy_ref" >/dev/null 2>&1 || {
+            echo "::error::Deployment ref contains unsupported characters."
+            exit 1
+          }
+          [[ "$require_ci_success" == "true" || "$require_ci_success" == "false" ]] || {
+            echo "::error::require_ci_success must be true or false."
+            exit 1
+          }
+          printf 'ref=%s\n' "$deploy_ref" >> "$GITHUB_OUTPUT"
+          printf 'require_ci_success=%s\n' "$require_ci_success" >> "$GITHUB_OUTPUT"
 
       - name: Checkout target commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -88,6 +93,9 @@ jobs:
 
       - name: Verify target commit and CI
         id: sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUIRE_CI_SUCCESS: ${{ steps.target.outputs.require_ci_success }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
@@ -96,7 +104,11 @@ jobs:
             echo "::error::Target commit must be on main."
             exit 1
           }
-          if [[ "${{ steps.target.outputs.require_ci_success }}" == "true" ]]; then
+          [[ "$sha" =~ ^[a-f0-9]{40}$ ]] || {
+            echo "::error::Resolved deployment target is not a full commit SHA."
+            exit 1
+          }
+          if [[ "$REQUIRE_CI_SUCCESS" == "true" ]]; then
             ci_success_count="$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&status=success&per_page=1" --jq '.total_count')"
             if [[ "$ci_success_count" == "0" ]]; then
               echo "::error::No successful CI run found for $sha. Run CI first or dispatch with require_ci_success=false for an emergency rollback."
@@ -107,12 +119,15 @@ jobs:
 
       - name: Resolve optional database migration
         id: migration
+        env:
+          INPUT_SAFE_MIGRATION: ${{ inputs.safe_prisma_migration }}
+          INPUT_LEGACY_MIGRATION: ${{ inputs.apply_customer_product_material_code_migration }}
         run: |
           set -euo pipefail
           migration_name=""
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            migration_name='${{ inputs.safe_prisma_migration }}'
-            if [[ -z "$migration_name" && '${{ inputs.apply_customer_product_material_code_migration }}' == "true" ]]; then
+            migration_name="$INPUT_SAFE_MIGRATION"
+            if [[ -z "$migration_name" && "$INPUT_LEGACY_MIGRATION" == "true" ]]; then
               migration_name="20260820233000_customer_product_material_code"
             fi
           fi
@@ -128,7 +143,84 @@ jobs:
           fi
           printf 'name=%s\n' "$migration_name" >> "$GITHUB_OUTPUT"
 
+      - name: Setup deployment Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Build isolated deployment artifact
+        id: artifact
+        env:
+          DEPLOY_SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          deploy_sha="$DEPLOY_SHA"
+          public_origin="${PUBLIC_HEALTH_URL:-https://www.nextwood.net}"
+          public_origin="${public_origin%/}"
+          [[ "$public_origin" =~ ^https://[^/?#[:space:]@]+$ ]] || {
+            echo "::error::RMB_CVM_PUBLIC_HEALTH_URL must be an HTTPS origin without credentials or a path."
+            exit 1
+          }
+          export RMB_SKIP_LOCAL_ENV_FILES=1
+          export NEXT_TELEMETRY_DISABLED=1
+          DATABASE_URL="postgresql://127.0.0.1:5432/rmb_prisma_generate" \
+            npm ci --prefer-offline --no-audit --fund=false
+          env -u VERCEL_ENV -u VERCEL_TARGET_ENV -u STRICT_PRODUCTION_SECURITY \
+            RMB_SKIP_LOCAL_ENV_FILES=1 \
+            DATABASE_URL="postgresql://127.0.0.1:5432/rmb_build_only" \
+            APP_URL="$public_origin" \
+            NEXT_PUBLIC_APP_URL="$public_origin" \
+            SECURITY_BUILD_MODE=preview \
+            npm run build:app
+          printf '%s\n' "$deploy_sha" > .next/RMB_DEPLOY_SHA
+          artifact_path="$RUNNER_TEMP/rmb-next-$deploy_sha.tar.gz"
+          artifact_name="rmb-next-$deploy_sha"
+          tar --exclude='.next/cache' -czf "$artifact_path" .next
+          printf 'path=%s\n' "$artifact_path" >> "$GITHUB_OUTPUT"
+          printf 'name=%s\n' "$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.artifact.outputs.path }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  deploy:
+    name: Deploy to Tencent Cloud CVM
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      APP_DIR: ${{ vars.RMB_CVM_APP_DIR }}
+      SERVICE_NAME: ${{ vars.RMB_CVM_SERVICE }}
+      ENV_FILE: ${{ vars.RMB_CVM_ENV_FILE }}
+      DB_BACKUP_DIR: ${{ vars.RMB_CVM_DB_BACKUP_DIR }}
+      DB_BACKUP_RETENTION_DAYS: ${{ vars.RMB_CVM_DB_BACKUP_RETENTION_DAYS }}
+      LOCAL_HEALTH_URL: ${{ vars.RMB_CVM_LOCAL_HEALTH_URL }}
+      PUBLIC_HEALTH_URL: ${{ vars.RMB_CVM_PUBLIC_HEALTH_URL }}
+    steps:
+      - name: Checkout exact deployment commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Download verified deployment artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/rmb-deployment-artifact
+
       - name: Check deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
+          DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.RMB_CVM_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.RMB_CVM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           missing=()
@@ -143,6 +235,9 @@ jobs:
           fi
 
       - name: Prepare SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.RMB_CVM_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.RMB_CVM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.ssh"
@@ -153,6 +248,10 @@ jobs:
 
       - name: Ensure CVM database backup directory
         if: github.event_name == 'workflow_dispatch'
+        env:
+          DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
+          DEPLOY_PORT: ${{ secrets.RMB_CVM_PORT }}
+          DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
         run: |
           set -euo pipefail
           port="${DEPLOY_PORT:-22}"
@@ -197,7 +296,12 @@ jobs:
           REMOTE_SCRIPT
 
       - name: Apply single safe Prisma migration
-        if: steps.migration.outputs.name != ''
+        if: needs.build.outputs.migration_name != ''
+        env:
+          DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
+          DEPLOY_PORT: ${{ secrets.RMB_CVM_PORT }}
+          DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
+          MIGRATION_NAME: ${{ needs.build.outputs.migration_name }}
         run: |
           set -euo pipefail
           port="${DEPLOY_PORT:-22}"
@@ -208,7 +312,7 @@ jobs:
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           scp_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          migration_name="${{ steps.migration.outputs.name }}"
+          migration_name="$MIGRATION_NAME"
           local_script="$RUNNER_TEMP/rmb-cvm-db-migration.sh"
           remote_script="/tmp/rmb-cvm-db-migration-$migration_name.sh"
           remote_sql="/tmp/rmb-cvm-db-migration-$migration_name.sql"
@@ -369,63 +473,157 @@ jobs:
 
       - name: Build incremental git bundle
         id: bundle
+        env:
+          DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
+          DEPLOY_PORT: ${{ secrets.RMB_CVM_PORT }}
+          DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
+          DEPLOY_SHA: ${{ needs.build.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           port="${DEPLOY_PORT:-22}"
           app_dir="${APP_DIR:-/srv/rmb/app}"
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          remote_head="$(ssh "${ssh_opts[@]}" "$ssh_target" "cd '$app_dir' && git rev-parse --verify HEAD 2>/dev/null || true")"
-          deploy_sha="${{ steps.sha.outputs.sha }}"
-          if [[ "$remote_head" == "$deploy_sha" ]]; then
+          app_dir_b64="$(printf '%s' "$app_dir" | base64 -w0)"
+          remote_state="$(ssh "${ssh_opts[@]}" "$ssh_target" "RMB_APP_DIR_B64='$app_dir_b64' bash -s" <<'REMOTE_STATE'
+          set -euo pipefail
+          app_dir="$(printf '%s' "$RMB_APP_DIR_B64" | base64 -d)"
+          cd "$app_dir"
+          remote_head="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+          deployed_sha=""
+          build_sha=""
+          if [[ -f .rmb-deployed-sha ]]; then
+            deployed_sha="$(tr -d '\r\n' < .rmb-deployed-sha)"
+          fi
+          if [[ -f .next/RMB_DEPLOY_SHA ]]; then
+            build_sha="$(tr -d '\r\n' < .next/RMB_DEPLOY_SHA)"
+          fi
+          printf '%s\n%s\n%s\n' "$remote_head" "$deployed_sha" "$build_sha"
+          REMOTE_STATE
+          )"
+          remote_head="$(sed -n '1p' <<< "$remote_state")"
+          deployed_sha="$(sed -n '2p' <<< "$remote_state")"
+          build_sha="$(sed -n '3p' <<< "$remote_state")"
+          deploy_sha="$DEPLOY_SHA"
+          if [[ "$deployed_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            base_deployed_sha="$deployed_sha"
+          else
+            base_deployed_sha="$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/deploy-cvm.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty')"
+            [[ "$base_deployed_sha" =~ ^[a-f0-9]{40}$ ]] || {
+              echo "::error::No successful deployment baseline is available and the server marker is missing."
+              exit 1
+            }
+            echo "::warning::Server deployed-SHA marker is missing; using the latest successful deployment baseline $base_deployed_sha."
+          fi
+          git cat-file -e "$base_deployed_sha^{commit}"
+          git merge-base --is-ancestor "$base_deployed_sha" "$deploy_sha" || {
+            echo "::error::Last deployed SHA $base_deployed_sha is not an ancestor of target $deploy_sha."
+            exit 1
+          }
+          printf 'base_sha=%s\n' "$base_deployed_sha" >> "$GITHUB_OUTPUT"
+          if [[ "$deployed_sha" == "$deploy_sha" && "$build_sha" == "$deploy_sha" ]]; then
             printf 'up_to_date=true\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git branch --force deploy-target "$deploy_sha"
           bundle_path="$RUNNER_TEMP/rmb-cvm-$deploy_sha.bundle"
-          if [[ -n "$remote_head" ]]; then
+          if [[ "$remote_head" == "$deploy_sha" ]]; then
+            git bundle create "$bundle_path" deploy-target "^$deploy_sha^"
+          elif [[ -n "$remote_head" ]]; then
             git merge-base --is-ancestor "$remote_head" "$deploy_sha" || {
               echo "::error::Server HEAD $remote_head is not an ancestor of $deploy_sha. Refusing non-fast-forward deployment."
               exit 1
             }
             git bundle create "$bundle_path" deploy-target "^$remote_head"
           else
-            echo "::warning::Server checkout has no readable HEAD; creating a full deployment bundle."
-            git bundle create "$bundle_path" deploy-target
+            echo "::error::Server checkout has no readable HEAD; refusing an in-place deployment."
+            exit 1
           fi
           printf 'path=%s\n' "$bundle_path" >> "$GITHUB_OUTPUT"
           printf 'up_to_date=false\n' >> "$GITHUB_OUTPUT"
 
       - name: Upload and run deployment
         if: steps.bundle.outputs.up_to_date != 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
+          DEPLOY_PORT: ${{ secrets.RMB_CVM_PORT }}
+          DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
+          DEPLOY_SHA: ${{ needs.build.outputs.sha }}
+          BASE_DEPLOYED_SHA: ${{ steps.bundle.outputs.base_sha }}
+          APPLIED_MIGRATION: ${{ needs.build.outputs.migration_name }}
+          SOURCE_BUNDLE_PATH: ${{ steps.bundle.outputs.path }}
+          BUILD_ARCHIVE_PATH: ${{ runner.temp }}/rmb-deployment-artifact/rmb-next-${{ needs.build.outputs.sha }}.tar.gz
         run: |
           set -euo pipefail
           port="${DEPLOY_PORT:-22}"
           app_dir="${APP_DIR:-/srv/rmb/app}"
           service_name="${SERVICE_NAME:-rmb-app.service}"
-          env_file="${ENV_FILE:-/srv/rmb/shared/app.env}"
-          local_health_url="${LOCAL_HEALTH_URL:-http://127.0.0.1:3000/}"
+          expected_env_file="${ENV_FILE:-/srv/rmb/shared/app.env}"
+          local_origin="${LOCAL_HEALTH_URL:-http://127.0.0.1:3000/}"
+          public_origin="${PUBLIC_HEALTH_URL:-https://www.nextwood.net}"
+          local_ready_url="${local_origin%/}/api/health"
+          public_ready_url="${public_origin%/}/api/health"
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           scp_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
-          deploy_sha="${{ steps.sha.outputs.sha }}"
+          deploy_sha="$DEPLOY_SHA"
+          base_deployed_sha="$BASE_DEPLOYED_SHA"
+          applied_migration="$APPLIED_MIGRATION"
           remote_bundle="/tmp/rmb-cvm-$deploy_sha.bundle"
+          remote_archive="/tmp/rmb-next-$deploy_sha.tar.gz"
           remote_script="/tmp/rmb-cvm-deploy-$deploy_sha.sh"
-          scp "${scp_opts[@]}" "${{ steps.bundle.outputs.path }}" "$ssh_target:$remote_bundle"
+          remote_config="/tmp/rmb-cvm-deploy-$deploy_sha.env"
+          local_config="$RUNNER_TEMP/rmb-cvm-deploy-$deploy_sha.env"
+          {
+            printf 'RMB_DEPLOY_SHA=%q\n' "$deploy_sha"
+            printf 'RMB_BASE_DEPLOYED_SHA=%q\n' "$base_deployed_sha"
+            printf 'RMB_APPLIED_MIGRATION=%q\n' "$applied_migration"
+            printf 'RMB_DEPLOY_BUNDLE=%q\n' "$remote_bundle"
+            printf 'RMB_BUILD_ARCHIVE=%q\n' "$remote_archive"
+            printf 'RMB_APP_DIR=%q\n' "$app_dir"
+            printf 'RMB_SERVICE=%q\n' "$service_name"
+            printf 'RMB_EXPECTED_ENV_FILE=%q\n' "$expected_env_file"
+            printf 'RMB_READY_URL=%q\n' "$local_ready_url"
+            printf 'RMB_PUBLIC_READY_URL=%q\n' "$public_ready_url"
+            printf 'RMB_ROLLBACK_HEALTH_URL=%q\n' "$local_origin"
+          } > "$local_config"
+          scp "${scp_opts[@]}" "$SOURCE_BUNDLE_PATH" "$ssh_target:$remote_bundle"
+          scp "${scp_opts[@]}" "$BUILD_ARCHIVE_PATH" "$ssh_target:$remote_archive"
           scp "${scp_opts[@]}" scripts/deploy-cvm-from-bundle.sh "$ssh_target:$remote_script"
-          ssh "${ssh_opts[@]}" "$ssh_target" \
-            "chmod 700 '$remote_script' && RMB_DEPLOY_SHA='$deploy_sha' RMB_DEPLOY_BUNDLE='$remote_bundle' RMB_APP_DIR='$app_dir' RMB_SERVICE='$service_name' RMB_ENV_FILE='$env_file' RMB_HEALTH_URL='$local_health_url' '$remote_script'"
+          scp "${scp_opts[@]}" "$local_config" "$ssh_target:$remote_config"
+          ssh "${ssh_opts[@]}" "$ssh_target" "bash -s -- '$remote_script' '$remote_config'" <<'REMOTE_DEPLOY'
+          set -euo pipefail
+          remote_script="$1"
+          remote_config="$2"
+          cleanup_remote_files() { rm -f -- "$remote_config" "$remote_script"; }
+          trap cleanup_remote_files EXIT
+          chmod 700 "$remote_script"
+          set -a
+          # shellcheck disable=SC1090
+          source "$remote_config"
+          set +a
+          "$remote_script"
+          REMOTE_DEPLOY
 
       - name: Public health check
-        if: steps.bundle.outputs.up_to_date != 'true'
+        env:
+          EXPECTED_SHA: ${{ needs.build.outputs.sha }}
         run: |
           set -euo pipefail
           public_url="${PUBLIC_HEALTH_URL:-https://www.nextwood.net}"
+          public_url="${public_url%/}/api/health"
+          expected_sha="$EXPECTED_SHA"
           public_health_ok=0
           for attempt in {1..20}; do
-            if curl --fail --silent --show-error --head --max-time 20 "$public_url" >/dev/null; then
-              public_health_ok=1
-              break
+            if response="$(curl --fail --silent --show-error --max-time 20 "$public_url")"; then
+              if HEALTH_RESPONSE="$response" EXPECTED_SHA="$expected_sha" node -e '
+                const body = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+                process.exit(body.status === "ok" && body.version === process.env.EXPECTED_SHA ? 0 : 1);
+              '; then
+                public_health_ok=1
+                break
+              fi
             fi
             echo "Public health not ready yet; retrying ($attempt/20)"
             sleep 2
@@ -435,4 +633,10 @@ jobs:
 
       - name: Already up to date
         if: steps.bundle.outputs.up_to_date == 'true'
-        run: echo "CVM already runs ${{ steps.sha.outputs.sha }}."
+        env:
+          DEPLOY_SHA: ${{ needs.build.outputs.sha }}
+        run: echo "CVM already runs $DEPLOY_SHA."
+
+      - name: Remove temporary SSH credentials
+        if: always()
+        run: rm -f -- "$HOME/.ssh/rmb-cvm-deploy" "$HOME/.ssh/known_hosts"
