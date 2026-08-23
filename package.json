@@ -53,6 +53,7 @@
     "qrcode": "^1.5.4",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "svix": "^2.0.0",
     "tencentcloud-sdk-nodejs-ocr": "^4.1.292",
     "tencentcloud-sdk-nodejs-sms": "^4.1.240"
   },

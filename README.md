@@ -808,12 +808,26 @@ R2_ENDPOINT
 邮件通知使用 Resend：
 
 ```text
-RESEND_API_KEY=Resend API Key
-RESEND_FROM=发件邮箱
-RESEND_EMAIL_ENDPOINT=https://api.resend.com/emails
+RESEND_API_KEY=仅用于发信的 Resend API Key
+RESEND_FROM=NEXTWOOD CRM <crm@send.nextwood.com>
+RESEND_INBOUND_API_KEY=用于读取收信正文和附件的 Resend Full Access API Key
+RESEND_WEBHOOK_SECRET=Resend email.received Webhook Signing Secret
+CRM_EMAIL_DOMAIN=send.nextwood.com
+RESEND_EMAIL_ENDPOINT=
 ```
 
 `RESEND_EMAIL_ENDPOINT` 可留空，默认使用 Resend 官方接口。若未配置 `RESEND_API_KEY` 或发件邮箱，系统会阻止邮件发送并保存明确失败原因。
+
+CRM 收信不是传统 IMAP / POP 邮箱。Resend 收到 `*@send.nextwood.com` 的邮件后，会把
+`email.received` 事件发送到公网 HTTPS 地址
+`{APP_URL}/api/customer-email-messages/inbound`。服务端验证
+`RESEND_WEBHOOK_SECRET` 后，再使用 `RESEND_INBOUND_API_KEY` 获取完整正文和附件并归档到客户沟通模块。
+收信 Key 必须使用 Resend `full_access` 权限；已有的 `sending_access` Key 只能发信，不能读取收信内容。
+真实 Key 和 Signing Secret 只能写入服务器环境变量，禁止提交到 Git 或使用 `NEXT_PUBLIC_*` 暴露给浏览器。
+
+`send.nextwood.com` 已有发信验证时不需要重新验证整个域名，但仍需在 Resend 域名详情中开启
+Receiving，并把页面显示的额外 MX 记录原样添加到 DNS，等待收信记录显示为 Verified。
+完整配置和验收步骤见：[docs/INSTALLATION.md](docs/INSTALLATION.md#resend-crm-收信配置sendnextwoodcom)。
 
 统一 API 限流在本地开发时可使用进程内存。生产环境默认必须配置 Upstash Redis：
 

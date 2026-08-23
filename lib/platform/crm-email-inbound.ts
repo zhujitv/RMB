@@ -33,7 +33,7 @@ export async function parseInboundCrmEmailRequest(request: Request) {
   }
   const formData = await request.formData();
   const body: Record<string, unknown> = {};
-  for (const key of ["customerId", "fromEmail", "fromName", "toEmails", "ccEmails", "subject", "bodyText", "messageId", "threadKey"]) {
+  for (const key of ["customerId", "fromEmail", "fromName", "toEmails", "ccEmails", "subject", "bodyText", "messageId", "threadKey", "receivedAt"]) {
     body[key] = formData.get(key);
   }
   return { body, files: await readCrmEmailAttachmentFiles(formData) };
@@ -61,7 +61,7 @@ async function resolveInboundCustomerId(body: Record<string, unknown>) {
 async function resolveInboundAccountId(toEmails: string[]) {
   if (!toEmails.length) return null;
   const account = await prisma.crmEmailAccount.findFirst({
-    where: { emailAddress: { in: toEmails }, deletedAt: null, status: EMAIL_ACCOUNT_STATUS_ACTIVE },
+    where: { emailAddress: { in: toEmails, mode: "insensitive" }, deletedAt: null, status: EMAIL_ACCOUNT_STATUS_ACTIVE },
     orderBy: { createdAt: "asc" },
   });
   return account?.id || null;
@@ -86,13 +86,17 @@ export async function recordInboundCustomerCrmEmailMessage(
     if (existing) return { message: serializeEmailMessageWithAttachments(existing), deliveryMessage: "入站邮件已存在，已跳过重复写入" };
   }
   const emailMessageId = crypto.randomUUID();
+  const requestedReceivedAt = String(body.receivedAt || "").trim();
+  const parsedReceivedAt = requestedReceivedAt ? new Date(requestedReceivedAt) : null;
+  const receivedAt = parsedReceivedAt && Number.isFinite(parsedReceivedAt.getTime()) ? parsedReceivedAt : new Date();
+  const accountId = await resolveInboundAccountId(toEmails);
   let attachments: FileAsset[] = [];
-  const row = await prisma.$transaction(async (tx) => {
+  const persistInboundMessage = () => prisma.$transaction(async (tx) => {
     const created = await tx.crmEmailMessage.create({
       data: {
         id: emailMessageId,
         customerId,
-        accountId: await resolveInboundAccountId(toEmails),
+        accountId,
         direction: "INBOUND",
         status: "RECEIVED",
         fromName: String(body.fromName || "").trim().slice(0, 120) || null,
@@ -103,13 +107,28 @@ export async function recordInboundCustomerCrmEmailMessage(
         bodyText: requireText(body.bodyText, "邮件正文").slice(0, 10000),
         messageId: providerMessageId,
         threadKey: String(body.threadKey || "").trim() || providerMessageId,
-        receivedAt: new Date(),
+        receivedAt,
       },
       include: crmEmailMessageInclude(),
     });
     attachments = await storeCrmEmailAttachments({ tx, actorId: "", customerId, messageId: emailMessageId, files });
     return created;
   });
+  let row: Awaited<ReturnType<typeof persistInboundMessage>>;
+  try {
+    row = await persistInboundMessage();
+  } catch (error: unknown) {
+    if (!providerMessageId || String((error as { code?: string } | null)?.code || "") !== "P2002") throw error;
+    const existing = await prisma.crmEmailMessage.findUnique({
+      where: { messageId: providerMessageId },
+      include: crmEmailMessageInclude(),
+    });
+    if (!existing) throw error;
+    return {
+      message: serializeEmailMessageWithAttachments(existing),
+      deliveryMessage: "入站邮件已存在，已跳过重复写入",
+    };
+  }
   await runNonCriticalTask("CRM 入站邮件日志写入", () => (
     writeAudit(request, null, "接收 CRM 客户邮件", "crm_email_messages", row.id, null, { ...row, attachmentCount: attachments.length })
   ));

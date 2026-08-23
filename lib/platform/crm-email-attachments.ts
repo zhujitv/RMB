@@ -13,9 +13,9 @@ import {
 
 export const CRM_EMAIL_ATTACHMENT_SOURCE_TABLE = "crm_email_messages";
 const CRM_EMAIL_ATTACHMENT_ROLE_PREFIX = "CRM_EMAIL_ATTACHMENT";
-const CRM_EMAIL_ATTACHMENT_MAX_COUNT = 5;
-const CRM_EMAIL_ATTACHMENT_TOTAL_MAX_BYTES = 20 * 1024 * 1024;
-const CRM_EMAIL_ATTACHMENT_ALLOWED_MIMES = new Set([
+export const CRM_EMAIL_ATTACHMENT_MAX_COUNT = 5;
+export const CRM_EMAIL_ATTACHMENT_TOTAL_MAX_BYTES = 20 * 1024 * 1024;
+export const CRM_EMAIL_ATTACHMENT_ALLOWED_MIMES = new Set([
   "application/pdf",
   "image/jpeg",
   "image/png",
@@ -46,10 +46,10 @@ export function serializeCrmEmailAttachment(asset: FileAsset) {
   };
 }
 
-function normalizeAttachmentMimeType(file: File) {
-  const mimeType = String(file.type || "application/octet-stream").toLowerCase();
+export function normalizeCrmEmailAttachmentMimeType(fileName: string, value: unknown) {
+  const mimeType = String(value || "application/octet-stream").toLowerCase();
   if (mimeType !== "application/octet-stream") return mimeType;
-  const name = file.name.toLowerCase();
+  const name = fileName.toLowerCase();
   if (name.endsWith(".pdf")) return "application/pdf";
   if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
   if (name.endsWith(".png")) return "image/png";
@@ -65,10 +65,36 @@ function normalizeAttachmentMimeType(file: File) {
   return mimeType;
 }
 
+export function assertCrmEmailAttachmentBodyMatchesMime(fileName: string, mimeType: string, body: Buffer) {
+  const startsWith = (...bytes: number[]) => bytes.every((byte, index) => body[index] === byte);
+  const officeZip = startsWith(0x50, 0x4b, 0x03, 0x04);
+  const officeOle = startsWith(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1);
+  const matches = (() => {
+    if (mimeType === "application/pdf") return body.subarray(0, 1024).includes(Buffer.from("%PDF-"));
+    if (mimeType === "image/jpeg") return startsWith(0xff, 0xd8, 0xff);
+    if (mimeType === "image/png") return startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+    if (mimeType === "image/webp") return body.subarray(0, 4).toString("ascii") === "RIFF"
+      && body.subarray(8, 12).toString("ascii") === "WEBP";
+    if ([
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ].includes(mimeType)) return officeZip;
+    if (["application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint"].includes(mimeType)) {
+      return officeOle;
+    }
+    if (["text/plain", "text/csv"].includes(mimeType)) return !body.subarray(0, 4096).includes(0);
+    return false;
+  })();
+  if (!matches) {
+    throw codedError(`附件内容与文件类型不符：${fileName}`, 415, "CRM_EMAIL_ATTACHMENT_SIGNATURE_INVALID");
+  }
+}
+
 async function readCrmEmailAttachmentFile(candidate: unknown, index: number): Promise<CrmEmailAttachmentFile> {
   if (!(candidate instanceof File)) throw codedError("附件格式错误", 400, "CRM_EMAIL_ATTACHMENT_INVALID");
   const originalFileName = safeObjectFileName(candidate.name || `attachment-${index + 1}`);
-  const mimeType = normalizeAttachmentMimeType(candidate);
+  const mimeType = normalizeCrmEmailAttachmentMimeType(originalFileName, candidate.type);
   if (!CRM_EMAIL_ATTACHMENT_ALLOWED_MIMES.has(mimeType)) {
     throw codedError(`附件类型暂不支持：${originalFileName}`, 415, "CRM_EMAIL_ATTACHMENT_TYPE_INVALID");
   }
@@ -77,6 +103,7 @@ async function readCrmEmailAttachmentFile(candidate: unknown, index: number): Pr
   if (fileSize > CRM_EMAIL_ATTACHMENT_MAX_BYTES) throw codedError(`附件超过 10MB：${originalFileName}`, 413, "CRM_EMAIL_ATTACHMENT_TOO_LARGE");
   const body = Buffer.from(await candidate.arrayBuffer());
   if (body.byteLength !== fileSize) throw codedError(`附件读取不完整：${originalFileName}`, 400, "CRM_EMAIL_ATTACHMENT_SIZE_MISMATCH");
+  assertCrmEmailAttachmentBodyMatchesMime(originalFileName, mimeType, body);
   return {
     originalFileName,
     fileName: originalFileName,

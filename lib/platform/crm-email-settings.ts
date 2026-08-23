@@ -34,13 +34,26 @@ export async function saveCrmEmailIntegrationSettings(request: AuditRequest, act
   const before = await prisma.systemSetting.findUnique({ where: { key: CRM_EMAIL_SETTING_KEY } });
   const current = normalizeCrmEmailIntegrationSettings(before?.value);
   const value = normalizeCrmEmailIntegrationSettings({ ...current, ...body });
-  const saved = await prisma.systemSetting.upsert({
-    where: { key: CRM_EMAIL_SETTING_KEY },
-    update: { value: value as Prisma.InputJsonValue },
-    create: { key: CRM_EMAIL_SETTING_KEY, value: value as Prisma.InputJsonValue },
+  const domainChanged = value.mailDomain !== current.mailDomain;
+  const { saved, migratedAccountCount } = await prisma.$transaction(async (tx) => {
+    const setting = await tx.systemSetting.upsert({
+      where: { key: CRM_EMAIL_SETTING_KEY },
+      update: { value: value as Prisma.InputJsonValue },
+      create: { key: CRM_EMAIL_SETTING_KEY, value: value as Prisma.InputJsonValue },
+    });
+    if (!domainChanged) return { saved: setting, migratedAccountCount: 0 };
+    const accounts = await tx.crmEmailAccount.findMany({ select: { id: true, localPart: true } });
+    await Promise.all(accounts.map((account) => tx.crmEmailAccount.update({
+      where: { id: account.id },
+      data: { emailAddress: `${account.localPart}@${value.mailDomain}` },
+    })));
+    return { saved: setting, migratedAccountCount: accounts.length };
   });
   await runNonCriticalTask("CRM 邮件设置操作日志写入", () => (
-    writeAudit(request, actor, "更新 CRM 邮件设置", "system_settings", CRM_EMAIL_SETTING_KEY, before, saved)
+    writeAudit(request, actor, "更新 CRM 邮件设置", "system_settings", CRM_EMAIL_SETTING_KEY, before, {
+      ...saved,
+      migratedAccountCount,
+    })
   ));
   return serializeCrmEmailIntegrationSettings(value);
 }

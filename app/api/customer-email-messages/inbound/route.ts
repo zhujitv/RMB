@@ -1,7 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   apiError,
+  isResendInboundWebhookRequest,
   parseInboundCrmEmailRequest,
+  receiveResendCustomerCrmEmail,
   recordInboundCustomerCrmEmailMessage,
 } from "../../../../lib/platform-db";
 import { assertMultipartRequestWithinLimit } from "../../../../lib/platform/upload-request-guard";
@@ -12,6 +14,13 @@ const MAX_CRM_EMAIL_MULTIPART_BYTES = 22 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   try {
+    if (isResendInboundWebhookRequest(request)) {
+      const result = await receiveResendCustomerCrmEmail(request);
+      return NextResponse.json(
+        { success: true, data: result.message, message: result.deliveryMessage },
+        { status: 200 },
+      );
+    }
     const contentType = String(request.headers.get("content-type") || "").toLowerCase();
     if (contentType.startsWith("multipart/form-data;")) {
       assertMultipartRequestWithinLimit(request, {

@@ -151,8 +151,11 @@ R2_ENDPOINT=""
 ### 邮件配置
 
 ```env
-RESEND_API_KEY=""
-RESEND_FROM="NEXTWOOD <notice@your-domain.com>"
+RESEND_API_KEY="re_replace_with_sending_access_key"
+RESEND_FROM="NEXTWOOD CRM <crm@send.nextwood.com>"
+RESEND_INBOUND_API_KEY="re_replace_with_full_access_key"
+RESEND_WEBHOOK_SECRET="whsec_replace_with_webhook_signing_secret"
+CRM_EMAIL_DOMAIN="send.nextwood.com"
 RESEND_EMAIL_ENDPOINT=""
 ```
 
@@ -163,6 +166,64 @@ RESEND_EMAIL_ENDPOINT=""
 - 物流费用开票通知
 - 供应商资料回传通知
 - 工作台提醒
+- CRM 客户邮件收发与附件归档
+
+上述值均为格式示例，不是真实密钥。生产环境的 Key 和 Signing Secret 只能写入
+`/srv/rmb/shared/app.env` 等服务器私有环境变量文件，禁止提交到 Git，禁止使用
+`NEXT_PUBLIC_*` 变量暴露给浏览器。
+
+`RESEND_API_KEY` 可以使用仅发信权限。`RESEND_INBOUND_API_KEY` 用于读取收到邮件的
+HTML、纯文本、邮件头和附件，必须在 Resend 创建为 `full_access`；不要把已有的
+`sending_access` Key 误当作收信 Key。`RESEND_WEBHOOK_SECRET` 是 Webhook 详情页显示的
+Signing Secret，不是 API Key，三者不要混用。
+
+#### Resend CRM 收信配置（send.nextwood.com）
+
+Resend Receiving 通过 Webhook 接收邮件，不提供传统 IMAP / POP 邮箱。启用后，发往
+`*@send.nextwood.com` 的邮件都会由 Resend 接收，系统再根据收件地址和客户资料归档。
+
+1. 登录 Resend，打开 `Domains`，进入已经验证发信权限的 `send.nextwood.com`。
+2. 在域名详情的 Receiving 区域开启收信。已有发信验证无需重做 SPF / DKIM，但必须
+   单独验证 Resend 新显示的收信 MX 记录。
+3. 把 Resend 页面显示的 MX `Name`、`Value` 和 `Priority` 原样添加到 DNS，不要照抄
+   文档示例服务器地址。点击 `I've added the record`，等待 Receiving 记录变为 Verified。
+4. 如果 `send.nextwood.com` 已存在其他真实邮箱 MX，先停止操作并核对：MX 数值越小，
+   优先级越高；相同优先级会随机投递，不会同时复制到两个服务。应改用独立收信子域，
+   或由原邮箱服务转发，避免截走现有邮箱来信。
+5. 在 Resend `Webhooks` 页面添加公网 HTTPS 地址：
+
+   ```text
+   https://你的正式系统域名/api/customer-email-messages/inbound
+   ```
+
+   只需订阅 `email.received`。保存后复制该 Webhook 的 Signing Secret 到
+   `RESEND_WEBHOOK_SECRET`。
+6. 在 Resend 创建单独的 `full_access` API Key，写入 `RESEND_INBOUND_API_KEY`；原发信
+   Key 继续放在 `RESEND_API_KEY`。修改服务器环境变量后重启 `rmb-app.service`。
+7. 登录系统，在【系统设置 → CRM邮件】中把系统邮箱域名设为 `send.nextwood.com`，依次
+   开启“启用 CRM 邮件模块”“允许外发邮件”和“允许接收入站邮件”，然后保存。
+
+Webhook 会先校验 Resend 签名，再按事件中的 `email_id` 拉取完整正文和附件。Webhook
+签名验证依赖原始请求正文，Nginx 或其他代理不得改写请求体。附件下载地址是临时签名链接，
+系统应及时保存到当前私有 COS；不能把临时链接当作长期附件地址。
+
+#### CRM 收信验收
+
+1. 从系统外部邮箱发送一封带正文和 PDF 附件的邮件到已创建的
+   `员工英文名@send.nextwood.com`。
+2. 在 Resend 的 `Emails → Receiving` 中确认来信存在。
+3. 在对应 Webhook 的事件记录中确认返回 HTTP 200；如果失败，修复后可执行 Replay。
+4. 在系统【客户沟通】中确认发件人、收件人、主题、正文、接收时间和附件均已归档。
+5. 对同一个 Webhook 事件执行一次 Replay，确认系统不会重复创建同一封邮件。
+6. 从 CRM 回复该邮件，确认客户邮箱收到回复，并确认后续回复继续归入同一邮件会话。
+
+常见失败检查：
+
+- Receiving MX 未变为 Verified、DNS 主机名填写错误或与已有 MX 冲突。
+- Webhook 地址不是公网 HTTPS、被登录鉴权拦截、发生重定向或未返回 HTTP 200。
+- 未订阅 `email.received`，或 `RESEND_WEBHOOK_SECRET` 复制自另一个 Webhook。
+- `RESEND_INBOUND_API_KEY` 仍是 `sending_access`，导致只能收到事件但无法读取正文和附件。
+- 系统设置中的 CRM 邮件模块或“允许接收入站邮件”仍处于关闭状态。
 
 ### 限流配置
 
