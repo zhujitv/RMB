@@ -49,6 +49,7 @@ function createFixture() {
   const buildLog = join(root, "build.log");
   const fetchLog = join(root, "fetch.log");
   const restartLog = join(root, "restart.log");
+  const curlLog = join(root, "curl.log");
   const auditFile = join(root, "audit.jsonl");
   const stateFile = join(root, "deploy.state");
   const meminfoFile = join(root, "meminfo");
@@ -164,6 +165,10 @@ fi
 
   writeExecutable(join(binDir, "curl"), `#!/bin/sh
 set -eu
+printf '%s\n' "$*" >> "$MOCK_CURL_LOG"
+case "$*" in
+  *'/api/auth/me?basic=1'*) printf '%s' "\${MOCK_AUTH_STATUS:-401}"; exit 0 ;;
+esac
 version="$(tr -d '\\r\\n' < "$MOCK_APP_DIR/.next/RMB_DEPLOY_SHA")"
 printf '{"status":"ok","version":"%s"}\n' "$version"
 `);
@@ -274,6 +279,7 @@ exit 1
     MOCK_BUILD_LOG: buildLog,
     MOCK_FETCH_LOG: fetchLog,
     MOCK_RESTART_LOG: restartLog,
+    MOCK_CURL_LOG: curlLog,
     MOCK_EXPECTED_ENV_FILE: "/srv/rmb/shared/app.env",
     RMB_APP_DIR: appDir,
     RMB_SERVICE: "rmb-app.service",
@@ -288,6 +294,7 @@ exit 1
     RMB_DEPLOY_ACTOR: "deploy-test",
     RMB_DEPLOY_RUN_URL: "https://github.com/zhujitv/RMB/actions/runs/1",
     RMB_EXPECTED_DEPLOY_USER: currentUser,
+    RMB_HEALTH_CHECK_ATTEMPTS: "1",
   };
 
   return {
@@ -298,6 +305,7 @@ exit 1
     buildLog,
     fetchLog,
     restartLog,
+    curlLog,
     auditFile,
     stateFile,
     deployScript: executableDeployScript,
@@ -362,6 +370,9 @@ test("quick deploy switches source and build, then records the target marker", (
       "next build",
     ]);
     assert.deepEqual(readLines(fixture.restartLog), ["restart"]);
+    const probes = readLines(fixture.curlLog);
+    assert.equal(probes.some((line) => line.includes("http://127.0.0.1:3000/api/auth/me?basic=1")), true);
+    assert.equal(probes.some((line) => line.includes("https://www.nextwood.net/api/auth/me?basic=1")), true);
     assert.equal(existsSync(fixture.stateFile), false);
     assert.equal(statSync(join(fixture.appDir, ".next")).mode & 0o777, 0o755);
     assert.equal(statSync(join(fixture.appDir, ".next", "BUILD_ID")).mode & 0o777, 0o644);
@@ -566,6 +577,25 @@ test("restart failure restores the base source, build and deployed marker", () =
       buildId: "old-build",
       source: "export const value = 'base';",
     });
+    assertBaseDependencyAlias(fixture);
+    assert.deepEqual(readLines(fixture.restartLog), ["restart", "restart"]);
+    assert.equal(existsSync(fixture.stateFile), false);
+    const audit = readLines(fixture.auditFile).map((line) => JSON.parse(line));
+    assert.equal(audit.at(-1)?.status, "FAILED");
+    assert.equal(audit.at(-1)?.rolledBack, true);
+  } finally {
+    cleanupFixture(fixture);
+  }
+});
+
+test("a failing authenticated runtime route rolls back the activated build", () => {
+  const fixture = createFixture();
+  try {
+    const before = onlineState(fixture);
+    const result = runDeploy(fixture, { MOCK_AUTH_STATUS: "500" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /local auth readiness check failed/);
+    assert.deepEqual(onlineState(fixture), before);
     assertBaseDependencyAlias(fixture);
     assert.deepEqual(readLines(fixture.restartLog), ["restart", "restart"]);
     assert.equal(existsSync(fixture.stateFile), false);

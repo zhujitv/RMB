@@ -211,6 +211,18 @@ export function WorkspaceShell() {
     );
   }
 
+  if (auth.status === "error") {
+    return (
+      <LoadingPanel
+        message={auth.message}
+        detail={auth.detail || "工作台初始化失败，请重新加载后再试。"}
+        loading={false}
+        actionLabel="重新加载"
+        onAction={() => window.location.reload()}
+      />
+    );
+  }
+
   if (!payload) return <LoadingPanel message="正在加载工作台..." />;
 
   return (

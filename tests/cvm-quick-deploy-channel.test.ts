@@ -247,7 +247,9 @@ test("activation is transactional, health-gated, audited and automatically rever
   const restart = script.indexOf('"${RESTART_CMD[@]}" restart "$SERVICE"', switchBuild);
   const restarted = script.indexOf("write_state RESTARTED");
   const localHealth = script.indexOf('check_health "$LOCAL_URL" "$TARGET_SHA" "local"');
+  const localAuth = script.indexOf('check_auth_route "${LOCAL_URL%/api/health}/api/auth/me?basic=1" "local"');
   const publicHealth = script.indexOf('check_health "$PUBLIC_URL" "$TARGET_SHA" "public"');
+  const publicAuth = script.indexOf('check_auth_route "${PUBLIC_URL%/api/health}/api/auth/me?basic=1" "public"');
   const marker = script.indexOf('write_marker "$TARGET_SHA"');
   assert.ok(prepared >= 0);
   assert.ok(switchBuild > prepared);
@@ -256,8 +258,10 @@ test("activation is transactional, health-gated, audited and automatically rever
   assert.ok(restart > validateActiveLinks);
   assert.ok(restarted > restart);
   assert.ok(localHealth > restarted);
-  assert.ok(publicHealth > localHealth);
-  assert.ok(switchSource > publicHealth);
+  assert.ok(localAuth > localHealth);
+  assert.ok(publicHealth > localAuth);
+  assert.ok(publicAuth > publicHealth);
+  assert.ok(switchSource > publicAuth);
   assert.ok(sourceSwitched > switchSource);
   assert.ok(marker > sourceSwitched);
   assert.match(script, /exchange_builds\(\)/);
@@ -266,6 +270,7 @@ test("activation is transactional, health-gated, audited and automatically rever
   assert.match(script, /exchange_builds "\$APP_DIR\/\.next" "\$candidate\/\.next"/);
   assert.match(script, /restore_source_to "\$base"/);
   assert.match(script, /check_health "\$LOCAL_URL" "\$base" "rollback"/);
+  assert.match(script, /"\$status" == "200" \|\| "\$status" == "401"/);
   assert.match(script, /STATE_FILE="\$\{RMB_STATE_FILE:-\$APP_DIR\/\.rmb-quick-deploy-state\}"/);
   assert.match(script, /recover_pending\(\)/);
   assert.match(script, /\^\(PREPARED\|EXCHANGED\|RESTARTED\|SOURCE_SWITCHED\)\$/);

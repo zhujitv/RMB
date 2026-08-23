@@ -266,7 +266,8 @@ test("parser source does not reference bundled fixture documents", async () => {
   assert.match(source, /\["pdfjs-dist", "legacy", "build", "pdf\.mjs"\]\.join\("\/"\)/);
   assert.match(source, /\["pdfjs-dist", "legacy", "build", "pdf\.worker\.mjs"\]\.join\("\/"\)/);
   assert.match(source, /getBuiltinModule\("node:module"\)/);
-  assert.match(source, /\.createRequire\(import\.meta\.url\)/);
+  assert.match(source, /\.createRequire\(`\$\{process\.cwd\(\)\}\/package\.json`\)/);
+  assert.doesNotMatch(source, /\.createRequire\(import\.meta\.url\)/);
   assert.match(source, /runtimeRequire\.resolve\(pdfJsModuleSpecifier\)/);
   assert.match(source, /runtimeRequire\.resolve\(pdfJsWorkerModuleSpecifier\)/);
   assert.match(source, /globalThis\.pdfjsWorker = await import/);

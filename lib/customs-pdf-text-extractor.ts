@@ -11,7 +11,7 @@ const pdfJsModuleSpecifier = ["pdfjs-dist", "legacy", "build", "pdf.mjs"].join("
 const pdfJsWorkerModuleSpecifier = ["pdfjs-dist", "legacy", "build", "pdf.worker.mjs"].join("/");
 const runtimeRequire = process
   .getBuiltinModule("node:module")
-  .createRequire(import.meta.url);
+  .createRequire(`${process.cwd()}/package.json`);
 const pdfJsModulePath = runtimeRequire.resolve(pdfJsModuleSpecifier);
 const pdfJsWorkerModulePath = runtimeRequire.resolve(pdfJsWorkerModuleSpecifier);
 

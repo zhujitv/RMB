@@ -12,6 +12,7 @@ EXPECTED_ENV_FILE="${RMB_EXPECTED_ENV_FILE:-/srv/rmb/shared/app.env}"
 TARGET_SHA="${RMB_DEPLOY_SHA:-}"
 LOCAL_URL="${RMB_READY_URL:-http://127.0.0.1:3000/api/health}"
 PUBLIC_URL="${RMB_PUBLIC_READY_URL:-https://www.nextwood.net/api/health}"
+HEALTH_CHECK_ATTEMPTS="${RMB_HEALTH_CHECK_ATTEMPTS:-12}"
 LOCK_FILE="$APP_DIR/.rmb-production-deploy.lock"
 AUDIT_FILE="${RMB_AUDIT_FILE:-$APP_DIR/.rmb-quick-deploy-audit.jsonl}"
 STATE_FILE="${RMB_STATE_FILE:-$APP_DIR/.rmb-quick-deploy-state}"
@@ -34,6 +35,8 @@ EXPECTED_DEPLOY_USER="${RMB_EXPECTED_DEPLOY_USER:-rmb-deploy}"
 [[ "$SERVICE" =~ ^[A-Za-z0-9_.@-]+\.service$ ]] || fail "RMB_SERVICE is invalid"
 [[ "$LOCAL_URL" =~ ^http://127\.0\.0\.1:[0-9]+/api/health$ ]] || fail "local health URL must be loopback /api/health"
 [[ "$PUBLIC_URL" =~ ^https://[^/?#[:space:]@]+/api/health$ ]] || fail "public health URL must be an HTTPS /api/health URL"
+[[ "$HEALTH_CHECK_ATTEMPTS" =~ ^[0-9]+$ ]] && (( HEALTH_CHECK_ATTEMPTS >= 1 && HEALTH_CHECK_ATTEMPTS <= 30 )) \
+  || fail "RMB_HEALTH_CHECK_ATTEMPTS must be between 1 and 30"
 [[ -d "$APP_DIR/.git" ]] || fail "application checkout not found: $APP_DIR"
 [[ "$(id -un)" == "$EXPECTED_DEPLOY_USER" ]] \
   || fail "quick deployment must run as $EXPECTED_DEPLOY_USER"
@@ -64,13 +67,26 @@ build_sha() { tr -d '\r\n' < "$1/RMB_DEPLOY_SHA" 2>/dev/null || true; }
 
 check_health() {
   local url="$1" expected="$2" label="$3" response
-  for attempt in {1..12}; do
+  for ((attempt = 1; attempt <= HEALTH_CHECK_ATTEMPTS; attempt += 1)); do
     if response="$(curl --fail --silent --show-error --max-time 5 "$url")" && \
       HEALTH_RESPONSE="$response" EXPECTED_SHA="$expected" node -e '
         const body = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
         process.exit(body.status === "ok" && body.version === process.env.EXPECTED_SHA ? 0 : 1);
       '; then
       log "$label health check passed"
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+check_auth_route() {
+  local url="$1" label="$2" status
+  for ((attempt = 1; attempt <= HEALTH_CHECK_ATTEMPTS; attempt += 1)); do
+    if status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 5 "$url")" \
+      && [[ "$status" == "200" || "$status" == "401" ]]; then
+      log "$label auth readiness check passed"
       return 0
     fi
     sleep 2
@@ -556,7 +572,9 @@ validate_live_dependency_links \
 "$SYSTEMCTL_BIN" is-active --quiet "$SERVICE" || fail "service is not active after restart"
 write_state RESTARTED
 check_health "$LOCAL_URL" "$TARGET_SHA" "local" || fail "local health check failed"
+check_auth_route "${LOCAL_URL%/api/health}/api/auth/me?basic=1" "local" || fail "local auth readiness check failed"
 check_health "$PUBLIC_URL" "$TARGET_SHA" "public" || fail "public health check failed"
+check_auth_route "${PUBLIC_URL%/api/health}/api/auth/me?basic=1" "public" || fail "public auth readiness check failed"
 (umask 022; git merge --ff-only "$TARGET_SHA")
 [[ "$(git rev-parse HEAD)" == "$TARGET_SHA" ]] || fail "source switch did not reach target SHA"
 write_state SOURCE_SWITCHED
