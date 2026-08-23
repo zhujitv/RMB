@@ -306,6 +306,7 @@ jobs:
           set -euo pipefail
           port="${DEPLOY_PORT:-22}"
           app_dir="${APP_DIR:-/srv/rmb/app}"
+          service="${SERVICE_NAME:-rmb-app.service}"
           env_file="${ENV_FILE:-/srv/rmb/shared/app.env}"
           backup_dir="${DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
           retention_days="${DB_BACKUP_RETENTION_DAYS:-15}"
@@ -359,6 +360,16 @@ jobs:
               set +a
               return 0
             fi
+            if command -v systemctl >/dev/null 2>&1; then
+              local main_pid
+              main_pid="$(systemctl show "$SERVICE" --property=MainPID --value 2>/dev/null || true)"
+              if [[ "$main_pid" =~ ^[1-9][0-9]*$ && -r "/proc/$main_pid/environ" ]]; then
+                if DATABASE_URL="$(RMB_SERVICE_PID="$main_pid" node -e 'const fs = require("node:fs"); const pid = process.env.RMB_SERVICE_PID || ""; const entry = fs.readFileSync(`/proc/${pid}/environ`).toString().split("\0").find((value) => value.startsWith("DATABASE_URL=")); if (!entry) process.exit(1); process.stdout.write(entry.slice("DATABASE_URL=".length));')" && [[ -n "$DATABASE_URL" ]]; then
+                  export DATABASE_URL
+                  return 0
+                fi
+              fi
+            fi
             command -v sudo >/dev/null 2>&1 || fail "environment file is protected and sudo is unavailable: $ENV_FILE"
             sudo -n test -r "$ENV_FILE" 2>/dev/null || fail "environment file is not readable by deploy user or passwordless sudo: $ENV_FILE"
             DATABASE_URL="$(sudo -n env RMB_ENV_FILE="$ENV_FILE" bash -c '
@@ -374,6 +385,7 @@ jobs:
 
           APP_DIR="${RMB_APP_DIR:-/srv/rmb/app}"
           ENV_FILE="${RMB_ENV_FILE:-/srv/rmb/shared/app.env}"
+          SERVICE="${RMB_SERVICE:-rmb-app.service}"
           MIGRATION_NAME="${RMB_MIGRATION_NAME:?RMB_MIGRATION_NAME is required}"
           MIGRATION_SQL="${RMB_MIGRATION_SQL:?RMB_MIGRATION_SQL is required}"
           BACKUP_DIR="${RMB_DB_BACKUP_DIR:-/srv/rmb/shared/db-backups}"
@@ -487,7 +499,7 @@ jobs:
           scp "${scp_opts[@]}" "$local_script" "$ssh_target:$remote_script"
           scp "${scp_opts[@]}" "prisma/migrations/$migration_name/migration.sql" "$ssh_target:$remote_sql"
           ssh "${ssh_opts[@]}" "$ssh_target" \
-            "chmod 700 '$remote_script' && RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_DB_BACKUP_DIR='$backup_dir' RMB_DB_BACKUP_RETENTION_DAYS='$retention_days' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
+            "chmod 700 '$remote_script' && RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_SERVICE='$service' RMB_DB_BACKUP_DIR='$backup_dir' RMB_DB_BACKUP_RETENTION_DAYS='$retention_days' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
 
       - name: Build incremental git bundle
         id: bundle

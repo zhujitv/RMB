@@ -138,6 +138,9 @@ test("GitHub Runner creates the default .next artifact with non-sensitive build 
   assert.doesNotMatch(uploadStep, /RMB_ENV_FILE/);
   assert.match(migrationStep, /RMB_ENV_FILE/);
   assert.match(migrationStep, /if \[\[ -r "\$ENV_FILE" \]\]/);
+  assert.match(migrationStep, /systemctl show "\$SERVICE" --property=MainPID --value/);
+  assert.match(migrationStep, /fs\.readFileSync\(`\/proc\/\$\{pid\}\/environ`\)/);
+  assert.match(migrationStep, /entry\.slice\("DATABASE_URL="\.length\)/);
   assert.match(migrationStep, /sudo -n test -r "\$ENV_FILE"/);
   assert.match(migrationStep, /DATABASE_URL="\$\(sudo -n env RMB_ENV_FILE="\$ENV_FILE"/);
   assert.match(migrationStep, /printf "%s" "\$DATABASE_URL"/);

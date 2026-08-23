@@ -127,7 +127,7 @@ gh workflow run deploy-cvm.yml --repo zhujitv/RMB \
 工作流会在 CVM 上：
 
 1. 读取 `/srv/rmb/shared/app.env` 中的生产 `DATABASE_URL`。
-   如果部署账号不能直接读取该受保护文件，迁移脚本会通过无交互 `sudo` 在服务器内部读取连接串，不修改文件权限，也不把连接串输出到 GitHub 日志。
+   如果部署账号不能直接读取该受保护文件，迁移脚本会优先从当前 `rmb-app.service` 进程环境读取；如果服务器允许对应的无交互 `sudo` 读取，也可使用该后备路径。两种方式都不修改文件权限，也不把连接串输出到 GitHub 日志。
 2. 自动确保 `/srv/rmb/shared/db-backups` 可写；如果共享备份目录不可写，则停止迁移，避免备份散落到部署用户私人目录。
 3. 自动清理备份目录中超过 15 天的 RMB 数据库备份；可用 `RMB_CVM_DB_BACKUP_RETENTION_DAYS` 调整。
 4. 用与数据库大版本匹配的 PostgreSQL 工具做 `pg_dump` 备份，并兼容 Prisma 专用连接参数。
