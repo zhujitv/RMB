@@ -61,23 +61,23 @@ const fileCenter = readFileSync(
 );
 const styles = readWorkspaceStylesSource();
 
-test("preview route redirects order documents to short-lived signed COS URLs", () => {
+test("preview route returns same-origin inline streams so browsers do not download previews", () => {
   assert.match(
     filePreviewRoute,
-    /getManagedFilePreviewLocation\(request, actor, kind, id\)/,
+    /getManagedFilePreview\(request, actor, kind, id\)/,
   );
-  assert.match(filePreviewRoute, /status: 307/);
-  assert.match(filePreviewRoute, /Location: signedPreview\.location/);
-  assert.match(filePreviewRoute, /"Referrer-Policy": "no-referrer"/);
-  assert.match(filePreviewRoute, /"Cache-Control": "private, no-store"/);
+  assert.match(filePreviewRoute, /new Response\(new Uint8Array\(result\.body\)/);
+  assert.match(filePreviewRoute, /disposition: "inline"/);
+  assert.doesNotMatch(filePreviewRoute, /status: 307/);
   assert.match(filePreviewRoute, /export async function HEAD/);
   assert.match(
     filePreviewRoute,
     /getManagedFilePreviewMetadata\(request, actor, kind, id\)/,
   );
-  assert.match(previewRoute, /getOrderDocumentPreviewLocation/);
-  assert.match(previewRoute, /status: 307/);
-  assert.match(previewRoute, /Location: signedPreview\.location/);
+  assert.match(previewRoute, /getOrderDocumentPreview/);
+  assert.match(previewRoute, /new Response\(new Uint8Array\(body\)/);
+  assert.match(previewRoute, /disposition: "inline"/);
+  assert.doesNotMatch(previewRoute, /status: 307/);
   assert.match(
     orderDocumentsService,
     /export async function getOrderDocumentPreviewMetadata/,

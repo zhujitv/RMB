@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 import {
   apiErrorSafe500,
   getManagedFilePreview,
-  getManagedFilePreviewLocation,
   getManagedFilePreviewMetadata,
   managedFileStreamHeaders,
 } from "../../../../../../lib/platform-db";
@@ -33,18 +32,6 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await requireApiActor(request);
     const { kind, id } = await params;
-    const signedPreview = await getManagedFilePreviewLocation(request, actor, kind, id);
-    if (signedPreview?.location) {
-      return new Response(null, {
-        status: 307,
-        headers: {
-          Location: signedPreview.location,
-          "Cache-Control": "private, no-store",
-          "Referrer-Policy": "no-referrer",
-          "X-Content-Type-Options": "nosniff",
-        },
-      });
-    }
     const result = await getManagedFilePreview(request, actor, kind, id);
     return new Response(new Uint8Array(result.body), {
       headers: managedFileStreamHeaders({

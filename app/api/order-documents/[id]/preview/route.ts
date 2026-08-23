@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import {
   apiErrorSafe500,
-  getOrderDocumentPreviewLocation,
+  getOrderDocumentPreview,
   getOrderDocumentPreviewMetadata,
   managedFileStreamHeaders,
   preferredOrderDocumentFileName,
@@ -35,15 +35,15 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await requireApiActor(request);
     const { id } = await params;
-    const signedPreview = await getOrderDocumentPreviewLocation(request, actor, id);
-    return new Response(null, {
-      status: 307,
-      headers: {
-        Location: signedPreview.location,
-        "Cache-Control": "private, no-store",
-        "Referrer-Policy": "no-referrer",
-        "X-Content-Type-Options": "nosniff",
-      },
+    const { body, mimeType, document } = await getOrderDocumentPreview(request, actor, id);
+    const fileName = preferredOrderDocumentFileName(document);
+    return new Response(new Uint8Array(body), {
+      headers: managedFileStreamHeaders({
+        bodyLength: body.length,
+        mimeType,
+        fileName,
+        disposition: "inline",
+      }),
     });
   } catch (error: unknown) {
     return previewErrorResponse((error || {}) as ErrorLike);
