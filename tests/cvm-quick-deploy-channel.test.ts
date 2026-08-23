@@ -117,11 +117,20 @@ test("bootstrap validator permits only the exact approved lock transform", () =>
   const validatorEnd = script.indexOf("\nNODE\nfi", validatorStart);
   assert.ok(validatorStart >= 0 && validatorEnd > validatorStart, "bootstrap validator must be extractable");
   const validator = script.slice(validatorStart, validatorEnd);
-  const baseFullDeployScript = execFileSync(
-    "git",
-    ["show", "HEAD:scripts/deploy-cvm-from-bundle.sh"],
-    { encoding: "utf8" },
-  ).trimEnd();
+  const baseFullDeployScript = fullDeployScript
+    .replace(
+      'ROLLBACK_HEALTH_URL="${RMB_ROLLBACK_HEALTH_URL:-http://127.0.0.1:3000/}"\nLOCK_FILE="$APP_DIR/.rmb-production-deploy.lock"\nHEALTH_ATTEMPTS="${RMB_HEALTH_ATTEMPTS:-20}"',
+      'ROLLBACK_HEALTH_URL="${RMB_ROLLBACK_HEALTH_URL:-http://127.0.0.1:3000/}"\nHEALTH_ATTEMPTS="${RMB_HEALTH_ATTEMPTS:-20}"',
+    )
+    .replace(
+      '[[ "$ROLLBACK_HEALTH_URL" =~ ^http://127\\.0\\.0\\.1:[0-9]+/?$ ]] || fail "RMB_ROLLBACK_HEALTH_URL must be a loopback origin"\ncommand -v flock >/dev/null || fail "flock is required"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
+      '[[ "$ROLLBACK_HEALTH_URL" =~ ^http://127\\.0\\.0\\.1:[0-9]+/?$ ]] || fail "RMB_ROLLBACK_HEALTH_URL must be a loopback origin"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
+    )
+    .replace(
+      'cd "$APP_DIR"\nensure_checkout_writable\nmkdir -p "$(dirname "$LOCK_FILE")"\nexec 9>"$LOCK_FILE"\nflock -n 9 || fail "another production deployment is already running"\n\nCURRENT_HEAD="$(git rev-parse --verify HEAD 2>/dev/null || true)"',
+      'cd "$APP_DIR"\nensure_checkout_writable\n\nCURRENT_HEAD="$(git rev-parse --verify HEAD 2>/dev/null || true)"',
+    )
+    .trimEnd();
   const env = {
     ...process.env,
     RMB_BOOTSTRAP_BASE_SCRIPT: baseFullDeployScript,
