@@ -76,10 +76,17 @@ test("independent public verification is short and bounded", () => {
 });
 
 test("server fetches main before accepting the exact SHA", () => {
-  const mainFetch = script.indexOf("git fetch --no-tags --force origin main:refs/remotes/origin/main");
+  const mainFetch = script.indexOf('git fetch --no-tags --force "$ORIGIN_URL" main:refs/remotes/origin/main');
   const mainEquality = script.indexOf('"$(git rev-parse refs/remotes/origin/main)" == "$TARGET_SHA"');
   assert.ok(mainFetch >= 0);
   assert.ok(mainEquality > mainFetch);
+  assert.match(script, /git remote get-url --all origin/);
+  assert.match(script, /origin must have exactly one approved fetch URL/);
+  assert.match(script, /for attempt in \{1\.\.3\}/);
+  assert.match(script, /timeout --signal=TERM --kill-after=10s 90s/);
+  assert.match(script, /Empty reply from server/);
+  assert.match(script, /non-transient fetch failure on attempt/);
+  assert.match(script, /after 3 transient network attempts/);
   assert.match(script, /git cat-file -e "\$TARGET_SHA\^\{commit\}"/);
   assert.doesNotMatch(script, /git fetch --no-tags origin "\$TARGET_SHA"/);
   assert.match(script, /git merge-base --is-ancestor "\$BASE_SHA" "\$TARGET_SHA"/);

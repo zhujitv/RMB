@@ -24,6 +24,8 @@
 
 任何一项不满足都会在切换前停止，并提示改用 `Deploy CVM` 完整通道。
 
+腾讯云拉取 GitHub 时，每次最多执行 90 秒，超时后最多保留 10 秒让进程安全结束。只有空响应、DNS/连接超时、连接重置、服务端限流或 5xx 等明确的临时网络错误才会重试，最多 3 次；认证失败、仓库地址错误、权限拒绝等配置问题第一次即停止。重试只包裹尚未构建、尚未激活的只读 `git fetch`，不会重复执行构建、服务重启或线上切换。
+
 ## 快速但不跳过保护
 
 腾讯云使用临时 Git worktree 构建目标提交并复用当前 `node_modules`，因此依赖不变时不再执行 `npm ci`。候选 worktree 会按固定顺序执行：安全环境检查、`prisma generate` 生成与当前 schema 一致的 Prisma Client、`next build`。这里的 `prisma generate` 只生成客户端代码，既不连接生产数据库，也不执行 migration；Prisma schema 或 migration 文件有变化时，快速通道会在构建前停止。

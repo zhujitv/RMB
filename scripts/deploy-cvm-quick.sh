@@ -202,12 +202,42 @@ BUILD_SHA="$(build_sha "$APP_DIR/.next")"
 log "fetching current main from the configured read-only origin"
 export GIT_TERMINAL_PROMPT=0
 export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes"
-ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
+ORIGIN_URL="$(git remote get-url --all origin 2>/dev/null || true)"
+[[ -n "$ORIGIN_URL" && "$ORIGIN_URL" != *$'\n'* && "$ORIGIN_URL" != *$'\r'* ]] \
+  || fail "origin must have exactly one approved fetch URL"
 case "$ORIGIN_URL" in
   git@github.com:zhujitv/RMB.git|ssh://git@github.com/zhujitv/RMB.git|ssh://git@ssh.github.com:443/zhujitv/RMB.git|https://github.com/zhujitv/RMB.git|https://github.com/zhujitv/RMB) ;;
   *) fail "origin must be the approved zhujitv/RMB repository" ;;
 esac
-git fetch --no-tags --force origin main:refs/remotes/origin/main || fail "cannot refresh origin/main"
+fetch_failure_is_retryable() {
+  local status="$1" output="$2"
+  (( status == 124 )) && return 0
+  grep -Eiq \
+    'Empty reply from server|Could not resolve (host|hostname)|Connection timed out|Operation timed out|Failed to connect|Connection reset by peer|remote end hung up unexpectedly|early EOF|HTTP[^0-9]*(408|429|5[0-9]{2})|The requested URL returned error: (408|429|5[0-9]{2})|TLS connection was non-properly terminated' \
+    <<< "$output"
+}
+fetch_origin_main() {
+  local attempt status output delay
+  for attempt in {1..3}; do
+    if output="$(timeout --signal=TERM --kill-after=10s 90s \
+      git fetch --no-tags --force "$ORIGIN_URL" main:refs/remotes/origin/main 2>&1)"; then
+      [[ -z "$output" ]] || printf '%s\n' "$output"
+      return 0
+    else
+      status=$?
+    fi
+    [[ -z "$output" ]] || printf '%s\n' "$output" >&2
+    fetch_failure_is_retryable "$status" "$output" \
+      || fail "cannot refresh origin/main: non-transient fetch failure on attempt $attempt/3 (exit $status)"
+    if (( attempt == 3 )); then
+      fail "cannot refresh origin/main after 3 transient network attempts (last exit $status)"
+    fi
+    if (( attempt == 1 )); then delay=5; else delay=15; fi
+    log "origin/main fetch attempt $attempt/3 failed with a transient network error; retrying in ${delay}s"
+    sleep "$delay"
+  done
+}
+fetch_origin_main
 [[ "$(git rev-parse refs/remotes/origin/main)" == "$TARGET_SHA" ]] || fail "quick deployment only accepts the latest main HEAD"
 git cat-file -e "$TARGET_SHA^{commit}" 2>/dev/null || fail "current main target is unavailable after fetch"
 git merge-base --is-ancestor "$BASE_SHA" "$TARGET_SHA" || fail "target is not a fast-forward from the online SHA"

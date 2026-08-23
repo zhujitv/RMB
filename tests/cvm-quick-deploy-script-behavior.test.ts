@@ -112,6 +112,11 @@ if [ "\${1:-}" = "remote" ] && [ "\${2:-}" = "get-url" ]; then
 fi
 if [ "\${1:-}" = "fetch" ]; then
   printf 'fetch\n' >> "$MOCK_FETCH_LOG"
+  fetch_count="$(wc -l < "$MOCK_FETCH_LOG" | tr -d ' ')"
+  if [ "$fetch_count" -le "\${MOCK_FETCH_FAIL_COUNT:-0}" ]; then
+    printf '%s\n' "\${MOCK_FETCH_FAIL_MESSAGE:-fatal: unable to access repository: Empty reply from server}" >&2
+    exit "\${MOCK_FETCH_FAIL_STATUS:-1}"
+  fi
   exec "$REAL_GIT_BIN" fetch --no-tags --force "$MOCK_ORIGIN_PATH" main:refs/remotes/origin/main
 fi
 exec "$REAL_GIT_BIN" "$@"
@@ -178,6 +183,11 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 exec "$@"
+`);
+
+  writeExecutable(join(binDir, "sleep"), `#!/bin/sh
+set -eu
+exit 0
 `);
 
   writeExecutable(join(binDir, "nice"), `#!/bin/sh
@@ -318,6 +328,83 @@ test("quick deploy switches source and build, then records the target marker", (
     assert.equal(statSync(join(fixture.appDir, ".next", "RMB_DEPLOY_SHA")).mode & 0o777, 0o644);
     const audit = readLines(fixture.auditFile).map((line) => JSON.parse(line));
     assert.deepEqual(audit.map((entry) => entry.status), ["STARTED", "SUCCESS"]);
+  } finally {
+    cleanupFixture(fixture);
+  }
+});
+
+test("transient origin fetch failures are retried before deployment continues", () => {
+  const fixture = createFixture();
+  try {
+    const result = runDeploy(fixture, {
+      MOCK_FETCH_FAIL_COUNT: "2",
+      MOCK_FETCH_FAIL_MESSAGE: "fatal: unable to access repository: Empty reply from server",
+      MOCK_FETCH_FAIL_STATUS: "128",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(readLines(fixture.fetchLog), ["fetch", "fetch", "fetch"]);
+    assert.match(result.stdout, /fetch attempt 1\/3 failed with a transient network error/);
+    assert.match(result.stdout, /fetch attempt 2\/3 failed with a transient network error/);
+    assert.deepEqual(readLines(fixture.restartLog), ["restart"]);
+    assert.equal(onlineState(fixture).head, fixture.targetSha);
+  } finally {
+    cleanupFixture(fixture);
+  }
+});
+
+test("a bounded origin fetch timeout is retried once connectivity returns", () => {
+  const fixture = createFixture();
+  try {
+    const result = runDeploy(fixture, {
+      MOCK_FETCH_FAIL_COUNT: "1",
+      MOCK_FETCH_FAIL_MESSAGE: "fetch operation exceeded its time budget",
+      MOCK_FETCH_FAIL_STATUS: "124",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(readLines(fixture.fetchLog), ["fetch", "fetch"]);
+    assert.match(result.stdout, /fetch attempt 1\/3 failed with a transient network error/);
+    assert.equal(onlineState(fixture).head, fixture.targetSha);
+  } finally {
+    cleanupFixture(fixture);
+  }
+});
+
+test("three transient origin fetch failures stop before build or restart", () => {
+  const fixture = createFixture();
+  try {
+    const before = onlineState(fixture);
+    const result = runDeploy(fixture, {
+      MOCK_FETCH_FAIL_COUNT: "3",
+      MOCK_FETCH_FAIL_MESSAGE: "fatal: unable to access repository: Empty reply from server",
+      MOCK_FETCH_FAIL_STATUS: "128",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot refresh origin\/main after 3 transient network attempts/);
+    assert.deepEqual(readLines(fixture.fetchLog), ["fetch", "fetch", "fetch"]);
+    assert.deepEqual(readLines(fixture.buildLog), []);
+    assert.deepEqual(readLines(fixture.restartLog), []);
+    assert.deepEqual(onlineState(fixture), before);
+  } finally {
+    cleanupFixture(fixture);
+  }
+});
+
+test("non-transient origin fetch failures are not retried", () => {
+  const fixture = createFixture();
+  try {
+    const before = onlineState(fixture);
+    const result = runDeploy(fixture, {
+      MOCK_FETCH_FAIL_COUNT: "3",
+      MOCK_FETCH_FAIL_MESSAGE: "fatal: Authentication failed for repository",
+      MOCK_FETCH_FAIL_STATUS: "128",
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Authentication failed/);
+    assert.match(result.stderr, /non-transient fetch failure on attempt 1\/3/);
+    assert.deepEqual(readLines(fixture.fetchLog), ["fetch"]);
+    assert.deepEqual(readLines(fixture.buildLog), []);
+    assert.deepEqual(readLines(fixture.restartLog), []);
+    assert.deepEqual(onlineState(fixture), before);
   } finally {
     cleanupFixture(fixture);
   }
