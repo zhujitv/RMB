@@ -186,8 +186,9 @@ test("local build scripts load env files before prisma commands", () => {
   );
   assert.match(
     runWithEnvScript,
-    /const ENV_FILES = \["\.env", "\.env\.local"\]/,
+    /const ENV_FILES = process\.env\.RMB_SKIP_LOCAL_ENV_FILES === "1"/,
   );
+  assert.match(runWithEnvScript, /: \["\.env", "\.env\.local"\];/);
   assert.match(runWithEnvScript, /originalEnvKeys\.has\(key\)/);
   assert.match(runWithEnvScript, /spawnSync\(command, args/);
 });

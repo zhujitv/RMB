@@ -41,6 +41,19 @@ ensure_checkout_writable() {
   rm -f "$app_probe" "$git_probe"
 }
 
+load_build_environment() {
+  if [[ -f "$ENV_FILE" ]]; then
+    [[ -r "$ENV_FILE" ]] || fail "environment file is not readable by the deployment user: $ENV_FILE"
+    log "loading build environment from $ENV_FILE"
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+  else
+    fail "build environment file not found: $ENV_FILE"
+  fi
+}
+
 [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "RMB_DEPLOY_SHA must be a full commit SHA"
 [[ -n "$BUNDLE" && -f "$BUNDLE" ]] || fail "RMB_DEPLOY_BUNDLE must point to an uploaded git bundle"
 [[ -d "$APP_DIR/.git" ]] || fail "RMB_APP_DIR is not a git checkout: $APP_DIR"
@@ -80,25 +93,19 @@ else
 fi
 git update-ref refs/remotes/origin/main "$TARGET_SHA" || true
 
+export RMB_SKIP_LOCAL_ENV_FILES=1
+
 if [[ "$NPM_INSTALL_MODE" == "always" ]] \
   || [[ ! -d node_modules ]] \
   || printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(package\.json|package-lock\.json)$'; then
   log "installing dependencies"
-  npm ci --prefer-offline --no-audit --fund=false
+  DATABASE_URL="postgresql://127.0.0.1:5432/rmb_prisma_generate" \
+    npm ci --prefer-offline --no-audit --fund=false
 else
   log "package manifests unchanged; skipping npm ci"
 fi
 
-if [[ -f "$ENV_FILE" ]]; then
-  [[ -r "$ENV_FILE" ]] || fail "environment file is not readable by the deployment user: $ENV_FILE"
-  log "loading build environment from $ENV_FILE"
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
-else
-  log "build environment file not found; continuing without $ENV_FILE"
-fi
+load_build_environment
 
 log "checking migration status without applying migrations"
 npx prisma migrate status

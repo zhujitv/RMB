@@ -37,7 +37,11 @@ function loadEnvFile(fileName: string) {
   }
 }
 
-[".env", ".env.local"].forEach(loadEnvFile);
+const localEnvFiles = process.env.RMB_SKIP_LOCAL_ENV_FILES === "1"
+  ? []
+  : [".env", ".env.local"];
+
+localEnvFiles.forEach(loadEnvFile);
 
 export default defineConfig({
   schema: "prisma",

@@ -4,7 +4,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const ENV_FILES = [".env", ".env.local"];
+const ENV_FILES = process.env.RMB_SKIP_LOCAL_ENV_FILES === "1"
+  ? []
+  : [".env", ".env.local"];
 const originalEnvKeys = new Set(Object.keys(process.env));
 
 function unquote(value) {

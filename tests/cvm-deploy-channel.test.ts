@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import test from "node:test";
 
 const workflow = readFileSync(".github/workflows/deploy-cvm.yml", "utf8");
 const remoteScript = readFileSync("scripts/deploy-cvm-from-bundle.sh", "utf8");
+const prismaConfig = readFileSync("prisma.config.ts", "utf8");
+const runWithEnvScript = readFileSync("scripts/run-with-env.mjs", "utf8");
 const backupInstallScript = readFileSync("scripts/install-cvm-db-backup-strategy.sh", "utf8");
 const docs = readFileSync("docs/CVM_DEPLOYMENT_CHANNEL.md", "utf8");
 
@@ -57,6 +62,50 @@ test("CVM deployment stays migration-safe and uses the app build only", () => {
   assert.match(remoteScript, /HEALTH_ATTEMPTS/);
   assert.match(workflow, /Public health not ready yet/);
   assert.doesNotMatch(remoteScript, /db:deploy|build:release|prisma migrate deploy|prisma db push|prisma migrate dev/);
+});
+
+test("CVM deployment isolates dependency scripts before loading protected environment", () => {
+  assert.match(remoteScript, /export RMB_SKIP_LOCAL_ENV_FILES=1/);
+  assert.match(remoteScript, /DATABASE_URL="postgresql:\/\/127\.0\.0\.1:5432\/rmb_prisma_generate"/);
+  assert.match(remoteScript, /fail "build environment file not found: \$ENV_FILE"/);
+  const skipIndex = remoteScript.indexOf("export RMB_SKIP_LOCAL_ENV_FILES=1");
+  const installIndex = remoteScript.indexOf("npm ci --prefer-offline");
+  const protectedEnvIndex = remoteScript.lastIndexOf("\nload_build_environment\n");
+  assert.ok(skipIndex >= 0 && skipIndex < installIndex, "local env files must be skipped before npm lifecycle scripts");
+  assert.ok(protectedEnvIndex > installIndex, "production secrets must load only after npm lifecycle scripts finish");
+  assert.match(prismaConfig, /process\.env\.RMB_SKIP_LOCAL_ENV_FILES === "1"/);
+  assert.match(runWithEnvScript, /process\.env\.RMB_SKIP_LOCAL_ENV_FILES === "1"/);
+});
+
+test("run-with-env skips inaccessible local files only when the deploy flag is set", () => {
+  const fixtureDir = mkdtempSync(join(tmpdir(), "rmb-run-with-env-"));
+  const scriptPath = resolve("scripts/run-with-env.mjs");
+  try {
+    mkdirSync(join(fixtureDir, ".env.local"));
+    const skippedOutput = execFileSync(
+      process.execPath,
+      [scriptPath, process.execPath, "-e", "process.stdout.write(process.env.RMB_PARENT_ENV || '')"],
+      {
+        cwd: fixtureDir,
+        encoding: "utf8",
+        env: { ...process.env, RMB_SKIP_LOCAL_ENV_FILES: "1", RMB_PARENT_ENV: "inherited" },
+      },
+    );
+    assert.equal(skippedOutput, "inherited");
+
+    rmSync(join(fixtureDir, ".env.local"), { recursive: true });
+    writeFileSync(join(fixtureDir, ".env.local"), "RMB_FILE_ENV=loaded\n", "utf8");
+    const localEnv = { ...process.env };
+    delete localEnv.RMB_SKIP_LOCAL_ENV_FILES;
+    const loadedOutput = execFileSync(
+      process.execPath,
+      [scriptPath, process.execPath, "-e", "process.stdout.write(process.env.RMB_FILE_ENV || '')"],
+      { cwd: fixtureDir, encoding: "utf8", env: localEnv },
+    );
+    assert.equal(loadedOutput, "loaded");
+  } finally {
+    rmSync(fixtureDir, { recursive: true, force: true });
+  }
 });
 
 test("CVM deployment docs explain setup and rollback boundaries", () => {
