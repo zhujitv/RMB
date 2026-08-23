@@ -351,6 +351,27 @@ jobs:
             log "pruned $deleted_count DB backup(s) older than $retention_days day(s) in $dir"
           }
 
+          load_database_url() {
+            if [[ -r "$ENV_FILE" ]]; then
+              set -a
+              # shellcheck disable=SC1090
+              source "$ENV_FILE"
+              set +a
+              return 0
+            fi
+            command -v sudo >/dev/null 2>&1 || fail "environment file is protected and sudo is unavailable: $ENV_FILE"
+            sudo -n test -r "$ENV_FILE" 2>/dev/null || fail "environment file is not readable by deploy user or passwordless sudo: $ENV_FILE"
+            DATABASE_URL="$(sudo -n env RMB_ENV_FILE="$ENV_FILE" bash -c '
+              set -Eeuo pipefail
+              set -a
+              source "$RMB_ENV_FILE"
+              set +a
+              [[ -n "${DATABASE_URL:-}" ]]
+              printf "%s" "$DATABASE_URL"
+            ')" || fail "DATABASE_URL could not be loaded from protected environment file"
+            export DATABASE_URL
+          }
+
           APP_DIR="${RMB_APP_DIR:-/srv/rmb/app}"
           ENV_FILE="${RMB_ENV_FILE:-/srv/rmb/shared/app.env}"
           MIGRATION_NAME="${RMB_MIGRATION_NAME:?RMB_MIGRATION_NAME is required}"
@@ -365,10 +386,7 @@ jobs:
           command -v node >/dev/null 2>&1 || fail "node is required to mark Prisma migration metadata"
 
           cd "$APP_DIR"
-          set -a
-          # shellcheck disable=SC1090
-          source "$ENV_FILE"
-          set +a
+          load_database_url
           [[ -n "${DATABASE_URL:-}" ]] || fail "DATABASE_URL is missing from $ENV_FILE"
           POSTGRES_URL="$(DATABASE_URL="$DATABASE_URL" node <<'NODE'
           const raw = process.env.DATABASE_URL || "";
