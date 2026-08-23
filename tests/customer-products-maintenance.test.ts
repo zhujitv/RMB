@@ -5,6 +5,7 @@ import test from "node:test";
 const managerSource = readFileSync("app/modules/settings/customer-products-manager.tsx", "utf8");
 const tableSource = readFileSync("app/modules/settings/settings-table.tsx", "utf8");
 const settingsSource = readFileSync("app/modules/settings/settings-view-constants.ts", "utf8");
+const quotationCustomerDetailSource = readFileSync("app/modules/quotations/quotation-customer-detail.tsx", "utf8");
 const serviceSource = readFileSync("lib/platform/quotation-customer-products.ts", "utf8");
 const schemaSource = readFileSync("prisma/models/quotations.prisma", "utf8");
 
@@ -15,6 +16,9 @@ test("customer details expose a product attribute maintenance entry", () => {
   assert.match(tableSource, />产品属性<\/button>/);
   assert.match(tableSource, /onManageProducts\(row as CustomerRow\)/);
   assert.match(tableSource, /<CustomerProductsManager customer=\{productCustomer\}/);
+  assert.match(quotationCustomerDetailSource, /管理产品库/);
+  assert.match(quotationCustomerDetailSource, /<CustomerProductsManager/);
+  assert.doesNotMatch(quotationCustomerDetailSource, /<QuotationCustomerProductsEditor/);
 });
 
 test("customer product manager supports search create edit and void", () => {

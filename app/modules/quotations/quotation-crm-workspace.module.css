@@ -106,6 +106,7 @@
 .detailHero h3, .detailHero p { margin: 0; }
 .detailHero h3 { margin-top: 4px; color: #0f172a; font-size: 24px; line-height: 1.25; }
 .detailHero p { margin-top: 4px; color: #64748b; font-size: 13px; }
+.detailHeroActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 
 .detailMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .detailMetrics article {
@@ -274,6 +275,8 @@
   .crmHeroActions { justify-content: stretch; }
   .crmHeroActions button { width: 100%; }
   .detailHero, .quoteCard { grid-template-columns: 1fr; }
+  .detailHeroActions { justify-content: stretch; }
+  .detailHeroActions button { width: 100%; }
   .productToolbar, .productFormHeader { align-items: stretch; flex-direction: column; }
   .crmStats, .customerMeta, .customerMetrics, .customerFilters, .followUpCards, .detailMetrics, .profileGrid, .businessStats, .businessRow, .productFormGrid, .compactForm, .followUpForm, .emailAccountForm, .emailComposeGrid, .productCardFacts { grid-template-columns: 1fr; }
   .businessActions { justify-content: stretch; }

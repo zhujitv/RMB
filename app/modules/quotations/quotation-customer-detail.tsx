@@ -1,11 +1,12 @@
+import { useState } from "react";
 import { formatCurrencyAmount, formatDate } from "../../formatters";
+import { CustomerProductsManager } from "../settings/customer-products-manager";
 import shell from "../../WorkspaceShell.module.css";
 import { useWorkspaceTabDiscardGuard } from "../../workspace/workspace-tab-context";
 import { QuotationCustomerBusinessRecords } from "./quotation-customer-business-records";
 import { QuotationCustomerContacts, type CustomerContactFields } from "./quotation-customer-contacts";
 import { QuotationCustomerEmails } from "./quotation-customer-emails";
 import { QuotationCustomerFollowUps } from "./quotation-customer-follow-ups";
-import { QuotationCustomerProductsEditor } from "./quotation-customer-products-editor";
 import styles from "./quotation-crm-workspace.module.css";
 import type { CustomerInsight } from "./quotation-crm-insights";
 import {
@@ -48,15 +49,26 @@ export function QuotationCustomerDetail({
   onViewQuotation,
   onCustomerContactSaved,
 }: QuotationCustomerDetailProps) {
+  const [productsOpen, setProductsOpen] = useState(false);
   const latest = customer.latestQuotation;
   const latestVersion = currentQuotationVersion(latest);
-  const confirmDiscard = useWorkspaceTabDiscardGuard("联系人或客户资料有未保存修改，确定返回客户工作台吗？");
+  const confirmDiscard = useWorkspaceTabDiscardGuard("联系人或客户资料有未保存修改，确定离开当前页面吗？");
+  const productCustomer = customer.customerId ? {
+    id: customer.customerId,
+    shortName: customer.name,
+    name: customer.legalName || customer.name,
+    fullName: customer.legalName || customer.name,
+  } : null;
+
   return (
     <section className={styles.customerDetail} aria-label="客户 CRM 详情">
       <div className={styles.detailHero}>
         <button className={shell.secondaryButton} type="button" onClick={() => { if (confirmDiscard()) onBack(); }}>返回客户工作台</button>
         <div><span className={styles.crmEyebrow}>客户 CRM</span><h3>{customer.name}</h3><p>{customer.legalName || "未维护客户全称"}</p></div>
-        {canWriteQuotations ? <button className={shell.primaryButtonCompact} type="button" onClick={onToggleCreate}>{createOpen ? "继续编辑报价" : "新建报价"}</button> : null}
+        <div className={styles.detailHeroActions}>
+          {productCustomer ? <button className={shell.secondaryButton} type="button" onClick={() => setProductsOpen(true)}>管理产品库</button> : null}
+          {canWriteQuotations ? <button className={shell.primaryButtonCompact} type="button" onClick={onToggleCreate}>{createOpen ? "继续编辑报价" : "新建报价"}</button> : null}
+        </div>
       </div>
 
       <div className={styles.detailMetrics}>
@@ -85,10 +97,6 @@ export function QuotationCustomerDetail({
           onOpenOrders={onOpenOrders}
           onOpenPayments={onOpenPayments}
         />
-        <section className={`${styles.crmPanel} ${styles.fullWidthPanel}`}>
-          <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>客户产品库</span><h3>物料编码与产品属性</h3></div><small>来自客户产品接口</small></div>
-          <QuotationCustomerProductsEditor customer={customer} canWriteQuotations={canWriteQuotations} />
-        </section>
       </div>
 
       <QuotationCustomerFollowUps customer={customer} canWriteQuotations={canWriteQuotations} />
@@ -106,9 +114,17 @@ export function QuotationCustomerDetail({
                 <span><strong>V{quotation.currentVersionNumber || version?.versionNumber || 1}</strong><small>预计交期 {version?.leadTimeDays == null || version.leadTimeDays === "" ? "-" : `${version.leadTimeDays} 天`}</small></span>
               </button>
             );
-          }) : <div className={styles.crmEmpty}>该客户暂无历史报价，可以先维护联系人、客户产品库，再新建报价。</div>}
+          }) : <div className={styles.crmEmpty}>该客户暂无历史报价，可以先维护联系人，再新建报价；产品库可从页面顶部进入。</div>}
         </div>
       </section>
+
+      {productsOpen && productCustomer ? (
+        <CustomerProductsManager
+          customer={productCustomer}
+          canWrite={canWriteQuotations}
+          onClose={() => setProductsOpen(false)}
+        />
+      ) : null}
     </section>
   );
 }

@@ -66,7 +66,7 @@ function CustomerCard({ customer, onOpenCustomer }: { customer: CustomerInsight;
           ? <>最近 {quotationNumber(latest) || "未编号"} · {quotationStatusLabel(latest.status)}{latestExpired ? " · 已过期" : ""} · {formatCurrencyAmount(latestVersion?.currency || "CNY", quotationTotal(latest))}</>
           : "暂无报价 · 可先维护联系人和客户产品库"}
       </span>
-      <span className={styles.openCustomerHint}>进入客户详情 / 客户产品库</span>
+      <span className={styles.openCustomerHint}>进入客户详情</span>
     </button>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { apiJson } from "../../api";
 import { DismissibleLayer, PaginationBar } from "../../components";
 import { formatDateTime } from "../../formatters";
+import { useWorkspaceTabBusy, useWorkspaceTabDirty } from "../../workspace/workspace-tab-context";
 import styles from "./settings-styles";
 import managerStyles from "./customer-products-manager.module.css";
 import type { CustomerRow } from "./types";
@@ -54,7 +55,7 @@ function customerLabel(customer: CustomerRow) {
   return customer.shortName || customer.fullName || customer.name || "客户";
 }
 
-export function CustomerProductsManager({ customer, onClose }: { customer: CustomerRow; onClose: () => void }) {
+export function CustomerProductsManager({ customer, onClose, canWrite = true }: { customer: CustomerRow; onClose: () => void; canWrite?: boolean }) {
   const [rows, setRows] = useState<CustomerProductRow[]>([]);
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
@@ -67,6 +68,8 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
   const [messageIsError, setMessageIsError] = useState(false);
   const [form, setForm] = useState<ProductForm | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  useWorkspaceTabDirty(Boolean(form));
+  useWorkspaceTabBusy(saving);
 
   useEffect(() => {
     let active = true;
@@ -186,7 +189,7 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
               </label>
               <div className={managerStyles.toolbarActions}>
                 <button className={styles.secondaryButton} type="submit" disabled={loading}>查询</button>
-                <button className={styles.primaryButtonCompact} type="button" onClick={() => setForm({ ...EMPTY_FORM })}>新增产品</button>
+                {canWrite ? <button className={styles.primaryButtonCompact} type="button" onClick={() => setForm({ ...EMPTY_FORM })}>新增产品</button> : null}
               </div>
             </form>
 
@@ -241,10 +244,10 @@ export function CustomerProductsManager({ customer, onClose }: { customer: Custo
                       <td>{product.unit || "-"}</td>
                       <td>{product.lastUnitPrice == null ? "-" : `${product.lastCurrency || ""} ${product.lastUnitPrice}`.trim()}</td>
                       <td>{product.lastQuotedAt ? formatDateTime(product.lastQuotedAt) : "-"}</td>
-                      <td><div className={styles.rowActionGroup}>
+                      <td>{canWrite ? <div className={styles.rowActionGroup}>
                         <button className={styles.rowDetailButton} type="button" onClick={() => setForm(productFormFromRow(product))}>编辑</button>
                         <button className={styles.dangerButton} type="button" onClick={() => void voidProduct(product)} disabled={saving}>作废</button>
-                      </div></td>
+                      </div> : "仅查看"}</td>
                     </tr>
                   )) : null}
                 </tbody>

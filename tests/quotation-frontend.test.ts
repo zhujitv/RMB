@@ -31,7 +31,7 @@ const quotesModuleSource = readFileSync("app/modules/QuotesModule.tsx", "utf8");
 const quotationsViewSource = readFileSync("app/modules/quotations/quotations-module-view.tsx", "utf8");
 const quotationCrmSource = readFileSync("app/modules/quotations/quotation-crm-workspace.tsx", "utf8");
 const quotationCustomerDetailSource = readFileSync("app/modules/quotations/quotation-customer-detail.tsx", "utf8");
-const quotationCustomerProductsSource = readFileSync("app/modules/quotations/quotation-customer-products-editor.tsx", "utf8");
+const customerProductsManagerSource = readFileSync("app/modules/settings/customer-products-manager.tsx", "utf8");
 const quotationCustomerContactsSource = readFileSync("app/modules/quotations/quotation-customer-contacts.tsx", "utf8");
 const quotationCustomerFollowUpsSource = readFileSync("app/modules/quotations/quotation-customer-follow-ups.tsx", "utf8");
 const quotationCustomerBusinessSource = readFileSync("app/modules/quotations/quotation-customer-business-records.tsx", "utf8");
@@ -365,48 +365,48 @@ test("quotation CRM can search and segment customers before pagination", () => {
   assert.match(quotationCrmSource, /\[customerKeyword, customerFilter\]/);
 });
 
-test("quotation CRM customer cards open a customer detail and product library page", () => {
+test("quotation CRM customer detail keeps the low-frequency product library behind a modal", () => {
   assert.match(quotationCrmSource, /useState\(""\)/);
   assert.match(quotationCrmSource, /setSelectedCustomerKey\(nextCustomer\.key\)/);
   assert.match(quotationCrmSource, /<QuotationCustomerDetail/);
-  assert.match(quotationCrmSource, /进入客户详情 \/ 客户产品库/);
+  assert.match(quotationCrmSource, /进入客户详情/);
+  assert.doesNotMatch(quotationCrmSource, /进入客户详情 \/ 客户产品库/);
   assert.match(quotationCustomerDetailSource, /aria-label="客户 CRM 详情"/);
   assert.match(quotationCustomerDetailSource, /返回客户工作台/);
-  assert.match(quotationCustomerProductsSource, /\/api\/customer-products\?\$\{params\}/);
-  assert.match(quotationCustomerProductsSource, /客户产品库读取中/);
-  assert.match(quotationCustomerDetailSource, /物料编码与产品属性/);
-  assert.match(quotationCustomerDetailSource, /styles\.fullWidthPanel/);
+  assert.match(quotationCustomerDetailSource, /管理产品库/);
+  assert.match(quotationCustomerDetailSource, /setProductsOpen\(true\)/);
+  assert.match(quotationCustomerDetailSource, /<CustomerProductsManager/);
+  assert.match(quotationCustomerDetailSource, /canWrite=\{canWriteQuotations\}/);
+  assert.doesNotMatch(quotationCustomerDetailSource, /<QuotationCustomerProductsEditor/);
   assert.match(quotationCustomerDetailSource, /该客户报价记录/);
   assert.match(quotationCustomerDetailSource, /onViewQuotation\(quotation\)/);
 });
 
-test("quotation CRM customer detail can create and edit customer products", () => {
-  assert.match(quotationCustomerProductsSource, /type ProductForm/);
-  assert.match(quotationCustomerProductsSource, /新增产品/);
-  assert.match(quotationCustomerProductsSource, /编辑客户产品/);
-  assert.match(quotationCustomerProductsSource, /保存客户产品/);
-  assert.match(quotationCustomerProductsSource, /method: form\.id \? "PATCH" : "POST"/);
-  assert.match(quotationCustomerProductsSource, /\/api\/customer-products\/\$\{encodeURIComponent\(form\.id\)\}/);
-  assert.match(quotationCustomerProductsSource, /customerId: customer\.customerId/);
-  assert.match(quotationCustomerProductsSource, /setReloadToken\(\(value\) => value \+ 1\)/);
-  assert.match(quotationCustomerProductsSource, /canWriteQuotations \? /);
-  assert.match(quotationCustomerProductsSource, /productFormFromRow\(product\)/);
-  assert.match(quotationCustomerProductsSource, /<ProductCards/);
-  assert.match(quotationCustomerProductsSource, /未设置物料编码/);
-  assert.doesNotMatch(quotationCustomerProductsSource, /修改客户产品不会改写历史报价/);
+test("customer product modal supports scoped create and edit with read-only fallback", () => {
+  assert.match(customerProductsManagerSource, /type ProductForm/);
+  assert.match(customerProductsManagerSource, /新增产品/);
+  assert.match(customerProductsManagerSource, /编辑产品属性/);
+  assert.match(customerProductsManagerSource, /保存产品属性/);
+  assert.match(customerProductsManagerSource, /method: form\.id \? "PATCH" : "POST"/);
+  assert.match(customerProductsManagerSource, /customerId: customer\.id/);
+  assert.match(customerProductsManagerSource, /setReloadToken\(\(value\) => value \+ 1\)/);
+  assert.match(customerProductsManagerSource, /canWrite \? /);
+  assert.match(customerProductsManagerSource, /productFormFromRow\(product\)/);
+  assert.match(customerProductsManagerSource, /useWorkspaceTabDirty\(Boolean\(form\)\)/);
+  assert.match(customerProductsManagerSource, /useWorkspaceTabBusy\(saving\)/);
+  assert.match(customerProductsManagerSource, /仅查看/);
   assert.doesNotMatch(quotationCrmSource, /不用再从一张报价表里猜下一步/);
   assert.doesNotMatch(quotationCrmSource, /productPlaybook/);
 });
 
-test("quotation CRM customer detail can safely void customer products", () => {
-  assert.match(quotationCustomerProductsSource, /function voidProduct\(product: CustomerProduct\)/);
-  assert.match(quotationCustomerProductsSource, /确认删除/);
-  assert.match(quotationCustomerProductsSource, /历史报价不会改变/);
-  assert.match(quotationCustomerProductsSource, /method: "DELETE"/);
-  assert.match(quotationCustomerProductsSource, /setForm\(\(current\) => current\?\.id === product\.id \? null : current\)/);
-  assert.match(quotationCustomerProductsSource, /客户产品已删除/);
-  assert.match(quotationCustomerProductsSource, />删除<\/button>/);
-  assert.doesNotMatch(quotationCustomerProductsSource, /作废\/删除/);
+test("customer product modal can safely void products", () => {
+  assert.match(customerProductsManagerSource, /function voidProduct\(product: CustomerProductRow\)/);
+  assert.match(customerProductsManagerSource, /确认删除/);
+  assert.match(customerProductsManagerSource, /历史报价和销售数据不会改变/);
+  assert.match(customerProductsManagerSource, /method: "DELETE"/);
+  assert.match(customerProductsManagerSource, /setForm\(\(current\) => current\?\.id === product\.id \? null : current\)/);
+  assert.match(customerProductsManagerSource, /产品属性已删除/);
+  assert.match(customerProductsManagerSource, />作废<\/button>/);
 });
 
 test("quotation CRM customer detail maintains contacts through a scoped customer API", () => {
