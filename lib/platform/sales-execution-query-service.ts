@@ -177,7 +177,10 @@ export async function getSalesExecution(id: string, actor: SalesExecutionActor) 
           ...(purchaseOrderIds.length ? [{
             sourceTable: FILE_ASSET_SOURCE_TABLES.FACTORY_PURCHASE_ORDERS,
             sourceId: { in: purchaseOrderIds },
-            fileRole: FILE_ASSET_ROLES.PRODUCTION_COMPLETION_EVIDENCE,
+            fileRole: { in: [
+              FILE_ASSET_ROLES.PRODUCTION_COMPLETION_EVIDENCE,
+              FILE_ASSET_ROLES.PURCHASE_ORDER_ORIGINAL_DETAIL,
+            ] },
           }] : []),
         ],
       },
@@ -198,6 +201,9 @@ export async function getSalesExecution(id: string, actor: SalesExecutionActor) 
       ...order,
       productionCompletionEvidenceFile: assetBySource.get(
         `${FILE_ASSET_SOURCE_TABLES.FACTORY_PURCHASE_ORDERS}:${order.id}:${FILE_ASSET_ROLES.PRODUCTION_COMPLETION_EVIDENCE}`,
+      ) || null,
+      dispatchAttachmentFile: assetBySource.get(
+        `${FILE_ASSET_SOURCE_TABLES.FACTORY_PURCHASE_ORDERS}:${order.id}:${FILE_ASSET_ROLES.PURCHASE_ORDER_ORIGINAL_DETAIL}`,
       ) || null,
       supplierResponses: order.supplierResponses.map((response) => ({
         ...response,

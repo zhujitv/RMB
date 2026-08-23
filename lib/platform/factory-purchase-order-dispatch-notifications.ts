@@ -5,6 +5,7 @@ import { publicSendError, uniqueEmails } from "./notification-helpers";
 import { sendNotificationEmail } from "./notification-send";
 import { ACTIVE_PURCHASE_ORDER_STATUSES, factoryDispatchContextRecord, factoryDispatchVariables } from "./factory-purchase-order-dispatch-notification-helpers";
 import { resolveFactoryPurchaseOrderDispatchRecipients } from "./factory-purchase-order-dispatch-recipients";
+import { readFrozenFactoryPurchaseOrderDispatchAttachment } from "./factory-purchase-order-dispatch-attachment-snapshot";
 import {
   LEASE_MS,
   MAX_ATTEMPTS,
@@ -165,6 +166,10 @@ async function processOutboxRow(outboxId: string, staleBefore: Date) {
   const row = claim;
   const context = factoryDispatchContextRecord(row.context);
   try {
+    const attachments = await readFrozenFactoryPurchaseOrderDispatchAttachment(
+      purchaseOrderId,
+      context.dispatchAttachment,
+    );
     const delivery = await sendNotificationEmail({
       type: row.type,
       recipientEmails: Array.isArray(row.recipientEmails) ? row.recipientEmails : [],
@@ -174,6 +179,9 @@ async function processOutboxRow(outboxId: string, staleBefore: Date) {
       relatedEntityId: purchaseOrderId,
       idempotencyKey: row.idempotencyKey || undefined,
       context,
+      attachments,
+      subjectOverride: row.subject,
+      bodyOverride: row.body,
       ignoreTemplateCc: true,
       claimedOutboxId: row.id,
       claimedOutboxAttempt: row.attempts,

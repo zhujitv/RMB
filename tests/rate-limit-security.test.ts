@@ -117,8 +117,13 @@ test("explicit rate-limit Redis variables take priority over Upstash aliases", a
 test("registration and upload retain their dedicated compatibility buckets", () => {
   const registration = apiRateLimitKey(request("/api/auth/register", "POST"));
   const upload = apiRateLimitKey(request("/api/order-documents", "POST"));
+  const purchaseOrderAttachment = apiRateLimitKey(request(
+    "/api/sales-executions/execution-1/purchase-orders/po-1/dispatch-attachment",
+    "POST",
+  ));
   const write = apiRateLimitKey(request("/api/orders", "POST"));
   assert.match(registration, /^api:registration:/);
   assert.match(upload, /^api:upload:/);
+  assert.match(purchaseOrderAttachment, /^api:upload:/);
   assert.match(write, /^api:write:/);
 });

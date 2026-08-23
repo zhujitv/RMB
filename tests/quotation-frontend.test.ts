@@ -122,6 +122,16 @@ test("combined product input normalizes split and already-combined storage consi
   assert.equal(quotationItemDescription({ description: visible, specification: "24*140*2900 mm", key: "combined" }), visible);
 });
 
+test("quotation product descriptions keep raw spacing while focused and normalize when editing ends", () => {
+  assert.deepEqual(visibleProductDescriptionParts("POLIVAN ", ""), { description: "POLIVAN ", specification: "" });
+  assert.match(editorSource, /const \[rawDescription, setRawDescription\] = useState\(canonicalDescription\)/);
+  assert.match(editorSource, /const description = editingDescription && !disabled \? rawDescription : canonicalDescription/);
+  assert.match(editorSource, /setRawDescription\(canonicalDescription\);\s*setEditingDescription\(true\)/);
+  assert.match(editorSource, /const nextDescription = event\.target\.value;\s*setRawDescription\(nextDescription\);[\s\S]*visibleProductDescriptionParts\(nextDescription, item\.specification\)/);
+  assert.match(editorSource, /setEditingDescription\(false\);\s*setOpen\(false\)/);
+  assert.doesNotMatch(editorSource, /setRawDescription\(nextDescription\.trim\(\)\)/);
+});
+
 test("draft and sent quotations expire by their Shanghai calendar date", () => {
   const now = new Date("2026-08-09T08:00:00+08:00");
   assert.equal(quotationValidityState({ id: "draft", status: "DRAFT", currentVersion: { validUntil: "2026-08-08" } }, now).expired, true);
@@ -222,7 +232,7 @@ test("quotation editor uses inline product suggestions and clears hidden linkage
   assert.match(editorSource, /data-product-id=\{product\.id\}/);
   assert.match(editorSource, /customerProductSearchText\(product\)/);
   assert.match(editorSource, /物料编码 \$\{product\.materialCode\}/);
-  assert.match(editorSource, /visibleProductDescriptionParts\(event\.target\.value, item\.specification\)/);
+  assert.match(editorSource, /visibleProductDescriptionParts\(nextDescription, item\.specification\)/);
   assert.match(editorSource, /customerProductId: ""[\s\S]*\.\.\.normalized/);
   assert.match(editorSource, /event\.key === "ArrowDown"/);
   assert.match(editorSource, /event\.key === "ArrowUp"/);

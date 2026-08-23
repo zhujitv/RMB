@@ -8,6 +8,7 @@ export type NotificationAttachment = {
   filename: string;
   content: Buffer | string;
   contentType?: string;
+  sha256?: string;
 };
 export type NotificationVariableDefinition = {
   key: string;

@@ -296,6 +296,18 @@ test("quote source locks sales fields while direct drafts can reuse customer pro
   assert.match(productSuggestionSource, /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}[\s\S]*onClick=\{\(\) => selectProduct\(product\)\}/);
 });
 
+test("sales product descriptions preserve a typed space while focused and normalize when editing ends", () => {
+  const draft = validDraft();
+  draft.items[0]!.name = "POLIVAN ";
+  assert.equal(directExecutionPayload(draft).items[0]?.name, "POLIVAN");
+  assert.match(productSuggestionSource, /const \[rawDescription, setRawDescription\] = useState\(canonicalDescription\)/);
+  assert.match(productSuggestionSource, /const description = editingDescription && !disabled \? rawDescription : canonicalDescription/);
+  assert.match(productSuggestionSource, /setRawDescription\(canonicalDescription\);\s*setEditingDescription\(true\)/);
+  assert.match(productSuggestionSource, /const nextDescription = event\.target\.value;\s*setRawDescription\(nextDescription\);\s*const normalized/);
+  assert.match(productSuggestionSource, /setEditingDescription\(false\);\s*setOpen\(false\)/);
+  assert.doesNotMatch(productSuggestionSource, /setRawDescription\(nextDescription\.trim\(\)\)/);
+});
+
 test("sales entry and generated factory purchase orders use one product description field", () => {
   assert.match(linesSource, /产品描述\s*\n/);
   assert.doesNotMatch(linesSource, /产品描述（含规格）/);

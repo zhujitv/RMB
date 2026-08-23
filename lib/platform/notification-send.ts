@@ -18,6 +18,7 @@ import {
 import { TEXT_LIMITS } from "./notification-definitions";
 import { freightowerTrackingEmailHtml } from "./freightower-tracking-email";
 import { NOTIFICATION_TYPES } from "./notification-definition-types";
+import { validateNotificationAttachments } from "./notification-email-transport";
 
 const FREIGHTOWER_EMAIL_TYPES = new Set<string>([
   NOTIFICATION_TYPES.FREIGHTOWER_TRACKING_UPDATE,
@@ -85,7 +86,10 @@ export async function sendNotificationEmail(input: SendNotificationEmailInput) {
   ) {
     return { sent: false, skipped: true, outboxId: existing.id, error: "相同通知正在发送中" };
   }
-  const attachments = input.attachments || [];
+  if (input.attachments?.length && !template.supportsAttachments) {
+    throw codedError("该通知类型不允许发送附件。", 400, "NOTIFICATION_ATTACHMENTS_NOT_SUPPORTED");
+  }
+  const attachments = validateNotificationAttachments(input.attachments || []);
   const outbox = preclaimed && existing
     ? existing
     : existing

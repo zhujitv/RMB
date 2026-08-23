@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { DetailField, SideDetailDrawer } from "../../components";
 import { formatCurrencyAmount, formatDate, formatDateTime } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
@@ -112,6 +112,16 @@ export function ExecutionDetailDrawer({
   onClose: () => void;
 }) {
   const [view, setView] = useState<"internal" | "factory">("internal");
+  const [busyDispatchAttachments, setBusyDispatchAttachments] = useState<Set<string>>(() => new Set());
+  const dispatchAttachmentBusy = busyDispatchAttachments.size > 0;
+  const handleDispatchAttachmentBusyChange = useCallback((purchaseOrderId: string, busy: boolean) => {
+    setBusyDispatchAttachments((current) => {
+      const next = new Set(current);
+      if (busy) next.add(purchaseOrderId);
+      else next.delete(purchaseOrderId);
+      return next;
+    });
+  }, []);
   const items = execution.items || [];
   const orders = execution.purchaseOrders || [];
   const activeOrders = orders.filter((order) => order.status !== "VOIDED");
@@ -147,8 +157,8 @@ export function ExecutionDetailDrawer({
       subtitle={`V${execution.currentVersionNumber || 1} · ${execution.sourceType === "QUOTATION" ? "报价转入" : "直接创建"} · ${salesExecutionStatusLabel(execution.status, Boolean(linkedOrder || execution.shippingStartedAt), linkedOrder?.status)}`}
       onClose={onClose}
       actions={canEdit || canDispatch || canVoid || canDelete || canEnterShipping || (linkedOrder && canOpenReceivableOrder) ? <>
-        {canEdit ? <button className={shell.secondaryButton} type="button" disabled={loading || dispatching || shippingStarting || voiding || deleting} onClick={onEdit}>编辑草稿</button> : null}
-        {canDispatch ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding || deleting || !orders.length} title={!orders.length ? "请先完成工厂分配" : undefined} onClick={onDispatch}>{dispatching ? "下发中..." : "正式下发工厂"}</button> : null}
+        {canEdit ? <button className={shell.secondaryButton} type="button" disabled={loading || dispatching || dispatchAttachmentBusy || shippingStarting || voiding || deleting} onClick={onEdit}>编辑草稿</button> : null}
+        {canDispatch ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || dispatchAttachmentBusy || shippingStarting || voiding || deleting || !orders.length} title={dispatchAttachmentBusy ? "采购明细附件正在保存，请稍候" : !orders.length ? "请先完成工厂分配" : undefined} onClick={onDispatch}>{dispatching ? "下发中..." : dispatchAttachmentBusy ? "附件保存中..." : "正式下发工厂"}</button> : null}
         {canEnterShipping && !execution.shippingStartedAt ? <button className={shell.primaryButtonCompact} type="button" disabled={loading || dispatching || shippingStarting || voiding || deleting} title={shippingReadiness.ready ? undefined : shippingReadiness.reason} onClick={onEnterShipping}>{shippingStarting ? "处理中..." : linkedOrder ? "确认装柜完成" : "进入发货并创建应收"}</button> : null}
         {canVoid ? <button className={shell.dangerButton} type="button" disabled={loading || dispatching || shippingStarting || voiding || deleting} onClick={onVoid}>{voiding ? "作废中..." : "作废销售执行"}</button> : null}
         {canDelete ? <button className={shell.dangerButton} type="button" disabled={loading || deleting} onClick={onDelete}>{deleting ? "删除中..." : "永久删除"}</button> : null}
@@ -196,6 +206,7 @@ export function ExecutionDetailDrawer({
                 canAddAdjustment={canAddFactoryAdjustment}
                 canReviewFactoryPriceCorrection={canReviewFactoryPriceCorrection}
                 onExecutionChanged={onFactoryExecutionChanged}
+                onDispatchAttachmentBusyChange={handleDispatchAttachmentBusyChange}
               />
             </section>
           ) : (

@@ -83,6 +83,7 @@ export async function softDeleteFileAssetBySource(
   if (deleted.count && activeAsset?.storageKey) {
     await enqueueFileStorageDeletion(client, {
       storageKey: activeAsset.storageKey,
+      bucket: activeAsset.bucket,
       sourceTable,
       sourceId,
       fileRole,

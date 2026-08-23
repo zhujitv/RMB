@@ -55,6 +55,7 @@ export function attachmentMetadata(attachments: NotificationAttachment[] = []) {
     filename: attachment.filename,
     contentType: attachment.contentType || "",
     size: Buffer.isBuffer(attachment.content) ? attachment.content.byteLength : Buffer.byteLength(String(attachment.content || "")),
+    sha256: attachment.sha256 || "",
   }));
 }
 

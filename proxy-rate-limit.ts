@@ -69,7 +69,7 @@ function isUnsafeMethod(method = "") {
 }
 
 function isUploadRequest(request: NextRequest) {
-  const uploadPath = /\/(?:[^/]+-)?(?:documents?|invoices?)(?:\/|$)|\/(?:attachments|import|package|payment-voucher|supplier-document-requests)(?:\/|$)/i;
+  const uploadPath = /\/(?:[^/]+-)?(?:documents?|invoices?|attachments?)(?:\/|$)|\/(?:import|package|payment-voucher|supplier-document-requests)(?:\/|$)/i;
   return isUnsafeMethod(request.method) && uploadPath.test(request.nextUrl.pathname);
 }
 

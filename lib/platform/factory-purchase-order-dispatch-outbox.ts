@@ -6,6 +6,8 @@ import { productVisibleDescription } from "./quotation-calculations";
 import { buildWorkbenchDeepLink } from "./workbench-deep-link";
 import { ACTIVE_PURCHASE_ORDER_STATUSES } from "./factory-purchase-order-dispatch-notification-helpers";
 import { resolveFactoryPurchaseOrderDispatchRecipients } from "./factory-purchase-order-dispatch-recipients";
+import { dispatchAttachmentSnapshotFromAsset } from "./factory-purchase-order-dispatch-attachment-snapshot";
+import { FILE_ASSET_ROLES, FILE_ASSET_SOURCE_TABLES } from "./file-asset-data";
 
 function appOrigin() {
   return (
@@ -86,11 +88,32 @@ export async function queueFactoryPurchaseOrderDispatchOutbox(
       items: { orderBy: [{ lineNumber: "asc" }] },
     },
   });
+  const attachmentAssets = orders.length ? await tx.fileAsset.findMany({
+    where: {
+      sourceTable: FILE_ASSET_SOURCE_TABLES.FACTORY_PURCHASE_ORDERS,
+      sourceId: { in: orders.map((order) => order.id) },
+      fileRole: FILE_ASSET_ROLES.PURCHASE_ORDER_ORIGINAL_DETAIL,
+      isDeleted: false,
+      deletedAt: null,
+    },
+  }) : [];
+  const attachmentByPurchaseOrderId = new Map(attachmentAssets.map((asset) => [asset.sourceId, asset]));
   const outboxRows: Prisma.NotificationOutboxCreateManyInput[] = [];
   const purchaseOrderIds: string[] = [];
+  const attachmentSnapshots: Array<{
+    purchaseOrderId: string;
+    assetId: string;
+    sha256: string;
+    size: number;
+    mimeType: string;
+    fileName: string;
+  }> = [];
   let missingRecipient = 0;
   for (const order of orders) {
     purchaseOrderIds.push(order.id);
+    const attachmentAsset = attachmentByPurchaseOrderId.get(order.id);
+    const dispatchAttachment = attachmentAsset ? dispatchAttachmentSnapshotFromAsset(attachmentAsset) : null;
+    if (dispatchAttachment) attachmentSnapshots.push({ purchaseOrderId: order.id, ...dispatchAttachment });
     const { recipientEmails, blockedReason } =
       await resolveFactoryPurchaseOrderDispatchRecipients(tx, order.supplierId);
     const variables = {
@@ -141,7 +164,15 @@ export async function queueFactoryPurchaseOrderDispatchOutbox(
           executionId,
           executionNo: order.execution.executionNo,
           dispatchVersionNumber,
+          dispatchAttachment,
         },
+        attachments: dispatchAttachment ? [{
+          assetId: dispatchAttachment.assetId,
+          filename: dispatchAttachment.fileName,
+          contentType: dispatchAttachment.mimeType,
+          size: dispatchAttachment.size,
+          sha256: dispatchAttachment.sha256,
+        }] : undefined,
         relatedEntityType: "factory_purchase_order",
         relatedEntityId: order.id,
       });
@@ -155,5 +186,6 @@ export async function queueFactoryPurchaseOrderDispatchOutbox(
     queued: created.count,
     missingRecipient,
     purchaseOrderIds,
+    attachmentSnapshots,
   };
 }

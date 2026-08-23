@@ -47,12 +47,16 @@ export function ProductSuggestionInput({
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const description = salesItemDescription(item);
+  const canonicalDescription = salesItemDescription(item);
+  const [rawDescription, setRawDescription] = useState(canonicalDescription);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const description = editingDescription && !disabled ? rawDescription : canonicalDescription;
   const suggestions = useMemo(() => matchingProducts(products, description), [description, products]);
   const listId = `${item.key}-history-products`;
 
   function closeWhenFocusLeaves(event: FocusEvent<HTMLDivElement>) {
     if (!event.currentTarget.contains(event.relatedTarget)) {
+      setEditingDescription(false);
       setOpen(false);
       setActiveIndex(-1);
     }
@@ -61,6 +65,7 @@ export function ProductSuggestionInput({
   function selectProduct(product: CustomerProduct) {
     const retainedPrice = matchingPrice(product, currency);
     const manualPrice = item.salesPriceSource === "manual" ? item.salesUnitPrice : "";
+    setRawDescription(productDescription(product));
     onChange({
       customerProductId: product.id,
       name: String(product.name || product.productName || ""),
@@ -86,7 +91,11 @@ export function ProductSuggestionInput({
         value={description}
         disabled={disabled}
         placeholder="例如 Universal panel WPC (24*140*2900 mm)"
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setRawDescription(canonicalDescription);
+          setEditingDescription(true);
+          setOpen(true);
+        }}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" && suggestions.length) {
             event.preventDefault();
@@ -104,7 +113,9 @@ export function ProductSuggestionInput({
           }
         }}
         onChange={(event) => {
-          const normalized = visibleProductDescriptionParts(event.target.value, item.specification);
+          const nextDescription = event.target.value;
+          setRawDescription(nextDescription);
+          const normalized = visibleProductDescriptionParts(nextDescription, item.specification);
           const keepManualPrice = item.salesPriceSource === "manual";
           onChange({
             customerProductId: "",

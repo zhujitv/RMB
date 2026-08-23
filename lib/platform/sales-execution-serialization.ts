@@ -54,6 +54,8 @@ function serializePurchaseOrder(value: unknown) {
   const productionStartedBy = executionRecord(order.productionStartedBy);
   const productionCompletedBy = executionRecord(order.productionCompletedBy);
   const actualDeliveryRecordedBy = executionRecord(order.actualDeliveryRecordedBy);
+  const dispatchAttachmentFile = executionRecord(order.dispatchAttachmentFile);
+  const dispatchAttachmentUploadedBy = executionRecord(dispatchAttachmentFile.uploadedBy);
   const {
     responseHistory,
     payments,
@@ -169,6 +171,20 @@ function serializePurchaseOrder(value: unknown) {
     dispatchSmsStatus: order.dispatchSmsStatus ? String(order.dispatchSmsStatus) : null,
     dispatchSmsSentAt: order.dispatchSmsSentAt || null,
     dispatchSmsError: String(order.dispatchSmsError || ""),
+    dispatchAttachment: dispatchAttachmentFile.id ? {
+      id: String(dispatchAttachmentFile.id),
+      fileName: String(dispatchAttachmentFile.fileName || "采购明细"),
+      originalFileName: String(dispatchAttachmentFile.originalFileName || ""),
+      mimeType: String(dispatchAttachmentFile.mimeType || "application/octet-stream"),
+      fileSize: Number(dispatchAttachmentFile.fileSize || 0),
+      uploadedAt: dispatchAttachmentFile.uploadedAt || null,
+      uploadedBy: dispatchAttachmentUploadedBy.id ? {
+        id: String(dispatchAttachmentUploadedBy.id),
+        name: String(dispatchAttachmentUploadedBy.name || ""),
+      } : null,
+      previewUrl: `/api/sales-executions/${encodeURIComponent(String(order.executionId || ""))}/purchase-orders/${encodeURIComponent(String(order.id || ""))}/dispatch-attachment`,
+      downloadUrl: `/api/sales-executions/${encodeURIComponent(String(order.executionId || ""))}/purchase-orders/${encodeURIComponent(String(order.id || ""))}/dispatch-attachment?download=1`,
+    } : null,
     supplierDeliveryDate: order.supplierDeliveryDate || null,
     supplierResponseRemark: String(order.supplierResponseRemark || ""),
     supplierResponseSequence: Number(order.supplierResponseSequence || 0),

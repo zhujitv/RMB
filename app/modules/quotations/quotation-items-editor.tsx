@@ -8,7 +8,6 @@ import { customerProductDescription, customerProductSearchText, customerProductN
 import { QuotationItemActions } from "./quotation-item-actions";
 import { visibleProductDescriptionParts } from "./quotation-product-description-values";
 const MAX_SUGGESTIONS = 8;
-
 function matchingProducts(products: CustomerProduct[], query: string) {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (!normalizedQuery) return products.slice(0, MAX_SUGGESTIONS);
@@ -45,7 +44,10 @@ function ProductDescriptionInput({
 }) {
   const [open, setOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const description = quotationItemDescription(item);
+  const canonicalDescription = quotationItemDescription(item);
+  const [rawDescription, setRawDescription] = useState(canonicalDescription);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const description = editingDescription && !disabled ? rawDescription : canonicalDescription;
   const suggestions = useMemo(
     () => matchingProducts(products, description),
     [description, products],
@@ -58,6 +60,7 @@ function ProductDescriptionInput({
 
   function closeWhenFocusLeaves(event: FocusEvent<HTMLDivElement>) {
     if (!event.currentTarget.contains(event.relatedTarget)) {
+      setEditingDescription(false);
       setOpen(false);
       setHighlightedIndex(-1);
     }
@@ -66,6 +69,7 @@ function ProductDescriptionInput({
   function chooseProduct(product: CustomerProduct) {
     const retainedPrice = latestPrice(product, currency);
     const manualPrice = item.unitPriceSource === "manual" ? item.unitPrice : "";
+    setRawDescription(customerProductDescription(product));
     onChange({
       customerProductId: product.id,
       description: customerProductName(product),
@@ -95,6 +99,8 @@ function ProductDescriptionInput({
         disabled={disabled}
         placeholder="例如 Universal panel WPC (24*140*2900 mm)"
         onFocus={() => {
+          setRawDescription(canonicalDescription);
+          setEditingDescription(true);
           setOpen(true);
           setHighlightedIndex(-1);
         }}
@@ -116,8 +122,10 @@ function ProductDescriptionInput({
           }
         }}
         onChange={(event) => {
+          const nextDescription = event.target.value;
+          setRawDescription(nextDescription);
           const keepUnitPrice = item.unitPriceSource !== "history";
-          const normalized = visibleProductDescriptionParts(event.target.value, item.specification);
+          const normalized = visibleProductDescriptionParts(nextDescription, item.specification);
           onChange({
             customerProductId: "",
             ...normalized,

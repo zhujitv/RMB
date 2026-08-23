@@ -16,6 +16,27 @@
   opacity: 0.6;
 }
 
+.dispatchAttachment { margin: 10px 0; display: grid; gap: 8px; border: 1px solid #bfdbfe; border-radius: 10px; background: #eff6ff; padding: 10px 12px; }
+.dispatchAttachmentHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dispatchAttachmentHeading > div { min-width: 0; display: grid; gap: 3px; }
+.dispatchAttachmentHeading strong { color: #172554; font-size: 13px; }
+.dispatchAttachmentHeading small, .dispatchAttachmentLocked { color: #64748b; font-size: 11px; line-height: 1.45; }
+.dispatchAttachmentHeading > span { flex: 0 0 auto; border-radius: 999px; background: #dcfce7; color: #166534; padding: 4px 8px; font-size: 10px; font-weight: 800; }
+.dispatchAttachmentHeading > span[data-empty="true"] { background: #e2e8f0; color: #475569; }
+.dispatchAttachmentFile { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #fff; padding: 8px 10px; }
+.dispatchAttachmentFile > div:first-child { min-width: 0; display: grid; gap: 2px; }
+.dispatchAttachmentFile strong { overflow-wrap: anywhere; color: #1e3a8a; font-size: 12px; }
+.dispatchAttachmentFile small { color: #64748b; font-size: 10px; }
+.dispatchAttachmentActions, .dispatchAttachmentControls { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.dispatchAttachmentActions a, .dispatchAttachmentActions button, .dispatchAttachmentUpload { border: 1px solid #93c5fd; border-radius: 7px; background: #fff; color: #1d4ed8; padding: 5px 8px; font: inherit; font-size: 11px; font-weight: 750; text-decoration: none; cursor: pointer; }
+.dispatchAttachmentActions button { border-color: #fca5a5; color: #b91c1c; }
+.dispatchAttachmentActions button:disabled, .dispatchAttachmentUpload[data-disabled="true"] { cursor: wait; opacity: .55; }
+.dispatchAttachmentConfirmation { display: inline-flex; align-items: flex-start; gap: 6px; color: #334155; font-size: 11px; line-height: 1.45; }
+.dispatchAttachmentConfirmation input { width: 16px; height: 16px; margin: 0; accent-color: #2563eb; }
+.dispatchAttachmentUpload { position: relative; overflow: hidden; margin-left: auto; }
+.dispatchAttachmentUpload:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
+.dispatchAttachmentUpload input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: inherit; }
+
 .executionPanel { margin-top: 12px; border-top: 1px solid #fed7aa; padding-top: 12px; display: grid; gap: 10px; }
 .metricGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .metricGrid > div { display: grid; gap: 3px; border: 1px solid #ffedd5; border-radius: 9px; background: #fff; padding: 8px 10px; }
@@ -125,4 +146,6 @@
   .wide { grid-column: auto; }
   .priceCorrectionHeading, .priceCorrectionBatch header { align-items: stretch; flex-direction: column; }
   .priceCorrectionHeading > span, .priceCorrectionBatch header > b { width: fit-content; }
+  .dispatchAttachmentHeading, .dispatchAttachmentFile { align-items: stretch; flex-direction: column; }
+  .dispatchAttachmentUpload { margin-left: 0; }
 }

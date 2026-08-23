@@ -14,7 +14,7 @@ import {
   lockSalesExecution,
   requireSalesExecutionActorId,
 } from "./sales-execution-access";
-import { loadSalesExecution } from "./sales-execution-query-service";
+import { getSalesExecution, loadSalesExecution } from "./sales-execution-query-service";
 import { serializeSalesExecution } from "./sales-execution-values";
 import { appendSalesExecutionVersion } from "./sales-execution-version";
 import { queueFactoryPurchaseOrderDispatchOutbox } from "./factory-purchase-order-dispatch-outbox";
@@ -185,7 +185,7 @@ export async function dispatchSalesExecution(
         "sales_executions",
         before.id,
         serializeSalesExecution(before, true),
-        serialized,
+        { ...serialized, dispatchAttachments: queued.attachmentSnapshots },
         tx,
       );
       return {
@@ -244,7 +244,7 @@ export async function dispatchSalesExecution(
     queued: delivery.queued,
     missingRecipient: transactionResult.missingRecipient,
   };
-  const execution = serializeSalesExecution(await loadSalesExecution(executionId, actor), true);
+  const execution = await getSalesExecution(executionId, actor);
   const smsNotificationSummary = {
     total: transactionResult.purchaseOrderIds.length,
     submitted: smsDelivery.submitted,

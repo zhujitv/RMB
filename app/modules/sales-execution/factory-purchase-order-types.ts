@@ -14,6 +14,10 @@ export type FactoryConfirmationEvidence = {
   downloadUrl?: string | null;
 };
 
+export type FactoryPurchaseOrderDispatchAttachment = FactoryConfirmationEvidence & {
+  previewKind?: string | null;
+};
+
 export type FactoryPurchaseOrderConfirmationEvent = {
   key: string;
   eventId?: string;
@@ -207,6 +211,7 @@ export type FactoryPurchaseOrder = {
   dispatchSmsStatus?: string | null;
   dispatchSmsSentAt?: string | null;
   dispatchSmsError?: string | null;
+  dispatchAttachment?: FactoryPurchaseOrderDispatchAttachment | null;
   supplierDeliveryDate?: string | null;
   supplierResponseRemark?: string | null;
   supplierResponseSequence?: number | null;

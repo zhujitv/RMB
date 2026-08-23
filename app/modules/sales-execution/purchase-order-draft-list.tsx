@@ -3,6 +3,7 @@ import shell from "../../WorkspaceShell.module.css";
 import styles from "./sales-execution.module.css";
 import actionStyles from "./purchase-order-actions.module.css";
 import { PurchaseOrderExecutionPanel } from "./purchase-order-execution-panel";
+import { PurchaseOrderDispatchAttachment } from "./purchase-order-dispatch-attachment";
 import { factoryPurchaseOrderStatusLabel, statusTone } from "./status-values";
 import { numeric, optionalNumeric, supplierName, type FactoryPurchaseOrder, type PurchaseOrderItem } from "./types";
 
@@ -68,6 +69,7 @@ export function PurchaseOrderDraftList({
   canAddAdjustment = false,
   canReviewFactoryPriceCorrection = false,
   onExecutionChanged,
+  onDispatchAttachmentBusyChange,
 }: {
   orders: FactoryPurchaseOrder[];
   executionId?: string;
@@ -82,6 +84,7 @@ export function PurchaseOrderDraftList({
   canAddAdjustment?: boolean;
   canReviewFactoryPriceCorrection?: boolean;
   onExecutionChanged?: () => void | Promise<void>;
+  onDispatchAttachmentBusyChange?: (purchaseOrderId: string, busy: boolean) => void;
 }) {
   if (!orders.length) return <div className={shell.emptyState}>尚未生成工厂采购单，请先完成工厂分配。</div>;
   return (
@@ -123,6 +126,12 @@ export function PurchaseOrderDraftList({
               </div>
               <span className={total === null ? styles.balancePending : styles.purchaseOrderTotal}>{total === null ? "待供应商回填" : formatCurrencyAmount(currency, total)}</span>
             </div>
+            {executionId ? <PurchaseOrderDispatchAttachment
+              executionId={executionId}
+              order={order}
+              onChanged={onExecutionChanged || (() => undefined)}
+              onBusyChange={onDispatchAttachmentBusyChange}
+            /> : null}
             <div className={styles.detailTableWrap}>
               <table className={styles.detailTable}>
                 <thead><tr><th>#</th><th>产品描述</th><th>单位</th><th>采购数量</th><th>采购单价</th><th className={styles.amountCell}>采购金额</th><th>工厂备注</th></tr></thead>
