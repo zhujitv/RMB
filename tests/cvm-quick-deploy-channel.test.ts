@@ -48,6 +48,9 @@ test("quick deploy uses strict SSH and only transfers the checked bootstrap scri
   assert.match(workflow, /StrictHostKeyChecking=yes/);
   assert.doesNotMatch(workflow, /ssh-keyscan|upload-artifact|download-artifact/);
   assert.match(workflow, /scp "\$\{scp_opts\[@\]\}" scripts\/deploy-cvm-quick\.sh "\$ssh_target:\$remote_upload"/);
+  assert.match(workflow, /Initial CVM connection attempt \$attempt\/3 failed/);
+  assert.match(workflow, /Bootstrap upload attempt \$attempt\/3 failed/);
+  assert.match(workflow, /transport_status == 255 && attempt < 3/);
   assert.doesNotMatch(workflow, /scp[^\n]*(?:\.next|tar\.gz|build artifact)/i);
   assert.match(workflow, /sha256sum scripts\/deploy-cvm-quick\.sh/);
   assert.match(workflow, /RMB_BOOTSTRAP_SHA256=%q/);
@@ -67,6 +70,22 @@ test("quick deploy uses strict SSH and only transfers the checked bootstrap scri
   assert.doesNotMatch(workflow, /\|\s*bash|bash -s|<\s*scripts\/deploy-cvm-quick\.sh/);
   assert.match(script, /GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes"/);
   assert.match(script, /origin must be the approved zhujitv\/RMB repository/);
+});
+
+test("transport retries finish before the remote deployment command and never replay it", () => {
+  const connectRetry = workflow.indexOf("Initial CVM connection attempt");
+  const uploadRetry = workflow.indexOf("Bootstrap upload attempt");
+  const remoteDeploy = workflow.indexOf('ssh "${ssh_opts[@]}" "$ssh_target" "$remote_command"');
+  const independentVerification = workflow.indexOf("- name: Verify public version independently");
+  assert.ok(connectRetry >= 0);
+  assert.ok(uploadRetry > connectRetry);
+  assert.ok(remoteDeploy > uploadRetry);
+  assert.ok(independentVerification > remoteDeploy);
+  assert.doesNotMatch(workflow.slice(remoteDeploy, independentVerification), /retrying|for attempt/);
+  assert.equal(
+    workflow.split('ssh "${ssh_opts[@]}" "$ssh_target" "$remote_command"').length - 1,
+    1,
+  );
 });
 
 test("independent public verification is short and bounded", () => {
