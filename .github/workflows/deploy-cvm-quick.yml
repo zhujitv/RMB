@@ -120,23 +120,12 @@ jobs:
           [[ "$local_ready_url" =~ ^http://127\.0\.0\.1:[0-9]+/api/health$ ]] || { echo "::error::Invalid local health URL."; exit 1; }
           [[ "$public_ready_url" =~ ^https://[^/?#[:space:]@]+/api/health$ ]] || { echo "::error::Invalid public health URL."; exit 1; }
           ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
-          ssh_opts=(-i "$HOME/.ssh/rmb-cvm-quick" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
-          scp_opts=(-i "$HOME/.ssh/rmb-cvm-quick" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
+          ssh_opts=(-i "$HOME/.ssh/rmb-cvm-quick" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
+          scp_opts=(-i "$HOME/.ssh/rmb-cvm-quick" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=15 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
           command -v sha256sum >/dev/null || { echo "::error::sha256sum is required."; exit 1; }
           bootstrap_sha256="$(sha256sum scripts/deploy-cvm-quick.sh)"
           bootstrap_sha256="${bootstrap_sha256%% *}"
-          remote_upload=""
-          for attempt in {1..3}; do
-            if remote_upload="$(ssh "${ssh_opts[@]}" "$ssh_target" 'umask 077; mktemp /tmp/rmb-cvm-quick-upload.XXXXXX')"; then
-              break
-            else
-              transport_status=$?
-            fi
-            (( transport_status == 255 && attempt < 3 )) || exit "$transport_status"
-            if (( attempt == 1 )); then retry_delay=5; else retry_delay=15; fi
-            echo "::warning::Initial CVM connection attempt $attempt/3 failed; retrying in ${retry_delay}s."
-            sleep "$retry_delay"
-          done
+          remote_upload="$(ssh "${ssh_opts[@]}" "$ssh_target" 'umask 077; mktemp /tmp/rmb-cvm-quick-upload.XXXXXX')"
           [[ "$remote_upload" =~ ^/tmp/rmb-cvm-quick-upload\.[A-Za-z0-9]+$ ]] || {
             echo "::error::CVM returned an invalid temporary upload path."
             exit 1
@@ -147,17 +136,7 @@ jobs:
             ssh "${ssh_opts[@]}" "$ssh_target" "$cleanup_command" >/dev/null 2>&1 || true
           }
           trap cleanup_upload EXIT
-          for attempt in {1..3}; do
-            if scp "${scp_opts[@]}" scripts/deploy-cvm-quick.sh "$ssh_target:$remote_upload"; then
-              break
-            else
-              transport_status=$?
-            fi
-            (( transport_status == 255 && attempt < 3 )) || exit "$transport_status"
-            if (( attempt == 1 )); then retry_delay=5; else retry_delay=15; fi
-            echo "::warning::Bootstrap upload attempt $attempt/3 failed; retrying in ${retry_delay}s."
-            sleep "$retry_delay"
-          done
+          scp "${scp_opts[@]}" scripts/deploy-cvm-quick.sh "$ssh_target:$remote_upload"
           bootstrap='set -euo pipefail; exec_file="$(mktemp /tmp/rmb-cvm-quick-exec.XXXXXX)"; cleanup() { rm -f -- "$exec_file" "$RMB_BOOTSTRAP_UPLOAD"; }; trap cleanup EXIT; chmod 600 "$RMB_BOOTSTRAP_UPLOAD"; if git -C "$RMB_APP_DIR" cat-file -e HEAD:scripts/deploy-cvm-quick.sh 2>/dev/null; then git -C "$RMB_APP_DIR" show HEAD:scripts/deploy-cvm-quick.sh > "$exec_file"; else checksum_line="$(sha256sum "$RMB_BOOTSTRAP_UPLOAD")"; actual_sha256="${checksum_line%% *}"; [[ "$actual_sha256" == "$RMB_BOOTSTRAP_SHA256" ]] || { echo "Bootstrap script checksum mismatch." >&2; exit 1; }; cp -- "$RMB_BOOTSTRAP_UPLOAD" "$exec_file"; fi; chmod 700 "$exec_file"; bash -n "$exec_file"; "$exec_file"'
           printf -v remote_command \
             'RMB_DEPLOY_SHA=%q RMB_APP_DIR=%q RMB_SERVICE=%q RMB_EXPECTED_ENV_FILE=%q RMB_READY_URL=%q RMB_PUBLIC_READY_URL=%q RMB_AUDIT_FILE=%q RMB_DEPLOY_ACTOR=%q RMB_DEPLOY_RUN_URL=%q RMB_BOOTSTRAP_UPLOAD=%q RMB_BOOTSTRAP_SHA256=%q bash -c %q' \

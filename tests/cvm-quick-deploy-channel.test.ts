@@ -38,6 +38,7 @@ test("quick deploy shares the production lock and has bounded runtime", () => {
   assert.ok(timeoutIndex >= 0 && timeoutIndex < flockIndex, "timeout supervisor must start before the deployment lock is acquired");
   assert.doesNotMatch(workflow, /timeout[^\n]*"\$exec_file"/);
   assert.match(workflow, /ConnectTimeout=15/);
+  assert.equal(workflow.match(/ConnectionAttempts=3/g)?.length, 2);
   assert.match(workflow, /ServerAliveInterval=15/);
   assert.match(workflow, /ServerAliveCountMax=3/);
 });
@@ -48,9 +49,7 @@ test("quick deploy uses strict SSH and only transfers the checked bootstrap scri
   assert.match(workflow, /StrictHostKeyChecking=yes/);
   assert.doesNotMatch(workflow, /ssh-keyscan|upload-artifact|download-artifact/);
   assert.match(workflow, /scp "\$\{scp_opts\[@\]\}" scripts\/deploy-cvm-quick\.sh "\$ssh_target:\$remote_upload"/);
-  assert.match(workflow, /Initial CVM connection attempt \$attempt\/3 failed/);
-  assert.match(workflow, /Bootstrap upload attempt \$attempt\/3 failed/);
-  assert.match(workflow, /transport_status == 255 && attempt < 3/);
+  assert.doesNotMatch(workflow, /transport_status|Initial CVM connection attempt|Bootstrap upload attempt/);
   assert.doesNotMatch(workflow, /scp[^\n]*(?:\.next|tar\.gz|build artifact)/i);
   assert.match(workflow, /sha256sum scripts\/deploy-cvm-quick\.sh/);
   assert.match(workflow, /RMB_BOOTSTRAP_SHA256=%q/);
@@ -72,16 +71,13 @@ test("quick deploy uses strict SSH and only transfers the checked bootstrap scri
   assert.match(script, /origin must be the approved zhujitv\/RMB repository/);
 });
 
-test("transport retries finish before the remote deployment command and never replay it", () => {
-  const connectRetry = workflow.indexOf("Initial CVM connection attempt");
-  const uploadRetry = workflow.indexOf("Bootstrap upload attempt");
+test("transport retries are limited to SSH connection establishment and never replay deployment", () => {
   const remoteDeploy = workflow.indexOf('ssh "${ssh_opts[@]}" "$ssh_target" "$remote_command"');
   const independentVerification = workflow.indexOf("- name: Verify public version independently");
-  assert.ok(connectRetry >= 0);
-  assert.ok(uploadRetry > connectRetry);
-  assert.ok(remoteDeploy > uploadRetry);
+  assert.match(workflow, /ConnectionAttempts=3/);
+  assert.doesNotMatch(workflow, /transport_status|Initial CVM connection attempt|Bootstrap upload attempt/);
+  assert.ok(remoteDeploy >= 0);
   assert.ok(independentVerification > remoteDeploy);
-  assert.doesNotMatch(workflow.slice(remoteDeploy, independentVerification), /retrying|for attempt/);
   assert.equal(
     workflow.split('ssh "${ssh_opts[@]}" "$ssh_target" "$remote_command"').length - 1,
     1,
