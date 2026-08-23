@@ -10,6 +10,9 @@ const PUBLIC_API_ROUTES = new Set([
   // The route applies the shared login rate limit and account-state checks.
   "app/api/mini/auth/login/route.ts",
   "app/api/company-profile/route.ts",
+  // Deployment probes must work before a user session exists. The response is
+  // deliberately limited to readiness status and the deployed commit SHA.
+  "app/api/health/route.ts",
   "app/api/freightower/webhook/route.ts",
   // CRM email inbound callbacks are called by the mail gateway without ERP
   // cookies; the route is protected by CRM_EMAIL_INBOUND_SECRET and upload caps.
