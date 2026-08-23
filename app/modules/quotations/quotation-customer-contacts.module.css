@@ -36,3 +36,18 @@
   .form label:last-of-type, .formFooter { grid-column: auto; }
   .formFooter { align-items: stretch; flex-direction: column; }
 }
+.primarySummary, .contactCard { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid #dbeafe; border-radius: 14px; background: #f8fbff; padding: 13px; }
+.primarySummary strong, .primarySummary small, .contactCard strong, .contactCard small, .contactCard span { display: block; }
+.primarySummary span, .primarySummary small, .contactCard small, .contactCard span { color: #64748b; font-size: 12px; }
+.primarySummary strong { margin-top: 3px; color: #0f172a; font-size: 16px; }
+.contactList { display: grid; gap: 9px; }
+.contactCard { background: #fff; }
+.contactCard > div:nth-child(2) { min-width: 220px; }
+.contactCard em { margin-left: 7px; border-radius: 999px; background: #dcfce7; color: #166534; padding: 3px 7px; font-size: 11px; font-style: normal; }
+.formCard { display: grid; gap: 12px; border: 1px solid #bfdbfe; border-radius: 15px; background: #eff6ff; padding: 14px; }
+.formGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.formGrid label, .remark { display: grid; gap: 5px; color: #334155; font-size: 12px; font-weight: 800; }
+.formGrid input, .formGrid select, .remark textarea { width: 100%; border: 1px solid #dbe1ea; border-radius: 10px; background: #fff; padding: 8px 10px; font: inherit; }
+.formGrid .primaryCheck { display: flex; align-items: center; padding-top: 20px; }
+.formGrid .primaryCheck input { width: auto; }
+@media (max-width: 900px) { .formGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .contactCard { align-items: flex-start; flex-direction: column; } }

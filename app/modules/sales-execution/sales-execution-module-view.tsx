@@ -4,6 +4,7 @@ import { ExecutionDetailDrawer } from "./execution-detail-drawer";
 import { ExecutionFormContainer } from "./execution-form-container";
 import { ExecutionList } from "./execution-list";
 import { QuotationConversionPanel, type QuotationConversionDraft } from "./quotation-conversion-panel";
+import { ProductionControlTower } from "./production-control-tower";
 import styles from "./sales-execution.module.css";
 import type { SalesExecutionRow } from "./types";
 
@@ -160,6 +161,8 @@ export function SalesExecutionModuleView({
           <button className={shell.secondaryButton} type="button" disabled={loading} onClick={onRefresh}>{loading ? "刷新中..." : "刷新"}</button>
         </div>
       </div>
+
+      <ProductionControlTower />
 
       {canWrite && conversionDraft ? (
         <QuotationConversionPanel

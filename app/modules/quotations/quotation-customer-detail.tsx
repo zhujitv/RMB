@@ -7,6 +7,7 @@ import { QuotationCustomerBusinessRecords } from "./quotation-customer-business-
 import { QuotationCustomerContacts, type CustomerContactFields } from "./quotation-customer-contacts";
 import { QuotationCustomerEmails } from "./quotation-customer-emails";
 import { QuotationCustomerFollowUps } from "./quotation-customer-follow-ups";
+import { QuotationCustomerOpportunities } from "./quotation-customer-opportunities";
 import styles from "./quotation-crm-workspace.module.css";
 import type { CustomerInsight } from "./quotation-crm-insights";
 import {
@@ -100,6 +101,7 @@ export function QuotationCustomerDetail({
       </div>
 
       <QuotationCustomerFollowUps customer={customer} canWriteQuotations={canWriteQuotations} />
+      <QuotationCustomerOpportunities customer={customer} canWrite={canWriteQuotations} />
       <QuotationCustomerEmails customer={customer} canWriteQuotations={canWriteQuotations} />
 
       <section className={styles.crmPanel}>

@@ -1,0 +1,13 @@
+.form { display: grid; gap: 12px; border: 1px solid #bfdbfe; border-radius: 16px; background: #eff6ff; padding: 14px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.grid label { display: grid; gap: 5px; color: #334155; font-size: 12px; font-weight: 800; }
+.grid input, .grid select, .grid textarea { min-height: 40px; border: 1px solid #dbe1ea; border-radius: 10px; background: #fff; padding: 8px 10px; font: inherit; }
+.grid .wide { grid-column: span 2; }
+.board { display: grid; grid-template-columns: repeat(6, minmax(170px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.column { display: grid; align-content: start; gap: 8px; min-height: 140px; border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fafc; padding: 10px; }
+.column header { display: flex; justify-content: space-between; color: #334155; }
+.column header span { border-radius: 999px; background: #dbeafe; color: #1d4ed8; padding: 2px 7px; font-size: 11px; font-weight: 900; }
+.column article { display: grid; gap: 5px; border: 1px solid #dbeafe; border-radius: 11px; background: #fff; padding: 9px; }
+.column article > span, .column article small { color: #64748b; font-size: 11px; }
+.column article button { border: 0; background: transparent; color: #2563eb; padding: 0; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

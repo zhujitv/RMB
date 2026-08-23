@@ -1,0 +1,67 @@
+enum CustomerOpportunityStage {
+  LEAD
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model CustomerContact {
+  id              String    @id @default(cuid())
+  customerId      String    @map("customer_id")
+  name            String
+  title           String?
+  department      String?
+  phone           String?
+  email           String?
+  wechat          String?
+  preferredMethod String?   @map("preferred_method")
+  isPrimary       Boolean   @default(false) @map("is_primary")
+  remark          String?
+  createdById     String?   @map("created_by")
+  updatedById     String?   @map("updated_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("CustomerContactsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?    @relation("CustomerContactsUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, isPrimary, deletedAt])
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("customer_contacts")
+}
+
+model CustomerOpportunity {
+  id                String                   @id @default(cuid())
+  customerId        String                   @map("customer_id")
+  name              String
+  stage             CustomerOpportunityStage @default(LEAD)
+  amount            Decimal?                 @db.Decimal(18, 2)
+  currency          String                    @default("CNY")
+  probability       Int                       @default(10)
+  expectedCloseDate DateTime?                 @map("expected_close_date") @db.Date
+  nextAction        String?                   @map("next_action")
+  ownerUserId       String?                   @map("owner_user_id")
+  lostReason        String?                   @map("lost_reason")
+  remark            String?
+  closedAt          DateTime?                 @map("closed_at")
+  createdById       String?                   @map("created_by")
+  updatedById       String?                   @map("updated_by")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  deletedAt         DateTime?                 @map("deleted_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  owner     User?    @relation("CustomerOpportunitiesOwned", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdBy User?    @relation("CustomerOpportunitiesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?    @relation("CustomerOpportunitiesUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([customerId, stage, deletedAt])
+  @@index([ownerUserId, stage])
+  @@index([expectedCloseDate])
+  @@map("customer_opportunities")
+}
