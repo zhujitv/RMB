@@ -183,8 +183,13 @@ test("server builds in an isolated worktree without reinstalling dependencies", 
   assert.doesNotMatch(script, /npm (?:ci|install)/);
   assert.match(script, /printf '%s\\n' "\$TARGET_SHA" > \.next\/RMB_DEPLOY_SHA/);
   assert.match(script, /normalize_build_permissions "\$CANDIDATE_DIR\/\.next"/);
+  assert.match(script, /\[\[ -d "\$build" && ! -L "\$build" \]\]/);
+  assert.match(script, /fs\.realpathSync\(buildInput\) !== path\.join\(candidate, "\.next"\)/);
   assert.match(script, /chmod -R u=rwX,go=rX "\$build"/);
   assert.match(script, /candidate build is not readable by the application service/);
+  assert.match(script, /rebase_candidate_dependency_links "\$CANDIDATE_DIR\/\.next"/);
+  assert.match(script, /build link target is outside the approved dependency tree/);
+  assert.match(script, /activated build contains a missing or unsafe dependency link/);
   assert.match(script, /\(umask 022; git merge --ff-only "\$TARGET_SHA"\)/);
 
   const securityCheck = script.indexOf("node scripts/security-env-check.mjs");
@@ -221,17 +226,19 @@ test("activation is transactional, health-gated, audited and automatically rever
   const prepared = script.indexOf("write_state PREPARED");
   const switchBuild = script.indexOf('exchange_builds "$APP_DIR/.next" "$CANDIDATE_DIR/.next"');
   const exchanged = script.indexOf("write_state EXCHANGED");
+  const validateActiveLinks = script.indexOf("activated build contains a missing or unsafe dependency link");
+  const switchSource = script.indexOf('git merge --ff-only "$TARGET_SHA"');
+  const sourceSwitched = script.indexOf("write_state SOURCE_SWITCHED");
   const restart = script.indexOf('"${RESTART_CMD[@]}" restart "$SERVICE"', switchBuild);
   const restarted = script.indexOf("write_state RESTARTED");
   const localHealth = script.indexOf('check_health "$LOCAL_URL" "$TARGET_SHA" "local"');
   const publicHealth = script.indexOf('check_health "$PUBLIC_URL" "$TARGET_SHA" "public"');
-  const switchSource = script.indexOf('git merge --ff-only "$TARGET_SHA"');
-  const sourceSwitched = script.indexOf("write_state SOURCE_SWITCHED");
   const marker = script.indexOf('write_marker "$TARGET_SHA"');
   assert.ok(prepared >= 0);
   assert.ok(switchBuild > prepared);
   assert.ok(exchanged > switchBuild);
-  assert.ok(restart > exchanged);
+  assert.ok(validateActiveLinks > exchanged);
+  assert.ok(restart > validateActiveLinks);
   assert.ok(restarted > restart);
   assert.ok(localHealth > restarted);
   assert.ok(publicHealth > localHealth);

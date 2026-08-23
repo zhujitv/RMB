@@ -5,9 +5,12 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readlinkSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -97,7 +100,20 @@ function createFixture() {
 
   mkdirSync(join(appDir, "node_modules"));
   mkdirSync(join(appDir, "node_modules", ".bin"));
+  mkdirSync(join(appDir, "node_modules", "fixture"));
+  mkdirSync(join(appDir, "node_modules", "@scope", "example"), { recursive: true });
+  writeFileSync(join(appDir, "node_modules", "fixture", "index.js"), "module.exports = 'fixture';\n", "utf8");
+  writeFileSync(
+    join(appDir, "node_modules", "@scope", "example", "index.js"),
+    "module.exports = 'scoped fixture';\n",
+    "utf8",
+  );
   mkdirSync(join(appDir, ".next"));
+  mkdirSync(join(appDir, ".next", "node_modules"));
+  symlinkSync(
+    "../../node_modules/fixture",
+    join(appDir, ".next", "node_modules", "fixture-base-1234567890abcdef"),
+  );
   writeFileSync(join(appDir, ".next", "BUILD_ID"), "old-build\n", "utf8");
   writeFileSync(join(appDir, ".next", "RMB_DEPLOY_SHA"), `${baseSha}\n`, "utf8");
   writeFileSync(join(appDir, ".rmb-deployed-sha"), `${baseSha}\n`, "utf8");
@@ -138,6 +154,12 @@ set -eu
 printf 'next %s\n' "$*" >> "$MOCK_BUILD_LOG"
 mkdir -p .next
 printf 'new-build\n' > .next/BUILD_ID
+mkdir -p .next/node_modules/@scope
+ln -s ../../../node_modules/fixture .next/node_modules/fixture-1234567890abcdef
+ln -s ../../../../node_modules/@scope/example .next/node_modules/@scope/example-1234567890abcdef
+if [ "\${MOCK_BUILD_UNSAFE_LINK:-0}" = "1" ]; then
+  ln -s "$MOCK_UNSAFE_LINK_TARGET" .next/node_modules/unsafe-1234567890abcdef
+fi
 `);
 
   writeExecutable(join(binDir, "curl"), `#!/bin/sh
@@ -212,6 +234,13 @@ temporary="$left.exchange.$$"
 mv "$left" "$temporary"
 mv "$right" "$left"
 mv "$temporary" "$right"
+if [ "\${MOCK_BREAK_ACTIVE_LINK_AFTER_EXCHANGE:-0}" = "1" ] && [ "$left" = "$MOCK_APP_DIR/.next" ]; then
+  active_alias="$left/node_modules/fixture-1234567890abcdef"
+  if [ -L "$active_alias" ]; then
+    rm -f "$active_alias"
+    ln -s ../../node_modules/missing-fixture "$active_alias"
+  fi
+fi
 `);
 
   writeExecutable(join(binDir, "df"), `#!/bin/sh
@@ -299,6 +328,17 @@ function onlineState(fixture: Fixture) {
   };
 }
 
+function assertBaseDependencyAlias(fixture: Fixture) {
+  const alias = join(
+    fixture.appDir,
+    ".next",
+    "node_modules",
+    "fixture-base-1234567890abcdef",
+  );
+  assert.equal(readlinkSync(alias), "../../node_modules/fixture");
+  assert.equal(realpathSync(alias), realpathSync(join(fixture.appDir, "node_modules", "fixture")));
+}
+
 function cleanupFixture(fixture: Fixture) {
   rmSync(fixture.root, { recursive: true, force: true });
 }
@@ -326,6 +366,21 @@ test("quick deploy switches source and build, then records the target marker", (
     assert.equal(statSync(join(fixture.appDir, ".next")).mode & 0o777, 0o755);
     assert.equal(statSync(join(fixture.appDir, ".next", "BUILD_ID")).mode & 0o777, 0o644);
     assert.equal(statSync(join(fixture.appDir, ".next", "RMB_DEPLOY_SHA")).mode & 0o777, 0o644);
+    const regularAlias = join(fixture.appDir, ".next", "node_modules", "fixture-1234567890abcdef");
+    const scopedAlias = join(
+      fixture.appDir,
+      ".next",
+      "node_modules",
+      "@scope",
+      "example-1234567890abcdef",
+    );
+    assert.equal(readlinkSync(regularAlias), "../../node_modules/fixture");
+    assert.equal(readlinkSync(scopedAlias), "../../../node_modules/@scope/example");
+    assert.equal(realpathSync(regularAlias), realpathSync(join(fixture.appDir, "node_modules", "fixture")));
+    assert.equal(
+      realpathSync(scopedAlias),
+      realpathSync(join(fixture.appDir, "node_modules", "@scope", "example")),
+    );
     const audit = readLines(fixture.auditFile).map((line) => JSON.parse(line));
     assert.deepEqual(audit.map((entry) => entry.status), ["STARTED", "SUCCESS"]);
   } finally {
@@ -426,6 +481,43 @@ test("candidate build failure leaves the online source and build untouched witho
   }
 });
 
+test("an external candidate dependency link is rejected before activation or restart", () => {
+  const fixture = createFixture();
+  try {
+    const before = onlineState(fixture);
+    const result = runDeploy(fixture, {
+      MOCK_BUILD_UNSAFE_LINK: "1",
+      MOCK_UNSAFE_LINK_TARGET: fixture.root,
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /outside the approved dependency tree/);
+    assert.match(result.stderr, /candidate build dependency links cannot be safely relocated/);
+    assert.deepEqual(readLines(fixture.restartLog), []);
+    assert.deepEqual(onlineState(fixture), before);
+    assert.equal(existsSync(fixture.stateFile), false);
+  } finally {
+    cleanupFixture(fixture);
+  }
+});
+
+test("a dependency link broken during activation is rolled back before the new service starts", () => {
+  const fixture = createFixture();
+  try {
+    const before = onlineState(fixture);
+    const result = runDeploy(fixture, { MOCK_BREAK_ACTIVE_LINK_AFTER_EXCHANGE: "1" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /activated build contains a missing or unsafe dependency link/);
+    assert.deepEqual(onlineState(fixture), before);
+    assert.deepEqual(readLines(fixture.restartLog), ["restart"]);
+    assert.equal(existsSync(fixture.stateFile), false);
+    const audit = readLines(fixture.auditFile).map((line) => JSON.parse(line));
+    assert.equal(audit.at(-1)?.status, "FAILED");
+    assert.equal(audit.at(-1)?.rolledBack, true);
+  } finally {
+    cleanupFixture(fixture);
+  }
+});
+
 test("insufficient free memory stops before candidate build or service restart", () => {
   const fixture = createFixture();
   try {
@@ -474,6 +566,7 @@ test("restart failure restores the base source, build and deployed marker", () =
       buildId: "old-build",
       source: "export const value = 'base';",
     });
+    assertBaseDependencyAlias(fixture);
     assert.deepEqual(readLines(fixture.restartLog), ["restart", "restart"]);
     assert.equal(existsSync(fixture.stateFile), false);
     const audit = readLines(fixture.auditFile).map((line) => JSON.parse(line));
@@ -484,41 +577,53 @@ test("restart failure restores the base source, build and deployed marker", () =
   }
 });
 
-test("a later run recovers an interrupted exchanged build before attempting a new build", () => {
-  const fixture = createFixture();
-  try {
-    const interruptedCandidate = join(fixture.appDir, ".rmb-quick-build-interrupted");
-    git(fixture.appDir, "fetch", "origin", "main");
-    git(fixture.appDir, "worktree", "add", "--detach", interruptedCandidate, "origin/main");
-    mkdirSync(join(interruptedCandidate, ".next"), { recursive: true });
-    writeFileSync(join(interruptedCandidate, ".next", "BUILD_ID"), "old-build\n", "utf8");
-    writeFileSync(join(interruptedCandidate, ".next", "RMB_DEPLOY_SHA"), `${fixture.baseSha}\n`, "utf8");
-    writeFileSync(join(fixture.appDir, ".next", "BUILD_ID"), "interrupted-new-build\n", "utf8");
-    writeFileSync(join(fixture.appDir, ".next", "RMB_DEPLOY_SHA"), `${fixture.targetSha}\n`, "utf8");
-    git(fixture.appDir, "merge", "--ff-only", "origin/main");
-    writeFileSync(
-      fixture.stateFile,
-      `EXCHANGED\t${fixture.baseSha}\t${fixture.targetSha}\t${interruptedCandidate}\n`,
-      "utf8",
-    );
+for (const interruptedPhase of ["EXCHANGED", "SOURCE_SWITCHED"] as const) {
+  test(`a later run recovers an interrupted ${interruptedPhase} deployment before rebuilding`, () => {
+    const fixture = createFixture();
+    try {
+      const interruptedCandidate = join(fixture.appDir, ".rmb-quick-build-interrupted");
+      git(fixture.appDir, "fetch", "origin", "main");
+      git(fixture.appDir, "worktree", "add", "--detach", interruptedCandidate, "origin/main");
+      mkdirSync(join(interruptedCandidate, ".next"), { recursive: true });
+      mkdirSync(join(interruptedCandidate, ".next", "node_modules"));
+      symlinkSync(
+        "../../node_modules/fixture",
+        join(interruptedCandidate, ".next", "node_modules", "fixture-base-1234567890abcdef"),
+      );
+      writeFileSync(join(interruptedCandidate, ".next", "BUILD_ID"), "old-build\n", "utf8");
+      writeFileSync(
+        join(interruptedCandidate, ".next", "RMB_DEPLOY_SHA"),
+        `${fixture.baseSha}\n`,
+        "utf8",
+      );
+      writeFileSync(join(fixture.appDir, ".next", "BUILD_ID"), "interrupted-new-build\n", "utf8");
+      writeFileSync(join(fixture.appDir, ".next", "RMB_DEPLOY_SHA"), `${fixture.targetSha}\n`, "utf8");
+      git(fixture.appDir, "merge", "--ff-only", "origin/main");
+      writeFileSync(
+        fixture.stateFile,
+        `${interruptedPhase}\t${fixture.baseSha}\t${fixture.targetSha}\t${interruptedCandidate}\n`,
+        "utf8",
+      );
 
-    const result = runDeploy(fixture, { MOCK_BUILD_FAIL: "1" });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stdout, /recovering interrupted quick deployment/);
-    assert.deepEqual(onlineState(fixture), {
-      head: fixture.baseSha,
-      marker: fixture.baseSha,
-      buildSha: fixture.baseSha,
-      buildId: "old-build",
-      source: "export const value = 'base';",
-    });
-    assert.deepEqual(readLines(fixture.restartLog), ["restart"]);
-    assert.equal(existsSync(fixture.stateFile), false);
-    assert.equal(existsSync(interruptedCandidate), false);
-  } finally {
-    cleanupFixture(fixture);
-  }
-});
+      const result = runDeploy(fixture, { MOCK_BUILD_FAIL: "1" });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stdout, /recovering interrupted quick deployment/);
+      assert.deepEqual(onlineState(fixture), {
+        head: fixture.baseSha,
+        marker: fixture.baseSha,
+        buildSha: fixture.baseSha,
+        buildId: "old-build",
+        source: "export const value = 'base';",
+      });
+      assertBaseDependencyAlias(fixture);
+      assert.deepEqual(readLines(fixture.restartLog), ["restart"]);
+      assert.equal(existsSync(fixture.stateFile), false);
+      assert.equal(existsSync(interruptedCandidate), false);
+    } finally {
+      cleanupFixture(fixture);
+    }
+  });
+}
 
 test("an occupied deployment lock rejects a second run before fetch or build", () => {
   const fixture = createFixture();

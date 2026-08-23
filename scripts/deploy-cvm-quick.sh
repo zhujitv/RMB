@@ -126,11 +126,116 @@ remove_candidate() {
 normalize_build_permissions() {
   local build="$1" unreadable
   [[ "$build" == "$APP_DIR"/.rmb-quick-build-*/.next ]] || return 1
+  [[ -d "$build" && ! -L "$build" ]] || return 1
+  if mountpoint -q "$build"; then return 1; fi
+  RMB_BUILD_ROOT="$build" RMB_CANDIDATE_ROOT="$CANDIDATE_DIR" node -e '
+    const fs = require("node:fs"), path = require("node:path");
+    const buildInput = path.resolve(process.env.RMB_BUILD_ROOT || "");
+    const candidate = fs.realpathSync(process.env.RMB_CANDIDATE_ROOT || "");
+    const stat = fs.lstatSync(buildInput);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) process.exit(1);
+    if (fs.realpathSync(buildInput) !== path.join(candidate, ".next")) process.exit(1);
+  ' || return 1
   chmod -R u=rwX,go=rX "$build" || return 1
   unreadable="$(find "$build" -xdev \
     \( -type d ! -perm -0005 -o -type f ! -perm -0004 \) \
     -print -quit)"
   [[ -z "$unreadable" ]]
+}
+
+manage_build_dependency_links() {
+  local mode="$1" build="$2" future_build="$3" dependency_root="$4"
+  [[ "$mode" == "rebase" || "$mode" == "validate" ]] || return 1
+  [[ "$dependency_root" == "$APP_DIR/node_modules" ]] || return 1
+  if [[ "$mode" == "rebase" ]]; then
+    [[ "$build" == "$APP_DIR"/.rmb-quick-build-*/.next ]] || return 1
+    [[ "$future_build" == "$APP_DIR/.next" ]] || return 1
+  else
+    [[ "$build" == "$APP_DIR/.next" && "$future_build" == "$APP_DIR/.next" ]] || return 1
+  fi
+  node - "$mode" "$build" "$future_build" "$dependency_root" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const [mode, buildInput, futureBuildInput, dependencyInput] = process.argv.slice(2);
+const buildAbsolute = path.resolve(buildInput);
+const buildInputStat = fs.lstatSync(buildAbsolute);
+if (!buildInputStat.isDirectory() || buildInputStat.isSymbolicLink()) {
+  throw new Error("build root must be a real directory");
+}
+const buildRoot = fs.realpathSync(buildAbsolute);
+const futureBuildRoot = fs.realpathSync(futureBuildInput);
+const dependencyRoot = fs.realpathSync(dependencyInput);
+
+function isStrictlyInside(root, target) {
+  const relative = path.relative(root, target);
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function collectLinks(directory, links = []) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    const stat = fs.lstatSync(entryPath);
+    if (stat.isSymbolicLink()) links.push(entryPath);
+    else if (stat.isDirectory()) collectLinks(entryPath, links);
+  }
+  return links;
+}
+
+const links = collectLinks(buildRoot).sort();
+const records = links.map((linkPath) => {
+  const relativePath = path.relative(buildRoot, linkPath);
+  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
+    throw new Error(`build link escaped its root: ${linkPath}`);
+  }
+  const resolvedTarget = fs.realpathSync(linkPath);
+  if (!isStrictlyInside(dependencyRoot, resolvedTarget)) {
+    throw new Error(`build link target is outside the approved dependency tree: ${relativePath}`);
+  }
+  const futureLink = path.join(futureBuildRoot, relativePath);
+  const futureTarget = path.relative(path.dirname(futureLink), resolvedTarget) || ".";
+  if (path.isAbsolute(futureTarget)) throw new Error(`cannot create a relative build link: ${relativePath}`);
+  return { linkPath, relativePath, resolvedTarget, futureLink, futureTarget };
+});
+
+if (mode === "rebase") {
+  records.forEach((record, index) => {
+    const temporary = path.join(
+      path.dirname(record.linkPath),
+      `.${path.basename(record.linkPath)}.rmb-link-${process.pid}-${index}`,
+    );
+    try {
+      fs.symlinkSync(record.futureTarget, temporary);
+      fs.renameSync(temporary, record.linkPath);
+    } finally {
+      try { fs.unlinkSync(temporary); } catch (error) {
+        if (!error || error.code !== "ENOENT") throw error;
+      }
+    }
+    const futureResolved = fs.realpathSync(path.resolve(path.dirname(record.futureLink), record.futureTarget));
+    if (futureResolved !== record.resolvedTarget || !isStrictlyInside(dependencyRoot, futureResolved)) {
+      throw new Error(`rebased build link does not resolve safely: ${record.relativePath}`);
+    }
+  });
+} else if (mode === "validate") {
+  for (const record of records) {
+    const liveResolved = fs.realpathSync(record.linkPath);
+    if (liveResolved !== record.resolvedTarget || !isStrictlyInside(dependencyRoot, liveResolved)) {
+      throw new Error(`live build link does not resolve safely: ${record.relativePath}`);
+    }
+  }
+} else {
+  throw new Error(`unsupported build link mode: ${mode}`);
+}
+NODE
+}
+
+rebase_candidate_dependency_links() {
+  manage_build_dependency_links rebase "$1" "$APP_DIR/.next" "$APP_DIR/node_modules"
+}
+
+validate_live_dependency_links() {
+  manage_build_dependency_links validate "$APP_DIR/.next" "$APP_DIR/.next" "$APP_DIR/node_modules"
 }
 
 rollback_to() {
@@ -145,6 +250,7 @@ rollback_to() {
   fi
   restore_source_to "$base" || return 1
   write_marker "$base" || return 1
+  validate_live_dependency_links || return 1
   "${RESTART_CMD[@]}" restart "$SERVICE" || return 1
   "$SYSTEMCTL_BIN" is-active --quiet "$SERVICE" || return 1
   check_health "$LOCAL_URL" "$base" "rollback" || return 1
@@ -180,11 +286,13 @@ CURRENT_HEAD="$(git rev-parse --verify HEAD 2>/dev/null || true)"
 [[ "$CURRENT_HEAD" =~ ^[a-f0-9]{40}$ ]] || fail "server checkout has no readable HEAD"
 git diff --quiet || fail "server checkout has unstaged tracked changes"
 git diff --cached --quiet || fail "server checkout has staged changes"
-[[ -d node_modules && -x node_modules/.bin/prisma && -x node_modules/.bin/next ]] \
+[[ -d node_modules && ! -L node_modules && -x node_modules/.bin/prisma && -x node_modules/.bin/next ]] \
   || fail "build dependencies are missing; use the full deployment channel"
 [[ -f .next/BUILD_ID ]] || fail "current production build is missing"
 [[ ! -L .next ]] || fail "current production build must not be a symlink"
 if mountpoint -q .next; then fail "current production build must not be a mount point"; fi
+validate_live_dependency_links \
+  || fail "current production build contains a missing or unsafe dependency link"
 [[ -w "$APP_DIR" && -x "$APP_DIR" && -w "$APP_DIR/.git" && -x "$APP_DIR/.git" ]] \
   || fail "application checkout is not writable by $EXPECTED_DEPLOY_USER"
 LIVE_BUILD_OWNER_ISSUE="$(find .next -xdev ! -user "$EXPECTED_DEPLOY_USER" -print -quit)"
@@ -262,6 +370,7 @@ is_blocked_path() {
   fi
   case "$lower" in
     docs/*|tests/*) return 1 ;;
+    public/*|data/*) return 0 ;;
     .github/*|.circleci/*|.gitlab-ci*|scripts/*|prisma/*|*/migrations/*|migrations/*|prisma.config.*) return 0 ;;
     package*.json|*/package*.json|package-lock.json|*/package-lock.json|npm-shrinkwrap.json|*/npm-shrinkwrap.json) return 0 ;;
     yarn.lock|*/yarn.lock|pnpm-lock.yaml|*/pnpm-lock.yaml|bun.lock|bun.lockb|*/bun.lock|*/bun.lockb) return 0 ;;
@@ -432,13 +541,17 @@ command -v ionice >/dev/null 2>&1 && BUILD_PREFIX=(ionice -c 3 nice -n 10)
   "${BUILD_PREFIX[@]}" "${build_env[@]}" ./node_modules/.bin/next build
   printf '%s\n' "$TARGET_SHA" > .next/RMB_DEPLOY_SHA
 )
-rm -f -- "$CANDIDATE_DIR/node_modules"
 [[ -f "$CANDIDATE_DIR/.next/BUILD_ID" ]] || fail "candidate build has no BUILD_ID"
 normalize_build_permissions "$CANDIDATE_DIR/.next" \
   || fail "candidate build is not readable by the application service"
+rebase_candidate_dependency_links "$CANDIDATE_DIR/.next" \
+  || fail "candidate build dependency links cannot be safely relocated"
+rm -f -- "$CANDIDATE_DIR/node_modules"
 write_state PREPARED
 exchange_builds "$APP_DIR/.next" "$CANDIDATE_DIR/.next"
 write_state EXCHANGED
+validate_live_dependency_links \
+  || fail "activated build contains a missing or unsafe dependency link"
 "${RESTART_CMD[@]}" restart "$SERVICE"
 "$SYSTEMCTL_BIN" is-active --quiet "$SERVICE" || fail "service is not active after restart"
 write_state RESTARTED
