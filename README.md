@@ -1020,13 +1020,13 @@ npm run db:studio
 
 ## 部署说明
 
-当前生产环境只部署到腾讯云 CVM，以 Nginx + systemd 运行 Next.js；数据库使用腾讯云 PostgreSQL，附件使用腾讯云 COS 私有桶。Vercel 发布配置已经移除，不作为当前发布或验收依据。GitHub 是代码和正式版本的唯一档案库，每个上线版本都必须保存 commit、Git tag 和 GitHub Release。
+当前生产环境只部署到腾讯云 CVM，以 Nginx + systemd 运行 Next.js；数据库使用腾讯云 PostgreSQL，附件使用腾讯云 COS 私有桶。Vercel 发布配置已经移除，不作为当前发布或验收依据。GitHub 是代码档案库；小更新只保存 commit 且不修改版本号，大版本发布才创建 Git tag 和 GitHub Release。
 
 安全发布顺序：
 
 1. 只选择本次功能文件提交并推送到 GitHub `main`，禁止在脏工作区宽泛暂存。
-2. 确认该 commit 的 GitHub Actions 已通过，为本次正式版本创建并推送 `vX.Y.Z` Git tag；`GitHub Release Archive` workflow 会自动创建 GitHub Release。
-3. 优先使用 `Deploy CVM` GitHub Actions 通道部署：GitHub Runner 生成增量 Git bundle 上传到 CVM，CVM 从本地 bundle 快进，不再依赖 CVM 直接连接 GitHub。
+2. 确认该 commit 的 GitHub Actions 已通过。小更新不改版本号；只有大版本才创建并推送 `vX.Y.Z` Git tag，由 `GitHub Release Archive` 自动创建 Release。
+3. 普通业务小更新使用 `Deploy CVM Quick`：Runner 只上传经校验的小型 bootstrap 脚本，业务源码由 CVM fetch 最新 `main`；CVM 在隔离 worktree 构建候选 `.next`。依赖、Prisma schema / migration、运行配置和大版本升级使用完整 `Deploy CVM`。
 4. 如果存在数据库 migration，先确认数据库备份成功并核对 migration 状态。数据库备份属于业务数据保护，不是代码版本备份。
 5. 只有存在待执行 migration 时，才在维护窗口显式执行：
 
@@ -1034,18 +1034,19 @@ npm run db:studio
 npm run db:deploy
 ```
 
-6. 部署通道在 CVM 上执行 `npm run build:app` 构建应用；普通构建不会自动迁移数据库。
-7. 部署通道重启唯一的应用服务。腾讯云不保留源码压缩包、旧 release 目录或代码版本备份；需要回滚时从 GitHub 检出上一个正式 tag 后重新构建。
-8. 核对服务器运行 commit 与 GitHub SHA 一致、systemd 服务正常、仅一个 Next.js 运行进程、`www` 返回 200、裸域名正确跳转。
-9. 登录后验收报价、销售执行、供应商采购、应收订单、COS 附件和邮件流程。
+6. 快速通道不安装依赖、不迁移数据库，也不读取生产环境文件；它会在候选 worktree 中依次执行安全检查、`prisma generate` 生成 Prisma Client、`next build`。构建前还会检查至少 `3072 MiB` 可用内存、动态磁盘门槛和系统负载，将 Node.js 堆限制为 `1024 MiB`、Next.js 构建并发限制为 1，并以 `nice` / 可用时的 `ionice` 降低构建优先级。
+7. 候选构建完成后，快速通道使用 Linux `renameat2` 原子交换新旧 `.next` 并重启唯一应用服务。本机和公网健康检查确认目标 SHA 后才切源码和部署 marker；持久状态文件支持失败时及下一次运行时自动恢复。该流程包含服务重启，不是零停机发布，整个任务最长 35 分钟。
+8. 快速通道和完整通道共享 GitHub 并发组与 CVM 远端生产部署锁。腾讯云不长期保留源码压缩包、旧 release 目录或代码版本备份。
+9. 核对服务器运行 commit 与 GitHub SHA 一致、systemd 服务正常、仅一个 Next.js 运行进程、`www` 返回 200、裸域名正确跳转。
+10. 登录后验收报价、销售执行、供应商采购、应收订单、COS 附件和邮件流程。
 
-手动触发快速通道：
+手动触发小更新快速通道：
 
 ```bash
-gh workflow run deploy-cvm.yml --repo zhujitv/RMB -f ref=main -f require_ci_success=true
+gh workflow run deploy-cvm-quick.yml --repo zhujitv/RMB -f ref=main
 ```
 
-完整配置见 `docs/CVM_DEPLOYMENT_CHANNEL.md`。
+快速通道见 `docs/CVM_QUICK_DEPLOYMENT_CHANNEL.md`；完整发布通道见 `docs/CVM_DEPLOYMENT_CHANNEL.md`。
 
 代码层发布前执行：
 

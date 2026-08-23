@@ -123,6 +123,10 @@ process.exit(0);
 `, "utf8");
   chmodSync(curlPath, 0o755);
 
+  const flockPath = join(binDir, "flock");
+  writeFileSync(flockPath, "#!/bin/sh\nexit 0\n", "utf8");
+  chmodSync(flockPath, 0o755);
+
   return {
     root,
     appDir,

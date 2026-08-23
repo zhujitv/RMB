@@ -1,0 +1,171 @@
+name: Deploy CVM Quick
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Deploy current main, or enter its exact 40-character SHA"
+        required: false
+        default: "main"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: rmb-cvm-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Safe quick deploy to Tencent Cloud CVM
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production
+    env:
+      APP_DIR: ${{ vars.RMB_CVM_APP_DIR }}
+      SERVICE_NAME: ${{ vars.RMB_CVM_SERVICE }}
+      ENV_FILE: ${{ vars.RMB_CVM_ENV_FILE }}
+      LOCAL_HEALTH_URL: ${{ vars.RMB_CVM_LOCAL_HEALTH_URL }}
+      PUBLIC_HEALTH_URL: ${{ vars.RMB_CVM_PUBLIC_HEALTH_URL }}
+      AUDIT_FILE: ${{ vars.RMB_CVM_QUICK_AUDIT_FILE }}
+    steps:
+      - name: Validate target request
+        id: request
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$INPUT_REF" == "main" || "$INPUT_REF" =~ ^[a-f0-9]{40}$ ]] || {
+            echo "::error::ref must be main or an exact 40-character lowercase commit SHA."
+            exit 1
+          }
+          printf 'ref=%s\n' "$INPUT_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact target
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ steps.request.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Require current main HEAD and successful CI
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --force origin main:refs/remotes/origin/main
+          checked_out_sha="$(git rev-parse HEAD)"
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          [[ "$main_sha" == "$checked_out_sha" ]] || {
+            echo "::error::Quick deployment only accepts the latest main HEAD ($main_sha)."
+            exit 1
+          }
+          ci_success_count="$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$checked_out_sha&status=success&per_page=1" --jq '.total_count')"
+          [[ "$ci_success_count" != "0" ]] || {
+            echo "::error::No successful CI run exists for the exact target SHA."
+            exit 1
+          }
+          printf 'sha=%s\n' "$checked_out_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
+          DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.RMB_CVM_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.RMB_CVM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            [[ -n "${!name:-}" ]] || missing+=("$name")
+          done
+          (( ${#missing[@]} == 0 )) || {
+            printf '::error::Missing required deployment secrets: %s\n' "${missing[*]}"
+            exit 1
+          }
+
+      - name: Prepare strict SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.RMB_CVM_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.RMB_CVM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/rmb-cvm-quick"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/rmb-cvm-quick" "$HOME/.ssh/known_hosts"
+
+      - name: Fetch, build and atomically activate on CVM
+        env:
+          DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
+          DEPLOY_PORT: ${{ secrets.RMB_CVM_PORT }}
+          DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
+          DEPLOY_SHA: ${{ steps.target.outputs.sha }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          DEPLOY_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          app_dir="${APP_DIR:-/srv/rmb/app}"
+          service_name="${SERVICE_NAME:-rmb-app.service}"
+          env_file="${ENV_FILE:-/srv/rmb/shared/app.env}"
+          local_origin="${LOCAL_HEALTH_URL:-http://127.0.0.1:3000/}"
+          public_origin="${PUBLIC_HEALTH_URL:-https://www.nextwood.net}"
+          local_ready_url="${local_origin%/}/api/health"
+          public_ready_url="${public_origin%/}/api/health"
+          [[ "$app_dir" == /* && "$app_dir" != "/" ]] || { echo "::error::Invalid app directory."; exit 1; }
+          [[ "$service_name" =~ ^[A-Za-z0-9_.@-]+\.service$ ]] || { echo "::error::Invalid service name."; exit 1; }
+          [[ "$local_ready_url" =~ ^http://127\.0\.0\.1:[0-9]+/api/health$ ]] || { echo "::error::Invalid local health URL."; exit 1; }
+          [[ "$public_ready_url" =~ ^https://[^/?#[:space:]@]+/api/health$ ]] || { echo "::error::Invalid public health URL."; exit 1; }
+          ssh_target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          ssh_opts=(-i "$HOME/.ssh/rmb-cvm-quick" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
+          scp_opts=(-i "$HOME/.ssh/rmb-cvm-quick" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
+          command -v sha256sum >/dev/null || { echo "::error::sha256sum is required."; exit 1; }
+          bootstrap_sha256="$(sha256sum scripts/deploy-cvm-quick.sh)"
+          bootstrap_sha256="${bootstrap_sha256%% *}"
+          remote_upload="$(ssh "${ssh_opts[@]}" "$ssh_target" 'umask 077; mktemp /tmp/rmb-cvm-quick-upload.XXXXXX')"
+          [[ "$remote_upload" =~ ^/tmp/rmb-cvm-quick-upload\.[A-Za-z0-9]+$ ]] || {
+            echo "::error::CVM returned an invalid temporary upload path."
+            exit 1
+          }
+          cleanup_upload() {
+            local cleanup_command
+            printf -v cleanup_command 'rm -f -- %q' "$remote_upload"
+            ssh "${ssh_opts[@]}" "$ssh_target" "$cleanup_command" >/dev/null 2>&1 || true
+          }
+          trap cleanup_upload EXIT
+          scp "${scp_opts[@]}" scripts/deploy-cvm-quick.sh "$ssh_target:$remote_upload"
+          bootstrap='set -euo pipefail; exec_file="$(mktemp /tmp/rmb-cvm-quick-exec.XXXXXX)"; cleanup() { rm -f -- "$exec_file" "$RMB_BOOTSTRAP_UPLOAD"; }; trap cleanup EXIT; chmod 600 "$RMB_BOOTSTRAP_UPLOAD"; if git -C "$RMB_APP_DIR" cat-file -e HEAD:scripts/deploy-cvm-quick.sh 2>/dev/null; then git -C "$RMB_APP_DIR" show HEAD:scripts/deploy-cvm-quick.sh > "$exec_file"; else checksum_line="$(sha256sum "$RMB_BOOTSTRAP_UPLOAD")"; actual_sha256="${checksum_line%% *}"; [[ "$actual_sha256" == "$RMB_BOOTSTRAP_SHA256" ]] || { echo "Bootstrap script checksum mismatch." >&2; exit 1; }; cp -- "$RMB_BOOTSTRAP_UPLOAD" "$exec_file"; fi; chmod 700 "$exec_file"; bash -n "$exec_file"; "$exec_file"'
+          printf -v remote_command \
+            'RMB_DEPLOY_SHA=%q RMB_APP_DIR=%q RMB_SERVICE=%q RMB_EXPECTED_ENV_FILE=%q RMB_READY_URL=%q RMB_PUBLIC_READY_URL=%q RMB_AUDIT_FILE=%q RMB_DEPLOY_ACTOR=%q RMB_DEPLOY_RUN_URL=%q RMB_BOOTSTRAP_UPLOAD=%q RMB_BOOTSTRAP_SHA256=%q bash -c %q' \
+            "$DEPLOY_SHA" "$app_dir" "$service_name" "$env_file" "$local_ready_url" "$public_ready_url" \
+            "$AUDIT_FILE" "$DEPLOY_ACTOR" "$DEPLOY_RUN_URL" \
+            "$remote_upload" "$bootstrap_sha256" "$bootstrap"
+          ssh "${ssh_opts[@]}" "$ssh_target" "$remote_command"
+
+      - name: Verify public version independently
+        env:
+          EXPECTED_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          public_origin="${PUBLIC_HEALTH_URL:-https://www.nextwood.net}"
+          public_url="${public_origin%/}/api/health"
+          for attempt in {1..10}; do
+            if response="$(curl --fail --silent --show-error --max-time 5 "$public_url")" && \
+              HEALTH_RESPONSE="$response" EXPECTED_SHA="$EXPECTED_SHA" node -e '
+                const body = JSON.parse(process.env.HEALTH_RESPONSE || "{}");
+                process.exit(body.status === "ok" && body.version === process.env.EXPECTED_SHA ? 0 : 1);
+              '; then
+              echo "Public health check passed at $EXPECTED_SHA."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Public health did not return the deployed SHA."
+          exit 1
+
+      - name: Remove temporary SSH credentials
+        if: always()
+        run: rm -f -- "$HOME/.ssh/rmb-cvm-quick" "$HOME/.ssh/known_hosts"

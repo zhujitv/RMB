@@ -21,6 +21,7 @@ APPLIED_MIGRATION="${RMB_APPLIED_MIGRATION:-}"
 READY_URL="${RMB_READY_URL:-http://127.0.0.1:3000/api/health}"
 PUBLIC_READY_URL="${RMB_PUBLIC_READY_URL:-https://www.nextwood.net/api/health}"
 ROLLBACK_HEALTH_URL="${RMB_ROLLBACK_HEALTH_URL:-http://127.0.0.1:3000/}"
+LOCK_FILE="$APP_DIR/.rmb-production-deploy.lock"
 HEALTH_ATTEMPTS="${RMB_HEALTH_ATTEMPTS:-20}"
 HEALTH_SLEEP_SECONDS="${RMB_HEALTH_SLEEP_SECONDS:-2}"
 CUSTOM_SUDO_BIN="${RMB_SUDO:-}"
@@ -34,6 +35,7 @@ DEFAULT_SUDO=0
 [[ "$READY_URL" =~ ^http://127\.0\.0\.1:[0-9]+/api/health$ ]] || fail "RMB_READY_URL must be a loopback /api/health URL"
 [[ "$PUBLIC_READY_URL" =~ ^https://[^/?#[:space:]@]+/api/health$ ]] || fail "RMB_PUBLIC_READY_URL must be an HTTPS /api/health URL without credentials"
 [[ "$ROLLBACK_HEALTH_URL" =~ ^http://127\.0\.0\.1:[0-9]+/?$ ]] || fail "RMB_ROLLBACK_HEALTH_URL must be a loopback origin"
+command -v flock >/dev/null || fail "flock is required"
 SYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"
 [[ -n "$SYSTEMCTL_BIN" ]] || fail "systemctl is required"
 RESTART_CMD=("$SYSTEMCTL_BIN")
@@ -138,6 +140,9 @@ restart_service() {
 
 cd "$APP_DIR"
 ensure_checkout_writable
+mkdir -p "$(dirname "$LOCK_FILE")"
+exec 9>"$LOCK_FILE"
+flock -n 9 || fail "another production deployment is already running"
 
 CURRENT_HEAD="$(git rev-parse --verify HEAD 2>/dev/null || true)"
 [[ "$CURRENT_HEAD" =~ ^[a-f0-9]{40}$ ]] || fail "server checkout has no readable HEAD"

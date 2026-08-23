@@ -1,6 +1,6 @@
-# RMB CVM 快速部署通道
+# RMB CVM 完整部署通道
 
-这条通道用于把已经通过 CI 的 GitHub 提交发布到腾讯云 CVM。它的目标是替代桌面终端里的手工 `git pull + npm ci + build + restart`，减少等待、网络卡顿和人工误操作。
+这条通道用于依赖、数据库、运行配置、部署基础设施或大版本升级。普通 UI 和业务逻辑小更新应改用 [`Deploy CVM Quick`](CVM_QUICK_DEPLOYMENT_CHANNEL.md)：不更新版本号、不上传完整 `.next`，由腾讯云拉取 Git 增量并在候选工作区构建。
 
 ## 通道设计
 
@@ -23,7 +23,7 @@
 - 普通原地部署不允许运行依赖发生变化；依赖变化必须使用完整 release 部署，避免在线替换 `node_modules`。
 - 如果相对已部署版本存在未批准的 Prisma schema 或 migration 变化，普通部署会直接停止。
 - 不允许非快进部署；服务器当前 SHA 必须是目标 SHA 的祖先。
-- 同一时间只允许一个生产部署运行。
+- 同一时间只允许一个生产部署运行；完整通道与 `Deploy CVM Quick` 共用 CVM 上的 `.rmb-production-deploy.lock` 远端锁，也共用 GitHub 的 `rmb-cvm-production` 并发组。
 - SSH 必须启用严格主机校验；`RMB_CVM_KNOWN_HOSTS` 必须由人工确认后写入 GitHub Secret。
 - 建议使用专用 Linux 用户 `rmb-deploy`，只允许写入 `/srv/rmb/app`，并通过免密 sudo 仅执行 `systemctl restart rmb-app.service`；`show`、`is-active` 和 `status` 均以普通用户只读执行。
 - Build job 不绑定 `production` Environment，也不会注入或落盘任何腾讯云 SSH 凭据；SSH 私钥只在 Deploy job 下载并核对构建产物后创建，任务结束即删除。

@@ -62,6 +62,28 @@ test("CVM deployment avoids direct GitHub pulls from the server", () => {
   assert.doesNotMatch(remoteScript, /git pull|git fetch origin main/);
 });
 
+test("CVM full deployment shares the non-blocking production lock with quick deployment", () => {
+  assert.match(remoteScript, /LOCK_FILE="\$APP_DIR\/\.rmb-production-deploy\.lock"/);
+  assert.match(remoteScript, /command -v flock >\/dev\/null \|\| fail "flock is required"/);
+  assert.match(remoteScript, /mkdir -p "\$\(dirname "\$LOCK_FILE"\)"/);
+  assert.match(remoteScript, /exec 9>"\$LOCK_FILE"/);
+  assert.match(remoteScript, /flock -n 9 \|\| fail "another production deployment is already running"/);
+  assert.doesNotMatch(remoteScript, /RMB_DEPLOY_LOCK_FILE/);
+  assert.doesNotMatch(workflow, /RMB_CVM_DEPLOY_LOCK_FILE|RMB_DEPLOY_LOCK_FILE/);
+
+  const lockIndex = remoteScript.indexOf('flock -n 9 || fail "another production deployment is already running"');
+  const fetchIndex = remoteScript.indexOf('git fetch "$BUNDLE" deploy-target');
+  const extractIndex = remoteScript.indexOf('tar -xzf "$BUILD_ARCHIVE" -C "$CANDIDATE_DIR"');
+  const sourceSwitchIndex = remoteScript.indexOf('git merge --ff-only FETCH_HEAD');
+  const buildSwitchIndex = remoteScript.indexOf('mv "$APP_DIR/.next" "$ROLLBACK_DIR/.next"');
+
+  assert.ok(lockIndex >= 0, "production deploy lock must be acquired");
+  assert.ok(fetchIndex > lockIndex, "lock must be acquired before fetching the source bundle");
+  assert.ok(extractIndex > lockIndex, "lock must be acquired before extracting the build archive");
+  assert.ok(sourceSwitchIndex > lockIndex, "lock must be acquired before switching source");
+  assert.ok(buildSwitchIndex > lockIndex, "lock must be acquired before switching the build");
+});
+
 test("CVM deployment uses the successful-release marker as its deployed baseline", () => {
   const bundleStep = workflow.match(
     /- name: Build incremental git bundle[\s\S]*?(?=\n\s+- name: Upload and run deployment)/,

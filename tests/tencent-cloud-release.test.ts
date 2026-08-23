@@ -31,7 +31,10 @@ test("migrations remain explicit while CI builds stay migration-free", () => {
 });
 
 test("GitHub is the release archive and Tencent Cloud keeps no code backup", () => {
-  assert.match(installation, /每个正式发布版本都必须在 GitHub 保存 commit、Git tag 和 GitHub Release/);
+  assert.match(
+    installation,
+    /小更新保留原版本号，以 Git commit 留档；大版本发布才更新版本号并创建 Git tag 和 GitHub Release/,
+  );
   assert.match(installation, /腾讯云 CVM 不保存源码压缩包、旧 release 目录或代码版本备份/);
   assert.match(installation, /数据库备份和附件保护属于业务数据安全措施/);
   assert.match(releaseWorkflow, /tags:[\s\S]*v\[0-9\]\+\.\[0-9\]\+\.\[0-9\]\+/);

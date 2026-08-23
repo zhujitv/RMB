@@ -346,22 +346,26 @@ npm run verify:release
 
 ## 9. 腾讯云 CVM 部署流程
 
-当前生产只发布到腾讯云，GitHub 是源码和正式版本的唯一档案库。每个正式发布版本都必须在 GitHub 保存 commit、Git tag 和 GitHub Release。腾讯云 CVM 不保存源码压缩包、旧 release 目录或代码版本备份。
+当前生产只发布到腾讯云，GitHub 是源码和正式版本的唯一档案库。小更新保留原版本号，以 Git commit 留档；大版本发布才更新版本号并创建 Git tag 和 GitHub Release。腾讯云 CVM 不保存源码压缩包、旧 release 目录或代码版本备份。
 
-推荐使用 `Deploy CVM` GitHub Actions 通道，详见 `docs/CVM_DEPLOYMENT_CHANNEL.md`：
+部署分为两条受保护通道：普通业务小更新使用 `Deploy CVM Quick`（详见 `docs/CVM_QUICK_DEPLOYMENT_CHANNEL.md`）；依赖、Prisma、运行配置、部署设施或大版本升级使用 `Deploy CVM`（详见 `docs/CVM_DEPLOYMENT_CHANNEL.md`）。
 
 1. 在本地只选择本次功能文件提交，执行 `npm run verify:ci` 并推送到 GitHub `main`。
 2. 等待目标 commit 的 `CI` workflow 通过。
-3. 在 GitHub Actions 页面手动运行 `Deploy CVM`，或使用：
+3. 小更新在 GitHub Actions 页面运行 `Deploy CVM Quick`，`ref` 保持 `main`，或使用：
 
 ```bash
-gh workflow run deploy-cvm.yml --repo zhujitv/RMB -f ref=main -f require_ci_success=true
+gh workflow run deploy-cvm-quick.yml --repo zhujitv/RMB -f ref=main
 ```
 
-4. `Deploy CVM` 会通过 SSH 读取 CVM 当前 SHA，由 GitHub Runner 生成增量 Git bundle 并上传到 CVM；CVM 不再直接连接 GitHub 拉取代码。
-5. 无生产权限的 Build job 在干净环境生成 `.next` 构建归档，Deploy job 再下载同一提交的产物；CVM 校验后切换源码和构建、重启 `rmb-app.service`，并通过会访问数据库且返回构建版本的 `/api/health` 核对本机和公网状态。普通部署不会读取生产环境文件、连接生产数据库或在线替换 `node_modules`。
-6. 核对 systemd 服务正常、仅一个 `next-server` 进程、应用只监听本机端口，Nginx HTTPS 正常。
-7. 确认服务器运行 SHA 与 GitHub SHA 一致，`www` 返回 200、裸域名正确跳转，再登录验收核心业务。
+4. 快速通道只允许最新 `main` 的已通过 CI 提交。Runner 仅上传经 SHA-256 校验的小型 bootstrap 脚本；业务源码和提交对象由 CVM 的现有仓库直接 fetch，不上传完整源码包或 `.next` 构建包。
+5. CVM 在隔离 worktree 中复用现有依赖，依次执行安全检查、`prisma generate` 和 `next build`。它会重新生成 Prisma Client，但不会安装依赖、连接生产数据库或执行 migration；Prisma schema、migration、依赖或运行配置变化必须改用完整通道。
+6. 构建前必须有至少 `3072 MiB` 可用内存；可用磁盘至少 `2 GiB` 且至少是当前 `.next` 的四倍；系统负载还必须处于安全阈值内。构建将 Node.js 堆限制为 `1024 MiB`、Next.js 构建并发限制为 1，并通过 `nice` 运行；存在 `ionice` 时同时降低 I/O 优先级。服务器端部署受 22 分钟超时监督并预留 3 分钟强制结束窗口，整个快速任务最长 35 分钟。
+7. 候选构建完成后，快速通道通过 Linux `renameat2` 原子交换新旧 `.next` 并重启 `rmb-app.service`。本机和公网 `/api/health` 都确认目标 SHA 后，才快进源码并写入部署 marker。该流程包含服务重启，不是零停机发布。
+8. 部署阶段写入持久状态文件；当前任务失败会自动回滚，进程或 SSH 中断后下一次运行也会先自动恢复或收尾。被安全规则或资源门槛拦截时改用完整 `Deploy CVM` 通道。
+9. 快速通道和完整通道既共享 GitHub 生产部署并发组，也共享 CVM 上的远端生产部署锁，不能同时修改线上目录。
+10. 核对 systemd 服务正常、仅一个 `next-server` 进程、应用只监听本机端口，Nginx HTTPS 正常。
+11. 确认服务器运行 SHA 与 GitHub SHA 一致，`www` 返回 200、裸域名正确跳转，再登录验收核心业务。
 
 代码回滚时，从 GitHub 检出上一个正式 tag，重新安装依赖、构建并重启服务；不要依赖腾讯云上的旧代码目录。
 
