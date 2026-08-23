@@ -28,7 +28,9 @@
 
 腾讯云使用临时 Git worktree 构建目标提交并复用当前 `node_modules`，因此依赖不变时不再执行 `npm ci`。候选 worktree 会按固定顺序执行：安全环境检查、`prisma generate` 生成与当前 schema 一致的 Prisma Client、`next build`。这里的 `prisma generate` 只生成客户端代码，既不连接生产数据库，也不执行 migration；Prisma schema 或 migration 文件有变化时，快速通道会在构建前停止。
 
-构建前会检查服务器资源：可用内存至少 `3072 MiB`；可用磁盘至少 `2 GiB`，且不得低于当前 `.next` 大小的四倍；一分钟负载不得超过安全阈值。构建把 Node.js 堆限制为 `1024 MiB`、把 Next.js 构建并发限制为 1，并使用 `nice` 降低 CPU 优先级；系统具备 `ionice` 时同时降低磁盘 I/O 优先级。服务器端部署进程统一受 22 分钟超时监督，并预留 3 分钟强制结束窗口，整个 GitHub Actions 任务最长 35 分钟。
+构建前会检查服务器资源：可用内存至少 `6144 MiB`；可用磁盘至少 `2 GiB`，且不得低于当前 `.next` 大小的四倍；一分钟负载不得超过安全阈值。构建把 Node.js 堆限制为 `2048 MiB`、把 Next.js 构建并发限制为 1，并使用 `nice` 降低 CPU 优先级；系统具备 `ionice` 时同时降低磁盘 I/O 优先级。服务器端部署进程统一受 22 分钟超时监督，并预留 3 分钟强制结束窗口，整个 GitHub Actions 任务最长 35 分钟。
+
+部署控制文件继续使用私有权限。候选 `.next` 在激活前会单独规范为部署用户可写、应用服务可读，随后逐项检查目录可进入、文件可读取；源码快进与异常恢复也使用标准只读权限创建文件，避免部署账号与 `rmb` 服务账号不同而造成重启失败。
 
 GitHub 和服务器各有部署锁，快速通道与完整通道使用同一把服务器生产部署锁。候选 `.next` 构建完成后，Linux `renameat2` 会在同一文件系统内原子交换新旧 `.next`，随后重启服务。本机和公网 `/api/health` 都返回目标 SHA 后，系统才快进源码并写入 `.rmb-deployed-sha`；这是一条带服务重启的快速发布流程，不应描述为零停机发布。
 
@@ -47,10 +49,12 @@ GitHub Actions 保留操作者、目标 SHA 和完整日志。服务器同时追
 ## 服务器前置条件
 
 - `/srv/rmb/app` 是干净的 Git 工作区，`origin` 是获准的 GitHub 仓库；
+- 当前 `.next` 必须是真实目录、不是独立挂载点，且全部归属 `rmb-deploy`；归属漂移会在构建前停止并要求先修复；
 - 服务器已有 GitHub 只读 deploy key 或等价的只读拉取权限，SSH 使用严格主机校验；
 - 当前 `node_modules` 与线上依赖清单一致，并包含可执行的 Prisma 与 Next.js 构建工具；
 - 已安装 `git`、`node`、`curl`、`flock`、`timeout`、`python3` 和 `systemctl`；Linux/glibc 必须支持 `renameat2` 原子目录交换；
-- 构建开始时至少有 `3072 MiB` 可用内存，并满足动态磁盘和负载门槛；`ionice` 为可选优化；
-- 部署用户仍只拥有重启 `rmb-app.service` 所需的免密 sudo 权限。
+- 构建开始时至少有 `6144 MiB` 可用内存，并满足动态磁盘和负载门槛；`ionice` 为可选优化；
+- 快速通道必须以专用账号 `rmb-deploy` 执行；该账号仍只拥有重启 `rmb-app.service` 所需的免密 sudo 权限；
+- `rmb-app.service` 可以使用独立的 `rmb` 账号运行，激活前的权限检查会保证它能读取候选构建。
 
 首次加入这条通道的提交可以通过快速通道自举，但前提是该提交除运行时代码外只新增本 workflow、部署脚本、测试与本说明。若线上 Git 仓库尚未配置只读拉取凭据，应先配置凭据，或用现有完整部署通道完成第一次上线。

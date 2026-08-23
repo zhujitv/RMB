@@ -25,8 +25,9 @@ CANDIDATE_DIR=""
 CHANGED_FILES=""
 AUDIT_READY=0
 ROLLED_BACK=false
-BUILD_HEAP_MB=1024
+BUILD_HEAP_MB=2048
 MIN_AVAILABLE_MB=$((BUILD_HEAP_MB * 3))
+EXPECTED_DEPLOY_USER="${RMB_EXPECTED_DEPLOY_USER:-rmb-deploy}"
 
 [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "RMB_DEPLOY_SHA must be a full lowercase commit SHA"
 [[ "$APP_DIR" == /* && "$APP_DIR" != "/" ]] || fail "RMB_APP_DIR must be a narrow absolute path"
@@ -34,7 +35,9 @@ MIN_AVAILABLE_MB=$((BUILD_HEAP_MB * 3))
 [[ "$LOCAL_URL" =~ ^http://127\.0\.0\.1:[0-9]+/api/health$ ]] || fail "local health URL must be loopback /api/health"
 [[ "$PUBLIC_URL" =~ ^https://[^/?#[:space:]@]+/api/health$ ]] || fail "public health URL must be an HTTPS /api/health URL"
 [[ -d "$APP_DIR/.git" ]] || fail "application checkout not found: $APP_DIR"
-for required in git node curl flock timeout python3; do command -v "$required" >/dev/null || fail "$required is required"; done
+[[ "$(id -un)" == "$EXPECTED_DEPLOY_USER" ]] \
+  || fail "quick deployment must run as $EXPECTED_DEPLOY_USER"
+for required in git node curl find flock mountpoint timeout python3; do command -v "$required" >/dev/null || fail "$required is required"; done
 if [[ "${RMB_QUICK_DEPLOY_UNDER_TIMEOUT:-0}" != "1" ]]; then
   exec timeout --signal=TERM --kill-after=3m 22m \
     env RMB_QUICK_DEPLOY_UNDER_TIMEOUT=1 "$0" "$@"
@@ -109,7 +112,7 @@ restore_source_to() {
     git merge-base --is-ancestor "$desired" "$active" || return 1
     git update-ref "$CURRENT_REF" "$desired" "$active" || return 1
   fi
-  git restore --source="$desired" --staged --worktree -- .
+  (umask 022; git restore --source="$desired" --staged --worktree -- .)
 }
 
 remove_candidate() {
@@ -118,6 +121,16 @@ remove_candidate() {
   [[ ! -L "$candidate/node_modules" ]] || rm -f -- "$candidate/node_modules"
   git worktree remove --force "$candidate" >/dev/null 2>&1 || true
   git worktree prune >/dev/null 2>&1 || true
+}
+
+normalize_build_permissions() {
+  local build="$1" unreadable
+  [[ "$build" == "$APP_DIR"/.rmb-quick-build-*/.next ]] || return 1
+  chmod -R u=rwX,go=rX "$build" || return 1
+  unreadable="$(find "$build" -xdev \
+    \( -type d ! -perm -0005 -o -type f ! -perm -0004 \) \
+    -print -quit)"
+  [[ -z "$unreadable" ]]
 }
 
 rollback_to() {
@@ -170,6 +183,16 @@ git diff --cached --quiet || fail "server checkout has staged changes"
 [[ -d node_modules && -x node_modules/.bin/prisma && -x node_modules/.bin/next ]] \
   || fail "build dependencies are missing; use the full deployment channel"
 [[ -f .next/BUILD_ID ]] || fail "current production build is missing"
+[[ ! -L .next ]] || fail "current production build must not be a symlink"
+if mountpoint -q .next; then fail "current production build must not be a mount point"; fi
+[[ -w "$APP_DIR" && -x "$APP_DIR" && -w "$APP_DIR/.git" && -x "$APP_DIR/.git" ]] \
+  || fail "application checkout is not writable by $EXPECTED_DEPLOY_USER"
+LIVE_BUILD_OWNER_ISSUE="$(find .next -xdev ! -user "$EXPECTED_DEPLOY_USER" -print -quit)"
+[[ -z "$LIVE_BUILD_OWNER_ISSUE" ]] \
+  || fail "current production build is not owned by $EXPECTED_DEPLOY_USER; repair its ownership before quick deployment"
+LIVE_BUILD_MODE_ISSUE="$(find .next -xdev -type d ! -perm -u+w -print -quit)"
+[[ -z "$LIVE_BUILD_MODE_ISSUE" ]] \
+  || fail "current production build contains a directory that $EXPECTED_DEPLOY_USER cannot manage"
 BASE_SHA="$(tr -d '\r\n' < .rmb-deployed-sha 2>/dev/null || true)"
 BUILD_SHA="$(build_sha "$APP_DIR/.next")"
 [[ "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "deployed SHA marker is missing; use the full deployment channel"
@@ -362,12 +385,13 @@ CPU_COUNT="$cpu_count" LOAD_ONE="$load_one" node -e '
 audit_event "STARTED" "quick deployment accepted: $changed_count files, $line_churn changed lines"
 AUDIT_READY=1
 CANDIDATE_DIR="$APP_DIR/.rmb-quick-build-${TARGET_SHA:0:12}-$$"
-git worktree add --detach "$CANDIDATE_DIR" "$TARGET_SHA"
+(umask 022; git worktree add --detach "$CANDIDATE_DIR" "$TARGET_SHA")
 ln -s "$APP_DIR/node_modules" "$CANDIDATE_DIR/node_modules"
 public_origin="${PUBLIC_URL%/api/health}"
 BUILD_PREFIX=(nice -n 10)
 command -v ionice >/dev/null 2>&1 && BUILD_PREFIX=(ionice -c 3 nice -n 10)
 (
+  umask 022
   cd "$CANDIDATE_DIR"
   build_env=(env RMB_SKIP_LOCAL_ENV_FILES=1 NEXT_TELEMETRY_DISABLED=1 SECURITY_BUILD_MODE=preview \
     CIRCLE_NODE_TOTAL=1 NODE_OPTIONS="--max-old-space-size=$BUILD_HEAP_MB" \
@@ -380,6 +404,8 @@ command -v ionice >/dev/null 2>&1 && BUILD_PREFIX=(ionice -c 3 nice -n 10)
 )
 rm -f -- "$CANDIDATE_DIR/node_modules"
 [[ -f "$CANDIDATE_DIR/.next/BUILD_ID" ]] || fail "candidate build has no BUILD_ID"
+normalize_build_permissions "$CANDIDATE_DIR/.next" \
+  || fail "candidate build is not readable by the application service"
 write_state PREPARED
 exchange_builds "$APP_DIR/.next" "$CANDIDATE_DIR/.next"
 write_state EXCHANGED
@@ -388,7 +414,7 @@ write_state EXCHANGED
 write_state RESTARTED
 check_health "$LOCAL_URL" "$TARGET_SHA" "local" || fail "local health check failed"
 check_health "$PUBLIC_URL" "$TARGET_SHA" "public" || fail "public health check failed"
-git merge --ff-only "$TARGET_SHA"
+(umask 022; git merge --ff-only "$TARGET_SHA")
 [[ "$(git rev-parse HEAD)" == "$TARGET_SHA" ]] || fail "source switch did not reach target SHA"
 write_state SOURCE_SWITCHED
 write_marker "$TARGET_SHA" || fail "could not record the deployed SHA"

@@ -1034,7 +1034,7 @@ npm run db:studio
 npm run db:deploy
 ```
 
-6. 快速通道不安装依赖、不迁移数据库，也不读取生产环境文件；它会在候选 worktree 中依次执行安全检查、`prisma generate` 生成 Prisma Client、`next build`。构建前还会检查至少 `3072 MiB` 可用内存、动态磁盘门槛和系统负载，将 Node.js 堆限制为 `1024 MiB`、Next.js 构建并发限制为 1，并以 `nice` / 可用时的 `ionice` 降低构建优先级。
+6. 快速通道不安装依赖、不迁移数据库，也不读取生产环境文件；它会在候选 worktree 中依次执行安全检查、`prisma generate` 生成 Prisma Client、`next build`。构建前还会检查至少 `6144 MiB` 可用内存、动态磁盘门槛和系统负载，将 Node.js 堆限制为 `2048 MiB`、Next.js 构建并发限制为 1，并以 `nice` / 可用时的 `ionice` 降低构建优先级；候选构建在切换前还会校验 `rmb` 服务账号所需的只读权限。
 7. 候选构建完成后，快速通道使用 Linux `renameat2` 原子交换新旧 `.next` 并重启唯一应用服务。本机和公网健康检查确认目标 SHA 后才切源码和部署 marker；持久状态文件支持失败时及下一次运行时自动恢复。该流程包含服务重启，不是零停机发布，整个任务最长 35 分钟。
 8. 快速通道和完整通道共享 GitHub 并发组与 CVM 远端生产部署锁。腾讯云不长期保留源码压缩包、旧 release 目录或代码版本备份。
 9. 核对服务器运行 commit 与 GitHub SHA 一致、systemd 服务正常、仅一个 Next.js 运行进程、`www` 返回 200、裸域名正确跳转。

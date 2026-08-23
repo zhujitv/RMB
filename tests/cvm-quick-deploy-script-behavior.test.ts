@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +16,7 @@ import test from "node:test";
 
 const deployScript = resolve("scripts/deploy-cvm-quick.sh");
 const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+const currentUser = execFileSync("id", ["-un"], { encoding: "utf8" }).trim();
 const bashSupportsLowercaseExpansion = spawnSync(
   "bash",
   ["-c", "value=ABC; test \"${value,,}\" = abc"],
@@ -99,7 +101,7 @@ function createFixture() {
   writeFileSync(join(appDir, ".next", "BUILD_ID"), "old-build\n", "utf8");
   writeFileSync(join(appDir, ".next", "RMB_DEPLOY_SHA"), `${baseSha}\n`, "utf8");
   writeFileSync(join(appDir, ".rmb-deployed-sha"), `${baseSha}\n`, "utf8");
-  writeFileSync(meminfoFile, "MemAvailable:       4194304 kB\n", "utf8");
+  writeFileSync(meminfoFile, "MemAvailable:       8388608 kB\n", "utf8");
   writeFileSync(loadavgFile, "0.10 0.10 0.10 1/100 1\n", "utf8");
 
   writeExecutable(join(binDir, "git"), `#!/bin/sh
@@ -219,6 +221,11 @@ if [ "\${MOCK_FLOCK_BUSY:-0}" = "1" ]; then exit 1; fi
 exit 0
 `);
 
+  writeExecutable(join(binDir, "mountpoint"), `#!/bin/sh
+set -eu
+exit 1
+`);
+
   const env = {
     ...process.env,
     PATH: `${binDir}:${process.env.PATH || ""}`,
@@ -241,6 +248,7 @@ exit 0
     RMB_LOADAVG_FILE: loadavgFile,
     RMB_DEPLOY_ACTOR: "deploy-test",
     RMB_DEPLOY_RUN_URL: "https://github.com/zhujitv/RMB/actions/runs/1",
+    RMB_EXPECTED_DEPLOY_USER: currentUser,
   };
 
   return {
@@ -305,6 +313,9 @@ test("quick deploy switches source and build, then records the target marker", (
     ]);
     assert.deepEqual(readLines(fixture.restartLog), ["restart"]);
     assert.equal(existsSync(fixture.stateFile), false);
+    assert.equal(statSync(join(fixture.appDir, ".next")).mode & 0o777, 0o755);
+    assert.equal(statSync(join(fixture.appDir, ".next", "BUILD_ID")).mode & 0o777, 0o644);
+    assert.equal(statSync(join(fixture.appDir, ".next", "RMB_DEPLOY_SHA")).mode & 0o777, 0o644);
     const audit = readLines(fixture.auditFile).map((line) => JSON.parse(line));
     assert.deepEqual(audit.map((entry) => entry.status), ["STARTED", "SUCCESS"]);
   } finally {
@@ -335,12 +346,31 @@ test("insufficient free memory stops before candidate build or service restart",
     writeFileSync(join(fixture.root, "meminfo"), "MemAvailable:       2097152 kB\n", "utf8");
     const result = runDeploy(fixture);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /less than 3072 MiB memory is available/);
+    assert.match(result.stderr, /less than 6144 MiB memory is available/);
     assert.deepEqual(onlineState(fixture), before);
     assert.deepEqual(readLines(fixture.buildLog), []);
     assert.deepEqual(readLines(fixture.restartLog), []);
     assert.equal(existsSync(fixture.stateFile), false);
   } finally {
+    cleanupFixture(fixture);
+  }
+});
+
+test("an unmanageable live build stops before candidate fetch or build", () => {
+  const fixture = createFixture();
+  const liveBuild = join(fixture.appDir, ".next");
+  try {
+    const before = onlineState(fixture);
+    chmodSync(liveBuild, 0o555);
+    const result = runDeploy(fixture);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /current production build contains a directory/);
+    assert.deepEqual(onlineState(fixture), before);
+    assert.deepEqual(readLines(fixture.fetchLog), []);
+    assert.deepEqual(readLines(fixture.buildLog), []);
+    assert.deepEqual(readLines(fixture.restartLog), []);
+  } finally {
+    if (existsSync(liveBuild)) chmodSync(liveBuild, 0o755);
     cleanupFixture(fixture);
   }
 });
@@ -415,6 +445,22 @@ test("an occupied deployment lock rejects a second run before fetch or build", (
     assert.deepEqual(readLines(fixture.buildLog), []);
     assert.deepEqual(readLines(fixture.restartLog), []);
     assert.equal(existsSync(fixture.stateFile), false);
+  } finally {
+    cleanupFixture(fixture);
+  }
+});
+
+test("an unexpected deployment identity is rejected before fetch or build", () => {
+  const fixture = createFixture();
+  try {
+    const before = onlineState(fixture);
+    const result = runDeploy(fixture, { RMB_EXPECTED_DEPLOY_USER: `${currentUser}-other` });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /quick deployment must run as/);
+    assert.deepEqual(onlineState(fixture), before);
+    assert.deepEqual(readLines(fixture.fetchLog), []);
+    assert.deepEqual(readLines(fixture.buildLog), []);
+    assert.deepEqual(readLines(fixture.restartLog), []);
   } finally {
     cleanupFixture(fixture);
   }

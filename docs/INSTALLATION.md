@@ -360,7 +360,7 @@ gh workflow run deploy-cvm-quick.yml --repo zhujitv/RMB -f ref=main
 
 4. 快速通道只允许最新 `main` 的已通过 CI 提交。Runner 仅上传经 SHA-256 校验的小型 bootstrap 脚本；业务源码和提交对象由 CVM 的现有仓库直接 fetch，不上传完整源码包或 `.next` 构建包。
 5. CVM 在隔离 worktree 中复用现有依赖，依次执行安全检查、`prisma generate` 和 `next build`。它会重新生成 Prisma Client，但不会安装依赖、连接生产数据库或执行 migration；Prisma schema、migration、依赖或运行配置变化必须改用完整通道。
-6. 构建前必须有至少 `3072 MiB` 可用内存；可用磁盘至少 `2 GiB` 且至少是当前 `.next` 的四倍；系统负载还必须处于安全阈值内。构建将 Node.js 堆限制为 `1024 MiB`、Next.js 构建并发限制为 1，并通过 `nice` 运行；存在 `ionice` 时同时降低 I/O 优先级。服务器端部署受 22 分钟超时监督并预留 3 分钟强制结束窗口，整个快速任务最长 35 分钟。
+6. 构建前必须有至少 `6144 MiB` 可用内存；可用磁盘至少 `2 GiB` 且至少是当前 `.next` 的四倍；系统负载还必须处于安全阈值内。构建将 Node.js 堆限制为 `2048 MiB`、Next.js 构建并发限制为 1，并通过 `nice` 运行；存在 `ionice` 时同时降低 I/O 优先级。候选 `.next` 激活前会规范为部署账号可写、`rmb` 服务账号可读。服务器端部署受 22 分钟超时监督并预留 3 分钟强制结束窗口，整个快速任务最长 35 分钟。
 7. 候选构建完成后，快速通道通过 Linux `renameat2` 原子交换新旧 `.next` 并重启 `rmb-app.service`。本机和公网 `/api/health` 都确认目标 SHA 后，才快进源码并写入部署 marker。该流程包含服务重启，不是零停机发布。
 8. 部署阶段写入持久状态文件；当前任务失败会自动回滚，进程或 SSH 中断后下一次运行也会先自动恢复或收尾。被安全规则或资源门槛拦截时改用完整 `Deploy CVM` 通道。
 9. 快速通道和完整通道既共享 GitHub 生产部署并发组，也共享 CVM 上的远端生产部署锁，不能同时修改线上目录。

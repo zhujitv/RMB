@@ -160,6 +160,12 @@ test("bootstrap validator permits only the exact approved lock transform", () =>
 });
 
 test("server builds in an isolated worktree without reinstalling dependencies", () => {
+  assert.match(script, /EXPECTED_DEPLOY_USER="\$\{RMB_EXPECTED_DEPLOY_USER:-rmb-deploy\}"/);
+  assert.match(script, /quick deployment must run as \$EXPECTED_DEPLOY_USER/);
+  assert.match(script, /current production build must not be a symlink/);
+  assert.match(script, /current production build must not be a mount point/);
+  assert.match(script, /find \.next -xdev ! -user "\$EXPECTED_DEPLOY_USER"/);
+  assert.match(script, /repair its ownership before quick deployment/);
   assert.match(script, /git worktree add --detach "\$CANDIDATE_DIR" "\$TARGET_SHA"/);
   assert.match(script, /ln -s "\$APP_DIR\/node_modules" "\$CANDIDATE_DIR\/node_modules"/);
   assert.match(script, /RMB_SKIP_LOCAL_ENV_FILES=1/);
@@ -169,6 +175,10 @@ test("server builds in an isolated worktree without reinstalling dependencies", 
   assert.match(script, /\.\/node_modules\/\.bin\/next build/);
   assert.doesNotMatch(script, /npm (?:ci|install)/);
   assert.match(script, /printf '%s\\n' "\$TARGET_SHA" > \.next\/RMB_DEPLOY_SHA/);
+  assert.match(script, /normalize_build_permissions "\$CANDIDATE_DIR\/\.next"/);
+  assert.match(script, /chmod -R u=rwX,go=rX "\$build"/);
+  assert.match(script, /candidate build is not readable by the application service/);
+  assert.match(script, /\(umask 022; git merge --ff-only "\$TARGET_SHA"\)/);
 
   const securityCheck = script.indexOf("node scripts/security-env-check.mjs");
   const prismaGenerate = script.indexOf("./node_modules/.bin/prisma generate");
@@ -182,7 +192,7 @@ test("server preflights build resources and lowers candidate build priority", ()
   assert.match(script, /MEMINFO_FILE="\$\{RMB_MEMINFO_FILE:-\/proc\/meminfo\}"/);
   assert.match(script, /LOADAVG_FILE="\$\{RMB_LOADAVG_FILE:-\/proc\/loadavg\}"/);
   assert.match(script, /MemAvailable:/);
-  assert.match(script, /BUILD_HEAP_MB=1024/);
+  assert.match(script, /BUILD_HEAP_MB=2048/);
   assert.match(script, /MIN_AVAILABLE_MB=\$\(\(BUILD_HEAP_MB \* 3\)\)/);
   assert.match(script, /available_mb >= MIN_AVAILABLE_MB/);
   assert.match(script, /df -Pm "\$APP_DIR"/);
