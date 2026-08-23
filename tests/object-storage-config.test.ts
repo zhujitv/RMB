@@ -81,6 +81,8 @@ test("COS storage record normalization verifies objects before updating labels",
   const source = readFileSync("scripts/normalize-object-storage-to-cos.mjs", "utf8");
   assert.match(source, /HeadObjectCommand/);
   assert.match(source, /COS_OBJECT_VERIFICATION_FAILED/);
+  assert.match(source, /inactiveOnlyObjects/);
+  assert.match(source, /verifyObjects\(before\.activeKeys\)/);
   assert.match(source, /if \(!apply\)/);
   assert.match(source, /prisma\.\$transaction/);
   assert.match(source, /remainingLegacyRecords: 0/);

@@ -31,36 +31,38 @@ async function loadLegacyReferences() {
         storageKey: { not: "" },
         OR: [{ r2Bucket: { not: storage.bucket } }],
       },
-      select: { storageKey: true },
+      select: { storageKey: true, deletedAt: true },
     }),
     prisma.fileAsset.findMany({
       where: {
         storageKey: { not: "" },
         OR: [{ bucket: null }, { bucket: { not: storage.bucket } }],
       },
-      select: { storageKey: true },
+      select: { storageKey: true, isDeleted: true, deletedAt: true },
     }),
     prisma.supplierDocumentRequest.findMany({
       where: {
         templateStorageKey: { not: null },
         OR: [{ templateBucket: null }, { templateBucket: { not: storage.bucket } }],
       },
-      select: { templateStorageKey: true },
+      select: { templateStorageKey: true, deletedAt: true },
     }),
     prisma.orderCost.findMany({
       where: {
         paymentVoucherStorageKey: { not: null },
         OR: [{ paymentVoucherBucket: null }, { paymentVoucherBucket: { not: storage.bucket } }],
       },
-      select: { paymentVoucherStorageKey: true },
+      select: { paymentVoucherStorageKey: true, deletedAt: true },
     }),
   ]);
-  const keys = [...new Set([
-    ...documents.map((row) => row.storageKey),
-    ...assets.map((row) => row.storageKey),
-    ...templates.map((row) => row.templateStorageKey || ""),
-    ...vouchers.map((row) => row.paymentVoucherStorageKey || ""),
-  ].filter(Boolean))];
+  const references = [
+    ...documents.map((row) => ({ key: row.storageKey, active: !row.deletedAt })),
+    ...assets.map((row) => ({ key: row.storageKey, active: !row.isDeleted && !row.deletedAt })),
+    ...templates.map((row) => ({ key: row.templateStorageKey || "", active: !row.deletedAt })),
+    ...vouchers.map((row) => ({ key: row.paymentVoucherStorageKey || "", active: !row.deletedAt })),
+  ].filter((row) => row.key);
+  const keys = [...new Set(references.map((row) => row.key))];
+  const activeKeys = [...new Set(references.filter((row) => row.active).map((row) => row.key))];
   return {
     counts: {
       orderDocuments: documents.length,
@@ -68,8 +70,11 @@ async function loadLegacyReferences() {
       supplierTemplates: templates.length,
       paymentVouchers: vouchers.length,
       uniqueObjects: keys.length,
+      verifiedActiveObjects: activeKeys.length,
+      inactiveOnlyObjects: keys.length - activeKeys.length,
     },
     keys,
+    activeKeys,
   };
 }
 
@@ -130,7 +135,7 @@ async function normalizeRecords() {
 
 try {
   const before = await loadLegacyReferences();
-  const failures = await verifyObjects(before.keys);
+  const failures = await verifyObjects(before.activeKeys);
   if (failures.length) {
     console.error(JSON.stringify({
       status: "blocked",
