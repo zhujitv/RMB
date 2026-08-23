@@ -68,6 +68,10 @@ test("CVM deployment isolates dependency scripts before loading protected enviro
   assert.match(remoteScript, /export RMB_SKIP_LOCAL_ENV_FILES=1/);
   assert.match(remoteScript, /DATABASE_URL="postgresql:\/\/127\.0\.0\.1:5432\/rmb_prisma_generate"/);
   assert.match(remoteScript, /fail "build environment file not found: \$ENV_FILE"/);
+  assert.match(remoteScript, /env_contents="\$\(\$SUDO_CMD -n cat -- "\$ENV_FILE"\)"/);
+  assert.match(remoteScript, /source \/dev\/stdin <<< "\$env_contents"/);
+  assert.match(remoteScript, /unset env_contents/);
+  assert.doesNotMatch(remoteScript, /chmod[^\n]*ENV_FILE|chown[^\n]*ENV_FILE/);
   const skipIndex = remoteScript.indexOf("export RMB_SKIP_LOCAL_ENV_FILES=1");
   const installIndex = remoteScript.indexOf("npm ci --prefer-offline");
   const protectedEnvIndex = remoteScript.lastIndexOf("\nload_build_environment\n");

@@ -42,16 +42,28 @@ ensure_checkout_writable() {
 }
 
 load_build_environment() {
-  if [[ -f "$ENV_FILE" ]]; then
-    [[ -r "$ENV_FILE" ]] || fail "environment file is not readable by the deployment user: $ENV_FILE"
+  [[ -f "$ENV_FILE" ]] || fail "build environment file not found: $ENV_FILE"
+
+  if [[ -r "$ENV_FILE" ]]; then
     log "loading build environment from $ENV_FILE"
     set -a
     # shellcheck disable=SC1090
     source "$ENV_FILE"
     set +a
-  else
-    fail "build environment file not found: $ENV_FILE"
+    return
   fi
+
+  [[ -n "$SUDO_CMD" ]] || fail "environment file is not readable by the deployment user: $ENV_FILE"
+  log "loading protected build environment with elevated read access"
+  local env_contents
+  if ! env_contents="$($SUDO_CMD -n cat -- "$ENV_FILE")"; then
+    fail "environment file cannot be read with elevated access: $ENV_FILE"
+  fi
+  set -a
+  # shellcheck disable=SC1091
+  source /dev/stdin <<< "$env_contents"
+  set +a
+  unset env_contents
 }
 
 [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "RMB_DEPLOY_SHA must be a full commit SHA"
