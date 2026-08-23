@@ -52,6 +52,7 @@ test("customer communication prevents duplicate manual and automatic emails", ()
   assert.match(shippingDocumentsCore, /export function hasSentShippingNotification/);
   assert.match(shippingDocumentsCore, /item\.sendStatus === "sent" \|\| item\.sendStatus === "SUCCESS"/);
   assert.match(shippingDocumentsDeduplication, /pg_advisory_xact_lock/);
+  assert.match(shippingDocumentsDeduplication, /pg_advisory_xact_lock[\s\S]*::text AS "locked"/);
   assert.match(shippingDocumentsDeduplication, /MANUAL_SEND_DUPLICATE_WINDOW_MS/);
   assert.match(shippingDocumentsNotifications, /shipping-docs:auto:/);
   assert.match(shippingDocumentsDeduplication, /shipping-docs:manual:/);

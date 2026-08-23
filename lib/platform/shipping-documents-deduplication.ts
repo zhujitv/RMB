@@ -41,7 +41,7 @@ export async function claimManualShippingNotification(
   fingerprint: string,
 ) {
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`shipping-docs:manual:${orderId}`}, 0))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`shipping-docs:manual:${orderId}`}, 0))::text AS "locked"`;
     const recent = await tx.shippingDocumentNotification.findMany({
       where: {
         orderId,
