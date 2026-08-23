@@ -3,6 +3,7 @@ import { apiJson } from "../../api";
 import { formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
 import { QuotationCustomerDetail } from "./quotation-customer-detail";
+import type { CustomerContactFields } from "./quotation-customer-contacts";
 import {
   CUSTOMER_FILTER_OPTIONS,
   buildCrmSummary,
@@ -128,6 +129,15 @@ export function QuotationCrmWorkspace({
     if (customerPage > customerTotalPages) setCustomerPage(customerTotalPages);
   }, [customerPage, customerTotalPages]);
 
+  function updateSelectedCustomerContact(contact: CustomerContactFields) {
+    if (!selectedCustomer?.customerId) return;
+    setCustomerMasters((current) => {
+      const exists = current.some((customer) => customer.id === selectedCustomer.customerId);
+      if (exists) return current.map((customer) => customer.id === selectedCustomer.customerId ? { ...customer, ...contact } : customer);
+      return [...current, { id: selectedCustomer.customerId, name: selectedCustomer.legalName, shortName: selectedCustomer.name, ...contact }];
+    });
+  }
+
   if (selectedCustomer) {
     return (
       <QuotationCustomerDetail
@@ -143,6 +153,7 @@ export function QuotationCrmWorkspace({
         onOpenOrders={onOpenOrders}
         onOpenPayments={onOpenPayments}
         onViewQuotation={onViewDetail}
+        onCustomerContactSaved={updateSelectedCustomerContact}
       />
     );
   }

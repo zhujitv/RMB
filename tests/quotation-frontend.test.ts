@@ -413,6 +413,17 @@ test("quotation CRM customer detail maintains contacts through a scoped customer
   assert.match(quotationCustomerDetailSource, /<QuotationCustomerContacts/);
   assert.match(quotationCustomerContactsSource, /联系人维护/);
   assert.match(quotationCustomerContactsSource, /保存联系人/);
+  assert.match(quotationCustomerContactsSource, /主要联系人/);
+  assert.match(quotationCustomerContactsSource, /资料完整度/);
+  assert.match(quotationCustomerContactsSource, /撤销修改/);
+  assert.match(quotationCustomerContactsSource, /拨打电话/);
+  assert.match(quotationCustomerContactsSource, /发送邮件/);
+  assert.match(quotationCustomerContactsSource, /onSaved\?\.\(savedContact\)/);
+  assert.match(quotationCustomerContactsSource, /useWorkspaceTabDirty\(dirty\)/);
+  assert.match(quotationCustomerContactsSource, /useWorkspaceTabBusy\(saving\)/);
+  assert.doesNotMatch(quotationCustomerContactsSource, /已关联客户资料/);
+  assert.match(quotationCrmSource, /updateSelectedCustomerContact/);
+  assert.match(quotationCrmSource, /setCustomerMasters/);
   assert.match(quotationCustomerContactsSource, /\/api\/customers\/\$\{encodeURIComponent\(customer\.customerId\)\}\/contact/);
   assert.match(quotationCustomerContactsSource, /method: "PATCH"/);
   assert.match(customerCrmServiceSource, /updateCustomerContactInfo/);

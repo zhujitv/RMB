@@ -1,7 +1,8 @@
 import { formatCurrencyAmount, formatDate } from "../../formatters";
 import shell from "../../WorkspaceShell.module.css";
+import { useWorkspaceTabDiscardGuard } from "../../workspace/workspace-tab-context";
 import { QuotationCustomerBusinessRecords } from "./quotation-customer-business-records";
-import { QuotationCustomerContacts } from "./quotation-customer-contacts";
+import { QuotationCustomerContacts, type CustomerContactFields } from "./quotation-customer-contacts";
 import { QuotationCustomerEmails } from "./quotation-customer-emails";
 import { QuotationCustomerFollowUps } from "./quotation-customer-follow-ups";
 import { QuotationCustomerProductsEditor } from "./quotation-customer-products-editor";
@@ -28,6 +29,7 @@ type QuotationCustomerDetailProps = {
   onOpenOrders: (keyword: string) => void;
   onOpenPayments: (keyword: string) => void;
   onViewQuotation: (quotation: QuotationRow) => void;
+  onCustomerContactSaved: (contact: CustomerContactFields) => void;
 };
 
 
@@ -44,13 +46,15 @@ export function QuotationCustomerDetail({
   onOpenOrders,
   onOpenPayments,
   onViewQuotation,
+  onCustomerContactSaved,
 }: QuotationCustomerDetailProps) {
   const latest = customer.latestQuotation;
   const latestVersion = currentQuotationVersion(latest);
+  const confirmDiscard = useWorkspaceTabDiscardGuard("联系人或客户资料有未保存修改，确定返回客户工作台吗？");
   return (
     <section className={styles.customerDetail} aria-label="客户 CRM 详情">
       <div className={styles.detailHero}>
-        <button className={shell.secondaryButton} type="button" onClick={onBack}>返回客户工作台</button>
+        <button className={shell.secondaryButton} type="button" onClick={() => { if (confirmDiscard()) onBack(); }}>返回客户工作台</button>
         <div><span className={styles.crmEyebrow}>客户 CRM</span><h3>{customer.name}</h3><p>{customer.legalName || "未维护客户全称"}</p></div>
         {canWriteQuotations ? <button className={shell.primaryButtonCompact} type="button" onClick={onToggleCreate}>{createOpen ? "继续编辑报价" : "新建报价"}</button> : null}
       </div>
@@ -63,7 +67,7 @@ export function QuotationCustomerDetail({
       </div>
 
       <div className={styles.detailGrid}>
-        <QuotationCustomerContacts customer={customer} canWriteQuotations={canWriteQuotations} />
+        <QuotationCustomerContacts customer={customer} canWriteQuotations={canWriteQuotations} onSaved={onCustomerContactSaved} />
         <section className={styles.crmPanel}>
           <div className={styles.crmPanelHeader}><div><span className={styles.crmEyebrow}>最近报价</span><h3>最新一次报价动态</h3></div><small>{latest ? quotationNumber(latest) || "未编号" : "暂无报价"}</small></div>
           <div className={styles.profileGrid}>
