@@ -24,7 +24,6 @@
     "repair:receivable-collection-statuses": "node scripts/run-with-env.mjs jiti scripts/repair-receivable-collection-statuses.mjs",
     "repair:supplier-return-documents": "node scripts/run-with-env.mjs jiti scripts/repair-supplier-return-documents.mjs",
     "migrate:attachments:cos": "node scripts/run-with-env.mjs node scripts/migrate-object-storage-to-cos.mjs",
-    "normalize:storage:cos": "node scripts/run-with-env.mjs jiti scripts/normalize-object-storage-to-cos.mjs",
     "refresh:tax-refund-completeness": "jiti scripts/refresh-tax-refund-completeness.mjs",
     "verify:ci": "npm run lint && npm run db:generate && npm run typecheck && npm test && npm run security:audit && npm run build:app && npm run audit",
     "verify:release": "npm run lint && npm run db:generate && npm run typecheck && npm test && npm run security:audit && npm run build:release && npm run audit",
