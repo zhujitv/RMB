@@ -7,7 +7,6 @@ const binaryResponseFiles = [
   "app/api/files/[kind]/[id]/download/route.ts",
   "app/api/files/[kind]/[id]/preview/route.ts",
   "app/api/order-documents/[id]/download/route.ts",
-  "app/api/order-documents/[id]/preview/route.ts",
   "app/api/supplier-document-requests/[id]/template/route.ts",
   "lib/report-service-export.ts",
 ];

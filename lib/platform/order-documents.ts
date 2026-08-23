@@ -7,5 +7,6 @@ export {
   getOrderDocumentFileMetadata,
   getOrderDocumentMetadata,
   getOrderDocumentPreview,
+  getOrderDocumentPreviewLocation,
   getOrderDocumentPreviewMetadata,
 } from "./order-documents-files";

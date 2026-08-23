@@ -16,7 +16,7 @@ NEXTWOOD 供应链协同平台用于统一管理客户报价、销售执行、�
 - TypeScript 6
 - 腾讯云数据库 PostgreSQL
 - Prisma 7
-- 腾讯云 COS 私有对象存储（兼容旧 R2 / S3 配置）
+- 腾讯云 COS 私有对象存储
 - Resend 邮件服务
 - 阿里云 OCR / 文档智能
 - 飞驼可视海运、港区和海关跟踪接口
@@ -328,7 +328,7 @@ React 工作台中的物流信息已迁移：
 - 选择文件后立即上传
 - 显示上传状态和进度
 - 上传或删除工厂增值税发票后，成本发票状态自动更新，不允许通过手工选择绕过附件检查
-- 文件保存到腾讯云 COS 私有桶（旧部署兼容 R2 / S3）
+- 文件统一保存到腾讯云 COS 私有桶
 - 数据库只保存对象存储 Key，不保存公开下载链接
 - 下载时由后端生成签名 URL
 
@@ -795,16 +795,6 @@ API_RATE_LIMIT_WRITE_LIMIT=300
 API_RATE_LIMIT_UPLOAD_LIMIT=60
 ```
 
-也兼容以下 R2 变量名：
-
-```bash
-CLOUDFLARE_R2_ACCOUNT_ID
-CLOUDFLARE_R2_ACCESS_KEY_ID
-CLOUDFLARE_R2_SECRET_ACCESS_KEY
-CLOUDFLARE_R2_BUCKET
-R2_ENDPOINT
-```
-
 邮件通知使用 Resend：
 
 ```text
@@ -877,15 +867,7 @@ COS_SECRET_KEY=专用 CAM 子用户 SecretKey
 COS_BUCKET=包含 APPID 的完整存储桶名称
 ```
 
-存储桶必须保持私有读写，应用通过服务端鉴权提供上传、预览和下载。旧部署仍兼容以下 Cloudflare R2 / S3 配置：
-
-```text
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-R2_BUCKET=
-R2_ENDPOINT=
-```
+存储桶必须保持私有读写。应用先进行权限校验，再为预览生成短期 COS 私有签名地址；下载和上传同样受系统权限控制。
 
 配置完成后，以管理员登录系统，访问：
 

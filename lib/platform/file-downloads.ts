@@ -10,6 +10,7 @@ import {
   getOrderDocumentDownload,
   getOrderDocumentFileMetadata,
   getOrderDocumentPreview,
+  getOrderDocumentPreviewLocation,
   getOrderDocumentPreviewMetadata,
 } from "./order-documents";
 import {
@@ -196,6 +197,12 @@ export async function getManagedFilePreview(request: AuditRequestLike, actor: Ac
   const metadata = await getManagedFileMetadata(request, actor, kind, id);
   assertPreviewable(metadata.mimeType);
   throw codedError("文件暂时无法预览，请下载查看。", 400, "INVALID_FILE_TYPE");
+}
+
+export async function getManagedFilePreviewLocation(request: AuditRequestLike, actor: ActorLike, kind: string, id: string) {
+  const normalizedKind = normalizeManagedFileKind(kind);
+  if (normalizedKind !== MANAGED_FILE_KINDS.ORDER_DOCUMENT) return null;
+  return getOrderDocumentPreviewLocation(request, actor, id);
 }
 
 export async function getManagedFilePreviewMetadata(request: AuditRequestLike, actor: ActorLike, kind: string, id: string) {

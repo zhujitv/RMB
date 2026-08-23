@@ -116,24 +116,25 @@ async function collectDatabaseUrl() {
   return `postgresql://${encodeConnectionPart(user)}:${encodeConnectionPart(password)}@${host}:${port}/${encodeConnectionPart(database)}?${sslQuery}`;
 }
 
-async function collectR2() {
-  const enabled = isYes(await ask("是否现在配置 Cloudflare R2 / S3 私有文件存储？y/N"), false);
+async function collectCos() {
+  const enabled = isYes(await ask("是否现在配置腾讯云 COS 私有文件存储？Y/n"), true);
   if (!enabled) {
     return {
-      R2_ACCOUNT_ID: "",
-      R2_ACCESS_KEY_ID: "",
-      R2_SECRET_ACCESS_KEY: "",
-      R2_BUCKET: "",
-      R2_ENDPOINT: "",
+      COS_REGION: "",
+      COS_ENDPOINT: "",
+      COS_SECRET_ID: "",
+      COS_SECRET_KEY: "",
+      COS_BUCKET: "",
     };
   }
 
+  const region = await ask("COS 地域", "ap-shanghai");
   return {
-    R2_ACCOUNT_ID: await askRequired("R2 Account ID"),
-    R2_ACCESS_KEY_ID: await askSecret("R2 Access Key ID", { required: true }),
-    R2_SECRET_ACCESS_KEY: await askSecret("R2 Secret Access Key", { required: true }),
-    R2_BUCKET: await askRequired("R2 Bucket 名称"),
-    R2_ENDPOINT: await ask("兼容 S3 Endpoint（Cloudflare R2 可留空）"),
+    COS_REGION: region,
+    COS_ENDPOINT: await ask("COS Endpoint", `https://cos.${region}.myqcloud.com`),
+    COS_SECRET_ID: await askSecret("腾讯云 SecretId", { required: true }),
+    COS_SECRET_KEY: await askSecret("腾讯云 SecretKey", { required: true }),
+    COS_BUCKET: await askRequired("COS Bucket 名称（包含 AppId）"),
   };
 }
 
@@ -192,12 +193,12 @@ function renderEnv(values) {
     `INITIAL_ADMIN_EMAIL=${quoteEnv(values.INITIAL_ADMIN_EMAIL)}`,
     `INITIAL_ADMIN_PASSWORD=${quoteEnv(values.INITIAL_ADMIN_PASSWORD)}`,
     "",
-    "# Cloudflare R2 / S3 object storage for PDF documents.",
-    `R2_ACCOUNT_ID=${quoteEnv(values.R2_ACCOUNT_ID)}`,
-    `R2_ACCESS_KEY_ID=${quoteEnv(values.R2_ACCESS_KEY_ID)}`,
-    `R2_SECRET_ACCESS_KEY=${quoteEnv(values.R2_SECRET_ACCESS_KEY)}`,
-    `R2_BUCKET=${quoteEnv(values.R2_BUCKET)}`,
-    `R2_ENDPOINT=${quoteEnv(values.R2_ENDPOINT)}`,
+    "# Tencent Cloud COS private object storage for PDF documents.",
+    `COS_REGION=${quoteEnv(values.COS_REGION)}`,
+    `COS_ENDPOINT=${quoteEnv(values.COS_ENDPOINT)}`,
+    `COS_SECRET_ID=${quoteEnv(values.COS_SECRET_ID)}`,
+    `COS_SECRET_KEY=${quoteEnv(values.COS_SECRET_KEY)}`,
+    `COS_BUCKET=${quoteEnv(values.COS_BUCKET)}`,
     "",
     "# Optional production CSP allowlists.",
     `CSP_CONNECT_SRC=${quoteEnv(values.CSP_CONNECT_SRC)}`,
@@ -235,7 +236,7 @@ async function main() {
   const initialAdminName = await ask("初始管理员姓名", "系统管理员");
   const initialAdminEmail = await askRequired("初始管理员邮箱");
   const initialAdminPassword = await askPassword();
-  const r2 = await collectR2();
+  const cos = await collectCos();
   const email = await collectEmail();
   const redis = await collectRedis();
 
@@ -249,7 +250,7 @@ async function main() {
     INITIAL_ADMIN_NAME: initialAdminName,
     INITIAL_ADMIN_EMAIL: initialAdminEmail,
     INITIAL_ADMIN_PASSWORD: initialAdminPassword,
-    ...r2,
+    ...cos,
     CSP_CONNECT_SRC: "",
     CSP_IMG_SRC: "",
     CSP_FRAME_SRC: "",

@@ -6,7 +6,7 @@ type StorageConfigError = Error & {
 };
 
 export type ObjectStorageConfig = {
-  provider: "Tencent COS" | "S3-compatible object storage";
+  provider: "Tencent COS";
   endpoint: string;
   region: string;
   accessKeyId: string;
@@ -29,6 +29,24 @@ function configuredValue(...values: Array<string | undefined>) {
 }
 
 export function objectStorageConfig(env: Record<string, string | undefined> = process.env): ObjectStorageConfig {
+  const legacyR2Configured = configuredValue(
+    env.R2_ACCOUNT_ID,
+    env.R2_ENDPOINT,
+    env.R2_ACCESS_KEY_ID,
+    env.R2_SECRET_ACCESS_KEY,
+    env.R2_BUCKET,
+    env.CLOUDFLARE_R2_ACCOUNT_ID,
+    env.CLOUDFLARE_R2_ACCESS_KEY_ID,
+    env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+    env.CLOUDFLARE_R2_BUCKET,
+  );
+  if (legacyR2Configured) {
+    throw configError(
+      "系统已统一使用腾讯云 COS，请删除旧 R2 / S3 配置。",
+      500,
+      "STORAGE_LEGACY_R2_CONFIG_UNSUPPORTED",
+    );
+  }
   const cosRegion = configuredValue(env.COS_REGION, env.TENCENT_COS_REGION);
   const cosEndpoint = configuredValue(
     env.COS_ENDPOINT,
@@ -39,46 +57,7 @@ export function objectStorageConfig(env: Record<string, string | undefined> = pr
   const cosSecretAccessKey = configuredValue(env.COS_SECRET_KEY, env.TENCENT_COS_SECRET_KEY);
   const cosBucket = configuredValue(env.COS_BUCKET, env.TENCENT_COS_BUCKET);
 
-  if (cosRegion || cosEndpoint || cosAccessKeyId || cosSecretAccessKey || cosBucket) {
-    if (configuredValue(env.COS_PUBLIC_URL, env.TENCENT_COS_PUBLIC_URL)) {
-      throw configError(
-        "对象存储桶必须保持私有，请移除公开访问 URL 配置，下载统一使用后端签名链接。",
-        500,
-        "STORAGE_BUCKET_MUST_BE_PRIVATE",
-      );
-    }
-    const missing = [
-      !cosRegion ? "COS_REGION" : "",
-      !cosEndpoint ? "COS_ENDPOINT 或 COS_REGION" : "",
-      !cosAccessKeyId ? "COS_SECRET_ID" : "",
-      !cosSecretAccessKey ? "COS_SECRET_KEY" : "",
-      !cosBucket ? "COS_BUCKET" : "",
-    ].filter(Boolean);
-    if (missing.length) {
-      throw configError(
-        `文件存储服务未配置完整，请联系管理员配置腾讯云 COS。${!cosBucket ? "存储桶未配置。" : ""}`,
-        503,
-        "STORAGE_NOT_CONFIGURED",
-        { missing },
-      );
-    }
-    return {
-      provider: "Tencent COS",
-      endpoint: cosEndpoint,
-      region: cosRegion,
-      accessKeyId: cosAccessKeyId,
-      secretAccessKey: cosSecretAccessKey,
-      bucket: cosBucket,
-      forcePathStyle: false,
-    };
-  }
-
-  const accountId = env.R2_ACCOUNT_ID || env.CLOUDFLARE_R2_ACCOUNT_ID;
-  const endpoint = env.R2_ENDPOINT || (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
-  const accessKeyId = env.R2_ACCESS_KEY_ID || env.CLOUDFLARE_R2_ACCESS_KEY_ID;
-  const secretAccessKey = env.R2_SECRET_ACCESS_KEY || env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
-  const bucket = env.R2_BUCKET || env.CLOUDFLARE_R2_BUCKET;
-  if (env.R2_PUBLIC_URL || env.R2_PUBLIC_BASE_URL || env.CLOUDFLARE_R2_PUBLIC_URL) {
+  if (configuredValue(env.COS_PUBLIC_URL, env.TENCENT_COS_PUBLIC_URL)) {
     throw configError(
       "对象存储桶必须保持私有，请移除公开访问 URL 配置，下载统一使用后端签名链接。",
       500,
@@ -86,26 +65,27 @@ export function objectStorageConfig(env: Record<string, string | undefined> = pr
     );
   }
   const missing = [
-    !endpoint ? "R2_ENDPOINT 或 R2_ACCOUNT_ID" : "",
-    !accessKeyId ? "R2_ACCESS_KEY_ID" : "",
-    !secretAccessKey ? "R2_SECRET_ACCESS_KEY" : "",
-    !bucket ? "R2_BUCKET" : "",
+    !cosRegion ? "COS_REGION" : "",
+    !cosEndpoint ? "COS_ENDPOINT 或 COS_REGION" : "",
+    !cosAccessKeyId ? "COS_SECRET_ID" : "",
+    !cosSecretAccessKey ? "COS_SECRET_KEY" : "",
+    !cosBucket ? "COS_BUCKET" : "",
   ].filter(Boolean);
   if (missing.length) {
     throw configError(
-        `文件存储服务未配置，请联系管理员配置 S3 兼容对象存储。${!bucket ? "存储桶未配置。" : ""}`,
+      `文件存储服务未配置完整，请联系管理员配置腾讯云 COS。${!cosBucket ? "存储桶未配置。" : ""}`,
       503,
       "STORAGE_NOT_CONFIGURED",
       { missing },
     );
   }
   return {
-    provider: "S3-compatible object storage",
-    endpoint,
-    region: "auto",
-    accessKeyId: accessKeyId as string,
-    secretAccessKey: secretAccessKey as string,
-    bucket: bucket as string,
+    provider: "Tencent COS",
+    endpoint: cosEndpoint,
+    region: cosRegion,
+    accessKeyId: cosAccessKeyId,
+    secretAccessKey: cosSecretAccessKey,
+    bucket: cosBucket,
     forcePathStyle: false,
   };
 }

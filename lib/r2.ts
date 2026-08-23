@@ -220,11 +220,16 @@ export async function headR2Object(key: string) {
 }
 
 export async function signedDownloadUrl(key: string, fileName: string, expiresIn = 300) {
+  return signedObjectUrl(key, fileName, "attachment", expiresIn);
+}
+
+async function signedObjectUrl(key: string, fileName: string, disposition: "inline" | "attachment", expiresIn = 300) {
+  if (!key) throw storageError("对象存储文件 key 缺失，无法读取文件。", 404, "STORAGE_OBJECT_NOT_FOUND");
   const bucket = objectStorageBucketName();
   const command = new GetObjectCommand({
     Bucket: bucket,
     Key: key,
-    ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(fileName || "document.pdf")}`,
+    ResponseContentDisposition: `${disposition}; filename*=UTF-8''${encodeURIComponent(fileName || "document.pdf")}`,
   });
   try {
     return await getSignedUrl(storageClient(), command, { expiresIn });
@@ -232,6 +237,8 @@ export async function signedDownloadUrl(key: string, fileName: string, expiresIn
     throw normalizeStorageError(error);
   }
 }
+
+export const signedPreviewUrl = (key: string, fileName: string, expiresIn = 120) => signedObjectUrl(key, fileName, "inline", expiresIn);
 
 async function streamToBuffer(stream: TransformableStream, maxBytes: number) {
   if (!stream) return Buffer.alloc(0);

@@ -67,7 +67,7 @@ npm run setup
 
 - PostgreSQL 数据库地址、端口、库名、用户名和密码
 - 初始管理员姓名、邮箱和密码
-- COS / R2 / S3 私有文件存储
+- 腾讯云 COS 私有文件存储
 - Resend 邮件服务
 - 限流方式：腾讯云单 CVM、单 Node 进程可启用内存限流；多进程或多实例部署必须配置 Upstash Redis
 
@@ -122,7 +122,7 @@ INITIAL_ADMIN_PASSWORD="StrongPassword123"
 
 ### 文件存储配置
 
-系统中的 PDF、合同、发票、报关资料等附件必须存储到私有对象存储。腾讯云生产环境优先使用 COS：
+系统中的 PDF、合同、发票、报关资料等附件统一存储到腾讯云私有 COS：
 
 ```env
 COS_REGION="ap-shanghai"
@@ -132,21 +132,11 @@ COS_SECRET_KEY="your-cam-secret-key"
 COS_BUCKET="your-private-bucket-name-with-appid"
 ```
 
-旧部署仍兼容 R2 或 S3：
-
-```env
-R2_ACCOUNT_ID="your-cloudflare-account-id"
-R2_ACCESS_KEY_ID="your-r2-access-key-id"
-R2_SECRET_ACCESS_KEY="your-r2-secret-access-key"
-R2_BUCKET="your-r2-bucket"
-R2_ENDPOINT=""
-```
-
 要求：
 
 - 存储桶必须保持私有。
 - 不要配置公开访问 URL。
-- 文件预览和下载统一通过系统后端鉴权和签名访问。
+- 文件预览经过系统鉴权后使用短期私有签名地址，存储桶不公开。
 
 ### 邮件配置
 
@@ -413,14 +403,14 @@ GitHub 已保存每个正式代码版本，腾讯云 CVM 不再保存代码版�
 至少备份：
 
 - PostgreSQL 数据库
-- COS / R2 / S3 附件文件
+- 腾讯云 COS 附件文件
 - 生产环境变量
 
 建议：
 
 - 每日自动备份数据库。
 - 每周做一次恢复演练。
-- COS / R2 / S3 开启版本控制或对象保留策略。
+- 腾讯云 COS 开启版本控制或对象保留策略。
 - 重要版本发布前手动备份一次数据库。
 
 ## 13. 常见问题
@@ -446,7 +436,7 @@ npm run db:generate
 
 检查：
 
-- COS / R2 / S3 变量是否完整。
+- 腾讯云 COS 变量是否完整。
 - 存储桶是否存在。
 - Access Key 是否有读写权限。
 - 文件是否为 PDF。

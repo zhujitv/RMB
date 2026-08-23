@@ -80,7 +80,7 @@ export function configuredCsp() {
     [
       "--input-type=module",
       "-e",
-      `import('./lib/security-headers.mjs').then(({ buildContentSecurityPolicy }) => process.stdout.write(buildContentSecurityPolicy({ isDevelopment: false, nonce: 'testnonce', env: { CSP_CONNECT_SRC: 'https://api.nextwood.net', CSP_IMG_SRC: 'https://assets.nextwood.net', CSP_FRAME_SRC: 'https://viewer.nextwood.net' } })))`,
+      `import('./lib/security-headers.mjs').then(({ buildContentSecurityPolicy }) => process.stdout.write(buildContentSecurityPolicy({ isDevelopment: false, nonce: 'testnonce', env: { COS_REGION: 'ap-nanjing', CSP_CONNECT_SRC: 'https://api.nextwood.net', CSP_IMG_SRC: 'https://assets.nextwood.net', CSP_FRAME_SRC: 'https://viewer.nextwood.net' } })))`,
     ],
     { encoding: "utf8" },
   );

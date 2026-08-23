@@ -61,22 +61,23 @@ const fileCenter = readFileSync(
 );
 const styles = readWorkspaceStylesSource();
 
-test("preview route returns inline file streams with cache and nosniff headers", () => {
+test("preview route redirects order documents to short-lived signed COS URLs", () => {
   assert.match(
     filePreviewRoute,
-    /getManagedFilePreview\(request, actor, kind, id\)/,
+    /getManagedFilePreviewLocation\(request, actor, kind, id\)/,
   );
-  assert.match(
-    filePreviewRoute,
-    /managedFileStreamHeaders\(\{[\s\S]*disposition: "inline"/,
-  );
+  assert.match(filePreviewRoute, /status: 307/);
+  assert.match(filePreviewRoute, /Location: signedPreview\.location/);
+  assert.match(filePreviewRoute, /"Referrer-Policy": "no-referrer"/);
+  assert.match(filePreviewRoute, /"Cache-Control": "private, no-store"/);
   assert.match(filePreviewRoute, /export async function HEAD/);
   assert.match(
     filePreviewRoute,
     /getManagedFilePreviewMetadata\(request, actor, kind, id\)/,
   );
-  assert.match(previewRoute, /managedFileStreamHeaders/);
-  assert.match(previewRoute, /new Response\(new Uint8Array\(body\)/);
+  assert.match(previewRoute, /getOrderDocumentPreviewLocation/);
+  assert.match(previewRoute, /status: 307/);
+  assert.match(previewRoute, /Location: signedPreview\.location/);
   assert.match(
     orderDocumentsService,
     /export async function getOrderDocumentPreviewMetadata/,
@@ -90,7 +91,6 @@ test("preview route returns inline file streams with cache and nosniff headers",
     sharedConstants,
     /document\.originalFileName,[\s\S]*document\.originalFilename,[\s\S]*document\.originalName,[\s\S]*document\.fileName,[\s\S]*generatedOrderDocumentFileName\(document\)/,
   );
-  assert.doesNotMatch(filePreviewRoute, /attachment/);
   assert.match(fileCenter, /"Cache-Control": "private, max-age=300"/);
   assert.match(fileCenter, /"X-Content-Type-Options": "nosniff"/);
   assert.doesNotMatch(

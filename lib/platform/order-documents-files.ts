@@ -1,5 +1,5 @@
 import { prisma } from "../prisma";
-import { readR2Object } from "../r2";
+import { readR2Object, signedPreviewUrl } from "../r2";
 import { assertCanDeleteOrderDocumentFile } from "./file-delete-policy";
 import {
   FILE_ASSET_SOURCE_TABLES,
@@ -232,6 +232,36 @@ export async function getOrderDocumentPreview(request: AuditRequestLike, actor: 
     fileName: standardFilename,
   }));
   return { body, mimeType, document: serializeOrderDocument({ ...fileDocument, standardFilename }) };
+}
+
+export async function getOrderDocumentPreviewLocation(request: AuditRequestLike, actor: ActorLike, id: string) {
+  assertRead(actor, "documents");
+  const document = await prisma.orderDocument.findUnique({
+    where: { id },
+    include: orderDocumentFileInclude(),
+  });
+  if (!document || document.deletedAt) throw codedError("文件不存在或已删除", 404, "DOCUMENT_NOT_FOUND");
+  if (!canReadDocumentContent(actor, document)) throw codedError("无权限预览该订单单证", 403, "PERMISSION_DENIED");
+  if (document.uploadStatus !== "SUCCESS") throw codedError("文件尚未上传成功，不能预览", 400, "DOCUMENT_NOT_FOUND");
+  const asset = await findActiveFileAssetBySource(FILE_ASSET_SOURCE_TABLES.ORDER_DOCUMENTS, document.id, String(document.documentType));
+  const fileDocument = applyFileAssetToOrderDocument(document, asset);
+  const mimeType = previewableOrderDocumentMimeType(fileDocument);
+  if (!isPreviewableOrderDocumentMimeType(mimeType)) {
+    throw codedError("该文件类型暂不支持在线预览", 400, "INVALID_FILE_TYPE");
+  }
+  if (!fileDocument.storageKey) throw codedError("文件不存在或已删除", 404, "STORAGE_OBJECT_NOT_FOUND");
+  const standardFilename = await resolveStandardFilenameForPersistedDocument(fileDocument);
+  const location = await signedPreviewUrl(fileDocument.storageKey, standardFilename);
+  await runNonCriticalTask("文件预览操作日志写入", () => writeAudit(request, actor, "预览文件", "order_documents", document.id, null, {
+    orderNo: document.order?.orderNo,
+    fileName: standardFilename,
+    delivery: "COS_SIGNED_URL",
+  }));
+  return {
+    location,
+    mimeType,
+    document: serializeOrderDocument({ ...fileDocument, standardFilename }),
+  };
 }
 
 function previewableOrderDocumentMimeType(document: DocumentLike) {

@@ -6,16 +6,12 @@ import { createJiti } from "jiti";
 const jiti = createJiti(import.meta.url);
 const { objectStorageConfig } = await jiti.import<typeof import("../lib/r2.ts")>("../lib/r2.ts");
 
-test("Tencent COS configuration takes precedence over legacy R2", () => {
+test("Tencent COS configuration is the only supported production storage", () => {
   const config = objectStorageConfig({
     COS_REGION: "ap-shanghai",
     COS_SECRET_ID: "cos-secret-id",
     COS_SECRET_KEY: "cos-secret-key",
     COS_BUCKET: "rmb-private-1250000000",
-    R2_ACCOUNT_ID: "legacy-account",
-    R2_ACCESS_KEY_ID: "legacy-access",
-    R2_SECRET_ACCESS_KEY: "legacy-secret",
-    R2_BUCKET: "legacy-bucket",
   });
 
   assert.deepEqual(config, {
@@ -29,30 +25,33 @@ test("Tencent COS configuration takes precedence over legacy R2", () => {
   });
 });
 
-test("partial COS configuration fails instead of silently falling back to R2", () => {
+test("partial COS configuration fails", () => {
   assert.throws(
     () => objectStorageConfig({
       COS_REGION: "ap-shanghai",
-      R2_ACCOUNT_ID: "legacy-account",
-      R2_ACCESS_KEY_ID: "legacy-access",
-      R2_SECRET_ACCESS_KEY: "legacy-secret",
-      R2_BUCKET: "legacy-bucket",
     }),
     (error: unknown) => (error as { code?: string }).code === "STORAGE_NOT_CONFIGURED",
   );
 });
 
-test("legacy R2 configuration remains supported", () => {
-  const config = objectStorageConfig({
-    R2_ACCOUNT_ID: "legacy-account",
-    R2_ACCESS_KEY_ID: "legacy-access",
-    R2_SECRET_ACCESS_KEY: "legacy-secret",
-    R2_BUCKET: "legacy-bucket",
-  });
+test("legacy R2 configuration is rejected", () => {
+  assert.throws(
+    () => objectStorageConfig({ R2_ACCOUNT_ID: "legacy-account" }),
+    (error: unknown) => (error as { code?: string }).code === "STORAGE_LEGACY_R2_CONFIG_UNSUPPORTED",
+  );
+});
 
-  assert.equal(config.provider, "S3-compatible object storage");
-  assert.equal(config.endpoint, "https://legacy-account.r2.cloudflarestorage.com");
-  assert.equal(config.region, "auto");
+test("COS configuration rejects residual R2 variables", () => {
+  assert.throws(
+    () => objectStorageConfig({
+      COS_REGION: "ap-shanghai",
+      COS_SECRET_ID: "cos-secret-id",
+      COS_SECRET_KEY: "cos-secret-key",
+      COS_BUCKET: "rmb-private-1250000000",
+      R2_BUCKET: "legacy-bucket",
+    }),
+    (error: unknown) => (error as { code?: string }).code === "STORAGE_LEGACY_R2_CONFIG_UNSUPPORTED",
+  );
 });
 
 test("public object-storage URL is rejected for COS", () => {
@@ -76,4 +75,14 @@ test("COS migration is resumable, checks hashes, and never deletes the source", 
   assert.match(source, /status: "skipped"/);
   assert.match(source, /status: "failed"/);
   assert.doesNotMatch(source, /DeleteObjectCommand/);
+});
+
+test("COS storage record normalization verifies objects before updating labels", () => {
+  const source = readFileSync("scripts/normalize-object-storage-to-cos.mjs", "utf8");
+  assert.match(source, /HeadObjectCommand/);
+  assert.match(source, /COS_OBJECT_VERIFICATION_FAILED/);
+  assert.match(source, /if \(!apply\)/);
+  assert.match(source, /prisma\.\$transaction/);
+  assert.match(source, /remainingLegacyRecords: 0/);
+  assert.doesNotMatch(source, /DeleteObjectCommand|deleteMany/);
 });
