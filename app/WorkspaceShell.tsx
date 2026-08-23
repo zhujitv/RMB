@@ -39,6 +39,7 @@ export function WorkspaceShell() {
     handleRegister,
     handleChangePassword,
     handleLogout,
+    retryCurrentUser,
     loadWorkbenchTodos,
     updateCurrentUser,
     updateCompanyProfile,
@@ -181,7 +182,7 @@ export function WorkspaceShell() {
     await handleLogout();
   }
 
-  if (auth.status === "loading") return <LoadingPanel message={auth.message} />;
+  if (auth.status === "loading") return <LoadingPanel />;
 
   if (auth.status === "guest") {
     return (
@@ -217,13 +218,13 @@ export function WorkspaceShell() {
         message={auth.message}
         detail={auth.detail || "工作台初始化失败，请重新加载后再试。"}
         loading={false}
-        actionLabel="重新加载"
-        onAction={() => window.location.reload()}
+        actionLabel="重新同步"
+        onAction={() => { void retryCurrentUser(); }}
       />
     );
   }
 
-  if (!payload) return <LoadingPanel message="正在加载工作台..." />;
+  if (!payload) return <LoadingPanel />;
 
   return (
     <WorkspaceLayout

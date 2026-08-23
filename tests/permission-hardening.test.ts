@@ -363,12 +363,12 @@ test("workspace login page does not expose unauthenticated error codes", () => {
 
 test("workspace boot order enters loading before permission checks", () => {
   assert.match(workspaceShell, /const \[auth, setAuth\] = useState<AuthState>\(\{ status: "loading", message: "正在加载工作台\.\.\." \}\)/);
-  assert.match(workspaceShell, /if \(auth\.status === "loading"\)(?:\s*\{\s*)?\s*return <LoadingPanel message=\{auth\.message\} \/>\s*;?(?:\s*\})?/);
+  assert.match(workspaceShell, /if \(auth\.status === "loading"\)(?:\s*\{\s*)?\s*return <LoadingPanel \/>\s*;?(?:\s*\})?/);
   const errorState = workspaceShell.indexOf('if (auth.status === "error")');
-  const payloadFallback = workspaceShell.indexOf('if (!payload) return <LoadingPanel message="正在加载工作台..." />');
+  const payloadFallback = workspaceShell.indexOf('if (!payload) return <LoadingPanel />');
   assert.ok(errorState >= 0 && payloadFallback > errorState);
-  assert.match(workspaceShell, /actionLabel="重新加载"/);
-  assert.match(workspaceShell, /onAction=\{\(\) => window\.location\.reload\(\)\}/);
+  assert.match(workspaceShell, /actionLabel="重新同步"/);
+  assert.match(workspaceShell, /onAction=\{\(\) => \{ void retryCurrentUser\(\); \}\}/);
   assert.match(workspaceShell, /if \(auth\.status !== "ready"\) return;/);
   assert.match(workspaceShell, /dispatch\(\{ type: "prune", allowedMenuKeys:/);
   assert.match(workspaceShell, /const allowed = new Set\(\["welcome", "account", \.\.\.action\.allowedMenuKeys\]\)/);

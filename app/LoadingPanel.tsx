@@ -3,7 +3,7 @@
 import styles from "./WorkspaceShell.module.css";
 
 type LoadingPanelProps = {
-  message: string;
+  message?: string;
   detail?: string;
   loading?: boolean;
   actionLabel?: string;
@@ -11,8 +11,8 @@ type LoadingPanelProps = {
 };
 
 export function LoadingPanel({
-  message,
-  detail = "正在同步权限数据...",
+  message = "",
+  detail = "",
   loading = true,
   actionLabel,
   onAction,
@@ -21,8 +21,8 @@ export function LoadingPanel({
     <main className={styles.loadingScreen}>
       <div className={styles.loadingCard}>
         {loading ? <span className={styles.loadingDot} /> : null}
-        <strong>{message}</strong>
-        <p>{detail}</p>
+        {message ? <strong>{message}</strong> : null}
+        {detail ? <p>{detail}</p> : null}
         {actionLabel && onAction ? (
           <div className={styles.loadingActions}>
             <button className={styles.primaryButton} type="button" onClick={onAction}>{actionLabel}</button>

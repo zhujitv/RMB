@@ -35,6 +35,7 @@ export function useWorkspaceAuthController({
   }
 
   async function loadCurrentUser() {
+    setAuth({ status: "loading", message: "正在重新同步账户与权限数据..." });
     let nextAuth: AuthState | null = null;
     let shouldResetMenu = false;
     let nextDefaultMenu = "welcome";
@@ -253,6 +254,7 @@ export function useWorkspaceAuthController({
     handleRegister,
     handleChangePassword,
     handleLogout,
+    retryCurrentUser: loadCurrentUser,
     loadWorkbenchTodos,
     updateCurrentUser,
     updateCompanyProfile,
