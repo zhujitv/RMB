@@ -424,6 +424,9 @@ jobs:
           for (const name of ["schema", "uselibpqcompat", "connection_limit", "pool_timeout", "pgbouncer", "statement_cache_size"]) {
             url.searchParams.delete(name);
           }
+          if (url.searchParams.get("sslmode") === "no-verify") {
+            url.searchParams.set("sslmode", "require");
+          }
           process.stdout.write(url.toString());
           NODE
           )"
