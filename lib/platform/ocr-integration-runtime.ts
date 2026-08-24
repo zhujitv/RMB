@@ -4,12 +4,11 @@ import {
   type OcrRecognitionResult,
   bufferFromInput,
   ensureOcrFeatureEnabled,
+  ensureTencentOcrFeatureEnabled,
 } from "./ocr-integration-shared";
 import { recognizeAliyunCustomsDeclaration } from "./ocr-integration-customs";
-import {
-  recognizeAliyunVatInvoice,
-  recognizeWithPdfTextFallback,
-} from "./ocr-integration-clients";
+import { recognizeWithPdfTextFallback } from "./ocr-integration-clients";
+import { recognizeTencentVatInvoiceForIntegration } from "./tencent-vat-invoice-ocr";
 
 export async function recognizePdfTextWithOcr(
   buffer: Buffer | ArrayBuffer | Uint8Array | null | undefined,
@@ -41,9 +40,10 @@ export async function recognizeLogisticsInvoiceWithOcr(
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<OcrRecognitionResult> {
   if (options.signal?.aborted) throw options.signal.reason;
-  const loadedSettings = await ensureOcrFeatureEnabled("logisticsInvoice");
-  const requestedTimeoutMs = Math.max(1000, Math.trunc(Number(options.timeoutMs) || loadedSettings.timeoutMs));
-  const settings = { ...loadedSettings, timeoutMs: Math.min(loadedSettings.timeoutMs, requestedTimeoutMs) };
+  const settings = await ensureTencentOcrFeatureEnabled("logisticsInvoice");
   const fileBuffer = bufferFromInput(buffer);
-  return recognizeAliyunVatInvoice(fileBuffer, settings, { signal: options.signal });
+  return recognizeTencentVatInvoiceForIntegration(fileBuffer, {
+    signal: options.signal,
+    timeoutMs: Math.min(settings.timeoutMs, Math.max(1000, Math.trunc(Number(options.timeoutMs) || settings.timeoutMs))),
+  });
 }

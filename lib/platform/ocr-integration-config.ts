@@ -241,15 +241,16 @@ export function serializeOcrIntegrationSetting(setting: unknown) {
 
 export function serializeOcrFeatureFlags(setting: unknown) {
   const normalized = normalizeOcrIntegrationSettings(settingValue(setting) || {});
-  const credentialsConfigured = Boolean(normalized.appCode || (normalized.accessKeyId && normalized.accessKeySecret));
-  const enabled = normalized.enabled && credentialsConfigured;
+  const aliyunCredentialsConfigured = Boolean(normalized.appCode || (normalized.accessKeyId && normalized.accessKeySecret));
+  const tencentCredentialsConfigured = Boolean(normalized.tencentSecretId && normalized.tencentSecretKey);
+  const enabled = normalized.enabled && (aliyunCredentialsConfigured || tencentCredentialsConfigured);
   return {
     enabled,
     provider: normalized.provider,
     customsDeclarationMode: normalized.customsDeclarationMode,
-    customsDeclarationEnabled: enabled && normalized.customsDeclarationEnabled,
-    invoiceTextEnabled: enabled && normalized.invoiceTextEnabled,
-    logisticsInvoiceEnabled: enabled && normalized.logisticsInvoiceEnabled,
+    customsDeclarationEnabled: normalized.enabled && aliyunCredentialsConfigured && normalized.customsDeclarationEnabled,
+    invoiceTextEnabled: normalized.enabled && aliyunCredentialsConfigured && normalized.invoiceTextEnabled,
+    logisticsInvoiceEnabled: normalized.enabled && tencentCredentialsConfigured && normalized.logisticsInvoiceEnabled,
     fallbackToPdfText: normalized.fallbackToPdfText,
     timeoutMs: normalized.timeoutMs,
   };
@@ -257,11 +258,13 @@ export function serializeOcrFeatureFlags(setting: unknown) {
 
 export function ocrFeatureEnabled(settings: ReturnType<typeof normalizeOcrIntegrationSettings>, feature: OcrFeatureKey) {
   if (!settings.enabled) return false;
-  const credentialsConfigured = Boolean(settings.appCode || (settings.accessKeyId && settings.accessKeySecret));
-  if (!credentialsConfigured) return false;
-  if (feature === "customsDeclaration") return settings.customsDeclarationMode !== "MANUAL" && settings.customsDeclarationEnabled;
-  if (feature === "invoiceText") return settings.invoiceTextEnabled;
-  if (feature === "logisticsInvoice") return settings.logisticsInvoiceEnabled;
+  const aliyunCredentialsConfigured = Boolean(settings.appCode || (settings.accessKeyId && settings.accessKeySecret));
+  const tencentCredentialsConfigured = Boolean(settings.tencentSecretId && settings.tencentSecretKey);
+  if (feature === "customsDeclaration") {
+    return aliyunCredentialsConfigured && settings.customsDeclarationMode !== "MANUAL" && settings.customsDeclarationEnabled;
+  }
+  if (feature === "invoiceText") return aliyunCredentialsConfigured && settings.invoiceTextEnabled;
+  if (feature === "logisticsInvoice") return tencentCredentialsConfigured && settings.logisticsInvoiceEnabled;
   return false;
 }
 

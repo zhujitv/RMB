@@ -445,6 +445,9 @@ test("logistics invoice upload is grouped by required invoice categories", () =>
   assert.match(backend, /scheduleTaxRefundCompletenessRefresh\(String\(orderId\), "物流发票校验人工确认后退税完整度刷新"\)/);
   assert.match(backend, /recognizeAndValidateLogisticsInvoiceGroup/);
   assert.match(backend, /recognizeLogisticsInvoiceWithOcr/);
+  assert.match(backend, /let latestProvider = "TENCENT_CLOUD"/);
+  assert.match(backend, /recognized\.apiName \|\| recognized\.source \|\| "VatInvoiceOCR"/);
+  assert.doesNotMatch(backend, /latestProvider = "ALIYUN"/);
   assert.match(backend, /LOGISTICS_INVOICE_OCR_MODULE = "LOGISTICS_INVOICE"/);
   assert.match(backend, /LOGISTICS_INVOICE_OCR_DOCUMENT_TYPE = "LOGISTICS_INVOICE"/);
   assert.match(backend, /invoiceValidationStatusCanContinue/);

@@ -131,7 +131,7 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
   let latestRawText = "";
   let latestRawJson: unknown = null;
   let latestApiName = "";
-  let latestProvider = "ALIYUN";
+  let latestProvider = "TENCENT_CLOUD";
   try {
     const fileBuffer = await readR2Object(document.storageKey, { maxBytes: 10 * 1024 * 1024, signal: input.signal });
     if (input.signal?.aborted) throw input.signal.reason;
@@ -144,8 +144,8 @@ export async function recognizeAndValidateLogisticsInvoiceGroup(input: {
     const structuredFields = recognized.extractedFields || {};
     latestRawText = text;
     latestRawJson = recognized.rawJson || { source: recognized.source, provider: recognized.provider, textLength: text.length };
-    latestApiName = recognized.apiName || recognized.source || "ALIYUN_RECOGNIZE_INVOICE";
-    latestProvider = recognized.provider || "ALIYUN";
+    latestApiName = recognized.apiName || recognized.source || "VatInvoiceOCR";
+    latestProvider = recognized.provider || "TENCENT_CLOUD";
     const fields = parseVatInvoiceFields(text, structuredFields);
     const expectedSellerName = nonEmpty(document.supplier?.invoiceTitle || document.supplier?.supplierName);
     const expectedBuyerName = nonEmpty(

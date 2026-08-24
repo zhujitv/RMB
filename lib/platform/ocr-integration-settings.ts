@@ -74,8 +74,16 @@ export async function saveOcrIntegrationSettings(request: AuditRequestLike, acto
     tencentSecretId: cleanSecret(data.tencentSecretId) || current.tencentSecretId,
     tencentSecretKey: cleanSecret(data.tencentSecretKey) || current.tencentSecretKey,
   });
-  if (value.enabled && !value.appCode && !(value.accessKeyId && value.accessKeySecret)) {
+  const aliyunRequired = value.enabled && (
+    (value.customsDeclarationMode !== "MANUAL" && value.customsDeclarationEnabled)
+    || value.invoiceTextEnabled
+  );
+  const tencentRequired = value.enabled && value.logisticsInvoiceEnabled;
+  if (aliyunRequired && !value.appCode && !(value.accessKeyId && value.accessKeySecret)) {
     throw codedError("启用 OCR 前请先填写 AppCode，或同时填写 AccessKey ID 和 AccessKey Secret。", 400, "OCR_CREDENTIAL_REQUIRED");
+  }
+  if (tencentRequired && !(value.tencentSecretId && value.tencentSecretKey)) {
+    throw codedError("启用物流费用发票 OCR 前请先填写腾讯云 SecretId 和 SecretKey。", 400, "TENCENT_OCR_CREDENTIAL_REQUIRED");
   }
   if (value.enabled && value.customsDeclarationMode === "STRICT" && !(value.accessKeyId && value.accessKeySecret)) {
     throw codedError("报关单严格结构化模式需要配置 AccessKey ID 和 AccessKey Secret。", 400, "OCR_ACCESS_KEY_REQUIRED");
@@ -99,6 +107,12 @@ export async function ensureOcrFeatureEnabled(feature: OcrFeatureKey) {
     return settings;
   }
   throw codedError(`${ocrFeatureLabel(feature)}功能已关闭，请到系统设置启用 OCR。`, 403, "OCR_FEATURE_DISABLED");
+}
+
+export async function ensureTencentOcrFeatureEnabled(feature: OcrFeatureKey) {
+  const settings = await getOcrIntegrationSettings();
+  if (ocrFeatureEnabled(settings, feature)) return settings;
+  throw codedError(`${ocrFeatureLabel(feature)}功能已关闭，或腾讯云 OCR 密钥尚未配置。`, 403, "OCR_FEATURE_DISABLED");
 }
 
 export async function isOcrFeatureEnabled(feature: OcrFeatureKey) {

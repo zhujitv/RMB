@@ -21,6 +21,7 @@ const nextConfig = readFileSync("next.config.mjs", "utf8");
 const packageJson = readFileSync("package.json", "utf8");
 const settingsModule = readSettingsModuleSource();
 const instrumentation = existsSync("instrumentation.ts") ? readFileSync("instrumentation.ts", "utf8") : "";
+const tencentVatInvoice = readFileSync("lib/platform/tencent-vat-invoice-ocr.ts", "utf8");
 
 test("OCR integration settings are modular and stored in system settings", () => {
   assert.match(constants, /OCR_INTEGRATION_SETTING_KEY = "ocr_integration"/);
@@ -97,13 +98,20 @@ test("settings module exposes OCR configuration without leaking secrets", () => 
   assert.match(settingsModule, /markLoaded\("ocrIntegration"\)/);
 });
 
-test("OCR integration keeps invoice and logistics OCR without supplier return OCR", () => {
+test("OCR integration keeps Aliyun customs OCR and uses Tencent Cloud for logistics invoices", () => {
   assert.match(service, /@alicloud\/ocr-api20210707/);
   assert.match(service, /RecognizeInvoiceRequest/);
   assert.match(service, /recognizeInvoice\(new RecognizeInvoiceRequest/);
   assert.match(service, /ALIYUN_RECOGNIZE_INVOICE/);
   assert.match(service, /recognizeLogisticsInvoiceWithOcr/);
-  assert.match(service, /return recognizeAliyunVatInvoice\(fileBuffer, settings, \{ signal: options\.signal \}\)/);
+  assert.match(service, /ensureTencentOcrFeatureEnabled\("logisticsInvoice"\)/);
+  assert.match(service, /return recognizeTencentVatInvoiceForIntegration\(fileBuffer/);
+  assert.doesNotMatch(service, /return recognizeAliyunVatInvoice\(fileBuffer, settings, \{ signal: options\.signal \}\)/);
+  assert.match(tencentVatInvoice, /client\.VatInvoiceOCR/);
+  assert.match(tencentVatInvoice, /source: "TENCENT_VAT_INVOICE_OCR"/);
+  assert.match(tencentVatInvoice, /provider: invoice\.provider/);
+  assert.match(tencentVatInvoice, /productName: uniqueItemValues\(invoice\.items, "name"\)/);
+  assert.match(tencentVatInvoice, /amountWithTax: invoice\.header\.amountWithTax/);
   assert.doesNotMatch(service, /recognizeSupplierDocumentWithOcr/);
   assert.doesNotMatch(service, /recognizeAliyunSupplierContract/);
   assert.doesNotMatch(service, /const source = options\.url \? \{ url: options\.url \} : \{ body: Readable\.from\(buffer\) \}/);
