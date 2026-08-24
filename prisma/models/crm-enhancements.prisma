@@ -7,6 +7,18 @@ enum CustomerOpportunityStage {
   LOST
 }
 
+enum CustomerOpportunityActivityType {
+  WECHAT
+  PHONE
+  EMAIL
+  WHATSAPP
+  MEETING
+  SAMPLE
+  QUOTATION
+  FOLLOW_UP
+  OTHER
+}
+
 model CustomerContact {
   id              String    @id @default(cuid())
   customerId      String    @map("customer_id")
@@ -28,6 +40,8 @@ model CustomerContact {
   customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   createdBy User?    @relation("CustomerContactsCreated", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User?    @relation("CustomerContactsUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+  opportunityLinks CustomerOpportunityContact[]
+  opportunityActivities CustomerOpportunityActivity[]
 
   @@index([customerId, isPrimary, deletedAt])
   @@index([createdById])
@@ -45,7 +59,9 @@ model CustomerOpportunity {
   probability       Int                       @default(10)
   expectedCloseDate DateTime?                 @map("expected_close_date") @db.Date
   nextAction        String?                   @map("next_action")
+  nextActionDueAt   DateTime?                 @map("next_action_due_at") @db.Date
   ownerUserId       String?                   @map("owner_user_id")
+  lostReasonCode    String?                   @map("lost_reason_code")
   lostReason        String?                   @map("lost_reason")
   remark            String?
   closedAt          DateTime?                 @map("closed_at")
@@ -59,9 +75,74 @@ model CustomerOpportunity {
   owner     User?    @relation("CustomerOpportunitiesOwned", fields: [ownerUserId], references: [id], onDelete: SetNull)
   createdBy User?    @relation("CustomerOpportunitiesCreated", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy User?    @relation("CustomerOpportunitiesUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+  contactLinks CustomerOpportunityContact[]
+  activities CustomerOpportunityActivity[]
+  stageHistory CustomerOpportunityStageHistory[]
+  quotations SalesQuotation[]
 
   @@index([customerId, stage, deletedAt])
   @@index([ownerUserId, stage])
   @@index([expectedCloseDate])
+  @@index([ownerUserId, nextActionDueAt, stage])
   @@map("customer_opportunities")
+}
+
+model CustomerOpportunityContact {
+  id            String    @id @default(cuid())
+  opportunityId String    @map("opportunity_id")
+  contactId     String    @map("contact_id")
+  role          String?
+  isPrimary     Boolean   @default(false) @map("is_primary")
+  createdById   String?   @map("created_by")
+  updatedById   String?   @map("updated_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  opportunity CustomerOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contact CustomerContact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  createdBy User? @relation("OpportunityContactsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("OpportunityContactsUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([opportunityId, contactId])
+  @@index([contactId, deletedAt])
+  @@map("customer_opportunity_contacts")
+}
+
+model CustomerOpportunityActivity {
+  id            String                          @id @default(cuid())
+  opportunityId String                          @map("opportunity_id")
+  contactId     String?                         @map("contact_id")
+  type          CustomerOpportunityActivityType
+  subject       String
+  note          String?
+  occurredAt    DateTime                        @default(now()) @map("occurred_at")
+  outcome       String?
+  createdById   String?                         @map("created_by")
+  createdAt     DateTime                        @default(now()) @map("created_at")
+  deletedAt     DateTime?                       @map("deleted_at")
+
+  opportunity CustomerOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contact CustomerContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("OpportunityActivitiesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([opportunityId, occurredAt])
+  @@index([contactId])
+  @@map("customer_opportunity_activities")
+}
+
+model CustomerOpportunityStageHistory {
+  id            String                    @id @default(cuid())
+  opportunityId String                    @map("opportunity_id")
+  fromStage     CustomerOpportunityStage? @map("from_stage")
+  toStage       CustomerOpportunityStage  @map("to_stage")
+  note          String?
+  changedById   String?                   @map("changed_by")
+  changedAt     DateTime                  @default(now()) @map("changed_at")
+
+  opportunity CustomerOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  changedBy User? @relation("OpportunityStageHistoryChanged", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([opportunityId, changedAt])
+  @@map("customer_opportunity_stage_history")
 }

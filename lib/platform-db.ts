@@ -8,6 +8,7 @@ export * from "./platform/logistics";
 export * from "./platform/customer-communications";
 export * from "./platform/customer-crm";
 export * from "./platform/customer-crm-enhancements";
+export * from "./platform/customer-opportunity-workbench";
 export * from "./platform/crm-email";
 export * from "./platform/tax-profit";
 export * from "./platform/quotation-customer-products";
