@@ -434,8 +434,8 @@ expected = replaceOnce(
 );
 expected = replaceOnce(
   expected,
-  '[[ "$ROLLBACK_HEALTH_URL" =~ ^http://127\\.0\\.0\\.1:[0-9]+/?$ ]] || fail "RMB_ROLLBACK_HEALTH_URL must be a loopback origin"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
-  '[[ "$ROLLBACK_HEALTH_URL" =~ ^http://127\\.0\\.0\\.1:[0-9]+/?$ ]] || fail "RMB_ROLLBACK_HEALTH_URL must be a loopback origin"\ncommand -v flock >/dev/null || fail "flock is required"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
+  '  || fail "full deployment must run as $EXPECTED_DEPLOY_USER; use the protected GitHub deployment channel instead of a root desktop session"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
+  '  || fail "full deployment must run as $EXPECTED_DEPLOY_USER; use the protected GitHub deployment channel instead of a root desktop session"\ncommand -v flock >/dev/null || fail "flock is required"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
 );
 expected = replaceOnce(
   expected,

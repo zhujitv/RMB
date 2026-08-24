@@ -8,10 +8,16 @@ const script = readFileSync("scripts/deploy-cvm-quick.sh", "utf8");
 const fullDeployScript = readFileSync("scripts/deploy-cvm-from-bundle.sh", "utf8");
 const docs = readFileSync("docs/CVM_QUICK_DEPLOYMENT_CHANNEL.md", "utf8");
 
-test("quick deploy is one-click by default but resolves an exact current main SHA", () => {
+test("quick deploy supports one-click and opt-in automatic deployment after successful CI", () => {
   assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /workflow_run:/);
+  assert.match(workflow, /github\.event\.workflow_run\.conclusion == 'success'/);
+  assert.match(workflow, /github\.event\.workflow_run\.head_branch == 'main'/);
+  assert.match(workflow, /vars\.RMB_CVM_AUTO_QUICK_DEPLOY == 'true'/);
   assert.match(workflow, /default: "main"/);
   assert.match(workflow, /INPUT_REF: \$\{\{ inputs\.ref \}\}/);
+  assert.match(workflow, /WORKFLOW_RUN_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
+  assert.match(workflow, /INPUT_REF="\$WORKFLOW_RUN_SHA"/);
   assert.match(workflow, /"\$INPUT_REF" == "main"/);
   assert.match(workflow, /\^\[a-f0-9\]\{40\}\$/);
   assert.match(workflow, /main_sha="\$\(git rev-parse refs\/remotes\/origin\/main\)"/);
@@ -145,8 +151,8 @@ test("bootstrap validator permits only the exact approved lock transform", () =>
       'ROLLBACK_HEALTH_URL="${RMB_ROLLBACK_HEALTH_URL:-http://127.0.0.1:3000/}"\nHEALTH_ATTEMPTS="${RMB_HEALTH_ATTEMPTS:-20}"',
     )
     .replace(
-      '[[ "$ROLLBACK_HEALTH_URL" =~ ^http://127\\.0\\.0\\.1:[0-9]+/?$ ]] || fail "RMB_ROLLBACK_HEALTH_URL must be a loopback origin"\ncommand -v flock >/dev/null || fail "flock is required"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
-      '[[ "$ROLLBACK_HEALTH_URL" =~ ^http://127\\.0\\.0\\.1:[0-9]+/?$ ]] || fail "RMB_ROLLBACK_HEALTH_URL must be a loopback origin"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
+      '  || fail "full deployment must run as $EXPECTED_DEPLOY_USER; use the protected GitHub deployment channel instead of a root desktop session"\ncommand -v flock >/dev/null || fail "flock is required"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
+      '  || fail "full deployment must run as $EXPECTED_DEPLOY_USER; use the protected GitHub deployment channel instead of a root desktop session"\nSYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"',
     )
     .replace(
       'cd "$APP_DIR"\nensure_checkout_writable\nmkdir -p "$(dirname "$LOCK_FILE")"\nexec 9>"$LOCK_FILE"\nflock -n 9 || fail "another production deployment is already running"\n\nCURRENT_HEAD="$(git rev-parse --verify HEAD 2>/dev/null || true)"',

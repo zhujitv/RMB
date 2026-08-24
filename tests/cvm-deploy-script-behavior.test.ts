@@ -13,6 +13,7 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 
 const deployScript = resolve("scripts/deploy-cvm-from-bundle.sh");
+const currentUser = execFileSync("id", ["-un"], { encoding: "utf8" }).trim();
 
 function git(cwd: string, ...args: string[]) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -142,6 +143,7 @@ process.exit(0);
       MOCK_RESTART_FAIL_ONCE: restartFailsOnce ? "1" : "0",
       MOCK_RESTART_STATE: restartState,
       RMB_SUDO: sudoPath,
+      RMB_EXPECTED_DEPLOY_USER: currentUser,
       RMB_APP_DIR: appDir,
       RMB_SERVICE: "rmb-app.service",
       RMB_EXPECTED_ENV_FILE: "/srv/rmb/shared/app.env",

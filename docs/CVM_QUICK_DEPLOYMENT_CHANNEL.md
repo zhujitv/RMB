@@ -4,12 +4,28 @@
 
 ## 日常使用
 
-1. 代码合并到 `main`，等待同一提交的 `CI` 成功。
-2. 打开 GitHub Actions 的 `Deploy CVM Quick`。
-3. 直接点击 `Run workflow`；`ref` 保持默认 `main` 即可。
-4. 如需复核目标，可填当前 `main` 的完整 40 位 SHA。历史 SHA、分支和 tag 都不会被快速通道接受。
+推荐启用自动小更新：把 Repository Variable `RMB_CVM_AUTO_QUICK_DEPLOY` 设置为 `true`，并保持完整通道的 `RMB_CVM_AUTO_DEPLOY=false`。此后日常流程只有：
+
+1. 代码合并到 `main`；
+2. 同一提交的 `CI` 成功后，`Deploy CVM Quick` 自动发布；
+3. 健康检查全部通过后才生效，失败会自动回滚。
+
+需要人工控制时，把 `RMB_CVM_AUTO_QUICK_DEPLOY` 设为 `false`，然后打开 GitHub Actions 的 `Deploy CVM Quick`，直接点击 `Run workflow`；`ref` 保持默认 `main` 即可。如需复核目标，可填当前 `main` 的完整 40 位 SHA。历史 SHA、分支和 tag 都不会被快速通道接受。
 
 工作流最终仍把目标解析成精确 SHA，并在 GitHub Runner 和腾讯云上分别确认它就是最新 `main`，因此默认值不会降低提交锁定强度。
+
+## 两级发布规则
+
+- 页面、接口和普通业务逻辑等小更新：CI 成功后自动走 `Deploy CVM Quick`，不更新版本号，不上传大型构建包，不执行数据库迁移。
+- 依赖、Prisma、环境配置、部署脚本、认证、定时任务或大版本升级：快速通道会在切换前拒绝，人工运行 `Deploy CVM` 完整通道。
+- 禁止再用 root 账号从腾讯云桌面直接覆盖应用。两条 GitHub 通道统一使用 `rmb-deploy`，避免 `.next` 或 Git 文件归属漂移后拖慢下一次发布。
+
+推荐仓库变量：
+
+```text
+RMB_CVM_AUTO_QUICK_DEPLOY=true
+RMB_CVM_AUTO_DEPLOY=false
+```
 
 ## 自动安全边界
 

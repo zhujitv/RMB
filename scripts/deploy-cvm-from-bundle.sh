@@ -25,6 +25,7 @@ LOCK_FILE="$APP_DIR/.rmb-production-deploy.lock"
 HEALTH_ATTEMPTS="${RMB_HEALTH_ATTEMPTS:-20}"
 HEALTH_SLEEP_SECONDS="${RMB_HEALTH_SLEEP_SECONDS:-2}"
 CUSTOM_SUDO_BIN="${RMB_SUDO:-}"
+EXPECTED_DEPLOY_USER="${RMB_EXPECTED_DEPLOY_USER:-rmb-deploy}"
 DEFAULT_SUDO=0
 
 [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "RMB_DEPLOY_SHA must be a full commit SHA"
@@ -35,6 +36,10 @@ DEFAULT_SUDO=0
 [[ "$READY_URL" =~ ^http://127\.0\.0\.1:[0-9]+/api/health$ ]] || fail "RMB_READY_URL must be a loopback /api/health URL"
 [[ "$PUBLIC_READY_URL" =~ ^https://[^/?#[:space:]@]+/api/health$ ]] || fail "RMB_PUBLIC_READY_URL must be an HTTPS /api/health URL without credentials"
 [[ "$ROLLBACK_HEALTH_URL" =~ ^http://127\.0\.0\.1:[0-9]+/?$ ]] || fail "RMB_ROLLBACK_HEALTH_URL must be a loopback origin"
+[[ "$EXPECTED_DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || fail "RMB_EXPECTED_DEPLOY_USER is invalid"
+id "$EXPECTED_DEPLOY_USER" >/dev/null 2>&1 || fail "expected deployment user does not exist: $EXPECTED_DEPLOY_USER"
+[[ "$(id -un)" == "$EXPECTED_DEPLOY_USER" ]] \
+  || fail "full deployment must run as $EXPECTED_DEPLOY_USER; use the protected GitHub deployment channel instead of a root desktop session"
 command -v flock >/dev/null || fail "flock is required"
 SYSTEMCTL_BIN="$(command -v systemctl 2>/dev/null || true)"
 [[ -n "$SYSTEMCTL_BIN" ]] || fail "systemctl is required"

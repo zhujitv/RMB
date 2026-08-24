@@ -7,6 +7,11 @@ on:
         description: "Deploy current main, or enter its exact 40-character SHA"
         required: false
         default: "main"
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -20,6 +25,13 @@ jobs:
   deploy:
     name: Safe quick deploy to Tencent Cloud CVM
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        vars.RMB_CVM_AUTO_QUICK_DEPLOY == 'true'
+      )
     timeout-minutes: 35
     environment: production
     env:
@@ -33,9 +45,15 @@ jobs:
       - name: Validate target request
         id: request
         env:
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           INPUT_REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            INPUT_REF="$WORKFLOW_RUN_SHA"
+          else
+            INPUT_REF="${INPUT_REF:-main}"
+          fi
           [[ "$INPUT_REF" == "main" || "$INPUT_REF" =~ ^[a-f0-9]{40}$ ]] || {
             echo "::error::ref must be main or an exact 40-character lowercase commit SHA."
             exit 1

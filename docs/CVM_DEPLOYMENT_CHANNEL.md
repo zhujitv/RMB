@@ -26,6 +26,7 @@
 - 同一时间只允许一个生产部署运行；完整通道与 `Deploy CVM Quick` 共用 CVM 上的 `.rmb-production-deploy.lock` 远端锁，也共用 GitHub 的 `rmb-cvm-production` 并发组。
 - SSH 必须启用严格主机校验；`RMB_CVM_KNOWN_HOSTS` 必须由人工确认后写入 GitHub Secret。
 - 建议使用专用 Linux 用户 `rmb-deploy`，只允许写入 `/srv/rmb/app`，并通过免密 sudo 仅执行 `systemctl restart rmb-app.service`；`show`、`is-active` 和 `status` 均以普通用户只读执行。
+- 完整部署脚本强制以 `rmb-deploy` 执行；禁止从 root 桌面会话直接运行。这样完整发布不会改变 `.next` 和 Git 控制文件归属，也不会破坏下一次快速发布。
 - Build job 不绑定 `production` Environment，也不会注入或落盘任何腾讯云 SSH 凭据；SSH 私钥只在 Deploy job 下载并核对构建产物后创建，任务结束即删除。
 - 上传到 CVM 的 bundle 是临时文件，远程脚本结束后会删除。
 
@@ -57,6 +58,7 @@ RMB_CVM_DB_BACKUP_RETENTION_DAYS=15
 RMB_CVM_LOCAL_HEALTH_URL=http://127.0.0.1:3000/
 RMB_CVM_PUBLIC_HEALTH_URL=https://www.nextwood.net
 RMB_CVM_AUTO_DEPLOY=false
+RMB_CVM_AUTO_QUICK_DEPLOY=true
 ```
 
 实际默认值：

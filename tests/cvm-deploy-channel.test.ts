@@ -103,6 +103,9 @@ test("CVM deployment uses the successful-release marker as its deployed baseline
 });
 
 test("CVM deployment refuses unwritable checkouts without recursive ownership changes", () => {
+  assert.match(remoteScript, /EXPECTED_DEPLOY_USER="\$\{RMB_EXPECTED_DEPLOY_USER:-rmb-deploy\}"/);
+  assert.match(remoteScript, /full deployment must run as \$EXPECTED_DEPLOY_USER/);
+  assert.match(remoteScript, /protected GitHub deployment channel instead of a root desktop session/);
   assert.match(remoteScript, /ensure_checkout_writable\(\)/);
   assert.match(remoteScript, /touch "\$app_probe" "\$git_probe"/);
   assert.match(remoteScript, /refusing to change ownership recursively/);
