@@ -361,7 +361,14 @@ jobs:
               return 0
             fi
             if command -v systemctl >/dev/null 2>&1; then
-              local main_pid
+              local systemd_environment main_pid
+              systemd_environment="$(systemctl show "$SERVICE" --property=Environment --value 2>/dev/null || true)"
+              if [[ -n "$systemd_environment" ]]; then
+                if DATABASE_URL="$(RMB_SYSTEMD_ENVIRONMENT="$systemd_environment" node -e 'const raw = process.env.RMB_SYSTEMD_ENVIRONMENT || ""; const match = raw.match(/(?:^|\s)DATABASE_URL=(?:"([^"]*)"|'"'"'([^'"'"']*)'"'"'|(\S+))/); const value = match?.[1] ?? match?.[2] ?? match?.[3] ?? ""; if (!value) process.exit(1); process.stdout.write(value);')" && [[ -n "$DATABASE_URL" ]]; then
+                  export DATABASE_URL
+                  return 0
+                fi
+              fi
               main_pid="$(systemctl show "$SERVICE" --property=MainPID --value 2>/dev/null || true)"
               if [[ "$main_pid" =~ ^[1-9][0-9]*$ && -r "/proc/$main_pid/environ" ]]; then
                 if DATABASE_URL="$(RMB_SERVICE_PID="$main_pid" node -e 'const fs = require("node:fs"); const pid = process.env.RMB_SERVICE_PID || ""; const entry = fs.readFileSync(`/proc/${pid}/environ`).toString().split("\0").find((value) => value.startsWith("DATABASE_URL=")); if (!entry) process.exit(1); process.stdout.write(entry.slice("DATABASE_URL=".length));')" && [[ -n "$DATABASE_URL" ]]; then
