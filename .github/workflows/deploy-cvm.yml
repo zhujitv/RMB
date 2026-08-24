@@ -301,6 +301,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.RMB_CVM_HOST }}
           DEPLOY_PORT: ${{ secrets.RMB_CVM_PORT }}
           DEPLOY_USER: ${{ secrets.RMB_CVM_USER }}
+          DEPLOY_DATABASE_URL: ${{ secrets.DATABASE_URL }}
           MIGRATION_NAME: ${{ needs.build.outputs.migration_name }}
         run: |
           set -euo pipefail
@@ -314,6 +315,10 @@ jobs:
           ssh_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -p "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           scp_opts=(-i "$HOME/.ssh/rmb-cvm-deploy" -P "$port" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           migration_name="$MIGRATION_NAME"
+          [[ -n "${DEPLOY_DATABASE_URL:-}" ]] || {
+            echo "::error::DATABASE_URL repository secret is required for a protected migration."
+            exit 1
+          }
           local_script="$RUNNER_TEMP/rmb-cvm-db-migration.sh"
           remote_script="/tmp/rmb-cvm-db-migration-$migration_name.sh"
           remote_sql="/tmp/rmb-cvm-db-migration-$migration_name.sql"
@@ -353,6 +358,12 @@ jobs:
           }
 
           load_database_url() {
+            if [[ "${RMB_DATABASE_URL_STDIN:-}" == "1" ]]; then
+              IFS= read -r DATABASE_URL || fail "DATABASE_URL could not be read from the protected workflow input"
+              [[ -n "$DATABASE_URL" ]] || fail "DATABASE_URL from the protected workflow input is empty"
+              export DATABASE_URL
+              return 0
+            fi
             if [[ -r "$ENV_FILE" ]]; then
               set -a
               # shellcheck disable=SC1090
@@ -505,8 +516,8 @@ jobs:
           chmod 700 "$local_script"
           scp "${scp_opts[@]}" "$local_script" "$ssh_target:$remote_script"
           scp "${scp_opts[@]}" "prisma/migrations/$migration_name/migration.sql" "$ssh_target:$remote_sql"
-          ssh "${ssh_opts[@]}" "$ssh_target" \
-            "chmod 700 '$remote_script' && RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_SERVICE='$service' RMB_DB_BACKUP_DIR='$backup_dir' RMB_DB_BACKUP_RETENTION_DAYS='$retention_days' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
+          printf '%s\n' "$DEPLOY_DATABASE_URL" | ssh "${ssh_opts[@]}" "$ssh_target" \
+            "chmod 700 '$remote_script' && RMB_DATABASE_URL_STDIN=1 RMB_APP_DIR='$app_dir' RMB_ENV_FILE='$env_file' RMB_SERVICE='$service' RMB_DB_BACKUP_DIR='$backup_dir' RMB_DB_BACKUP_RETENTION_DAYS='$retention_days' RMB_MIGRATION_NAME='$migration_name' RMB_MIGRATION_SQL='$remote_sql' '$remote_script'"
 
       - name: Build incremental git bundle
         id: bundle
