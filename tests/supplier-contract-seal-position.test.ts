@@ -1,9 +1,19 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   findSupplierContractSealTextBox,
   supplierContractSealPlacement,
 } from "../lib/platform/supplier-contract-seal-position-math.ts";
+
+const locatorSource = readFileSync("lib/platform/supplier-contract-seal-position.ts", "utf8");
+
+test("scanned contract OCR uses a compact image and a dedicated timeout", () => {
+  assert.match(locatorSource, /jpeg\(\{ quality: SEAL_OCR_JPEG_QUALITY, mozjpeg: true \}\)/);
+  assert.match(locatorSource, /ImageBase64: optimizedImage\.toString\("base64"\)/);
+  assert.match(locatorSource, /Math\.max\(settings\.timeoutMs, MIN_SEAL_OCR_TIMEOUT_MS\)/);
+  assert.match(locatorSource, /供应商合同盖章位置 OCR 失败/);
+});
 
 test("buyer seal anchor follows each contract label instead of a fixed page position", () => {
   const upperAnchor = findSupplierContractSealTextBox([

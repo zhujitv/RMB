@@ -1,6 +1,12 @@
+import sharp from "sharp";
 import { getOcrIntegrationSettings } from "./ocr-integration-settings";
 import { rasterizePdfPageForOcr } from "./ocr-integration-pdf";
-import { codedError } from "./shared-base-utils";
+import {
+  codedError,
+  isPlainRecord,
+  logServerError,
+  redactSensitiveText,
+} from "./shared-base-utils";
 import { createTencentOcrClient } from "./tencent-customs-ocr-experiment";
 import {
   findSupplierContractSealTextBox,
@@ -10,6 +16,19 @@ import {
 } from "./supplier-contract-seal-position-math";
 
 const MAX_OCR_PAGES = 3;
+const MIN_SEAL_OCR_TIMEOUT_MS = 30_000;
+const SEAL_OCR_JPEG_QUALITY = 82;
+
+function sealOcrFailure(error: unknown) {
+  const record = isPlainRecord(error) ? error : {};
+  const diagnostic = codedError("腾讯云合同盖章位置识别失败", 502, "SUPPLIER_CONTRACT_SEAL_OCR_PROVIDER_FAILED");
+  diagnostic.details = {
+    providerCode: String(record.code || "TENCENT_OCR_REQUEST_FAILED").slice(0, 160),
+    providerMessage: redactSensitiveText(error instanceof Error ? error.message : String(record.message || error || ""), 500),
+    requestId: String(record.requestId || "").slice(0, 160),
+  };
+  return diagnostic;
+}
 
 async function locateFromPdfText(pdfBody: Buffer): Promise<SupplierContractSealAnchor | null> {
   try {
@@ -65,14 +84,23 @@ async function locateFromPdfText(pdfBody: Buffer): Promise<SupplierContractSealA
 
 async function locateFromTencentOcr(pdfBody: Buffer, pageSizes: SupplierContractPdfPageSize[]) {
   const settings = await getOcrIntegrationSettings();
-  const client = createTencentOcrClient(settings);
+  const client = createTencentOcrClient({
+    ...settings,
+    timeoutMs: Math.max(settings.timeoutMs, MIN_SEAL_OCR_TIMEOUT_MS),
+  });
   const firstPageNumber = pageSizes.length;
   const lastPageNumber = Math.max(1, pageSizes.length - MAX_OCR_PAGES + 1);
   for (let pageNumber = firstPageNumber; pageNumber >= lastPageNumber; pageNumber -= 1) {
     const rasterized = await rasterizePdfPageForOcr(pdfBody, pageNumber);
     if (!rasterized) continue;
+    // Scanned contracts produce multi-megabyte PNGs. Sending the PNG can spend the
+    // whole request timeout uploading/processing it, while a high-quality JPEG
+    // preserves the text geometry and is typically an order of magnitude smaller.
+    const optimizedImage = await sharp(rasterized.buffer)
+      .jpeg({ quality: SEAL_OCR_JPEG_QUALITY, mozjpeg: true })
+      .toBuffer();
     const response = await client.GeneralBasicOCR({
-      ImageBase64: rasterized.buffer.toString("base64"),
+      ImageBase64: optimizedImage.toString("base64"),
       LanguageType: "zh",
       IsWords: false,
     });
@@ -109,7 +137,8 @@ export async function locateSupplierContractSealAnchor(pdfBody: Buffer, pageSize
   try {
     const ocrAnchor = await locateFromTencentOcr(pdfBody, pageSizes);
     if (ocrAnchor) return ocrAnchor;
-  } catch {
+  } catch (error) {
+    logServerError("供应商合同盖章位置 OCR 失败", sealOcrFailure(error));
     throw codedError(
       "合同盖章位置识别服务暂不可用，已停止自动盖章以避免盖错。请稍后重试，或联系管理员检查腾讯云 OCR 配置。",
       409,
