@@ -3,6 +3,7 @@ import {
   codedError,
   nonEmpty,
   optional,
+  permissionError,
   runNonCriticalTask,
   scheduleTaxRefundCompletenessRefresh,
   writeAudit,
@@ -11,8 +12,9 @@ import {
   aggregateLogisticsExpenseInvoiceStatus,
   aggregateLogisticsExpenseStatus,
   assertCanConfirmLogisticsInvoice,
+  includeLogisticsExpenseListRelations,
   includeLogisticsExpenseRelations,
-  loadLogisticsExpenseForAction,
+  logisticsExpenseAccessWhere,
   serializeLogisticsExpense,
   serializeLogisticsExpenseBill,
 } from "./logistics-expense-shared";
@@ -47,7 +49,25 @@ import {
 
 export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, actor: ActorContext, id: string, input: UnknownRecord = {}) {
   assertCanConfirmLogisticsInvoice(actor);
-  const before = await loadLogisticsExpenseForAction(id, actor);
+  // Before entering the locked workflow we only need identity and grouping
+  // fields. Loading the full order/document/cost graph here duplicated the
+  // expensive relation query performed by the transaction below.
+  const before = await prisma.logisticsExpense.findFirst({
+    where: {
+      id,
+      deletedAt: null,
+      ...logisticsExpenseAccessWhere(actor),
+    },
+    select: {
+      id: true,
+      billId: true,
+      orderId: true,
+      supplierId: true,
+      costType: true,
+      currency: true,
+    },
+  });
+  if (!before) throw permissionError("物流费用不存在或无权访问", 404);
   const requestedGroup = logisticsInvoiceGroupForKey(input.invoiceGroup || input.invoiceGroupKey);
   const fallbackGroup = logisticsInvoiceGroupForExpense(before);
   const invoiceGroup = requestedGroup || fallbackGroup;
@@ -64,7 +84,7 @@ export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, 
     await lockLogisticsBillForWorkflow(tx, billId);
     const currentRows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
-      include: includeLogisticsExpenseRelations(),
+      include: includeLogisticsExpenseListRelations(),
       orderBy: [{ createdAt: "asc" }],
     });
     if (!currentRows.length) throw codedError("物流费用账单缺少费用明细。", 409, "LOGISTICS_INVOICE_ROWS_EMPTY");
@@ -131,7 +151,9 @@ export async function confirmLogisticsExpenseInvoice(request: AuditRequestLike, 
     }
     const rows = await tx.logisticsExpense.findMany({
       where: { billId, deletedAt: null },
-      include: includeLogisticsExpenseRelations(),
+      // The response serializer does not use the heavy cost relation or the
+      // supplier operator list, so return the compact list graph here.
+      include: includeLogisticsExpenseListRelations(),
       orderBy: [{ createdAt: "asc" }],
     });
     return { rows, targetRows, documentId, confirmIds };

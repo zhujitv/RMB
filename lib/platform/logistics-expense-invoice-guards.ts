@@ -8,19 +8,19 @@ import {
   aggregateLogisticsExpenseInvoiceStatus,
   aggregateLogisticsExpenseStatus,
 } from "./logistics-expense-shared";
+import type { LogisticsExpenseLike } from "./logistics-expense-access-model";
 import { logisticsInvoiceGroupForExpense } from "./logistics-invoice-groups";
 import { isVoidedLogisticsBill } from "./logistics-bill-state-machine";
 import {
   rowBillStatus,
-  type LogisticsExpenseRow,
 } from "./logistics-expense-workflow-core";
-export function assertLogisticsBillNotVoided(rows: LogisticsExpenseRow[] = [], message = "该物流费用账单已作废，仅允许查看详情和操作日志。") {
+export function assertLogisticsBillNotVoided(rows: LogisticsExpenseLike[] = [], message = "该物流费用账单已作废，仅允许查看详情和操作日志。") {
   if (rows.some((row) => isVoidedLogisticsBill({ status: rowBillStatus(row) }))) {
     throw codedError(message, 400, "LOGISTICS_BILL_VOIDED_ACTION_BLOCKED");
   }
 }
 
-export function paymentStatusUpdateAfterInvoiceProgress(billRows: LogisticsExpenseRow[]) {
+export function paymentStatusUpdateAfterInvoiceProgress(billRows: LogisticsExpenseLike[]) {
 		const billAuditStatus = aggregateLogisticsExpenseStatus(billRows, "auditStatus");
 		const billInvoiceStatus = aggregateLogisticsExpenseInvoiceStatus(billRows);
 		const billPaymentStatus = aggregateLogisticsExpenseStatus(billRows, "paymentStatus");
@@ -32,7 +32,7 @@ export function paymentStatusUpdateAfterInvoiceProgress(billRows: LogisticsExpen
 
 export async function assertActiveLogisticsInvoiceDocuments(
   tx: Prisma.TransactionClient | typeof prisma,
-  rows: LogisticsExpenseRow[] = [],
+  rows: LogisticsExpenseLike[] = [],
 ) {
   const documentIds = [...new Set(rows.map((row) => nonEmpty(row.invoiceDocumentId)).filter(Boolean))];
   if (!rows.length || rows.some((row) => !nonEmpty(row.invoiceDocumentId))) {
@@ -67,7 +67,7 @@ export async function assertActiveLogisticsInvoiceDocuments(
 export async function assertLogisticsInvoiceDocumentNotReusedOutsideRows(
   tx: Prisma.TransactionClient | typeof prisma,
   documentId: string,
-  allowedRows: LogisticsExpenseRow[] = [],
+  allowedRows: LogisticsExpenseLike[] = [],
 ) {
   const allowedRowIds = allowedRows.map((row) => nonEmpty(row.id)).filter(Boolean);
   const reusedRow = await tx.logisticsExpense.findFirst({
@@ -87,10 +87,13 @@ export async function assertLogisticsInvoiceDocumentNotReusedOutsideRows(
   }
 }
 
-export function assertLogisticsInvoiceRowsConfirmed(rows: LogisticsExpenseRow[] = []) {
+export function assertLogisticsInvoiceRowsConfirmed(rows: LogisticsExpenseLike[] = []) {
   const groupByDocumentId = new Map<string, string>();
   for (const row of rows) {
-    const confirmedById = nonEmpty(row.invoiceConfirmedById || row.invoiceConfirmedBy?.id);
+    const confirmedById = nonEmpty(
+      row.invoiceConfirmedById
+      || (row.invoiceConfirmedBy as { id?: unknown } | null | undefined)?.id,
+    );
     if (row.invoiceStatus !== "已确认" || !row.invoiceConfirmedAt || !confirmedById) {
       throw codedError("物流费用仍有发票未由财务确认，不能进入付款。", 409, "LOGISTICS_INVOICE_CONFIRMATION_INCOMPLETE");
     }

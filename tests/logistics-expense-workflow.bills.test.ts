@@ -282,6 +282,10 @@ test("logistics expense approval does not require an invoice and triggers suppli
   assert.match(backend, /LOGISTICS_COST_LINK_CHANGED/);
   assert.match(backend, /LOGISTICS_INVOICE_UPLOAD_BILL_CHANGED/);
   assert.match(backend, /export async function confirmLogisticsExpenseInvoice[\s\S]*lockLogisticsBillForWorkflow\(tx, billId\)[\s\S]*LOGISTICS_INVOICE_CONFIRM_BILL_CHANGED/);
+  assert.match(
+    backend,
+    /export async function confirmLogisticsExpenseInvoice[\s\S]*select: \{[\s\S]*billId: true[\s\S]*costType: true[\s\S]*include: includeLogisticsExpenseListRelations\(\)/,
+  );
   assert.match(backend, /confirmIds\.includes\(row\.id\)[\s\S]*invoiceStatus: "已确认"[\s\S]*invoiceConfirmedById: actorId\(actor\)[\s\S]*invoiceConfirmedAt: confirmedAt/);
   assert.match(backend, /reviewedById: actor\.id/);
   assert.match(backend, /reviewedAt: now/);

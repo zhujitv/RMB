@@ -229,6 +229,14 @@ test("logistics expense detail rows can delete unapproved unsynced items", () =>
     logisticsSupplierStatementSource,
     /const shipmentRows = groupLogisticsStatementRowsByShipment\(rows\)/,
   );
+  assert.doesNotMatch(
+    logisticsSupplierStatementSource,
+    /includeLogisticsExpenseRelations\(\)/,
+  );
+  assert.match(
+    logisticsSupplierStatementSource,
+    /select: \{[\s\S]*supplierId: true[\s\S]*orderId: true[\s\S]*cost: \{[\s\S]*paymentDate: true/,
+  );
   assert.match(
     backend,
     /subtractCurrencyTotals\(approvedCurrencyTotals, paidCurrencyTotals\)/,

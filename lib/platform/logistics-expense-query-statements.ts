@@ -5,7 +5,6 @@ import { summarizeCurrencyTotals, type CurrencyTotalInput } from "./currency-tot
 import {
   assertCanReadLogisticsExpenses,
   groupLogisticsExpensesByShipment,
-  includeLogisticsExpenseRelations,
   logisticsExpenseAccessWhere,
 } from "./logistics-expense-shared";
 import {
@@ -74,7 +73,27 @@ export async function logisticsSupplierStatement(query: QueryLike, actor: Logist
   };
   const rows = await prisma.logisticsExpense.findMany({
     where,
-    include: includeLogisticsExpenseRelations(),
+    // The statement only needs amounts, supplier names and the payment ledger.
+    // Avoid loading customer, transport, document and user relations for as
+    // many as 3,000 rows whenever the logistics-fees page is opened.
+    select: {
+      supplierId: true,
+      supplierNameSnapshot: true,
+      supplier: { select: { supplierName: true } },
+      orderId: true,
+      currency: true,
+      amount: true,
+      amountCny: true,
+      cost: {
+        select: {
+          paymentDate: true,
+          deletedAt: true,
+          currency: true,
+          amount: true,
+          amountCny: true,
+        },
+      },
+    },
     orderBy: [{ updatedAt: "desc" }],
     take: LOGISTICS_STATEMENT_SCAN_LIMIT,
   });
