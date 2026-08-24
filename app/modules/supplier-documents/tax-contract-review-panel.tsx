@@ -93,7 +93,17 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
     }
     const reason = decision === "REJECTED" ? window.prompt("请输入驳回原因") || "" : "";
     if (decision === "REJECTED" && !reason.trim()) return;
-    if (decision === "CONFIRMED" && !window.confirm("确认已查看发票原件，并同意当前已保存的人工核对与系统匹配结果？")) return;
+    let overrideReason = "";
+    if (decision === "CONFIRMED" && task.invoiceMatchStatus === "MISMATCH") {
+      const mismatchSummary = issues.length ? `\n\n当前差异：\n${issues.map((issue) => `- ${issue}`).join("\n")}` : "";
+      overrideReason = window.prompt(`系统检测到发票与合同存在差异。请输入人工复核通过说明（至少5个字），系统将保留差异和审核记录。${mismatchSummary}`) || "";
+      if (!overrideReason.trim()) return;
+      if (overrideReason.trim().length < 5) {
+        window.alert("人工复核通过说明至少需要5个字。");
+        return;
+      }
+    }
+    if (decision === "CONFIRMED" && !window.confirm("确认已查看发票原件，并以当前人工核对结果通过审核？确认后该资料任务将按完成规则重新计算。")) return;
     setBusy(true);
     try {
       await apiJson(`/api/supplier-document-requests/${encodeURIComponent(task.id)}/invoice-review`, {
@@ -102,6 +112,7 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
         body: JSON.stringify({
           decision,
           reason,
+          overrideReason,
           ...(decision === "CONFIRMED" ? {
             expectedOcrTaskId: task.invoiceOcrTaskId || "",
             expectedRevision: task.invoiceReviewRevision || 1,
@@ -255,9 +266,11 @@ export function TaxContractReviewPanel({ task, isAdmin, canWrite, onRefresh }: {
           <button className={styles.secondaryButton} type="button" disabled={busy} onClick={retryInvoiceOcr}>重新执行腾讯云 OCR</button>
         </div>
       ) : null}
-      {isAdmin && canWrite && task.invoiceMatchStatus === "AWAITING_REVIEW" ? (
+      {isAdmin && canWrite && ["MISMATCH", "AWAITING_REVIEW"].includes(task.invoiceMatchStatus || "NOT_UPLOADED") ? (
         <div className={styles.supplierDocumentNoticeActions}>
-          <button className={styles.primaryButtonCompact} type="button" disabled={busy || invoiceDirty} onClick={() => reviewInvoice("CONFIRMED")}>查看原件并确认发票</button>
+          <button className={styles.primaryButtonCompact} type="button" disabled={busy || invoiceDirty} onClick={() => reviewInvoice("CONFIRMED")}>
+            {task.invoiceMatchStatus === "MISMATCH" ? "人工审核并通过" : "查看原件并确认发票"}
+          </button>
           <button className={styles.secondaryButton} type="button" disabled={busy} onClick={() => reviewInvoice("REJECTED")}>驳回发票</button>
         </div>
       ) : null}

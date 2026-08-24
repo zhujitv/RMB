@@ -142,6 +142,18 @@ test("OCR raw evidence is immutable while manual versions are revisioned and sta
   assert.match(contractWorkflow, /contractRevision: expectedRevision/);
 });
 
+test("administrator can manually confirm a mismatched invoice with an audited explanation", () => {
+  const panel = readFileSync("app/modules/supplier-documents/tax-contract-review-panel.tsx", "utf8");
+  const review = readFileSync("lib/platform/supplier-invoice-review-decision.ts", "utf8");
+
+  assert.match(panel, /\["MISMATCH", "AWAITING_REVIEW"\]/);
+  assert.match(panel, /人工审核并通过/);
+  assert.match(panel, /overrideReason/);
+  assert.match(review, /mismatchReview && overrideReason\.trim\(\)\.length < 5/);
+  assert.match(review, /manualOverride/);
+  assert.match(review, /mismatchIssues: confirmedMismatchIssues/);
+});
+
 test("transition and normal contract drafts share the five-field editable table", () => {
   const panel = readFileSync("app/modules/supplier-documents/tax-contract-review-panel.tsx", "utf8");
   const editor = readFileSync("app/modules/supplier-documents/contract-draft-editor.tsx", "utf8");

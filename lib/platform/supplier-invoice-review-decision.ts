@@ -40,6 +40,9 @@ export async function reviewSupplierInvoice(
   assertWrite(actor, "supplierDocuments");
   const actorId = nonEmpty(actor.id);
   const decision = nonEmpty(input.decision).toUpperCase();
+  const overrideReason = nonEmpty(input.overrideReason).slice(0, 1000);
+  let confirmedWithMismatch = false;
+  let confirmedMismatchIssues: string[] = [];
   let row = await prisma.supplierDocumentRequest.findFirst({
     where: { id: requestId, deletedAt: null },
   });
@@ -61,12 +64,18 @@ export async function reviewSupplierInvoice(
       if (current.invoiceOcrTaskId !== expectedOcrTaskId) {
         throw codedError("发票已重新上传或重新扫描，请刷新后再确认。", 409, "SUPPLIER_INVOICE_REVIEW_TASK_CONFLICT");
       }
-      if (current.invoiceMatchStatus !== "AWAITING_REVIEW") {
-        throw codedError("只有OCR或人工核对结果完整匹配的发票才能确认。", 409, "SUPPLIER_INVOICE_NOT_MATCHED");
+      const matchedReview = current.invoiceMatchStatus === "AWAITING_REVIEW";
+      const mismatchReview = current.invoiceMatchStatus === "MISMATCH";
+      if (!matchedReview && !mismatchReview) {
+        throw codedError("当前发票尚未进入可人工审核状态，请先完成OCR或人工核对。", 409, "SUPPLIER_INVOICE_NOT_REVIEWABLE");
       }
       const match = current.invoiceMatchJson as { matched?: boolean; issues?: unknown[] } | null;
-      if (!match?.matched || match.issues?.length) {
+      if (matchedReview && (!match?.matched || match.issues?.length)) {
         throw codedError("发票仍存在不匹配项，不能确认。", 409, "SUPPLIER_INVOICE_HAS_ISSUES");
+      }
+      const mismatchIssues = Array.isArray(match?.issues) ? match.issues.map(String) : [];
+      if (mismatchReview && overrideReason.trim().length < 5) {
+        throw codedError("存在不匹配项时，人工复核通过说明至少需要5个字。", 400, "SUPPLIER_INVOICE_OVERRIDE_REASON_REQUIRED");
       }
       const task = await tx.ocrTask.findFirst({
         where: { id: expectedOcrTaskId, requestId: current.id, documentType: "SUPPLIER_INVOICE" },
@@ -83,15 +92,25 @@ export async function reviewSupplierInvoice(
         throw codedError("该发票已人工确认，不能重复确认。", 409, "SUPPLIER_INVOICE_ALREADY_CONFIRMED");
       }
       const confirmedAt = new Date();
+      const invoiceMatchJson = mismatchReview ? {
+        ...(match || {}),
+        manualOverride: {
+          reason: overrideReason,
+          mismatchIssues,
+          confirmedById: actorId,
+          confirmedAt: confirmedAt.toISOString(),
+        },
+      } : null;
       const claimedRequest = await tx.supplierDocumentRequest.updateMany({
         where: {
           id: current.id,
-          invoiceMatchStatus: "AWAITING_REVIEW",
+          invoiceMatchStatus: current.invoiceMatchStatus,
           invoiceOcrTaskId: expectedOcrTaskId,
           invoiceConfirmedAt: null,
         },
         data: {
           invoiceMatchStatus: "CONFIRMED",
+          ...(invoiceMatchJson ? { invoiceMatchJson: invoiceMatchJson as Prisma.InputJsonValue } : {}),
           invoiceConfirmedById: actorId,
           invoiceConfirmedAt: confirmedAt,
           invoiceRejectReason: null,
@@ -107,6 +126,8 @@ export async function reviewSupplierInvoice(
       if (claimedTask.count !== 1) {
         throw codedError("发票核对版本已变化，请刷新后重试。", 409, "SUPPLIER_INVOICE_REVIEW_REVISION_CONFLICT");
       }
+      confirmedWithMismatch = mismatchReview;
+      confirmedMismatchIssues = mismatchIssues;
       return current;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -140,7 +161,13 @@ export async function reviewSupplierInvoice(
     "supplier_document_requests",
     row.id,
     null,
-    { invoiceNo: row.invoiceNo || "", reason: nonEmpty(input.reason) },
+    {
+      invoiceNo: row.invoiceNo || "",
+      reason: nonEmpty(input.reason),
+      overrideReason: confirmedWithMismatch ? overrideReason : "",
+      confirmedWithMismatch,
+      mismatchIssues: confirmedMismatchIssues,
+    },
   );
   const refreshed = await prisma.supplierDocumentRequest.findUnique({
     where: { id: row.id },
