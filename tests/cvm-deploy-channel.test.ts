@@ -137,10 +137,9 @@ test("GitHub Runner creates the default .next artifact with non-sensitive build 
   assert.match(uploadStep, /RMB_BUILD_ARCHIVE=%q/);
   assert.doesNotMatch(uploadStep, /RMB_ENV_FILE/);
   assert.match(migrationStep, /RMB_ENV_FILE/);
-  assert.match(migrationStep, /DEPLOY_DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/);
-  assert.match(migrationStep, /RMB_DATABASE_URL_STDIN/);
-  assert.match(migrationStep, /printf '%s\\n' "\$DEPLOY_DATABASE_URL" \| ssh/);
-  assert.doesNotMatch(migrationStep, /RMB_DATABASE_URL=['"]?\$DEPLOY_DATABASE_URL/);
+  assert.doesNotMatch(migrationStep, /secrets\.DATABASE_URL/);
+  assert.doesNotMatch(migrationStep, /RMB_DATABASE_URL_STDIN/);
+  assert.doesNotMatch(migrationStep, /DEPLOY_DATABASE_URL/);
   assert.match(migrationStep, /get\("sslmode"\) === "no-verify"[\s\S]*set\("sslmode", "require"\)/);
   assert.match(migrationStep, /if \[\[ -r "\$ENV_FILE" \]\]/);
   assert.match(migrationStep, /systemctl show "\$SERVICE" --property=Environment --value/);
