@@ -55,7 +55,7 @@
     "react-dom": "19.2.7",
     "svix": "^2.0.0",
     "tencentcloud-sdk-nodejs-ocr": "^4.1.292",
-    "tencentcloud-sdk-nodejs-sms": "^4.1.240"
+    "tencentcloud-sdk-nodejs-sms": "^4.1.306"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
