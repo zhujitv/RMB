@@ -45,7 +45,7 @@
     "@prisma/client": "7.8.0",
     "bcryptjs": "3.0.3",
     "geoip-lite": "^2.0.3",
-    "jszip": "3.10.1",
+    "jszip": "3.10.2",
     "next": "^16.2.11",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.1.200",
